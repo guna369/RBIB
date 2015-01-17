@@ -1,0 +1,636 @@
+An Efficient Unification Algorithm
+ALBERTO MARTELLI Consiglio Nazionale delle Ricerche and UGO MONTANARI Universita di Pisa
+The unification problem in f'mst-order predicate calculus is described in general terms as the solution of a system of equations, and a nondeterministic algorithm is given. A new unification algorithm, characterized by having the acyclicitytest efficientlyembedded into it, is derived from the nondeterministic one, and a PASCAL implementation is given. A comparison with other well-known unification algorithms shows that the algorithm described here performs well in all cases. Categories and Subject Descriptors: F.2.2 [Analysis of Algorithms and Problem Complexity]: Nonnumerical Algorithms and Problems--complexity of proof procedures; F.4.1 [Mathematical Logic and Formal Languages]: Mathematical Logic--mechanical theoremproving; 1.2.3 [Artificial Intelligence]: Deduction and Theorem Proving--resolution General Terms: Algorithms, Languages, Performance, Theory
+1. INTRODUCTION
+In its essence, the unification problem in first-order logic can be expressed as follows: Given two terms containing some variables, find, if it exists, the simplest substitution (i.e., an assignment of some term to every variable) which makes the two terms equal. The resulting substitution is called the most general unifier and is unique up to variable renaming.
+Unification was first introduced by Robinson [17, 18] as the central step of the inference rule called resolution. This single, powerful rule can replace all the axioms and inference rules of the first-order predicate calculus and thus was immediately recognized as especially suited to mechanical theorem provers. In fact, a number of systems based on resolution were built and tried on a variety of different applications [5]. Even though further research made it apparent that resolution systems are difficult to direct during proof search and thus are often prone to combinatorial explosion [6], new impetus to the research in this area was given by Kowalski's idea of interpreting predicate logic as a programming language [10]. Here predicate logic clauses are seen as procedure declarations, and procedure invocation represents a resolution step. From this viewpoint, theorem provers can be regarded as interpreters for programs written in predicate logic, and this analogy suggests efficient implementations [3, 25].
+Authors' present addresses: A. Martelli, Istituto di Scienze della Informazione, Universit~ di Torino, Corso M. d'Azeglio 42, 1-10125 Torino, Italy; U. Montanari, Istituto di Scienze della Informazione, Universit& di Pisa, Corso Italia 40, 1-56100 Pisa, Italy. Permission to copy without fee all or part of this material is granted provided that the copies are not made or distributed for direct commercial advantage, the ACM copyright notice and the title of the publication and its date appear, and notice is given that copying is by permission of the Association for Computing Machinery. To copy otherwise, or to republish, requires a fee and/or specific permission. © 1982 ACM 0164-0925/82/0400-0258 $00.75
+ACMTransactionson ProgrammingLanguagesand Systems,Vol.4, No. 2, April 1982,Pages 258-282.
+
+An Efficient Unification Algorithm
+
+259
+
+Resolution, however, is not the only application of the unification algorithm. In fact, its pattern matching nature can be exploited in many cases where symbolic expressions are dealt with, such as, for instance, in interpreters for equation languages [4, 11], in systems using a database organized in terms of productions [19], in type checkers for programming languages with a complex type structure [14], and in the computation of critical pairs for term rewriting systems [9].
+The unification algorithm constitutes the heart of all the applications listed above, and thus its performance affects in a crucial way the global efficiency of each. The unification algorithm as originally proposed can be extremely inefficient; therefore, many attempts have been made to find more efficient algorithms [2, 7, 13, 15, 16, 22]. Unification algorithms have also been extended to the case of higher order logic [8] and to deal directly with associativity and commutativity [20]. The problem was also tackled from a computational complexity point of view, and linear algorithms were proposed independently by Martelli and Montanari [13] and Paterson and Wegman [15].
+In the next section we give some basic definitions by representing the unification problem as the solution of a system of equations. A nondeterministic algorithm, which comprehends as special cases most known algorithms, is then defined and proved correct. In Section 3 we present a new version of this algorithm obtained by grouping together all equations with some member in common, and we derive from it a first version of our unification algorithm.
+In Sections 4 and 5 we present the main ideas which make the algorithm efficient, and the last details are described in Section 6 by means of a PASCAL implementation.
+Finally, in Section 7, the performance of this algorithm is compared with that of two well-known algorithms, Huet's [7] and Paterson and Wegman's [15]. This analysis shows that our algorithm has uniformly good performance for all classes of data considered.
+
+2. UNIFICATION AS THE SOLUTION OF A SET OF EQUATIONS: A NONDETERMINISTIC ALGORITHM
+In this section we introduce the basic definitions and give a few theorems which are useful in proving the correctness of the algorithms. Our ay of stating the unification problem is slightly more general than the classical one due to Robinson [18] and directly suggests a number of possible solution methods.
+Let
+
+A= U Ai
+i=0,1 ....
+
+(Ai A Aj = O, i # j)
+
+be a ranked alphabet, where A~contains the i-adic function symbols (the elements of A0 are constant symbols). Furthermore, let V be the alphabet of the variables. The terms are defined recursively as follows:
+
+(1) constant symbols and variables are terms; (2) if tl . . . . . tn (n >_ 1) are terms and f E A,, then f ( 6 , . . . , tn) is a term.
+A substitution t~ is a mapping from variables to terms, with v~(x) = x almost everywhere. A substitution can be represented by a finite set of ordered pairs
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+260 A. Martelli and U. Montanari
+
+# = {(t,, xl), (t2, x 2 ) , . . . , (tm, Xm)} where ti are terms and xi are distinct variables, i = 1,..., m. To apply a substitution # to a term t, we simultaneously substitute all occurrences in t of every variable xi in a pair (ti, xi) of/} with the corresponding term ti. We call the resulting term to.
+For instance, given a term t = f(xl, g(xD, a) and a substitution # = {(h(x2), xl), (b, x2)}, we have t~ = f(h(x2), g(b), a) and taa = f(h(b), g(b), a).
+The standard unification problem can be written as an equation
+
+t' = t".
+A solution of the equation, called a unifier, is any substitution #, if it exists, which makes the two terms identical. For instance, two unifiers of the equation f ( x , , h(xl), x2} = f(g(x3), x4, x3) are #1 = ((g(x3), xl), (x3, x2), (h(g(xD), x4)} and #2 -- ( ( g ( a ) , Xl), (a, x2), (a, x3), (h(g(a)), x4)}.
+In what follows it is convenient also to consider sets of equations
+
+tj.=tj', j=l ..... k.
+Again, a unifier is any substitution which makes all pairs of terms t~, t~' identical simultaneously.
+Now we are interested in finding transformations which produce equivalent sets of equations, namely, transformations which preserve the sets of all unifiers. Let us introduce the following two transformations:
+
+(1) Term Reduction. Let
+
+f(t'~, t ~ , . . . , t',) = f(tT, t~' . . . . . t~ ), f E .4,,
+
+(1)
+
+be an equation where both terms are not variables and where the two root function symbols are equal. The new set of equations is obtained by replacing this equation with the following ones:
+
+t~ -- t~'
+t[ = t~'
+
+(2)
+
+t" = t'.
+
+If n = 0, then fis a constant symbol, and the equation is simply erased. (2) Variable Elimination. Let x = t be an equation where x is a variable and
+t is any term (variable or not). The new set of equations is obtained by applying the substitution # = ((t, x)} to both terms of all other equations in the set
+(without erasing x = t).
+
+We can prove the following theorems:
+THEOREM 2.1. Let S be a set of equations and let f'(t'~ . . . . , t'n) = f"(t~' . . . . , t,") be an equation of S. If f' ~ f", then S has no unifier. Otherwise, the new set of equations S', obtained by applying term reduction to the given equation, is equivalent to S.
+PROOF. If f ' # f", t h e n no substitution can make the two terms identical. If f' = f", any substitution which satisfies (2) also satisfies (1), and conversely for the recursive definition of term. []
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+An Efficient Unification Algorithm
+
+261
+
+THEOREM 2.2. Let S be a set of equations, and let us apply variable elimination to some equation x = t, getting a new set of equations S'. I f variable x occurs in t (but t is not x), then S has no unifier; otherwise, S and S' are equivalent.
+
+PROOF. E q u a t i o n x = t belongs b o t h to S a n d to S ' , a n d t h u s a n y unifier v~ (if it exists) of S or of S' must unify x and t; that is, xo and to are identical. Now let tl = t2 be a n y o t h e r e q u a t i o n of S, a n d let tl = t~ be t h e c o r r e s p o n d i n g e q u a t i o n in S'. Since tl and t~ have been obtained by substituting t for every occurrence of x in tl a n d t2, respectively, we h a v e tl~ = t ~ a n d t2~ = t ~ . T h u s , a n y unifier o f S is also a unifier of S' and vice versa. Furthermore, if variable x occurs in t (but t is not x), then no substitution ~ can make x and t identical, since xo becomes a subterm of to, and thus S has no unifier. []
+A set of equations is said to be in solved form iff it satisfies the following conditions:
+(1) t h e e q u a t i o n s are xj = ti, j = 1, . . . , k; (2) every variable which is the left member of some equation occurs only there.
+A set of equations in solved form has the obvious unifier
+0 - {(tl, xl), (t2, x2), • . . , (tk, xk)}.
+If there is any other unifier, it can be obtained as
+0 = { ( t , , x~), (t2°, x2) . . . . , (tk, xk)} U a
+
+w h e r e a is a n y s u b s t i t u t i o n w h i c h does n o t rewrite variables xl . . . . , xk. T h u s t~ is called a most g e n e r a l unifier (mgu ).
+
+The following nondeterministic algorithm shows how a set of equations can be transformed into an equivalent set of equations in solved form.
+
+Algorithm 1
+Given a set of equations, repeatedly perform any of the following transformations. If no transformation applies, stop with success.
+(a) Select any equation of the form
+
+t=x
+where t is not a variable and x is a variable, and rewrite it as
+
+x=t.
+(b) Select any equation of the form
+
+where x is variable, and erase it. (c) Select any equation of the form
+
+X=X
+
+t' = t"
+
+where t' and t" are not variables. If the two root function symbols are different, stop with failure; otherwise, apply term reduction.
+(d) Select any equation of the form
+
+x=t ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+262 A. Martelli and U. Montanari
+where x is a variable which occurs somewhere else in the set of equations and where t # x. If x occurs in t, then stop with failure; otherwise, apply variable elimination.
+As an example, let us consider the following set of equations: g(x2) = xl;
+f(xl, h(xl), x2) = f(g(x3), x4, x3).
+By applying transformation (c) of Algorithm 1 to the second equation we get g(x2) = xl; xl = g(x3); h(x~) = x4;
+X2 =X3.
+By applying transformation (d) to the second equation we get g(x2) = g(xs); xl = g(x3);
+h(g(x3)) = x4;
+X2 ~- X3.
+We now apply transformation (c) to the first equation and transformation (a) to the third equation:
+X2 ~ X3
+xl = g(x3); Xa = h(g(x3));
+X2 ----X3.
+Finally, by applying transformation (d) to the first equation and transformation (b) to the last equation, we get the set of equations in solved form:
+X2 ~- X3 ;
+xl = g(x3); x4 = h(g(x3)). Therefore, an mgu of the given system is = {(g(x~), x~), (x3, x2), (h(g(x3)), x4)}. T h e following t h e o r e m p r o v e s the correctness of Algorithm 1. THEOREM 2.3. Given a set of equations S, (i) Algorithm 1 always terminates, no matter which choices are made. (ii) If Algorithm 1 terminates with failure, S has no unifier. If Algorithm 1 terminates with success, the set S has been transformed into an equivalent set in solved form.
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+An Efficient Unification Algorithm
+
+263
+
+PROOF.
+
+(i) Let us define a function F mapping any set of equations S into a triple of natural numbers (nl, n2, n3). The first number, n~, is the number of variables in S which do not occur only once as the left-hand side of some equation. The second number, n2, is the total number of occurrences of function symbols in S. The third number, n3, is the sum of the numbers of equations in S of type x = x and of type t = x, where x is a variable and t is not. Let us define a total ordering on such triples as follows:
+
+(n~, n~, n~) > (n~', n 2", n~')
+
+ifn~ > n~'
+o r n~ = n~ a n d n2 > n2 o r n ~ = n " 1 a n -{1 n 2' ----n 2" a n d n 3' > n 3".
+
+With the above ordering, N 3 becomes a well-founded set, that is, a set where no infinite decreasing sequence exists. Thus, if we prove that any transformation of Algorithm 1 transforms a set S in a set S' such that F(S') < F(S), we have proved the termination. In fact, transformations (a) and (b) always decrease n3 and, possibly, n~. Transformation (c) can possibly increase n3 and decrease nl, but it surely decreases n2 (by two). T r a n s f o r m a t i o n (d) can possibly change n3 and increase n2, but it surely decreases n~.
+(ii) If Algorithm 1 terminates with failure, the thesis immediately follows from Theorems 2.1 and 2.2. If Algorithm 1 terminates with success, the resulting set of equations S' is equivalent to the given set S. In fact, transformations (a) and (b) clearly do not change the set of unifiers, while for transformations (c) and (d) this fact is stated in Theorems 2.1 and 2.2. Finally, S' is in solved form. In fact, if (a), (b), and (c) cannot be applied, it means that the equations are all in the form x = t, with t # x. If (d) cannot be applied, t h a t means t h a t every v.arialSle which is the left-hand side of some equation occurs only there. []
+
+The above nondeterministic algorithm provides a widely general version from which most unification algorithms [2, 3, 7, 13, 15, 16, 18, 22-24] can be derived by specifying the order in which the equations are selected and by defining suitable concrete data structures. For instance, Robinson's algorithm [18] might be obtained by considering the set of equations as a stack.
+
+3. AN ALGORITHM WHICH EXPLOITS A PARTIAL ORDERING AMONG SETS OF VARIABLES
+3.1 Basic Definitions
+In this section we present an extension of the previous formalism to model our algorithm more closely. We first introduce the concept of multiequation. A multiequation is the generalization of an equation, and it allows us to group together many terms which should be unified. To represent multiequations we use the notation S -- M where the left-hand side S is a nonempty set of variables and the right-hand side M is a multiset 1of nonvariable terms. An example is
+{xl, x2, x3} = (tl, t2).
+
+A multiset is a family of elements in which no ordering exists but in which many identical elements may occur.
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+264 A. Martelli and U. Montanari
+The solution (unifier) of a multiequation is any substitution which makes all terms in the left- and right-hand sides identical.
+A multiequation can be seen as a way of grouping many equations together. For instance, the set of equations
+Xl ----X2;
+X3 = Xl;
+tl = Xl;
+X2 ----t2;
+tl = t2
+can be transformed into the above multiequation, since every unifier of this set of equations makes the terms of all equations identical. To be more precise, given a set of equations SE, let us define a relation RSE between pairs of terms as follows: tl RSE t2 iff the equation tl = t2 belongs to SE. L e t / t S E be the reflexive, symmetric, and transitive closure of RSE.
+Now we can say that a set of equations SE corresponds to a multiequation S = M iff all terms of SE belong to S U M and for every tr and ts E S U M we have tr RSE t,.
+It is easy to see that many different sets of equations may correspond to a given multiequation and that all these sets are equivalent. Thus the set of solutions (unifiers) of a multiequation coincides with the set of solutions of any corresponding set of equations.
+Similar definitions can be given for a set of multiequations Z by introducing a relation Rz between pairs of terms which belong to the same multiequation. A set of equations SE corresponds to a set of multiequations Z iff
+ti/~SE tj ** ti Rz tj
+for all terms t~, tj of SE or Z.
+3.2 Transformations of Sets of Multiequations
+We now introduce a few transformations of sets of multiequations, which are generalizations of the transformations presented in Section 2.
+We first define the common part and the frontier of a multiset of terms (variables or not). The common part of a multiset of terms M is a term which, intuitively, is obtained by superimposing all terms of M and by taking the part which is common to all of them starting from the root. For instance, given the multiset of terms
+(f(xl, g(a, f(xs, b))), f(h(c), g(x2, f(b, xs))), f(h(x4), g(x6, x3))),
+the common part is
+f(xl, g(x2, x3)).
+The frontier is a set of multiequations, where every multiequation is associated with a leaf of the common part and consists of all subterms (one for each term of
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+An Efficient Unification Algorithm
+
+265
+
+M) corresponding to that leaf. The frontier of the above multiset of terms is
+
+{{x~} = (h(c), h(x4)), {x2, x6} = (a),
+{x3} = (f(xs, b), f(b, xD)).
+
+Note that if there is a clash of function symbols among some terms of a multiset of terms M, then M has no common part and frontier. In this case the terms of M are not unifiable.
+The common part and the frontier can be defined more precisely by means of a function DEC which takes a multiset of terms M as argument and returns either "failure," in which case M has neither common part nor frontier, or a pair (C(M), F(M) ) where C(M) is the common part of M and F(M) is the frontier of M.
+In the definition of DEC we use the following notation:
+
+head(t) is the root function s y m b o l of t e r m t, for t ~ V. Pi is the ith projection, defined by
+
+makemulteq
+t~
+
+Pi(f(tl .... ,tn))=ti for f~An and l_<i_n;
+is a function which transforms a multiset of terms M into a multiequation whose left-hand side is the set of all variables in M and whose right-hand side is the multiset of all terms in M which are not variables; and is the union for multisets.
+
+DEC(M) = ff 3t ~ M, t E V then (t, {makemulteq(M)} ) else if 3n, 3 f E A,, Yt E M, head(t) = f t h e n i f n ffi 0
+then ( f, O)
+e l s e i f Vi (1 __ i _ n), DEC(Mi) ~ failure where Mi -- OteMPi(t)
+t h e n (f(C(M1) . . . . . C(M,)), UTffilF(Mi)) else failure else failure.
+
+We can now define the following transformation:
+Multiequation Reduction. Let Z be a set of multiequations containing a multiequation S -- M such that M is nonempty and has a common part C and a frontier F. The new set Z' of multiequations is obtained by replacing S = M with the union of the multiequation S = (C) and of all the multiequations of F:
+
+Z'ffi(Z- {SffiM})U{S=(C)} UF.
+
+THEOREM 3.1. Let S = M (M nonempty) be a multiequation of a set Z of multiequations. If M has no common part, or if some variable in S belongs to the left-hand side of some multiequation in the frontier F of M, then Z has no
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+266 A. Martelli and U. Montanari
+unifier. Otherwise, by applying multiequation reduction to the multiequation S = M we get an equivalent set Z' ofmultiequations.
+PROOF. If the common part of M does not exist, then the multiequation S -- M has no unifier, since two terms should be made equal having a different function symbol in the corresponding subterms. Moreover, if some variable x of S occurs in some left-hand side of the frontier, then it also occurs in some term t of M, and thus the equation x = t, with x occurring in t, belongs to a set of equations equivalent to Z. But, according to T he or em 2.2, this set has no unifier.
+To prove that Z and Z' are equivalent, we show first that a unifier of Z is also a unifier of Z'. In fact, if a substitution ~ makes all terms of M equal, it also makes equal all the corresponding subterms, in particular, all terms and variables which belong to left- and right-hand sides of the same multiequation in the frontier. The multiequation S = (C) is also satisfied by construction. Conversely, if ~ satisfies Z', then the multiequation S -- M is also satisfied. In fact, all terms in S and M are made equal--in their upper part (the common part) due to the multiequation S -- (C) and in their lower part (the subterms not included in the common part) due to the set of multiequations F. []
+We say that a set Z of multiequations is compact iff
+Y(S =M), (S' =M'} ~Z: SA S' = ~.
+We can now introduce a second transformation, which derives a compact set of multiequations.
+Compactification. Let Z be a noncompact set of multiequations. Let R be a relation between pairs of multiequations of Z such that iS = M) R iS' = M') iff S n S' # O, and let/t be the transitive closure of R. The relation/~ partitions the set Z into equivalence classes. To obtain the final compact set Z', all multiequations belonging to the same equivalence class are merged; that is, they are transformed into single multiequations by taking the union of their left- and right-hand sides.
+Clearly, Z and Z' are equivalent, because the relation /~z between pairs of terms, defined in Section 3.1, does not change by passing from Z to Z'.
+3.3 Solving Systems of Multiequations
+For convenience, in what follows, we want to give a structure to a set of multiequations. Thus we introduce the concept of system of multiequations. A system R is a pair (T, U), where T is a sequence and U is a set of multiequations {either possibly empty), such that
+(1) the sets of variables which constitute the left-hand sides of all multiequations in both T and U contain all variables and are disjoint;
+(2) the right-hand sides of all multiequations in T consist of no more than one term; and
+(3) all variables belonging to the left-hand side of some multiequation in T can only occur in the right-hand side of any preceding multiequation in T.
+We now present an algorithm for solving a given system R of multiequations. When the computation starts, the T part is empty, and every step of the following
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+An Efficient Unification Algorithm • 267
+Algorithm 2 consists of "transferring" a multiequation from the U part, that is,
+the unsolved part, to the T part, that is, the triangular or solved part of R. When
+the Upart of R is empty, the system is essentially solved. In fact, the solution can be obtained by substituting the variables backward. Notice that, by keeping a solved system in this triangular form, we can hope to find efficient algorithms for unification even when the mgu has a size which is exponential with respect to the size of the initial system. For instance, the mgu of the set of multiequations
+{{Xl} = ~,
+{x~} = ~ ,
+{x3} = 0,
+{x4} = (h(x3, h(x2, x2)), h(h(h (xl, xl), x2), x3))}
+is
+{(h(xl, Xl), x2), (h(h(xl, Xl), h(Xl, Xl)), x3),
+(h(h(h(Xl, Xl), h(xl, Xl)), h(h(xl, Xl), h(Xl, Xl))), X4)}.
+However, we can give an equivalent solved system with empty U part and whose T part is
+({x,} --- (h(x3, x3)),
+{x3} = (h(x2, x2)),
+{X2) = (h(Xl, xl)),
+{xl} = o),
+from which the mgu can be obtained by substituting backward. Given a system R = (T, U) with an empty T part, an equivalent system with
+an empty U part can be computed with the following algorithm.
+Algorithm 2
+(1) r e p e a t (1.1) Select a multiequation S = M of U with M # ~5. (1.2) Compute the common part C and the frontier F ofM. I f M has no common part, stop with failure (clash). (1.3) If the left-hand sides of the frontier of M contain some variable of S, stop with failure (cycle). (1.4) Transform U using multiequation reduction on the selected mnltiequation and compactification.
+(1.5) Let S = {xl . . . . . Xn). Apply the substitution ~ = {(C, xl) . . . . . (C, x,)} to all
+terms in the right-hand side of the multiequations of U. (1.6) Transfer the multiequation S = (C) from U to the end of T. until the U part of R contains only multiequations, if any, with empty right-hand
+sides. (2) Transfer all the mnltiequations of U (all with M = ~D) to the end of T, and stop with
+success.
+Of course, if we w a n t to use this algorithm for unifying two t e r m s tl and t2, we have to construct an initial system with empty T part and with the following U part:
+{{x) = (tl, t2), {xl} = 6 , {x2} = O . . . . . {x,} = 6 }
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+268 A. Martelli and U. Montanari
+
+where xl, x2. . . . , Xn are all the variables in t~ and t2 and x is a new variable which does not occur in ti and t2. For instance, let tl = f(x~, g(x2, xs), x2, b) and t2 = f ( g ( h ( a , xs), x2), x~, h(a, x4), x4). T h e initial system is as follows:
+
+U: {{x} = (f(xl,g(x2, x3), x2, b), f(g(h(a, x~), x2), xl, h(a, x4), x4)),
+
+{x~} = 6 , (x2} = 6 , {x3} = ;D, (x4} = 6 , {xs} = 6};
+
+(3)
+
+T:().
+
+After the first iteration of Algorithm 2 we get
+
+U: {(x~} = (g(h(a, x~), x2), g(x2, x3)),
+
+{x2} = (h(a, x4)),
+
+(x~) = 0,
+
+(x4} = (b),
+
+(xs} = ~);
+
+T: ( {x} = (f(xl, xl, x2, x4))).
+
+We now eliminate variable x2, obtaining
+
+U: ({Xl) = (g(h(a, xs), h(a, x4)), g(h(a, x4), x3)), {x3} =6, (x4} = (b), {x5 ) = O};
+T: ( (x} = ( f ( x l , Xl, x2, x4)), {x2} = (h(a, x4))).
+
+By eliminating variable xl, we get
+
+U: {(x3} = (h(a, x4)), {x,, xs} = (b));
+T: ( (x} = (f(xl, xi, x2, x4)), (x2} = (h(a, x4)), (xl} = (g(h(a, x4), x3))).
+
+Finally, by eliminating first the set {x4, xs} and t h e n {x3}, we get the solved system
+
+U: O; T: ((x} = (f(x~, Xl, X2, X4)),
+(X2) = (h(a, x4)), {Xl) = (g(h(a, x4), xz)), (x4, xs} = (b), {x3) = (h(a, b))).
+
+We can now prove the correctness of Algorithm 2.
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+An Efficient Unification Algorithm • 269
+THEOREM 3.2. Algorithm 2 always terminates. I f it stops with failure, then the given system has no unifier. If it stops with success, the resulting system is equivalent to the given system and has an empty unsolved part.
+PROOF. All transformations obtain systems equivalent to the given one. In fact, in step (1.4} multiequation reduction obtains a set of equations which (according to Theorem 3.1) is equivalent, and compactification transforms it again into a system. Step {1.5) applies substitution only to the terms in U, and its feasibility can be proved as in Theorem 2.2. Step (1.6) can be applied since the multiequation S = (C), introduced during multiequation reduction, has not been modified by compactification, due to the condition tested in step (1.3). For the same condition, transferring multiequation S = (C) from U to T still leaves a system. Step (2) is clearly feasible.
+If the algorithm stops with failure, then, by Theorem 3.1, the system presently denoted by R (equivalent to the given one) has no solution. Otherwise, the final system clearly has an empty U part. Finally, the algorithm always terminates since at every cycle some variable is eliminated from the U part. []
+It is easy to see that, for a given system, the size of the final system depends heavily on the order of elimination of the multiequations. For instance, given the same system as discussed earlier,
+U: {{xl) = ~,
+{x2} = (h(xl, Xl)),
+{x3} = (h(x2, x2)),
+{x,) = (h(x3, x3))};
+T:(),
+and eliminating the variables in the order x2, xz, x4, Xx, we get the final system
+U: 0;
+T: ({x2) -- (h(xm, Xl)),
+{x3} = (h(h(Xl, xl), h(Xl, xl))), {x4} = (h(h(h(Xl, Xl), h(xl, xl)), h(h(xl, xl), h(Xl, Xl)))), {x~} = 0 ) .
+If instead we eliminate the variables in the order x4, x3, x2, xl, we get
+U: O; T: ({x4} = (h(x3, x3)),
+(x3} = (h(x2, x2)), {x2} -- (h(Xl, Xx)), {x, } = O).
+3.4 The Unification Algorithm
+Looking at Algorithm 2, it is clear that the main source of complexity is step (1.5), since it may make many copies of large terms. In the following--and this is
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+270 A. Martelli and U. Montanari
+the heart of our algorithm--we show that, if the system has unifiers, then there always exists a multiequation in U (if not empty) such that by selecting it we do not need step (1.5) of the algorithm, since the variables in its left-hand side do not occur elsewhere in U. We need the following definition.
+Given a system R, let us consider the subset Vu of variables obtained by making the union of all left-hand sides Si of the multiequations in the U part of R. Since the sets Si are disjoint, they determine a partition of Vu. We now define a relation on the classes Si of this partition: we say that Si < Sj iff there exists a variable of Si occurring in some term of Mj, where Mj is the right-hand side of the multiequation whose left-hand side is Sj. We write <* for the transitive closure of <.
+Now we can prove the followingtheorem and corollary.
+THEOREM 3.3. If a system R has a unifier, then the relation <* is a partial ordering.
+PROOF. If Si < $i, then, in all unifiers of the system, the term substituted for every variable in Si must be a strict subterm of the term substituted for every variable in Sj. Thus, if the system has a unifier, the graph of the relation < cannot have cycles. Therefore, its transitive closure must be a partial ordering. []
+COROLLARY. If the system R has a unifier and its U part is nonempty, there
+exists a multiequation S ffi M such that the variables in S do not occur elsewhere inU.
+PROOF. Let S = M be a multiequation such that S is "on top" of the partial ordering < * (i.e., ~3Si, S < Si). The variables in S occur neither in the other lefthand sides of U (since they are disjoint) nor in any right member Mi of U, since otherwise S < Si. []
+We can now refine the nondeterministic Algorithm 2 giving the general version of our unification algorithm for a system of multiequations R = (T, U).
+Algorithm 3: UNIFY, the Unification Algorithm (1) r e p e a t
+(1.1) Select a multiequation S = M of U such that the variables in S do not occur elsewhere in U. If a multiequation with this property does not exist, stop with failure (cycle).
+(1.2) i f M i s empty then transfer this multiequation from U to the end of T. else begin (1.2.1) Compute the common part C and the frontier F of M. If M has no common part, stop with failure (clash). (1.2.2) Transform U using multiequation reduction on the selected multiequation and compactification. (1.2.3) Transfer the multiequation S = (C) from U to the end of T. end
+until the U part of R is empty. (2) stop with success.
+A few c o m m e n t s are needed. Besides step (1.5) of Algorithm 2, we have also erased step (1.3) for the same reason. Furthermore, in Algorithm 2 we were forced to wait to transfer multiequations with empty right-hand sides since substitution in that case would have required a special treatment.
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+An Efficient Unification Algorithm
+
+271
+
+By applying Algorithm UNIFY to the system which was previously solved with Algorithm 2, we see that we must first eliminate variable x, then variable x,, then variables x2 and x3 together, and, finally, variables x4 and x5 together, getting the following final system:
+U:~
+T: ({x} = (f(xl, xl, x2, x,)),
+{Xl} = (g(x2, x3)), {x2, x3} = (h(a, x4)), {x,, xs} = (b)).
+Note that the solution obtained using Algorithm UNIFY is more concise than the solution previously obtained using Algorithm 2, for two reasons. First, variables x2 and x3 have been recognized as equivalent; second, the right member of x~ is more factorized. This improvement is not casual but is intrinsic in the ordering behavior of Algorithm UNIFY.
+To summarize, Algorithm UNIFY is based mainly on the two ideas of keeping the solution in a factorized form and of selecting at each step a multiequation in such a way that no substitution ever has to be applied. Because of these two facts, the size of the final system cannot be larger than that of the initial one. Furthermore, the operation of selecting a multiequation fails if there are cycles among variables, and thus the so-called occur-check is built into the algorithm, instead of being performed at the last step as in other algorithms [2, 7].
+4. EFFICIENT MULTIEQUATION SELECTION
+In this section we show how to implement efficiently the operation of selecting a multiequation "on top" of the partial ordering in step (1.1) of Algorithm 3.
+The idea is to associate with every multiequation a counter which contains the number of other occurrences in U of the variables in its left-hand side. This counter is initialized by scanning the whole U part at the beginning. Of course, a multiequation whose counter is set to zero is on top of the partial ordering.
+For instance, let us again consider system (3):
+U: {[0] {x} = (f(xl,g(x2, x3), x2, b), f(g(h(a, x~), xe), xl,
+h(a, x4), x4)),
+[2] {xl} = 6,
+[3] {x2} = 6,
+[1] (x3} = 6,
+[2] {x4} = 6,
+[1] {xa} -- 6};
+T:().
+Here square brackets enclose the counters associated with each multiequation. Since only the first multiequation has its counter set to zero, it is selected to be transferred. Counters of the other multiequations are easily updated by decre-
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+272 A. Martelli and U. Montanari
+menting them whenever an occurrence of the corresponding variable appears in the left-hand side of a m u l t i e q u a t i o n in the frontier c o m p u t e d in step {1.2.1). When two or more multiequations in U are merged in the compactification phase, the counter associated with the new multiequation is obviously set to a value which is the sum of the contents of the old counters.
+The next steps are as follows:
+U: {[0] (Xl} = (g(h(a, x~), x2), g(x2, x3)),
+[2] {x2} = (h(a, x4)),
+[1] (x~) = o,
+[1] {x,} = (b),
+[1] {x~} = ~};
+T: ( (x} = (f(xl, x~, x2, x4))).
+U: {[0] {x2, x3} = (h(a, x4), h(a, x~)),
+[1] {x4} = (b), [1] {x~} = o};
+T: ({x} = (f(x,, x,, x2, x,)), {x,} = (g(x2, x3))).
+U: {[0] {x4, xs} = (b)};
+T: ({x} = (f(x,, xl, x2, x4)), {x,} = (g(x2, x3)), {x2, x3} = (h(a, x4))).
+U: ~; T: ({x} = (f(xl, xl, x2, x4)),
+{xl} = (g(x2, x3)),
+{x2, x3} = (h(a, x4)),
+{x4, x~} = (b)).
+5. IMPROVING THE UNIFICATION ALGORITHM FOR NONUNIFYING DATA In the case of nonunifying data, Algorithm 3 can stop with failure in two ways: either in step (1.1) if a cycle has been detected, or in step (1.2.1) if a clash occurs. In this section we show how to anticipate the latter kind of failure without altering the structure of the algorithm.
+Let us first give the following definition. Two terms are consistent iff either at
+least one of them is a variable or they are both nonvariable terms with the same root function symbol and pairwise consistent arguments. This definition can be extended to the case of more than two terms by saying that they are consistent
+iff all pairs of terms are consistent. For instance, the three terms f(x, g(a, y)), f(b, x), and f(x, y) are consistent although they are not unifiable.
+ACMTransactionson ProgrammingLanguagesand Systems,Vol.4, No. 2,April1982.
+
+An Efficient Unification Algorithm
+
+273
+
+We now modify Algorithm UNIFY by requiring all terms in the right-hand side of a multiequation to be consistent, for every multiequation. Thus, we stop with clash failure as soon as this requirement is not Satisfied. This new version of the algorithm is still correct since, if there are two inconsistent terms in the same multiequation, they will never unify.
+In this way, clashes are detected earlier. In fact, in the Algorithm 3 version of UNIFY a clash can be detected while computing the common part and the frontier of the right-hand side of the selected multiequation, whereas in the new version of UNIFY the same error is detected in the compactification phase of a previous iteration.
+An efficient implementation of the consistency check when two multiequations are merged requires a suitable representation for right-hand sides of multiequations. Thus, instead of choosing the obvious solution of representing every righthand side as a list of terms, we represent it as a multiterm, defined as follows.
+A multiterm can be either empty or of the form f(P1 ..... Pn) where f E A, and Pi (i = 1. . . . . n) is a pair (Si, Mi) consisting of a set of variables Si and a multiterm ]Vii. Furthermore, Si and Mi cannot b o t h be empty.
+For instance, the multiset of consistent terms
+(f(x, g(a, y)), f(b, x), f(x, y))
+
+can be represented with the multiterm
+
+f(((x}, b), ({x,y},g((O, a), ((y), ~)))).
+
+By representing right-hand sides in this way we have no loss of information, since the only operations which we have to perform on them are the operation of merging two right-hand sides and the operation of computing the common part and the frontier, which can be described as follows:
+
+MERGE (M', M " ) = case M' of O: M";
+f'((Si M~), , tS' M' ~" case M" of O: M'; f"((S~',M~') . . . . . (Sn",M~")): i f f ' -- f" a n d MERGE(M~, M[') # failure (i -- 1. . . . . t h e n f ' ( ( S i O S~', MERGE(MI, M;')) . . . . . ( S ~ ~J S t'n, MERGE(M~', M,,))"~ else failure endcase
+endcase
+
+n)
+
+COMMONPART(f((S1, M1) ..... (S,, Mn))) = f(P1, --., Pn)
+
+where Pi = if Si = ~ then COMMONPART(Mi) else ANYOF(SD (i = 1.... , n)
+
+where function ANYOF(S~) returns an element of set Si.
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+274 A. Martelli and U. Montanari
+
+Figure 1
+
+UPart = record MultEqNumber: Integer;, ZeroCounterMultEq, Equations: ListOfMultEq
+end; System = TPSystem; PSystem = record
+T: ListOfMultEq; U: UPart end; MultiTerm = ~PMultiTerm; PMultiTerm = record
+Fsymb: FunName; Args: ListOfTempMultEq end; MultiEquation = ~PMultiEquation; PMultiEquation = record
+Counter, VarNumber: Integer; S: ListOfVariables; M: MultiTerm
+end;
+TempMultEq = ~PTempMultEq; PTempMultEq = record
+S: QueueOfVariables; M: MultiTerrn
+end;
+Variable = TPVariable; P Variable = record
+Name: VarName; M: MultiEquation
+end;
+
+F R O N T I E R ( f ( ( S , , M1). . . . . ( S n , M n ) )) = F1 [..J . . . (.J F n
+
+where Fi = if Si = O t h e n FRONTIER(M/)
+
+else {Si = Mi}
+
+(i = 1, ...,
+
+n).
+
+Note that the common part and the frontier are defined only for nonempty multiterms and that they always exist.
+
+6. IMPLEMENTATION
+In order to describe the last details of our algorithm, we present here a PASCAL implementation. In Figure 1 we have the definitions of data types. All data structures used by the algorithm are dynamically created data structures con-
+nected through pointers. The UPart of a system has two lists of multiequations: Equations, which contains all initial multiequations, and ZeroCounterMultEq,
+which contains all multiequations with zero counter. Furthermore, the field
+MultEqNumber contains the number of multiequations in the UPart. A multiequation, besides having the fields Counter, S, and M, has a field VarNumber,
+which contains the number of variables in S and is used during compactification.
+The pairs Pi = (Si, Mi), which are the arguments of a multiterm, have type
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+An Efficient Unification Algorithm
+
+procedure Unify(R: System); var Mult: MultiEquation ;
+Frontier: ListOfTempMultEq ; begin
+repeat SelectMultiEquation(R ~.U, Mult); if not(Mult~.M=Nil) then begin Frontier := Nil; Reduce(Multi.M, Frontier); Compact(Frontier, R ~.U) end;
+R ~.T := NewListOfMultEq(Mult, R ~.T) until R ~.U.MultEqNumber = 0 end (*Unify*);
+
+Figure 2
+
+275
+
+Figure 3
+
+procedure SelectMultiEquation(var U: UPart; v a r Mult: MultiEquation); begin
+if U.ZeroCounterMultEq = Nil then fail('cycle'); Mult := U~eroCounterMultEq~. Value; U~eroCounterMultEq := U.ZeroCounterMultEqT.Next; U.MultEqNumber := U.MultEqNumber - 1 end (*SelectMultiEquation *);
+
+TempMultEq. Finally, all occurrences of a variable point to the same Variable
+object, which points to the multiequation containing it in its left-hand side.
+The types "ListOf... ," not given in Figure 1, are all implemented as records with two fields: Value and Next. Finally, QueueOfVariablesis an abstract type with operations CreateListOfVars, IsEmpty, HeadOf, RemoveHead, and Append, which have a constant execution time.
+In Figure 2 we rephrase Algorithm UNIFY as a PASCAL procedure. Procedure
+SelectMultiEquation selects from the UPartof the system a multiequation which is "on top" of the partial ordering, by taking it from the ZeroCounterMultEqlist.
+Its implementation is given in Figure 3.
+Procedure Reduce, given in Figure 4, computes the common part and the
+frontier of the selected multiequation. This procedure modifies the right-hand side of this multiequation so that it contains directly the common part. Note that
+the frontier is represented as a list of TempMultEq instead of as a list of
+multiequations.
+Finally, in Figure 5 we give procedure Compact, which performs compactifi-
+cation by repeatedly merging multiequations. When two multiequations are
+merged, one of them is erased, and thus all pointers to it from its variables must be moved to the other multiequation. To minimize the computing cost, we always erase the multiequation with the smallest number of variables in its left-hand
+side. Procedure MergeMultiTerms is given in Figure 6.
+A detailed complexity analysis of a similar implementation is given in [13].
+There it is proved that an upper bound to execution time is the sum of two terms, one linear with the total number of symbols in the initial system and another one
+n log n with the number of distinct variables.
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+276 A. Martelli and U. Montanari
+procedure Reduce(M: MultiTerm; var Frontier: ListOfTernpMultEq); var Arg" ListOfTempMultEq; begin
+Arg := MT.Args; while not(Arg = Nil) do begin
+i f IsEmpty(ArgT.Value T.S) then Reduce(ArgO.ValueT.M, Frontier) else begin
+Frontier := NewListOfTempMultEq(ArgT.Value, Frontier); ArgT. Value := NewTempMultEq( CreateQueueOfVars(HeadOf(Arg~. ValueT.S) ), Nil) end; Arg := ArgT.Next end end (*Reduce*);
+Figure 4
+Here we want only to point out that the nonlinear behavior stems from the operation described above of moving all pointers directed from variables to multiequations, whenever two multiequations are merged. To see how this can happen, let us consider the problem of unifying the two terms
+f(xl, x3, xs, xT, xl, xs, xl)
+and
+f(x2, x4, x6, x8, x3, x7, x5).
+During the first iteration of Unify we get a frontier whose multiequations are the pairs (xl, x2), (x3, x4), (x~, x6), (xT, xs), (xl, x3), (xs, xT), and (xl, xs). By executing Compact with this frontier, we see that it moves one pointer for each of the first four elements of the frontier, two pointers for each of the next two elements, and four pointers for the last element. Thus, it has an n log n complexity.
+As a final remark, we point out that we might modify the worst-case behavior of our algorithm with a different implementation of the operation of multiequation merging. In fact, we might represent sets of variables as trees instead of as lists, and we might use the well-known UNION-FIND algorithms [1] to add elements and to access them. In this case the complexity would be of the order of m. G(m), where G is an extremely slowly growing function (the inverse of the Ackermann function). However, m would be, in this case, the number of variable occurrences.
+7. COMPARISONS WITH OTHER ALGORITHMS
+In this section we compare the performance of our algorithm with that of two well-known algorithms: Huet's algorithm [7], which has an almost linear time complexity, and Paterson and Wegman's algorithm [15], which is theoretically the best having a linear complexity.
+As an example of the assertion made at the end of Section 2, let us give a sketchy description of the two algorithms using the terminology of this paper. Both algorithms deal with sets of multiequations whose left-hand sides are disjoint and whose right-hand sides consist of only one term of depth one, that is,
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+An Efficient Unification Algorithm
+
+277
+
+procedure Compact(Frontier: ListOfTempMultEq; var U: UPart); var Vars: QueueOfVariables;
+V: Variable; Mult, Mult 1: MultiEquation ; p r o c e d u r e MergeMultEq(var Mult: MultiEquation ; M u l t l: MultiEquation ); vat Multt: MultiEquation; V: Variable; Vars : L istOfVariables; begin if n o t ( M u l t = M u l t 1) t h e n begin if Mult T.VarNumber < M u l t 1T.VarNumber t h e n begin
+Multt := Mult; M u l t := Multl; Mult 1 := Multt end; MultT.Counter := MultT.Counter + Multl~.Counter; Mult T.VarNumber := M u l t ~.VarNumber + Mult 1T.VarNumber; Vars := M u l t l T.S; repeat V := Vars'~.Value; Vars := VarsT.Next; V~.M := Mult; Mult T.S := NewListOfVariables( V, Mult T.S) until Vars = Nil; MergeMultiTerms(MultT.M, Mult l T.M); U.MultEqNumber := U . M u l t E q N u m b e r - 1 end end (*MergeMultEq*);
+begin while not(Frontier = Nil) do begin Vars := Frontier T.ValueT.S; V := HeadOf(Vars); RemoveHead( Vars); Mult := VT.M; MultT.Counter := MultT.Counter - 1; while not IsEmpty(Vars) do begin V := HeadOf(Vars); RemoveHead( Vars); M u l t l :-- VT.M; M u l t l T.Counter := M u l t l ~.Counter - 1; MergeMultEq(Mult, Mult 1) end; MergeMulti Terms(Mult T.M, Frontier T.Value~.M ); ifMultT.Counter = 0 then U.ZeroCounterMultEq := NewListOfMultEq(Mult, U.ZeroCounterMultEq); Frontier := FrontierT.Next end
+end (*Compact*);
+Figure 5
+
+ACM Transactions on Programming Languages and Systems, Vol. ~1,No. 2, April 1982.
+
+278 A. Martelli and U. Montanari
+
+Figure 6
+
+procedure MergeMultiTerms(var M: MultiTerm ;MI: MultiTerm);
+var Arg, Argl: ListOfTempMultEq; begin
+ifM = Nil then M := M1 else if not(M1 = Nil) then begin
+if not (M "f.Fsymb = M l ~.Fsymb) then fail('clash' )
+else begin
+Arg := M~.Args; Argl := MIT.Args; while not(Arg = Nil) do
+begin Append(Arg~. Value~.S, Argl ~.Value~.S); MergeMultiTerms(Arg~. Value~.M, Argl ~.Value~.M );
+Arg := ArgT.Next; Argl := ArglT.Next
+end
+end
+end
+end (*MergeMultiTerms*);
+
+of the form f(x,, ..., x,) where x, . . . . . Xn are variables. For instance, {x,} = f(x~, x3, x,);
+
+{x2} --- a ;
+
+(xa} = g(x2); (x4} = a; (x5} ffi f(x6, xT, xs);
+
+(4)
+
+{x6} = a; {x7} = g(xa); {xs} = O.
+
+Furthermore, we have a set S of equations whose left- and right-hand sides are variables; for instance,
+S: {x, = xs}.
+
+A step of both algorithms consists of choosing an equation from S, merging the two corresponding multiequations, and adding to S the new equations obtained as the outcome of the merging. For instance, after the first step we have
+
+{x,, xs} = f(x2, x~, x4);
+
+{X2} = a ;
+
+{x3) = g(x2);
+
+{x4} = a;
+
+(5)
+
+{x~} = a;
+
+{xv} = g(xa);
+
+{x8 } = O;
+
+S : {x2 = x6, x3 ffi x7, x4 = x s ) . ACMTransactionson ProgrammingLanguagesand Systems,Vol.4, No. 2, April 1982.
+
+An Efficient Unification Algorithm
+
+279
+
+The two algorithms differ in the way they select the equation from S. In Huet's algorithm S is a list; at every step, the first element of it is selected, and the new equations are added at the end of the list. The algorithm stops when S is empty, and up to this point it has not yet checked the absence of cycles. Thus, there is a last step which checks whether the final multiequations are partially ordered.
+The source of the nonlinear behavior of this algorithm is the same as for our algorithm, that is, the access to multiequations after they have been merged. To avoid this, Paterson and Wegman choose to merge two multiequations only when their variables are no longer accessible. For instance, from (5) their algorithm selects x3 = x7 because x2 and xs are still accessible from the third and sixth multiequation, respectively, getting
+{xl, xs} = f(x2, x3, x,); {x2} = a;
+{x3, xT} = g(x2); {x4} = a; {x6} =- a;
+{xs} = O;
+S: {x2 = xs, x2 = x6, x4 = xs}.
+To select the multiequations to be merged, this algorithm "climbs" the partial ordering among multiequations until it finds a multiequation which is "on top"; thus the detection of cycles is intrinsic in this algorithm.
+Let us now see how our algorithm works with the above example. The initial system of multiequations is
+U: {[0] {Xl, X5} = f(( {x2, x6}, O), ({x3, xT}, gD), ({x4, xs}, ~ ) ) , [2] {x2} -= a, [1] {x3} = g(({x2), O)), [1] (x4} = a, [1] {x6} = a, [1] {xT} = g({{xs}, O)), [2] {xs ) = ~};
+T: ().
+The next step is
+U: {[1] {x2, x6} = a, [0] {x3, xT) = g(({x2, xs}, ~)), [1] {x4, xs} = a};
+T: ((x~, xs} = f(x2, x~, x4)),
+and so on. In this algorithm the equations containing the pairs of variables to be unified
+are kept in the multiterms, and the mergings are delayed until the corresponding multiequation is eliminated.
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+280 A. Martelli and U. Montanari
+An important difference between our algorithm and the others is that our algorithm may use terms of any depth. This fact entails a gain in efficiency, because it is certainly simpler to compute the common part and the frontier of deep terms than to merge multiequations step by step. Note, however, that this feature might also be added to the other algorithms. For instance, by adding the capability of dealing with deep terms to Paterson and Wegman's algorithm, we essentially obtain a linear algorithm which was independently discovered by the authors [13].
+In order to compare the essential features of the three algorithms, we notice that they can stop either with success or with failure for the detection of a cycle or with failure for the detection of a clash. Let Pm, Pc, and Pt be the probabilities of stopping with one of these three events, respectively. We consider three
+extreme cases:
+(1) Pm >> Pc, Pt {very high probability of stopping with success). Paterson
+and Wegman's algorithm is asymptotically the best, because it has a linear complexity whereas the other two algorithms have a comparable nonlinear complexity.
+However, in a typical application, such as, for example, a theorem prover, the unification algorithm is not used for unifying very large terms, but instead it is used a great number of times for unifying rather small terms each time. In this case we cannot exploit the asymptotically growing difference between linear and nonlinear algorithms, and the computing times of the three algorithms will be comparable, depending on the efficiency of the implementation.
+An experimental comparison of these algorithms, together with others, was carried out by Trum and Winterstein [21]. The algorithms were implemented in the same language, PASCAL, with similar data structures, and tried on five different classes of unifying test data. Our algorithm had the lowest running time for all test data. In fact, our algorithm is more efficient than Huet's because it does not need a final acyclicity test, and it is more efficient than Paterson and Wegman's because it needs simpler data structures.
+(2) Pc >> Pt >> Pm (very high probability of detecting a cycle). Paterson and
+Wegman's algorithm is the best because it starts merging two multiequations only when it is sure that there are no cycles above them. Our algorithm is also good because cycle detection is embedded in it. In contrast, Huet's algorithm must complete all mergings before being able to detect a cycle, and thus it has a very poor performance.
+(3) Pt >> Pc >> Pm (very high probability of detecting a clash). Huet's algo-
+rithm is the best because, if it stops with a clash, it has not paid any overhead for cycle detection. Our algorithm is better than Paterson and Wegman's because clashes are detected during multiequation merging and because our algorithm may merge some multiequations earlier, like {x2, x6} and {x4, Xs} in the above example. On the other hand, mergings which are delayed by our algorithm, by putting them in multiterms, cannot be done earlier by the other algorithm because they refer to multiequations which are still accessible. The difference in the performance of the two algorithms may become quite large if terms of any depth are allowed.
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+An Efficient Unification Algorithm
+
+281
+
+8. CONCLUSION
+A new unification algorithm has been presented. Its performance has been compared with that of other well-known algorithms in three extreme cases: high probability of stopping with success, high probability of detecting a cycle, and high probability of detecting a clash. Our algorithm was shown to have a good performance in all the cases, and thus presumably in all the intermediate cases, whereas the other algorithms had a poor performance in some cases.
+Most applications of the unification algorithm, such as, for instance, a resolution theorem prover or the interpreter of an equation language, require repeated use of the unification algorithm. The algorithm described in this paper can be very efficient even in this case, as the authors have shown in [12]. There they have proposed to merge this unification algorithm with Boyer and Moore's technique for storing shared structures in resolution-based theorem provers [3] and have shown that, by using the unification algorithm of this paper instead of the standard one, an exponential saving of computing time can be achieved. Furthermore, the time spent for initializations, which might be heavy for a single execution of the unification algorithm, is there reduced through a close integration of the unification algorithm into the whole theorem prover.
+
+REFERENCES
+1. AHO, A.V., HOPCROFT,J.E., AND ULLMAN, J.D. The Design and Analysis of Computer Algorithms. Addison-Wesley, Reading, Mass., 1974.
+2. BAXTER,L.D. A practically linear unification algorithm. Res. Rep. CS-76-13, Dep. of Applied Analysis and Computer Science, Univ. of Waterloo, Waterloo, Ontario, Canada.
+3. BOYER, R.S., AND MOORE, J.S. The sharing of structure in theorem-proving programs. In Machine Intelligence, vol. 7, B. Meltzer and D. Michie (Eds.). Edinburgh Univ. Press, Edinburgh, Scotland, 1972, pp. 101-116.
+4. BURSTALL,R.M., AND DARLINGTON,J. A transformation system for developing recursive programs. J. ACM 24, 1 (Jan. 1977), 44-67.
+5. CHANG, C.L., AND LEE, R.C. Symbolic Logic and Mechanical Theorem Proving. Academic Press, New York, 1973.
+6. HEWITT, C. Description and Theoretical Analysis (Using Schemata) of PLANNER: A Language for Proving Theorems and Manipulating Models in a Robot. Ph.D. dissertation, Dep. of Mathematics, Massachusetts Institute of Technology, Cambridge, Mass., 1972.
+7. HUET, G. R6solution d'6quations dans les langages d'ordre 1, 2. . . . . 0:. Th~se d'6tat, Sp6cialit6 Math~matiques, Universit~ Paris VII, 1976.
+8. HUET, G.P. A unification algorithm for typed ?,-calculus. Theor. Comput. Sci. 1, 1 (June 1975), 27-57.
+9. KNUTH, D.E., ANDBENDIX,P.B. Simple word problems in universal algebras. In Computational Problems in Abstract Algebra, J. Leech (Ed.). Pergamon Press, Eimsford, N.Y., 1970, pp. 263-297.
+10. KOWALSKI, R. Predicate logic as a programming language. In Information Processing 74, Elsevier North-Holland, New York, 1974, pp. 569-574.
+11. LEVI, G., AND SIROVICH,F. Proving program properties, symbolic evaluation and logical procedural semantics. In Lecture Notes in Computer Science, vol. 32: Mathematical Foundations of Computer Science 1975. Springer-Verlag, New York, 1975, pp. 294-301.
+12. MARTELLI, A., AND MONTANARI,U. Theorem proving with structure sharing and efficient unification. Internal Rep. S-77-7, Ist. di Scienze della Informazione, University of Pisa, Pisa, Italy; also in Proceedings of the 5th International Joint Conference on Artificial Intelligence, Boston, 1977, p. 543.
+13. MARTELLI,A., AND MONTANARI,V. Unification in linear time and space: A structured presen-
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+282 • A Martelli and U. Montanari
+tation. Internal Rep. B76-16, Ist. di Elaborazione delle Informazione, Consiglio Nazionale delle Ricerche, Pisa, Italy, July 1976. 14. MILNER, R. A theory of type polymorphism in programming. J. Comput. Syst. Sci. 17, 3 (Dec. 1978), 348-375. 15. PATERSON, M.S., AND WEGMAN, M.N. Linear unification. J. Comput. Syst. Sci. 16, 2 (April 1978), 158-167. 16. ROBINSON,J.A. Fast unification. In Theorem Proving Workshop, Oberwolfach, W. Germany, Jan. 1976. 17. ROBINSON,J.A. Computational logic: The unification computation. In Machine Intelligence, vol. 6, B. Meltzer and D. Michie (Eds.). Edinburgh Univ. Press, Edinburgh, Scotland, 1971, pp. 63-72. 18. ROBINSON,J.A. A machine-oriented logicbased on the resolution principle. J. A C M 12, 1 (Jan. 1965), 23-41. 19. SHORTLIFFE, E.H. Computer-Based Medical Consultation: MYCIN. Elsevier North-Holland, New York, 1976. 20. STICKEL, M.E. A complete unification algorithm for associative-commutative functions. In Proceedings of the 4th International Joint Conference on Artificial Intelligence, Tbilisi, U.S.S.R., 1975, pp. 71-76. 21. TRUM, P., AND WINTERSTEIN, G. Description, implementation, and practical comparison of unification algorithms. Internal Rep. 6/78, Fachbereich Informatik, Univ. of Kaiserlautern, W. Germany. 22. VENTURINIZILLI,M. Complexity of the unification algorithm for first-order expressions. Calcolo 12, 4 (Oct.-Dec. 1975), 361-372. 23. VON HENKE, F.W., AND LUCKHAM,D.C. Automatic program verificationIII: A methodology for verifying programs. Stanford Artificial Intelligence Laboratory Memo AIM-256, Stanford Univ., Stanford, Calif., Dec. 1974. 24. WALDINGER,R.J., AND LEVITT, K.N. Reasoning about programs. Artif. Intell. 5, 3 (Fall 1974), 235-316. 25. WARREN, D.H.D., PEREIRA, L.M., AND PEREIRA, F. PROLOG--The language and its implementation compared with LISP. In Proceedings of Symposium on Artificial Intelligence and Programming Languages, Univ. of Rochester, Rochester, N.Y., Aug. 15-17, 1977. Appeared as joint issue: S I G P L A N Notices (ACM) 12, 8 (Aug. 1977), and S I G A R T Newsl. 64 (Aug. 1977), 109-115.
+Received September 1979; revised July 1980 and September 1981; accepted October 1981
+ACM Transactions on Programming Languages and Systems, Vol. 4, No. 2, April 1982.
+
+

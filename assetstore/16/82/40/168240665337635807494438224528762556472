@@ -1,0 +1,718 @@
+FreshML: Programming with Binders Made Simple
+
+Mark R. Shinwell
+
+Andrew M. Pitts
+
+Murdoch J. Gabbay
+
+Cambridge University Computer Laboratory, Cambridge, CB3 0FD, UK
+{Mark.Shinwell,Andrew.Pitts,Murdoch.Gabbay}@cl.cam.ac.uk
+
+Abstract
+FreshML extends ML with elegant and practical constructs for declaring and manipulating syntactical data involving statically scoped binding operations. User-declared FreshML datatypes involving binders are concrete, in the sense that values of these types can be deconstructed by matching against patterns naming bound variables explicitly. This may have the computational effect of swapping bound names with freshly generated ones; previous work on FreshML used a complicated static type system inferring information about the ‘freshness’ of names for expressions in order to tame this effect. The main contribution of this paper is to show (perhaps surprisingly) that a standard type system without freshness inference, coupled with a conventional treatment of fresh name generation, sufﬁces for FreshML’s crucial correctness property that values of datatypes involving binders are operationally equivalent if and only if they represent α-equivalent pieces of object-level syntax. This is established via a novel denotational semantics. FreshML without static freshness inference is no more impure than ML and experience with it shows that it supports a programming style pleasingly close to informal practice when it comes to dealing with object-level syntax modulo α-equivalence.
+Categories and Subject Descriptors
+D.3.1 [Programming Languages]: Formal Deﬁnitions and Theory—syntax; D.3.2 [Programming Languages]: Language Classiﬁcations—applicative (functional) languages; D.3.3 [Programming Languages]: Language Constructs and Features— data types and structures, patterns; F.3.2 [Logics and Meanings of Programs]: Semantics of Programming Languages—denotational semantics, operational semantics
+General Terms
+Languages, Design, Theory
+Keywords
+Metaprogramming, variable binding, alpha-conversion
+Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for proﬁt or commercial advantage and that copies bear this notice and the full citation on the ﬁrst page. To copy otherwise, to republish, to post on servers or to redistribute to lists, requires prior speciﬁc permission and/or a fee. ICFP’03 August 25–29, 2003, Uppsala, Sweden. Copyright 2003 ACM 1-58113-756-7/03/0008 ...$5.00
+
+1 Introduction
+
+User-declared datatypes and pattern-matching in functional programming languages like ML and Haskell simplify one of the main tasks for which these languages were intended, namely metaprogramming—the construction and manipulation of syntactical structures. In particular, the declaration of recursive functions for manipulating the parse trees of object-level languages is made much simpler (and hence less error prone) through the use of patterns to match against parts of trees. Unfortunately a pervasive problem spoils this rosy picture: object-level languages often involve binding operations. In this case meta-level programs only make sense, or at least only have good properties, when we operate not on parse trees but on their equivalence classes for a relation of α-equivalence identifying trees differing only in the names of bound entities. At the moment programmers deal with this case-by-case according to the nature of the object-level language being implemented, using a self-imposed discipline. For example, they might work out (not so hard) and then correctly use (much harder) some ‘nameless’ representation of α-equivalence classes of parse trees in the style of de Bruijn [8]. The tedious and error-prone nature of ad hoc solutions to this semantically trivial, but pragmatically non-trivial issue of α-equivalence is widely acknowledged [27, Sect.13]. We need better automatic support for object-level α-equivalence in metaprogramming languages.
+
+FreshML is an ML-like language which provides such support. Its design was introduced by Pitts and Gabbay [25] and subsequently reﬁned and implemented by Shinwell [29]. It provides the user with a general-purpose type construction, written bty ty, for binding names of user-declared type bty in expressions of arbitrary type ty. This can be used in datatype declarations of types representing object-level syntax to specify information about binding in the type. For example, suppose we want to represent expressions of a small fragment of ML with the following forms:
+
+x fn x => e e1 e2 let fun f x = e1 in e2 end
+
+value identiﬁer function abstraction function application local recursive function
+
+In FreshML we can declare a new type name of bindable names for object-level value identiﬁers and then declare a datatype expr for the above ML expressions:
+
+bindable type name datatype expr = Vid of name
+| Fn of <name>expr | App of expr * expr | Let of expr * <name>expr | Letf of <name>((<name>expr ) * expr )
+
+In this declaration, types tell the system which data constructors are binders and how their arguments are bound. For example in let fun f x = e1 in e2 end there is a binding occurrence of f whose scope is both e1 and e2; and another of x whose scope is just e1. These binding scopes are reﬂected by the argument type of Letf in the declaration of expr . This declarative speciﬁcation of binding structure is particularly useful because FreshML endows datatypes like expr with two crucial properties:
+Abstractness: object-level expressions represented as values of the datatype are operationally equivalent in FreshML if and only if they are α-equivalent in the object language.
+Indeed, datatypes like expr are equality types in the ML sense, and meta-level equality correctly represents object-level α-equivalence.
+Concreteness: values of such datatypes can be deconstructed by matching against patterns which explicitly name bound entities.
+Indeed, FreshML provides automatic language-level support for the common informal idiom which refers to α-equivalence classes via representative parse trees, with bound names changed ‘on the ﬂy’ to make them distinct among themselves and distinct from any other names in the current context of use. For example, the following FreshML declaration of a function subst of type expr → name → expr → expr sufﬁces for subst e1 x e2 to compute (a representation of) the ML expression obtained by captureavoiding substitution of the expression represented by e1 for all free occurrences of the value identiﬁer named x in the expression represented by e2.
+fun subst e x (Vid y ) = if x =y then e else Vid y
+| subst e x (Fn (<y >e1)) = Fn (<y >(subst e x e1))
+| subst e x (App (e1,e2)) = App (subst e x e1,subst e x e2)
+| subst e x (Let (e1,<y >e2)) = Let (subst e x e1,<y >(subst e x e2))
+| subst e x (Letf (<f >(<y >e1,e2))) = Letf (<f >(<y >(subst e x e1),subst e x e2))
+Note how simple subst is!—only the ﬁrst clause of the declaration is not ‘boiler plate’ [15]. In particular the clauses dealing with substitution under a binder only have to specify the result when the bound name is sufﬁciently fresh. Section 2 shows how FreshML ensures only this case arises during evaluation; and subst is a total function because by Sect. 5 values of type expr represent αequivalence classes of expressions in the ML fragment.
+The Abstractness property says FreshML is correct as a language for ‘programming modulo α-equivalence’, and the Concreteness property says it is expressive. The two properties oppose each other and it is tricky to make them co-exist. We were guided to the design in [25] that achieves this by using the ‘FM’ mathematical model of binding in terms of name-swapping [10, 13, 24]. This model has a notion of an object’s support which specialises to the set of free names when it is an α-equivalence class of parse trees involving binders. We put forward the following informal thesis relating what is sometimes called the ‘Barendregt variable convention’ [3, page 26] to this notion of support.
+Thesis: when people carry out constructions on α-equivalence classes of parse trees via representative trees using dynamically freshened bound names, the end result is well-deﬁned, i.e. independent of which fresh bound names are chosen, because the freshly chosen names do not occur in the support of the ﬁnal result.
+
+The type system in [25] enforces the condition ‘freshly chosen names do not occur in the support of the ﬁnal result’ at compiletime by deducing information about a relation of freshness of names for expressions which is a decidable approximation to the (in general undecidable) ‘not-in-the-support-of’ relation. The result is a pure functional programming language; static freshness inference ensures the dynamics of replacing insufﬁciently fresh names on the ﬂy is referentially transparent. Purity makes reasoning about program properties simpler and is desirable, but our static freshness inference which achieved it had a drawback: since freshness is only an approximation of ‘not-in-the-support-of’, the type-checker inevitably rejects some algorithms that do in fact conform to the above Thesis. Experience showed this happened too often (we discuss why in Sect. 6). The main contribution of this paper is to show, perhaps surprisingly, that static freshness inference is not necessary for the crucial Abstractness property to hold in the presence of the Concreteness property, so long as the operational semantics of [25] is modiﬁed to make the declaration of fresh bindable names generative like some other sorts of names (references, exceptions and type names) are in ML. This fact is not at all obvious and requires proof, which we give.
+Summary
+Section 2 introduces a new version of FreshML with a slightly more ‘effectful’ dynamics than in [25], but considerably simpler type system. Since we wish to promote it, this new version of the language is simply called FreshML; the older, more complicated design from [25] will be referred to as FreshML 2000. As explained in Sect. 3, the essence of the dynamics is the combination of generative names with name-swapping. To prove that the FreshML type system controls the dynamics sufﬁciently for object-level α-equivalence to coincide with meta-level operational equivalence (the Abstractness property), in Sect. 4 we describe a denotational semantics of FreshML in the FM-sets model of binding [13] that gave rise to the design of FreshML 2000 in the ﬁrst place. The denotational semantics is structured using a monad and makes use of FM-cpos, which seem interesting in their own right. Section 5 contains the main technical contributions of the paper: we prove that this denotational semantics is computationally adequate for the operational semantics (the proof uses a suitable logical relation between semantics and syntax whose details are omitted in this extended abstract) and then we use this result to establish the Abstractness property (Theorem 5.6). Section 6 discusses the pros and cons of using static freshness inference as originally envisioned in [25] for FreshML 2000. Section 7 describes our experiences implementing FreshML. From the programmer’s point of view, we claim that FreshML extends ML with elegant and practical constructs for declaring and manipulating syntactical data involving binding operations. We give a few examples: capture-avoiding substitution, α-equivalence, computation of free variables (Fig. 5), and normalisation by evaluation (Fig. 7); more can be found at http://www.freshml.org/. Finally, Sect. 8 discusses related work and draws some conclusions about the results presented here and their implications for future work.
+2 FreshML-Lite
+This section introduces the new version of FreshML. Compared with [25], we do without freshness inference in the type system and use a generative operational semantics for fresh names. To make the presentation more accessible, here we use a cut-down language, which we call FreshML-Lite, combining the principal novelties of FreshML with a pure functional subset of ML.
+
+Types τ ∈ Ty bindable name abstraction type unit type product type function type data type
+
+::=
+name name τ
+unit τ ×τ τ →τ δ
+
+Patterns variable abstraction pair
+
+pat ::= x <x>x (x,x)
+
+Values v ∈ Val atom abstraction pair unit closure constructed
+
+::= a av (v, v) () [E, x(x) = e] C Cv
+
+Declarations dec value fresh atom recursive function sequential
+
+::= val pat = e fresh x fun x (x) = e dec dec
+
+Expressions e value identiﬁer constructor atom equality test atom swapping atom abstraction unit pair application case split local declaration
+
+::= x C e=e swap e,e in e <e>e
+() (e,e) ee case e of (C x => e | · · · ) let dec in e end
+
+Environments E ∈ VId −ﬁ→n Val
+
+Typing contexts Γ ∈ VId −ﬁ→n Ty
+
+States a ∈   ﬁn
+¡
+
+Top-level datatype declaration datatype bool = true | false and δ1 =... C of τ | · · ·
+
+Figure 1. FreshML-Lite syntax and semantic objects
+
+FreshML-Lite syntax is speciﬁed in Fig. 1. For simplicity we as-
+
+sume a single, top-level datatype declaration, including a type bool
+
+of booleans and possibly some other mutually recursively deﬁned
+
+datatypes δ1, name, whose
+
+δ2, . . . values
+
+There is a are called
+
+single type atoms1 and
+
+of bindable names, called which are the elements of
+
+a ﬁxed, countably inﬁnite set . The type name τ of abstractions
+
+¡
+has values given by pairs, written a v and consisting of an atom
+
+a ∈ and a value v of type τ . As we see below, FreshML-Lite’s
+
+¡
+semantics (both operational and denotational) identiﬁes abstraction
+
+values up to renaming the -enclosed atom; for example, a a
+
+and a a turn out to be operationally equivalent values of type
+
+name name. In FreshML-Lite programs, values of type name are
+
+introduced via local declarations of fresh atoms, in much the same
+
+way that names of references are introduced in ML; values of ab-
+
+straction type are introduced with expressions of the form <e1>e2
+
+and eliminated via a local declaration with an abstraction pattern,
+
+let val <x>y = e in e end.
+
+FreshML-Lite’s type system is quite standard compared with the one given in [25] (the latter infers freshness information in addition to conventional ML typing properties). Figure 2 gives a selection of
+
+1The terminology stems from the denotational model given in Sect. 4.
+
+Expressions
+
+Γ e1 : name Γ e2 : name Γ e1 = e2 : bool
+
+Γ e1 : name Γ e2 : name Γ e3 : τ Γ swap e1,e2 in e3 : τ
+
+Γ e1 : name Γ e2 : τ Γ <e1>e2 : name τ
+
+Γ e1 : τ1 Γ e2 : τ2 Γ (e1,e2) : τ1 × τ2
+
+Declarations
+
+Γ dec : Γ Γ + Γ e : τ Γ let dec in e end : τ
+
+Γ e : name τ x = y Γ val <x >y = e : {x → name, y → τ }
+
+Γ e : τ1 × τ2 x = y Γ val (x ,y ) = e : {x → τ1, y → τ2}
+
+Values
+
+Γ fresh x : {x → name}
+
+a∈ ¡
+a : name
+
+a∈ ¡
+
+v:τ
+
+a v : name τ
+
+v1 : τ1
+
+v2 : τ2
+
+(v1, v2) : τ1 × τ2
+
+Figure 2. FreshML-Lite typing (excerpt)
+
+(1) (2) (3) (4) (5)
+(6) (7) (8)
+(9) (10) (11)
+
+the typing rules. Comparing rules (3), (6) and (10) with rules (4), (7) and (11) respectively, we see that as far as typing properties are concerned, name τ is like a product type name × τ (cf. Theorem 3.1). However, the two types have different dynamic properties. We have chosen to remain close to the Deﬁnition of Standard ML [18] and specify the dynamics using inductively deﬁned evaluation relations of the form
+
+a, E e ⇓ v, a a, E dec ⇓ E , a
+
+(21) (22)
+
+where the states a and a are ﬁnite subsets of and the value ¡
+environments E and E are ﬁnite functions mapping value identiﬁers to values.2 Figure 3 gives a selection of the evaluation rules. Rules (14) and (18) make use of the notation
+
+(a a ) · v
+
+(23)
+
+which stands for the value obtained from v by swapping all occurrences of the atoms a and a in it.
+2In contrast to FreshML 2000 where the environment-style operational semantics is necessary for type soundness, it is quite possible to use a ‘substituted-in’ formulation of FreshML’s dynamics, in which values form a subset of expressions.
+
+a, E e1 ⇓ a, a a , E e2 ⇓ a, a a, E e1 = e2 ⇓ true, a
+
+a, E e1 ⇓ a, a a , E e2 ⇓ a , a a, E e1 = e2 ⇓ false, a
+
+a=a
+
+a, E e1 ⇓ a1, a a , E e2 ⇓ a2, a a , E e3 ⇓ v, a
+a, E swap e1,e2 in e3 ⇓ (a1 a2) · v, a
+
+a, E e1 ⇓ a, a a , E e2 ⇓ v, a a, E <e1>e2 ⇓ a v, a
+
+a, E e1 ⇓ v1, a a , E e2 ⇓ v2, a a, E (e1,e2) ⇓ (v1, v2), a
+
+a, E dec ⇓ E , a a , E + E e ⇓ v, a a, E let dec in e end ⇓ v, a
+
+(12) (13)
+(14) (15) (16) (17)
+
+a, E e ⇓ a v, a a ∈ − a v = (a a ) · v ¢
+a, E val <x1>x2 = e ⇓ {x1 → a , x2 → v }, a ∪ {a } (18)
+
+a, E e ⇓ (v1, v2), a a, E val (x1,x2) = e ⇓ {x1 → v1, x2 → v2}, a
+a∈ −a ¢
+a, E fresh x ⇓ {x → a}, a ∪ {a} Figure 3. FreshML-Lite evaluation (excerpt)
+
+(19) (20)
+
+The state may grow during evaluation: if (21) holds, Lemma 2.4 below shows that a ⊆ a (and similarly for (22)). The features that cause it to grow are not only declarations of fresh atoms (see rule (20)), but also value declarations involving abstraction patterns: see rule (18). This rule lies at the heart of our treatment of binders. It says that when matching an abstraction pattern <x>y against an abstraction value a v, we associate x not with a, but rather with a new atom a not in the current state; and then y is associated with (a a ) · v. In fact the valid instances of the evaluation relations (21) and (22) all have the property that a contains all the atoms occurring in v (provided a contains all those occurring in E, which we will always assume to be the case). So the new atom a in rule (18) does not occur in v and therefore the swapping (a a ) · v is equal to [a:=a ] · v, the result of replacing all occurrences of a in v with a . We postpone to Sect. 7 discussing ways of making the implementation of this rule more efﬁcient, both by avoiding the generation of fresh atoms where possible and by delaying the computation of atom swaps (replacements) until needed.
+FreshML-Lite permits explicit name-swapping in expressions with the syntax swap e1,e2 in e3; typing and evaluation rules are (2) and (14) in Figs 2 and 3. Name-swapping can express the operation e @ x from [25] of concreting an abstraction at a (fresh) atom, using
+let val <x’ >y = e in swap x,x’ in y . Here is a more typical example, using swap-expressions to replace the bound names in a number of abstractions with the same name.
+
+Example 2.1. If eq : τ × τ → bool gives a notion of equality for τ -values, then the following function eqa of type name τ × name τ → bool correctly computes ‘equality modulo α-conversion’ for name τ -values:
+fun eqa (p)= let val (z,z’) = p val <x>y = z val <x’>y’ = z’ in eq (swap x,x’ in y, y’) end.
+Compare this with the characterisation of α-equivalence via swapping of [32, Theorem 1].
+Remark 2.2. The full version of FreshML extends FreshML-Lite with a number of useful features, as well as including standard features from ML such as polymorphism, references and exceptions.
+• Compound patterns are allowed, in which abstraction patterns can be nested with other forms of pattern. For example, the declaration of eqa from Example 2.1 can be simpliﬁed to: fun eqa (<x>y,<x’>y’) = eq (swap x,x’ in y, y’).
+• Rather than having just one type name of bindable names, users can declare as many distinct such types as they need; they form a subclass of the equality types and expressions can be polymorphic in the type of bindable names used.
+• Abstraction types bty ty, with bty a declared type of bindable names, are a special case of abstraction types ety ty where ety is an arbitrary equality type. Their values are written v1 v2 (so a v is a synonym for a v when a is an atom). The semantics ensures that these values are indistinguishable up to renaming all the free atoms in the value v1 (of equality type ety) occurring in the value v2 (of type ty); this permits simple representations of binding constructs in which the number of bound names is not ﬁxed, such as the ML matching constructs (which bind all the variables occurring in a pattern), or Scheme’s general form of let-expression with a list of declarations.
+• If ety and ety are equality types, then so is ety ety and the built-in equality function at that type is the appropriate form of α-equivalence (cf. Example 2.1).
+We conclude this section by giving some ‘sanity checks’ on FreshML-Lite’s typing and evaluation rules. Lemma 2.3. Given value and typing environments E and Γ, write
+E : Γ to mean that dom(E) = dom(Γ) and that for each x ∈ dom(Γ), E(x) : Γ(x) holds. Then if a, E e ⇓ v, a , E : Γ and Γ e : τ hold, so does v : τ .
+Lemma 2.4. Given a state a containing all the atoms occurring in a value environment E, if a, E e ⇓ v, a holds then a ⊆ a . Moreover, the pair (v, a ) is uniquely determined up to permuting the atoms in a − a: if a, E e ⇓ v , a also holds, then there is a bijection π between a − a and a − a such that v is obtained from v by applying π to the atoms occurring in it.
+3 The essence of FreshML is swapping
+Although in rule (18) of Fig. 3 one can replace swapping (a a ) · v with renaming [a:=a ] · v, because a does not occur in v, nevertheless swapping rather than renaming underlies our treatment of fresh bindable names. This is because it is simpler to use a totally deﬁned operation that can be applied whether or not a occurs in v; but if a
+
+Types
+
+[[name]]ML [[ name τ ]]ML
+
+= unit ref = [[name]]ML × [[τ ]]ML
+
+Expressions
+[[e1 = e2]]ML = [[e1]]ML = [[e2]]ML [[swap e1,e2 in e3]]ML = swap [[e1]]ML [[e2]]ML [[e3]]ML
+[[<e1>e2]]ML = ([[e1]]ML,[[e2]]ML) [[val <x1>x2 = e]]ML = val (x1,x2) = [[e]]ML;
+val x1 = ref (); val x2 = swap x1 x1 x2
+(where x1, x2 are fresh) [[fresh x]]ML = val x = ref ()
+
+Values
+
+[[a]]ML = a [[ a v]]ML = ([[a]]ML, [[v]]ML)
+
+The rest of the translation is the identity; for example
+[[τ1 × τ2]]ML = [[τ1]]ML × [[τ2]]ML [[(e1,e2)]]ML = ([[e1]]ML,[[e2]]ML) [[val (x1,x2) = e]]ML = val (x1,x2) = [[e]]ML [[(v1, v2)]]ML = ([[v1]]ML, [[v2]]ML), etc.
+Figure 4. Translating FreshML-Lite into ML+swap
+
+does occur in v, renaming can have bad properties, whereas swapping is well-behaved. For example if a, a and a are distinct, a a and a a are equivalent, but [a:=a ] · (−) sends the ﬁrst to a a and the second to the inequivalent value a a . We might repair this familiar problem of ‘capture’ of free names by binders with a theory of capture-avoiding renaming, but a much simpler solution is just to use swapping (a a )·(−); its self-inverse nature has excellent properties which include preserving α-equivalence. Indeed, a growing body of evidence shows that name-swapping, and more generally permutations of names, are very useful for describing properties of syntax involving binders: see [5, 6, 11, 24, 32]. As far as dynamics are concerned, name-swapping is the only thing FreshML has over ML. To see this, consider the extension of Standard ML [18] with a primitive polymorphic function swap of type unit ref → unit ref → α → α for swapping addresses (the values of type unit ref) in ML values. Then the FreshML-Lite language of the previous section can be translated into it as in Fig. 4. Theorem 3.1. The above translation preserves and reﬂects FreshML-Lite typing and evaluation: Γ e : τ holds in FreshMLLite iff [[Γ]]ML [[e]]ML : [[τ ]]ML holds in ML+swap; and a, E e ⇓ v, a holds in FreshML-Lite iff a, [[E]]ML [[e]]ML ⇓ [[v]]ML, a holds in ML+swap. Since the translation is compositional, this theorem implies it is ‘computationally adequate’: if the translations of two phrases are contextually equivalent in ML+swap, then they are already contextually equivalent in FreshML-Lite. (See Deﬁnition 5.3 for a precise deﬁnition of contextual equivalence.) The converse is not true; the translation is far from being ‘fully abstract’. This is because abstraction values in FreshML-Lite are translated to (atom,value)pairs in ML+swap and the identity of the ﬁrst component can be discovered there in a way that we shall prove in Sect. 5 is impossible in FreshML-Lite. For example, the results in Sect. 5 show that the following two expressions of type ( name name) × ( name name)
+
+are contextually equivalent in FreshML-Lite:
+let fresh x fresh y in (<x >x ,<y >y ) end, let fresh x in (<x >x ,<x >x ) end.
+Under the translation they become the contextually inequivalent expressions
+let val x = ref () val y = ref () in ((x ,x ),(y ,y )) end, let val x = ref () in ((x ,x ),(x ,x )) end which are distinguished in ML+swap by the context let val x = [ – ] in #1(#1(x)) = #1(#2(x)) end (where #1 and #2 are ML notation for ﬁrst and second projection functions). It might seem then that we could better mimic name τ in ML+swap with an abstract type with underlying representation name × τ . However, being abstract, we would lose the Concreteness property mentioned in the Introduction, i.e. the ability to match against patterns involving abstraction, which seems so convenient in practice (see also Remark 5.7).
+4 Denotational semantics
+In this section we give meaning to FreshML-Lite types and expressions with a denotational semantics in the universe of FMsets. This permutation model of set theory devised by Fraenkel and Mostowski in the 1930s is shown in [13] to provide a syntaxindependent mathematical model of fresh bindable names and αconversion, by expressing those concepts purely in terms of swapping names. This mathematics gave rise to the FreshML 2000 design [25]. We saw in the previous section that the dynamics of FreshML’s treatment of bindable names reduces to two things: a dynamically generated supply of fresh names (provided by the ML type unit ref) and name-swapping (which we had to introduce as a primitive). So it is perhaps not surprising that a mathematical model of freshness and name-swapping can provide a denotational semantics of FreshML-Lite that ﬁts its operational semantics well. The computational adequacy result of Theorem 5.4 shows that it does; from this we deduce results about the correctness of representation of object-level α-equivalence.
+What is an FM-set? Ordinary sets are members of a cumulative hierarchy obtained by starting with nothing (∅) and continuing transﬁnitely, at each stage forming new sets by taking powersets. The universe of FM-sets differs just in that we start with a ﬁxed inﬁnite collection of ‘atoms’ (so-called because they will be members of
+£
+the universe that do not possess elements themselves), and at each stage take only the set of subsets that possess a ﬁnite support. By deﬁnition a set a of atoms is a support for X if for all a, b ∈ − a,
+£
+X equals (a b) · X. Here (a b) · X denotes the set obtained from X by swapping a and b wherever they appear in it (hereditarily). It is the case (though not obviously so: see [13, Proposition 3.4]) that every member X of the universe of FM-sets possesses a smallest ﬁnite support, written supp(X).
+The only restriction we have when doing FM-set theory is that we must remain within the universe of sets with ﬁnite support. The axiomatic development of [10] shows that nearly all logical and settheoretical constructs have this property. Just axioms of choice, the ability to form a set consisting of an arbitrary choice of inﬁnitely many objects of the universe, are limited. For example, and this will be relevant below, if xn (for n = 0, 1, . . .) is a countable sequence of elements of an FM-set, although each element of the sequence possesses a ﬁnite support, there may be no single ﬁnite set of atoms that is a support for all the xn simultaneously; only if there is such a ﬁnite set will the function sending each n to xn, i.e. the set of
+
+ordered pairs {(n, xn) | n = 0, 1, . . .}, be ﬁnitely supported and hence an FM-set.
+
+FreshML-Lite features ﬁxpoint recursion in both types and expressions. It is well-known how to use domain theory to give denotational semantics for this. Here we use a domain theory in FM-sets; this gives us access to the FM-set former for atomabstractions [13, Sect. 5] to give meaning to FreshML-Lite’s abstraction types name τ . We only need a relatively simple notion of domain, namely ω-complete partial orders (cpos), within the FMsets universe:
+
+Deﬁnition 4.1. An FM-cpo D is an FM-set equipped with a ﬁnitely supported partial order D⊆ D × D (often written just ) such that any ﬁnitely supported ω-chain d0 d1 d2 · · · ∈ D (i.e. one for which there is a single ﬁnite set of atoms a with supp(dn) ⊆ a for all n) has a least upper bound (lub). We also assume supp(D) = supp( D) = ∅ (i.e. D and D do not depend on particular atoms). A morphism of FM-cpos f : D → D is a function D → D that preserves , swapping (i.e. f ((a b) · d) = (a b) · f (d)), and lubs of ﬁnitely supported ω-chains.
+
+Such a D need not have lubs of arbitrary ω-chains. For example the
+
+denotation of name → unit turns out to be isomorphic to the FM-
+
+cpo of subsets of that are either ﬁnite or whose complement is
+
+¤
+
+ﬁnite, partially ordered by inclusion; if we enumerate the elements
+
+of ¤
+
+= {a0, a1, a2, . . .},3 then the chain ∅
+
+{a0}
+
+{a0, a2}
+
+{a0, a2, a4} · · · is not ﬁnitely supported and moreover does not
+
+possess a lub in this FM-cpo.
+
+Our semantics is monadic in the sense of Moggi [19]: each type τ is assigned an FM-cpo [[τ ]] whose elements are used to give meaning to FreshML-Lite values, v : τ ; whereas (closed) expressions of type τ are assigned elements of T[[τ ]], where T is a particular ‘dynamic allocation’ monad on FM-cpos. We deﬁne T below, but ﬁrst here is the deﬁnition of [[τ ]] as τ ranges over FreshML-Lite types.
+
+• [[unit]] d=ef {1}, [[name]] d=ef : Each FM-set X determines a ¤
+discrete FM-cpo taking as equality on X. The one-element set interprets unit and the set of atoms interprets name.
+¤
+
+• [[δn]] d=ef Dn: For datatypes we use minimal solutions to simultaneous recursive domain equations corresponding to the datatype declaration. We can construct them by standard techniques using colimits of embedding-projection pairs (see [1, Sect. 5] for example), which transfer smoothly to FM-cpos; we omit details.
+
+• [[ name τ ]] d=ef [ ][[τ ]]: For abstraction types we use the atom¤
+abstraction FM-cpo [ ]D built from an FM-cpo D, much like the ¤
+atom-abstraction FM-set in [13, Sect. 5]. This consists of equivalence classes for the pre-order (i.e. reﬂexive-transitive relation) on ¤ × D given by: (a1, d1) (a2, d2) iff a1 = a2 and d1 D d2, or a2 ∈/ supp(d1) and (a1 a2) · d1 D d2 (cf. Example 2.1). Overloading the notation, we write [a]d for the element of [ ]D given
+¤
+by the equivalence class of the pair (a, d). We can calculate that supp([a]d) = supp(d) − {a}.
+
+• [[τ × τ ]] d=ef [[τ ]] × [[τ ]]: For product types we use the product of FM-cpos, given as for ordinary cpos by ordered pairs with componentwise ordering.
+
+• [[τ → τ ]] d=ef [[τ ]] → T[[τ ]]: The function FM-cpo D → D of D and D consists of all ﬁnitely supported subsets of D × D that
+3Any such bijection of the set of atoms with the natural numbers is external to the FM-sets universe since it cannot be ﬁnitely supported.
+
+are total, monotone functions from D to D preserving least upper bounds of ﬁnitely supported chains. To interpret function types we combine this construct with the dynamic allocation monad T described below. Thus values of type τ → τ , i.e. recursive function closures, are modelled by functions mapping values (elements of [[τ ]]) to ‘computations’ of values (elements of T[[τ ]]).
+
+T is the analogue for the category of FM-cpos of one of the dy-
+
+namic allocation monads on a presheaf category used by Stark [30]
+
+to model the Pitts-Stark ν-calculus [26]. Each FM-cpo TD can be
+
+constructed as the quotient of ( ¥
+
+ﬁn ¤
+
+× D)⊥ by a suitable equiva-
+
+lence relation; we omit the details here and just note that TD carries
+
+the following structure:
+
+• A (mono)morphism η : D → TD (the monad unit).
+
+• A least element ⊥ ∈ TD.
+
+• A morphism ν : [ ]D → D (‘restriction’) satisfying for all ¤ a, b ∈ and x ∈ TD that ¤
+
+ν[a](ν[b]x) = ν[b](ν[a]x) ν[a]x = x if a ∈/ supp(x).
+
+(24) (25)
+
+TD is the minimal cpo with these properties, i.e. it has a certain category-theoretic universal property, which we omit; and we can use that to deﬁne the lifting part of the monad structure and verify the usual monad laws. We can present each non-bottom element of TD as
+
+νa . d d=ef ν[a1] · · · ν[an]η(d)
+
+(26)
+
+where a = {a1, . . . , an} is a ﬁnite (possibly empty) set of atoms occurring in the support of d ∈ D (by property (24), the order in which we list the elements of a on the right-hand side of (26) is immaterial). The element (26) models a convergent FreshMLLite expression whose evaluation creates some fresh atoms a and returns a value denoted by d. We need a dynamic allocation monad satisfying (24) and (25), rather than a simpler one just pairing up name sets and values, to prove Theorem 5.6.
+
+We can now construct the denotations of FreshML-Lite values, expressions and declarations:
+• if v : τ is derivable, then [[ v : τ ]] ∈ [[τ ]] • if Γ e : τ is derivable, then [[Γ e : τ ]] : [[Γ]] → T[[τ ]] • if Γ dec : Γ is derivable, then [[Γ dec : Γ ]] : [[Γ]]→T[[Γ ]] where the denotation [[Γ]] of a typing environment Γ is the product of the FM-cpos [[Γ(x)]] as x ranges over the ﬁnite domain of deﬁnition of Γ. Deﬁnition is by induction on judgements; we just give the interesting clauses.
+
+• Fresh name declaration, Γ fresh x : Γ : [[Γ fresh x : Γ ]](ρ) d=ef ν{a} . {x → a}, for some/any a ∈
+¤
+(by construction of T, the right-hand side is independent of a).
+
+• Value declaration for abstractions, Γ val <x>x = e : Γ : Let d = [[Γ e : name τ ]](ρ). Then, for m as deﬁned below,
+
+[[Γ
+
+val <x>x = e : Γ ]](ρ) d=ef
+
+⊥ m
+
+if d = ⊥ otherwise.
+
+For d = ⊥, we have that d = νa . [a]d and we can deﬁne m d=ef ν({a } a) . {x → a , x → (a a ) · d } for some/any a ∈/ a ∪ {a} ∪ supp(d ).
+
+• Swap expression, Γ swap e1,e2 in e3 : τ : Let a1 = [[Γ e1 : name]](ρ), a2 = [[Γ e2 : name]](ρ) and d = [[Γ e3 : τ ]](ρ). Then
+
+
+
+⊥ if a1 = ⊥,
+
+[[Γ
+
+swap e1,e2 in e3 : τ ]](ρ) d=ef (a1 a2) · d
+
+or a2 = ⊥ otherwise.
+
+• Abstraction expression, Γ <e1>e2 : name τ : Given d1 = [[Γ e1 : name]](ρ) and d2 = [[Γ e2 : τ ]](ρ), then
+
+[[Γ <e1>e2 : name τ ]](ρ) d=ef
+
+⊥ if d1 = ⊥, or d2 = ⊥
+
+ν(a
+
+a ) . [a]d
+
+otherwise, where d1 = νa . a, d2 = νa . d and a ∩ a = ∅.
+
+• Atom value: [[ a : name]] d=ef a. • Abstraction value: [[ a v : name τ ]] d=ef [a][[ v : τ ]]. When we refer to ‘some/any atom’ above, we are really using the freshness quantiﬁer N of [13]: we choose some atom satisfying the condition, but in fact any such one will do.
+
+5 Correctness
+
+In this section we show the denotational semantics of Sect. 4 matches the operational semantics closely enough that we can prove prove that values of recursively deﬁned FreshML-Lite datatypes represent α-equivalence classes of object-level syntax (the Abstractness property from the Introduction). For simplicity we take as object-language the familiar untyped λ-calculus, but the results easily generalise to other algebraic signatures with binders. We noted in the previous section that the denotation [[δ]] of a declared FreshML-Lite datatype δ is a recursively deﬁned FM-cpo. When δ arises from an algebraic signature with binders, it only involves product- and abstraction-, but not function-types; in this case [[δ]] is a discrete FM-cpo given by an inductively-deﬁned FM-set.
+
+Example 5.1. Given the datatype declaration
+
+datatype lam = Var of name
+| Lam of name lam | App of lam × lam
+
+then [[lam ]] is isomorphic to the discrete FM-cpo given by the in-
+
+ductively deﬁned FM-set µX.( + [ ]X + X × X). Previous ¦¦
+
+work [13, Theorem 6.2] shows this to be in bijection with the set
+
+Λ( ¦
+
+)/≡α of α-equivalence classes [t]≡α of untyped λ-terms t
+
+with variables in :
+
+¦
+
+t ∈ Λ( ) ::= a | λa.t | t t ¦
+
+(Swapping is given by (a interchanges all instances
+
+b) · of a
+
+a[tn]d≡αb
+
+ﬁnite set of free variables of t.) It is
+
+ni=nott;h[(taahredbs)tou·pstpe]oe≡rαftr,oofwm[htt]eh≡reeαt(yiaspitbnh)ge·
+
+rules for values in FreshML-Lite that there is a bijection between
+
+λ-terms t ∈ Λ( ¦
+
+) and values (t)v of type lam , given by
+
+(a)v d=ef Var a (λa.t)v d=ef Lam ( a (t)v) (t1 t2)v d=ef App ((t1)v, (t2)v).
+
+One can show by induction on the structure of t that under the
+
+isomorphism Λ( ¦
+
+)/≡α ∼= [[lam ]] above, [t]≡α is identiﬁed with
+
+[[ (t)v : lam ]]. Therefore for all t and t ,
+
+t ≡α t iff [[ (t)v : lam ]] = [[ (t )v : lam ]]
+
+(27)
+
+Thus denotations of values of FreshML-Lite datatypes like lam are in bijection with α-equivalence classes of terms of the objectlanguage they represent. To connect this to operational behaviour of FreshML-Lite programs we have to do two things. First, we examine the translation of object-level terms into expressions rather than values, since these are what the programmer writes, and second, we relate equality of denotation of expressions to an appropriate notion of operational behaviour (Deﬁnition 5.3).
+
+To tackle the ﬁrst issue, still using an object-language of λ-terms, note that atoms and value identiﬁers VId are both countably inﬁ-
+¦
+nite sets. By enumerating each, ﬁx some explicit bijection ai ↔ xi, then translate the λ-terms t of Example 5.1 into FreshML-Lite expressions (t)e as follows:
+
+(ai)e d=ef Var xi (λai.t)e d=ef let fresh xi in Lam (<xi>(t)e) end (t1 t2)e d=ef App ((t1)e,(t2)e).
+
+Lemma 5.2. One can show by induction on the structure of t that
+
+if its free variables are among {a1, . . . , an} and if Γ is the typing
+
+context mapping the corresponding value identiﬁers x1, . . . , xn to
+
+name, then Γ
+
+(t)e : lam
+
+holds and for any ρ ∈ [[Γ]] = ¦
+
+n
+
+[[Γ (t)e : lam ]](ρ) = ν∅ . [[ (ρ t)v : lam ]] ∈ T[[lam ]] (28)
+
+where ρ t is the λ-term obtained by simultaneous capture-avoiding substitution of ρ(xi) for ai in t (for i = 1, . . . , n). PROOF. When it comes to the step for λ-abstractions in the proof of (28), the ‘garbage collection’ property (25) of the monad T is crucial, combined with the fact that in an atom-abstraction FM-cpo [ ]D, an element of the form [a]d never contains a in its support.
+¦
+
+We now know for all t and t that t ≡α t iff [[Γ (t)e : lam ]] = [[Γ (t )e : lam ]] (29)
+where Γ is as in Lemma 5.2. For if t ≡α t , then ρ t ≡α ρ t for any ρ; so from (27) we get [[ (ρ t)v : lam ]] = [[ (ρ t )v : lam ]] and therefore [[Γ (t)e : lam ]](ρ) = [[Γ (t)e : lam ]](ρ) by (28); since this holds for any ρ, we have the left-to-right implication in (29). Conversely, if [[Γ (t)e : lam ]](ρ) = [[Γ (t)e : lam ]](ρ) holds for any ρ, from (28) again we get ν∅ . [[ (ρ t)v : lam ]] = ν∅ . [[ (ρ t )v : lam ]] in T[[lam ]]; but this implies that [[ (ρ t)v : lam ]] = [[ (ρ t )v : lam ]] in [[lam ]] (since the unit of the monad T is a monomorphism); so by (27) we have ρ t ≡α ρ t ; and then we can take ρ to be ρ(xi) = ai (i = 1, . . . , n), for which ρ t ≡α t and ρ t ≡α t , to conclude that t ≡α t . Turning to the second issue mentioned above, namely relating equality of denotation of expressions to operational behaviour, we give a notion of contextual equivalence for FreshML-Lite expressions. Roughly speaking, two expressions (of the same type) are contextually equivalent if they are interchangeable in any complete program without changing observable behaviour. We take programs to be closed expressions of type unit, and their observable behaviour to be whether they evaluate, ignoring any fresh atoms created along the way. The following more precise deﬁnition uses typing and evaluation as deﬁned in Sect. 2, and the notion of a context C[–]. As usual, contexts are generated by the grammar in Fig. 1 augmented by a placeholder ‘–’. C[e] then denotes the result of replacing ‘–’ by e.
+
+Deﬁnition 5.3. Given Γ e : τ and Γ e : τ , we write Γ e ≈ctx e : τ
+and say that e and e are contextually equivalent if for all contexts C[–] with ∅ C[e] : unit and ∅ C[e ] : unit, we have ∃a (∅, ∅ C[e] ⇓ (), a) if and only if ∃a (∅, ∅ C[e ] ⇓ (), a ). Theorem 5.4. (Computational adequacy) Suppose Γ e : τ ,
+E : Γ, and a contains the atoms of E. Let ρ be given by ρ(x) = [[ E(x) : Γ(x)]], for x ∈ dom(Γ).
+(a) If a, E e ⇓ v, a , then [[Γ e : τ ]](ρ) is equal to the nonbottom element ν(a − a) . [[ v : τ ]] of T[[τ ]].
+(b) Conversely, if [[Γ e : τ ]](ρ) = ⊥, then a, E e ⇓ v, a holds for some v and a .
+PROOF. (a) is proved by induction on the derivation of a, E e ⇓ v, a . The proof of part (b) is more involved. We use a standard method based on type-indexed logical relations relating domain elements to FreshML-Lite values and expressions. The construction is complicated because, as for ML, FreshML allows function types in recursively deﬁned datatypes (see Fig. 7 in Sect. 6 for an example), precluding a simple inductive technique; instead, we deduce the existence of the logical relations using the general theory of minimal invariant relations [23] applied in the setting of FM-cpos (details omitted in this extended abstract). Parts (a) and (b) together give the ﬁrst part of the following corollary. The second part can be deduced from the proof of the theorem, by exploiting particular properties of the logical relation at equality types, which for the simpliﬁed language given in Sect. 2 we can take to be types not involving use of the function type construct (either in themselves, or in the declarations of any datatypes that they involve). Corollary 5.5. Suppose Γ e : τ and Γ e : τ . If [[Γ e : τ ]] = [[Γ e : τ ]], then Γ e ≈ctx e : τ . The converse holds if τ is an equality type. Theorem 5.6. (Correctness of representation) Under the translation of λ-terms t into FreshML-Lite expressions (t)e of type lam given above, α-equivalence of λ-terms corresponds to contextual equivalence of FreshML-Lite expressions: given two λ-terms t and t , with free variables among {a1, . . . , an} say, letting Γ be the typing context that maps the corresponding value identiﬁers x1, . . . , xn to name, we have
+t ≡α t iff Γ (t)e ≈ctx (t )e : lam .
+PROOF. The type lam is an equality type, so we can combine Corollary 5.5 with (29) to get the desired conclusion. We emphasise that although this correctness theorem is for λ-terms, similar results hold for object languages speciﬁed by a general notion of binding signature (such as the nominal signatures of [32, Deﬁnition 1], or the nominal algebras of [14]) versus datatypes in FreshML-Lite whose declarations are derived from the signature in the simple declarative fashion discussed in the Introduction. Remark 5.7. What more could one want from such a representation of object languages in a metalanguage? Well, to be useful, the metalanguage should provide rich facilities for writing algorithms to manipulate these representations. FreshML’s abstraction patterns are very useful in this respect. In particular we can use them to provide an important facility, namely the ability to recognise that a meta-level expression represents some object-level term. For an impure functional programming language this cannot just be a matter
+
+1 (* remove : name -> name list -> name list *) 2 fun re move x [] = [] 3 | remove x (y ::ys ) = 4 if x = y then remove x ys 5 else y ::(remove x ys ); 6 (* fv : lam -> name list *) 7 fun fv (Var x ) = [x ] 8 | fv (Lam (<x >t )) = remove x (fv t ) 9 | fv (App (t1,t2 )) = (fv t1 ) @ (fv t2 ); 10 (* is closed t : lam -> bool *) 11 fun is closed t = ((fv t )=[])
+Figure 5. Testing for closed λ-terms in FreshML
+
+of typing and termination; because of side-effects from references and exceptions, the full FreshML has terminating closed expressions of type lam from Example 5.1 which are not in the image of the translation t → (t)e of λ-terms. However, even the cut-down FreshML-Lite of Sect. 2 has this property. For example
+
+genvar d=ef let fresh x in (Var x) end
+
+(30)
+
+evaluates to ‘some fresh object-level variable’. Once we identify
+
+[[lam ]] with Λ( §
+
+)/≡α as in Example 5.1, the denotational se-
+
+mantics of genvar Tth[a[lt agme]n] v(aanrdis[an]≡otα
+
+is [[∅ genvar : lam ]] is just {a}); from this contextually equivalent
+
+= ν{a} and Sect.
+
+.5([iat ]f≡oαllo)w∈s
+
+to (t)e for any closed
+
+λ-term t. Nevertheless, we can easily write FreshML-Lite boolean-
+
+valued functions to recognise an expression as the encoding of some
+
+object-level term; for example is closed declared in Fig. 5 (for
+
+legibility we used syntax for nested patterns and standard list con-
+
+structs). This uses helper functions remove for removing an atom
+
+from a list of atoms and fv for computing the free variables of a λ-
+
+term (possibly with repeats); and then is closed tests whether that
+
+list is empty. For example is closed genvar evaluates to false
+
+(creating a fresh atom as it does so). Our results can show that for
+
+a closed FreshML-Lite expression e of type lam, if evaluation of
+
+e terminates (i.e. if ∅, ∅ e ⇓ v, a holds for some v and a), then
+
+∅ is closed e ≈ctx true : bool if and only if ∅ e ≈ctx (t)e : lam
+
+holds for some closed λ-term t.
+
+6 Freshness inference
+
+Recall from Sect. 4 the important FM-sets notion of ﬁnite support (and the notation supp(X) for the smallest set of atoms supporting an FM-set X). In informal reasoning about α-equivalence classes by choosing representatives with sufﬁciently fresh bound names (c.f. the ‘Barendregt variable convention’ [3, page 26]), it seems that the end result is always well-deﬁned, i.e. independent of which fresh bound names are chosen, because the freshly chosen names do not occur in the support of the ﬁnal result (for if a, b ∈/ supp(X), then swapping a and b has no effect on X, i.e. (a b) · X = X). This is the informal Thesis put forward in the Introduction. (See [11, Sect. 2.3] for some mathematical justiﬁcation of it.) The deﬁnition of the denotational semantics at the end of Sect. 4 contains several examples of this phenomenon, for example.
+
+FreshML 2000 [25] enforces that freshly chosen names not be in the support of ﬁnal results at compile time: the type-checker builds up additional information about a relation of freshness between value identiﬁers and expressions, x # e, which is a sound decidable approximation to the ‘not-in-the-support-of’ relation a ∈/ supp([[e]]) in the denotational semantics. (Semantic ‘not-in-the-support-of’ is undecidable for the usual recursion-theoretic reasons.) This allows FreshML 2000 to reject phrases causing observable side ef-
+
+1 (* remove : <name>(name list ) -> name list *) 2 fun re move(<x >[]) = [] 3 | remove (<x >(y ::ys )) = 4 if x # y then y ::(remove (<x >ys )) 5 else remove (<x >ys ); 6 (* fv : lam -> name list *) 7 fun fv (Var x ) = [x ] 8 | fv (Lam (<x >t )) = remove (<x >(fv t )) 9 | fv (App (t1,t2 )) = (fv t1 )@(fv t2 );
+Figure 6. Free variables of λ-terms in FreshML 2000
+fects when fresh names are allocated dynamically. For example, x is most deﬁnitely not fresh for the expression Var x (corresponding to the fact that a ∈ supp(a) = {a}); and FreshML 2000 will not admit genvar declared in (30) as a well-typed expression of type lam . In fact FreshML 2000’s static freshness inference allows one to simplify its dynamics by not threading through evaluation a state containing the names generated so far. Not only does a correctness result like Theorem 5.6 hold for FreshML 2000, but it also satisﬁes ‘no junk’ properties; for example, every closed terminating expression of type lam in the fragment of FreshML 2000 without references and exceptions is of the form (t)e for some closed λterm t. As we saw in Sect. 5, FreshML-Lite has some ‘junk’, but at least it is possible to recognise it dynamically (Remark 5.7). So static freshness-checking gives a more effect-free functional language with better programming laws. However our experiences implementing and using freshness inference indicate that the price is too high, as we shall discuss. As far as implementation goes, unfortunately the freshness inference algorithm has to proceed not solely on the structure of expressions, but also sometimes on the structure of (inferred) types. This is due to the notion of purity—judgements which state that values of certain types (such as bool, int, or string, for example) can never contain atoms in their support. We need this to treat many seemingly innocuous uses of freshened bound names. For example to deduce that fn <x >y => y +1 respects the conditions imposed by freshness checking, we must deduce x # y +1. To do that we examine the type of the body of the match, which is int, and with purity judgements can observe that a value of type int cannot ever contain any atoms in its support; so we deduce x # y +1. More complicated problems of this kind arise in recursive datatype declarations; to deduce which kinds4 of atoms may or may not occur in the support of values of the declared datatypes, it is necessary to converge on a ﬁxed point as in the procedure for maximising equality in ML [18, Sect. 4.9]. With purity, more programs are typeable, but type-checking gets harder for the user to understand and predict. Experience writing syntax-manipulating programs in FreshML 2000 was one of the main motivations for developing a simpler FreshML without freshness inference. We were too frequently forced to adopt an obtuse coding style to get programs to pass the freshness checks. For example, the code in Fig. 5 does not typecheck in FreshML 2000, because at line 8 the freshness checking algorithm cannot deduce that x # (remove x fv t ) holds. In fact when evaluating an application of the fv function by matching against the clause at line 6, the ﬁnal result does not depend upon the particular fresh atom associated with the bound name x , because an atom is not in the support of a list of atoms that has had that atom removed. This fact has a simple proof by induction
+4Both FreshML 2000 and FreshML permit the declaration of different types of bindable names, whose values range over disjoint copies of .
+¨
+
+1 (* syntax *)
+
+2 datatype lam =
+
+3 Var of name
+
+4 | Lam of <name> lam
+
+5 | App of lam *lam ;
+
+6 (* semantics *)
+
+7 datatype sem =
+
+8 L of (unit -> sem ) -> sem (* function *)
+
+9 | N of neu
+
+(* neutral *)
+
+10 and neu =
+
+11 V of name
+
+(* variable *)
+
+12 | A of neu *sem ;
+
+(* neutral appn *)
+
+13 (* reification reify : sem -> lam *)
+
+14 fun reify (L f ) =
+
+15 let fresh x :name in
+
+16 Lam (<x >(reify (f (fn () => N (V x ))))) end
+
+17 | reify (N n ) = reifyn n
+
+18 and reifyn (V x ) = Var x
+
+19 | reifyn (A (n,d )) =
+
+20 App (reifyn n, reify d );
+
+21 (* evals :(name*(unit->sem ))list -> lam -> sem *)
+
+22 fun evals [] (Var x ) = N (V x )
+
+23 | evals ((x,v )::env )(Var y ) =
+
+24 if x = y then v ()
+
+25 else evals env (Var y )
+
+26 | evals env (Lam (<x >t )) =
+
+27 L (fn v => evals ((x,v )::env ) t )
+
+28 | evals env (App (t1,t2 )) =
+
+29 (case evals env t1 of
+
+30 L f => f (fn () => evals env t2 )
+
+31 | N n => N (A (n,evals env t2 )));
+
+32 (* evaluation eval : lam -> sem *)
+
+33 fun eval t = evals [] t ;
+
+34 (* normalisation norm : lam -> lam *)
+
+35 fun norm t = reify (eval t )
+
+Figure 7. Normalisation by evaluation in FreshML
+
+on the length of the list, but this is not something our freshnesschecking algorithm is able to use at the point it needs to verify the condition x # (remove x fv t ). For this particular example we can circumvent the problem by using a remove function of type name (name list) → name list, as in Fig. 6.5 At line 8 of this ﬁgure the previous problem has gone away because x is always fresh for an object of the form <x >e (and also because x is fresh for remove , since the deﬁnition of that function does not depend upon any atom in particular). FreshML 2000 spots this at compiletime and allows this new version of fv as a well-typed expression of type lam → name list. Figure 7 gives a subtler example of the shortcomings in static freshness inference in FreshML 2000, at the same time showing off how FreshML can express rather clearly non-trivial syntax-manipulating algorithms; in this case an algorithm computing the normal form of an untyped λ-term (if there is one) using normalisation by evaluation in a form suggested to us by Thierry Coquand [private communication] and adapted for call-by-value by Olivier Danvy. (See [2, Sect. 3] and the references there for more on normalisation by evaluation in an untyped setting.) In FreshML the function norm has type lam → lam (and does indeed compute normal forms where they exist); in FreshML 2000, norm does not type-check because
+5Atom inequality, written x # y , is needed in this declaration of remove to signal to the freshness-checker that it can use the fact that x is fresh for y when checking the ﬁrst branch of the conditional.
+
+datatype ’a am = In of ’a | Ab of <name>(’a am );
+(* monad unit *) fun return x = In x ; (* monad lifting
+op>>= : ’a am * (’a -> ’b am ) -> ’b am *) infix >>= ; fun ((In x ) >>= f ) = f x
+| ((Ab (<n >y )) >>= f ) = Ab (<n>(y >>= f )); (* forcing at pure types, e.g... *) fun force (In (s :string)) = s
+| force (Ab (<n >y )) = force y
+Figure 8. An abstraction monad
+the helper function evals does not. Checking fails at the clause in the deﬁnition of evals at lines 26–27, where the system cannot deduce that x # (fn v => evals ((x,v )::env ) t ) holds, under the assumption that x # evals and x # env hold. Indeed the proof of the corresponding property of supports in the denotational model, though true, is far from immediate.
+Remark 6.1. We can get around these shortcomings of freshness inference within FreshML 2000 by adopting a monadic programming style that mimics the use of the dynamic allocation monad T in the denotational semantics of Sect. 4, using an abstraction monad, such as the one in Fig. 8. Using this monad to wrap return types in abstractions, freshness inference only needs to use the simple fact x # <x>e; plus the fact that abstractions can be discarded at pure types, as in the function force in the ﬁgure. The efﬁciency of this style is questionable, and the resulting programs somewhat obfuscated. Nevertheless, it was the realisation that one can adopt this monadic style in FreshML 2000 that led us to the design of the simpler FreshML and its denotational semantics; and using name abstraction to model name generation (such as in Fig. 8) still has its uses in FreshML: see [12].
+We advocate use of FreshML, which does not enforce the Introduction’s Thesis (the property of freshly chosen names not being in the support of ﬁnal results) at compile-time. However, freshness inference may still be useful for other purposes: it could be used in a program logic for verifying properties of FreshML programs; and information about freshness deduced at compile-time may be useful for optimising run-time implementation, the issue we turn to next.
+7 Implementation
+The source code of an experimental implementation of the FreshML language (written in Objective Caml) is available at the web site http://www.freshml.org/. Our implementation provides the Core of Standard ML [18] together with FreshML’s distinctive features for programming with binders. There is an interactive interpreter, together with support for processing FreshML code held in individual source ﬁles, but no modules layer. If so desired, FreshML 2000’s freshness inference can be switched on by starting freshml with the command-line argument --pure. The web site contains examples of programming with binders in FreshML, including programs calculating the possible labelled transitions from a π-calculus [17] process, using various forms of encoding [12]; and Barthe’s classiﬁcation algorithm for type-checking injective Pure Type Systems [4]. We invite readers to try FreshML for themselves!
+We saw in Sect. 3 that the dynamics of FreshML can be implemented by translating it into ML augmented with a primitive function swap : unit ref → unit ref → α → α for swapping address
+
+Canonical values atom abstraction pair unit closure constructed
+Non-canonical values Explicit permutations identity composite Value environments
+
+c ::= a ap (p, p) () [P, f (x) = e] C Cp
+p ::= π • c
+π ::= [] (a a ) :: π
+P ::= [x → p, . . .]
+
+(where a, a range over and x, f over VId) © Figure 9. Values with delayed swapping
+
+names in ML values. It is possible to add this to some existing ML implementations using unsafe features.6 Since the representation of values in such systems was not designed with swapping in mind, such simple hacks may not yield very efﬁcient implementations of FreshML; but they do enable us to demonstrate FreshML’s novel features for computing with binders integrated into a complete ML system. Shinwell [28] reports on such an experiment with Objective Caml and the resulting Fresh O’Caml is available at http://www.freshml.org/.
+
+To make atom-swapping more efﬁcient, our implementation of FreshML uses a representation of FreshML values suggested by Mark Shields [private communication] using delayed swapping. In this scheme, shown in Fig. 9, values p have at each structural level ‘explicit permutations’ of atoms (represented by ﬁnite lists of pairs of atoms, π, standing for the sequential composition, reading from left to right, of the corresponding atom swaps). Evaluation produces values in canonical form, c, where the outermost constructor is manifest; but value environments P need only associate value identiﬁers with values that are not necessarily in canonical form. For example, evaluation rule (14) from Fig. 3 becomes
+
+a, P e1 ⇓ a1, a
+
+a , P e2 ⇓ a2, a
+
+a , P e3 ⇓ c, a c = cf((a1 a2) :: [] • c)
+
+a, P swap e1,e2 in e3 ⇓ c , a
+
+(31)
+
+where p → cf(p) is an auxiliary function converting a noncanonical value to canonical form by pushing the outermost explicit permutation through one structural level and applying it to any atom it meets. This is relatively inexpensive to implement compared with traversing the whole parse tree swapping its atoms.
+
+It seems that in practice most swappings arise from deconstructing abstraction values a v. In the delayed swapping implementation scheme, the evaluation rule for this (cf. rule (18) in Fig. 3) becomes
+
+a, P e ⇓ a (π • c), a a ∈ − a ©
+
+p1 = [] • a
+
+p2 = (a a ) :: π • c
+
+a, P val <x1>x2 = e ⇓ {x1 → p1, x2 → p2}, a ∪ {a } (32)
+with (a a ) appended to π. Another optimisation is to try to avoid choosing a fresh atom a at all. To make this possible, we can consider ‘garbage collection’ rules that try to reduce the state (set of atoms) by removing atoms not in the support of the results of
+
+6Thanks to Claudio Russo for showing how to do this in Moscow ML.
+
+evaluation (properties such as Lemma 2.4 have to be modiﬁed if we do this). Then in the above rule it may be the case that a ∈ − a
+
+and we can take a = a and replace (a a ) :: π • c with π • c. We have not yet fully exploited such optimisations. In particular the freshness inference discussed in Sect. 6 could be useful for optimising the dynamics of FreshML. For example, for non-canonical values of pure type, when converting to canonical form we can just discard the outermost permutation rather than pushing it down into the value.
+8 Related work
+Sheard [27, Sect. 13] gives an excellent survey of the problems for metaprogramming caused by statically scoped binders in object terms and some of the solutions that have been proposed. FreshML seems unique among metaprogramming languages in providing language-wide support for object-level α-equivalence while still allowing the user to refer to bound entities by name. Miller [16] proposed incorporating elements of higher order abstract syntax, HOAS [22], into an ML-like programming language, MLλ, with intentional function types ty => ty’. HOAS also underlies Raffalli’s Bindlib Library for O’Caml.7 FreshML’s underlying theory of binders [13] lifts less to the metalevel: like HOAS it promotes object-level renaming to the metalevel (via the swapping operation), but unlike HOAS it leaves object-level substitution to be deﬁned case-by-case using structural recursion. The advantage is that FreshML data types are concrete and their denotational semantics in the universe of FM-sets retain the pleasant recursion/induction properties of classical ﬁrst-order algebraic data types: see [13, Sect. 6]. Also, while MLλ and Bindlib give no direct access to bound names and their distinctions (name equality and inequality), FreshML does. The price paid for this ability is dynamic generation of fresh names. The seemingly small computational effect (which in fact has rather subtle interactions with higher order functions: see [26]) has a long history in functional programming, from Lisp’s gensym to more recent advocates, such as [21, 7]. However, the combination with name-swapping and abstraction types bty ty is unique to FreshML. Since the original design was published in [25], the use of swapping and freshness to deal with α-equivalence and name restriction has been taken up by others, such as in [6]. Indeed, it was reading this work that inspired us to remove the rather restrictive freshness checking from FreshML 2000’s statics and design the new version of FreshML presented here. FreshML 2000’s approach to names and binding has also inspired work on open code types in homogeneous metaprogramming languages by Nanevski and Pfenning [20]. FreshML’s correctness properties established in Sect. 5 are not obvious, and we had to work quite hard to establish them. We introduced a new denotational model, FM-cpos, that we think is interesting in its own right. Traditional, Scott-Strachey models of dynamically allocated local names are not sufﬁciently abstract to establish these correctness results (roughly speaking, they do not verify the laws (24) and (25)). Therefore, beginning with Oles, Reynolds and Moggi, various people have developed and applied ‘dynamic allocation’ monads in categories of functors valued in ωcpos: see [9, 31] for example. The detailed proofs of the results in Sects 4 and 5 are less complicated than the corresponding ones in the functor category approach—both conceptually (we are just doing traditional domain theory, but in a slightly different classical set theory) and practically (constructions on FM-cpos, especially function spaces, are much easier to describe concretely than are the
+7http://www.lama.univ-savoie.fr/ sitelama/Membres/pages web/RAFFALLI/bindlib.html
+
+analogous constructs in functor categories). We believe that FMcpos should be investigated as an interesting model of restriction (in the sense of π-calculus) and spatial locality in general; the work in [5, 11, 12] already takes steps in this direction.
+Simplifying FreshML 2000 to produce FreshML as we have described in this paper opens up many interesting possibilities. For one thing, it opens the door to full-scale functional language implementations incorporating our approach to programming with binders, as Shinwell’s work on Fresh O’Caml [28] shows. It has also made it possible to support abstraction types for binding data consisting of more than a single atom (see Remark 2.2). Freshness inference is poorly-understood for such types; the main problem is judging which atoms are in the support of a value as well as which are not. FreshML neatly removes the need to solve this problem and allows us to provide this generalised form of abstraction.
+The features we have described here for programming with binders seem really useful. Perhaps the school of pure, lazy functional programming should have them too—there should be a FreshHaskell! Once again, the simple form of FreshML presented here holds out hope that this might be possible, since it removes the need to get effective static freshness information, which appears to be much harder for a non-strict language than for a strict one. Of course our design is impure—some side-effects of generating fresh names are left exposed in FreshML; in ‘FreshHaskell’ one would presumably encapsulate them using a monad, mimicking the use of a monad in the denotational semantics of Sect. 4 (cf. the abstraction monad ’a am in Fig. 8). The design and implementation of ‘FreshHaskell’ remains to be investigated.
+9 Acknowledgements
+This research was funded by UK EPSRC grant GR/R07615/01 and by a donation from Microsoft’s Cambridge Research Laboratory. We thank Luca Cardelli, Thierry Coquand, Olivier Danvy, Simon Peyton Jones, Claudio Russo, Mark Shields, Keith Wansbrough and the anonymous referees for helpful comments and feedback on this work. Peter White contributed much to the implementation work, which beneﬁtted enormously from use of the O’Caml compiler of INRIA’s projet Cristal.
+10 References
+[1] S. Abramsky and A. Jung. Domain theory. In S. Abramsky, D. M. Gabbay, and T. S. E. Maibaum, editors, Handbook of Logic in Computer Science, Volume 3. Semantic Structures, chapter 1. Oxford University Press, 1994.
+[2] M. S. Ager, D. Biernacki, O. Danvy, and J. Midtgaard. From interpreter to compiler and virtual machine: A functional derivation. Technical Report BRICS RS-03-14, BRICS, Department of Computer Science, University of Aarhus, March 2003.
+[3] H. P. Barendregt. The Lambda Calculus: Its Syntax and Semantics. North-Holland, revised edition, 1984.
+[4] G. Barthe. Type-checking injective pure type systems. Journal of Functional Programming, 9(6):675–698, 1999.
+[5] L. Caires and L. Cardelli. A spatial logic for concurrency (part II). In CONCUR 2002 – Concurrency Theory, 13th International Conference, Brno, Czech Republic, August 20-23, 2002. Proceedings, volume 2421 of Lecture Notes in Computer Science, pages 209–225. Springer-Verlag, Berlin, 2002.
+[6] L. Cardelli, P. Gardner, and G. Ghelli. Manipulating trees with hidden labels. In Foundations of Software Science and Com-
+
+putation Structures, 6th International Conference, FOSSACS 2003, Warsaw, Poland. Proceedings, volume 2620 of Lecture Notes in Computer Science, pages 216–232. Springer-Verlag, Berlin, 2003. [7] K. Claessen and D. Sands. Observable sharing for functional circuit description. In Advances in Computing Science ASIAN’99, 5th Asian Computing Science Conference, volume 1742 of Lecture Notes in Computer Science, pages 62–73. Springer-Verlag, 1999. [8] N. G. de Bruijn. Lambda calculus notation with nameless dummies, a tool for automatic formula manipulation, with application to the Church-Rosser theorem. Indag. Math., 34:381–392, 1972. [9] M. P. Fiore, E. Moggi, and D. Sangiorgi. A fully abstract model for the π-calculus (extended abstract). In Eleventh Annual Symposium on Logic in Computer Science, pages 43–54. IEEE Computer Society Press, Washington, 1996. [10] M. J. Gabbay. A Theory of Inductive Deﬁnitions with αEquivalence: Semantics, Implementation, Programming Language. PhD thesis, University of Cambridge, 2000. [11] M. J. Gabbay. The π-calculus in FM. Submitted, September 2002. [12] M. J. Gabbay. FM for process calculi that generate fresh names. Submitted, June 2003. [13] M. J. Gabbay and A. M. Pitts. A new approach to abstract syntax with variable binding. Formal Aspects of Computing, 13:341–363, 2002. [14] F. Honsell, M. Miculan, and I. Scagnetto. An axiomatic approach to metareasoning on nominal algebras in HOAS. In 28th International Colloquium on Automata, Languages and Programming, ICALP 2001, Crete, Greece, July 2001. Proceedings, volume 2076 of Lecture Notes in Computer Science, pages 963–978. Springer-Verlag, Heidelberg, 2001. [15] R. Laemmel and S. L. Peyton Jones. Scrap your boilerplate: A practical approach to generic programming. In ACM SIGPLAN Workshop on Types in Language Design and Implementation (TLDI 2003), New Orleans, pages 26–37. ACM Press, 2003. [16] D. A. Miller. An extension to ML to handle bound variables in data structures: Preliminary report. In Proceedings of the Logical Frameworks BRA Workshop, 1990. [17] R. Milner, J. Parrow, and D. Walker. A calculus of mobile processes (parts I and II). Information and Computation, 100:1– 77, 1992. [18] R. Milner, M. Tofte, R. Harper, and D. MacQueen. The Deﬁnition of Standard ML (Revised). MIT Press, 1997. [19] E. Moggi. Notions of computation and monads. Information and Computation, 93(1):55–92, 1991. [20] A. Nanevski. Meta-programming with names and necessity. In Proceedings of the Seventh ACM SIGPLAN International Conference on Functional Programming, ICFP 2002, Pitts-
+
+burgh, Pennsylvania, pages 206–217. ACM Press, New York, 2002. [21] M. Odersky. A functional theory of local names. In Conference Record of the 21st Annual ACM Symposium on Principles of Programming Languages, pages 48–59. ACM Press, 1994. [22] F. Pfenning and C. Elliott. Higher-order abstract syntax. In Proc. ACM-SIGPLAN Conference on Programming Language Design and Implementation, pages 199–208. ACM Press, 1988. [23] A. M. Pitts. Relational properties of domains. Information and Computation, 127:66–90, 1996. [24] A. M. Pitts. Nominal logic, a ﬁrst order theory of names and binding. Information and Computation, to appear. (A preliminary version appeared in the Proceedings of the 4th International Symposium on Theoretical Aspects of Computer Software (TACS 2001), LNCS 2215, Springer-Verlag, 2001, pp 219–242.). [25] A. M. Pitts and M. J. Gabbay. A metalanguage for programming with bound names modulo renaming. In Mathematics of Program Construction. 5th International Conference, MPC2000, Ponte de Lima, Portugal, July 2000. Proceedings, volume 1837 of Lecture Notes in Computer Science, pages 230–255. Springer-Verlag, Heidelberg, 2000. [26] A. M. Pitts and I. D. B. Stark. Observable properties of higher order functions that dynamically create local names, or: What’s new? In Mathematical Foundations of Computer Science, Proc. 18th Int. Symp., Gdan´sk, 1993, volume 711 of Lecture Notes in Computer Science, pages 122–141. SpringerVerlag, Berlin, 1993. [27] T. Sheard. Accomplishments and research challenges in metaprogramming. In Semantics, Applications, and Implementation of Program Generation, Second International Workshop, SAIG 2001, Florence, Italy, September 6, 2001, Proceedings., volume 2196 of Lecture Notes in Computer Science, pages 2–44. Springer, 2001. [28] M. R. Shinwell. Swapping the atom: Programming with binders in Fresh O’Caml. Submitted, June 2003. [29] M. R. Shinwell and A. M. Pitts. FreshML User Manual. Cambridge University Computer Laboratory, November 2002. Available at http://www.freshml.org/docs/ . [30] I. D. B. Stark. Categorical models for local names. Lisp and Symbolic Computation, 9(1):77–107, 1996. [31] I. D. B. Stark. A fully abstract domain model for the πcalculus. In 11th Annual Symposium on Logic in Computer Science, pages 36–42. IEEE Computer Society Press, Washington, 1996. [32] C. Urban, A. M. Pitts, and M. J. Gabbay. Nominal uniﬁcation. In Computer Science Logic and 8th Kurt Go¨del Colloquium (CSL’03 & KGC), Vienna, Austria. Proccedings, Lecture Notes in Computer Science. Springer-Verlag, Berlin, 2003.
+
+

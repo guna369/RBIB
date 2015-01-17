@@ -1,0 +1,422 @@
+Uniﬁcation via Explicit Substitutions: The Case of Higher-Order Patterns
+
+Gilles Dowek INRIA Rocquencourt B.P. 105 78153 Le Chesnay Cedex, France Gilles.Dowek@inria.fr
+Claude Kirchner INRIA Lorraine & CRIN B.P. 101 54602 Villers-l`es-Nancy Cedex, France Claude.Kirchner@loria.fr
+
+Th´er`ese Hardin LITP and INRIA-Rocquencourt Universit´e Paris 6, 4 Place Jussieu 75252 Paris Cedex 05, France Therese.Hardin@litp.ibp.fr
+Frank Pfenning1 Department of Computer Science Carnegie Mellon University Pittsburgh, PA 15213, U.S.A. fp@cs.cmu.edu
+
+Abstract
+
+Following the general method and related completeness results on using explicit substitutions to perform higher-order uniﬁcation proposed in [5], we investigate in this paper the case of higher-order patterns as introduced by Miller. We show that our general algorithm specializes in a very convenient way to patterns. We also sketch an eﬃcient implementation of the abstract algorithm and its generalization to constraint simpliﬁcation.
+
+1 Introduction
+Typed λ-calculi of various sorts are used pervasively in logical frameworks and their implementations (e.g., λProlog [16], Isabelle [19], or Elf [22]) and in general reasoning systems such as Coq or Nuprl. Unlike functional programming languages, these implementations require access to the body of λ-terms for such operations as substitution, normalization, matching, or uniﬁcation. Their eﬃcient implementation is therefore a central problem in theorem proving and higher-order logic programming.
+While at present there is no conclusive evidence, it seems that calculi of explicit substitutions have many potential beneﬁts in the implementation of such operations as uniﬁcation or constraint simpliﬁcation in typed λ-calculi. They permit the expensive operation of substitution to be postponed until necessary and, furthermore, they allow multiple successive substitutions to be combined. As shown in [5], Huet’s uniﬁcation algorithm for simply typed lambda terms is a speciﬁc instance of ﬁrst-order equational uniﬁcation in a calculus of explicit substitutions.
+In practice, modiﬁed versions of Huet’s algorithm have performed well, despite the general undecidability of the problem. Miller observed that many problems fell within a decidable fragment [14], usually now referred to as higher-order patterns. Uniﬁcation on this fragment is decidable and unitary, even for very rich type theories such as the Calculus of Constructions [21].
+In this paper we show that the general algorithm for higher-order uniﬁcation with explicit substitutions can be cleanly specialized to the case of patterns, bringing a
+1currently on sabbatical at Technical University Darmstadt, Germany, with support from the Alexander von Humboldt Foundation.
+
+new view on the fundamental reasons why patterns behave so nicely. This behaviour can be explained in algebraic terms as the fact that applying a pattern substitution to a term is injective and thus has an inverse.
+An empirical analysis of existing higher-order logic programs [12, 13] suggested that a static restriction of higher-order logic programming to patterns is too severe from the programmer’s point of view. However, almost all dynamically arising equations fall within the pattern fragment. This led to the development of a constraint simpliﬁcation algorithm [20] which solves all equations between patterns and postpones other constraints. This constraint handling can then be used in a deduction-with-constraints process [10]. We show in this paper that the uniﬁcation algorithm for patterns can be generalized to a constraint simpliﬁcation algorithm for the unrestricted case. This algorithm (augmented, at present without proof, to the case of dependent types) has been implemented in SML as the core of MLF, a version of the logical framework LF with a module layer [8]. It has shown good computational properties, although we have not undertaken a systematic empirical comparison.
+The remainder of the paper is organized as follows. The next section describes λσ, the explicit calculus of substitution that we are using, together with its fundamental properties. In section 3 we study the properties of λσ-patterns and of pattern substitutions. These properties allow us to prove that the transformation rules of pattern uniﬁcation problems given in Section 4 are correct and complete and compute a most general uniﬁer, when it exists. Then in Section 5, we describe an eﬃcient way to implement these transformations in a logical framework context. We ﬁnally conclude with related and future work.
+For the basic concepts and deﬁnitions on lambda calculus, calculus of substitution, uniﬁcation and term rewriting, we refer to [5]. For lack of space, almost all proofs and several developments are missing from this version of the paper. They can be found in [6].
+2 Explicit substitutions
+The λσ-calculus is a ﬁrst-order rewriting system, introduced to provide an explicit treatment of substitutions initiated by β-reductions. Here, we shall use the λσcalculus described in [1], in its typed version [1, 4], but similar free calculi with explicit substitutions can be used in the same way provided they are conﬂuent and weakly terminating on the free algebra generated by term variables (here also called meta-variables). In this setting the reduction variables of the λ-calculus are encoded by de Bruijn indices while the uniﬁcation variables are coded by meta-variables.
+In λσ-calculus, the term a[s] represents the term a on which the substitution s has to be applied. The simplest substitutions are list of terms build with the constructors “·” (cons) and “id” (nil). Applying the substitution (a1 · · · ap · id) to a term a replaces the de Bruijn indices 1, . . . , p in a by the terms a1, . . . , ap and decrements accordingly by p the remaining de Bruijn indices. The composition operation transforms a sequence of substitutions into a single simultaneous one which ensures conﬂuence.
+The substitution “↑” increments de Bruijn indices: n + 1 is expressed by 1[↑n] and ↑0 is the substitution id by convention. For example, the term ((λX) Y )[s] reduces to X[Y.id][s] but also to X[1.(s◦ ↑)][Y [s].id]. Using composition these two terms reduce to X[Y [s].s] allowing to recover conﬂuence.
+Using a set of atomic types that are denoted K and a set X of variables X,
+
+Types
+
+A ::= K | A → B
+
+Contexts
+
+Γ ::= nil | A.Γ
+
+Terms
+
+a ::= 1 | X | (a b) | λA.a | a[s]
+
+Substitutions s ::= id | ↑ | a : A · s | s ◦ t
+
+Figure 1: The syntax of λσ-terms.
+
+(var )
+
+A.Γ 1 : A
+
+(lambda )
+
+(app) Γ a : A → B Γ b : A (clos) Γ (a b) : B
+
+(id )
+
+Γ id : Γ
+
+(shift)
+
+A.Γ b : B Γ λAb : A → B
+Γ s:Γ Γ a:A Γ a[s] : A
+A.Γ ↑ : Γ
+
+(cons )
+
+Γ a:A Γ s:Γ Γ a : A · s : A.Γ
+
+(comp)
+
+Γ s :Γ Γ s :Γ Γ s ◦s : Γ
+
+(metavar )
+
+ΓX X : TX
+
+Figure 2: Typing rules for λσ-terms.
+
+Figure 1 gives the syntax of λσ-terms. Notice that we do not have substitution variables in the calculus we consider here.
+The typing judgment Γ a : A deﬁnes when a term a has type A in context Γ. Similarly, Γ s : Γ deﬁnes when a substitution s maps terms constructed over Γ to terms over Γ . Each meta-variable X carries its own unique context ΓX and type AX such that ΓX X : AX (rule metavar). For the sake of brevity we often omit type labels in λ-abstractions and substitutions.
+The reduction rules deﬁning the semantics of this typed calculus are given in Figure 3. The whole set of rules is called λσ and the whole set except the rule Beta is called σ.
+It is shown in [24] that the typed λσ-calculus is conﬂuent and weakly terminating. For later use, let us also mention the notion of long normal form of a λσ-term which is the η-long form of its βη-normal form.
+The normal form of a λσ-term has one of the following forms: λa, (n a1 . . . ap), (X[a1 . . . ap. ↑n] b1 . . . bq), (X b1 . . . bq). By convention, we consider that the later form is a particular case of the third with p = n = 0.
+3 λσ-patterns
+Let us ﬁrst recall the usual notion of pattern in the simply typed λ -calculus.
+Deﬁnition 1 A higher-order pattern, or λ-pattern for short, is a simply typed lambda term whose free variables X is only applied to a sequence of distinct bound variables, i.e. (X x1 . . . xp).
+
+Beta
+
+(λA .a)b
+
+→ a[b.id]
+
+App VarCons Id Abs Clos
+
+(a b)[s] 1[(a : A).s] a[id] (λA .a)[s] (a[s])[t]
+
+→ (a[s] b[s]) →a →a → λA.(a[1 : A.(s ◦ ↑)]) → a[s ◦ t]
+
+IdL id ◦ s
+
+→s
+
+ShiftCons ↑ ◦ ((a : A).s) → s
+
+AssEnv (s1 ◦ s2) ◦ s3 → s1 ◦ (s2 ◦ s3)
+
+MapEnv ((a : A).s) ◦ t → (a[t] : A).(s ◦ t)
+
+IdR s ◦ id
+
+→s
+
+VarShift 1. ↑
+
+→ id
+
+Scons
+
+1[s].(↑ ◦ s) → s
+
+Eta
+
+λA.(a 1)
+
+→ b if a =σ b[↑]
+
+Figure 3: Reduction rules for λσ.
+As usual, we assume throughout the paper, that a variable is denoted by its name x even if its actual form in a term is η-expanded.
+Equations in the simply-typed λ-calculus are translated to equations in the λσcalculus [5]. Crucial in the translation is the proper treatment of free variables, since higher-order variables and capture-avoiding substitution are replaced by metavariables and grafting, i.e., ﬁrst-order replacement. This gap is bridged through the so-called pre-cooking of a term which raises the free variables to their proper context. This pre-cooking of a λ-term a, written aF , is deﬁned as aF = F (a, 0) where:
+1. F ((λAa), n) = λA(F (a, n + 1)), 2. F ((a b), n) = F (a, n)F (b, n), 3. F (k, n) = 1[↑k−1] 4. F (X, n) = X[↑n]. As shown in [5], pre-cooking is an homomorphism from λ-calculus to λσ-calculus.
+Deﬁnition 2 A λσ-term is a λσ-pattern if all the subterms of its long λσ-normal form of the form (X[s] b1 . . . bq) are such that s = a1 . . . ap. ↑n where a1, . . . , ap, b1, . . . , bq are distinct de Bruijn indices lower than or equal to n. A λσ-pattern is called atomic if all the variables in its long λσ-normal form have atomic type. In such a term all the subterms of the form (X[s] b1 . . . bq) are such that q = 0. A pattern substitution is a λσ-substitution with a long λσ-normal form a1 . . . ap. ↑n where all de Bruijn indices ai are distinct and less than or equal to n.
+Proposition 3 A λ-term a is a λ-pattern if and only if its pre-cooked form aF is a λσ-pattern.
+
+Proposition 4 Let s and t be pattern substitutions and a and b be atomic patterns. Then
+• the σ-normal form of 1.(s ◦ ↑) and s ◦ t are pattern substitutions,
+• the normal form of a[s] is an atomic pattern,
+• (X → b)a is an atomic pattern.
+Proposition 5 Let a1, . . . , ap be numbers and s = a1 . . . ap. ↑n be a pattern substitution. Consider the substitution s = e1 . . . en. ↑p where by deﬁnition:
+• for all i such that 1 ≤ i ≤ p, eai = i,
+• otherwise ei = Z for some new variable Z.
+Then we have s ◦ s =σ id.
+For example a right inverse of the pattern substitution s = (1.3.4. ↑5) is s = (1.W.2.3.Z. ↑3) since s ◦ s = (1.3.4. ↑5) ◦ (1.W.2.3.Z. ↑3) =σ (1.2.3. ↑3) =σ id.
+Notice that, as in this example, a right inverse of a pattern substitution is not itself a pattern substitution in general.
+As composition is to be read from left to right, we have the following corollary.
+Corollary 6 Any pattern substitution is injective.
+Pattern substitutions are injective, but they need not be surjective. We now show that given a pattern substitution s and a term a we can decide if a is in the image of s and if so we can compute the preimage of a under s.
+Deﬁnition 7 A de Bruijn index k is said to occur in a normal term (resp. a normal substitution):
+• λa, if k + 1 occurs in a,
+• (n a1 . . . ap), if k = n or k occurs in some ai,
+• (X[s] a1 . . . ap), if k occurs in s or in some ai,
+• a1 . . . ap. ↑n, if k occurs in some ai or if k > n.
+For example, The index 1 occurs in the term λ2, but the index 2 does not. Any index occurs in (X a1 . . . ap) (to be read as (X[↑0] a1 . . . ap)).
+Only a ﬁnite number of indices do not occur in a substitution s and one can compute this ﬁnite set. Then for each index, one can check if it occurs in a term a. Thus one can decide if all the indices occuring in a occur in s.
+Proposition 8 (Inversion) Let s be a pattern substitution, a be a normal term (resp. t be a normal substitution). There exists a term a (resp. a substitution t ) such that a = a [s] (resp. t = t ◦ s) if and only if every index occurring in a (resp. t) occurs in s. Then a is an atomic pattern (resp. t is a pattern substitution) and a = a[s] (resp. t = t ◦ s).
+For instance, the term (2 3) is in the image of ↑ because 1 does not occur in it, but (1 3) is not in the image of ↑ because 1 occurs in it.
+
+4 Pattern uniﬁcation
+
+4.1 Transformation rules
+Deﬁnition 9 The language of (uniﬁcation) constraints is deﬁned by [9]:
+C ::= (Γ a =?λσ b) | T | F | (C1 ∧ C2) | (∃X.C)
+Here T represents the constraint that is always satisﬁed, F the unsatisﬁable constraint, a and b are any λσ-terms of the same type in context Γ, and X ∈ X . The set of term variables of a constraint (also called a system) P or of a term a is denoted Var(P ) (resp. Var(a)).
+We take propositional constraint simpliﬁcation (such as C ∧ T →→ C) for granted and generally assume that constraints are maintained in prenex form. For simplicity, we often omit the leading existential quantiﬁers and the context Γ associated with equations.
+
+Deﬁnition 10 A λσ-pattern uniﬁcation problem is any uniﬁcation constraint, built only on λσ-patterns.
+
+As usual, a λσ-uniﬁer (also called a solution) of a constraint P is a grafting making the two terms of all the equations of P equal modulo λσ. In our setting, the solution of a λσ-pattern uniﬁcation is the result of the simpliﬁcation of the initial problem to a solved form.
+
+Deﬁnition 11 A λσ-pattern solved form is any conjunction of equations:
+
+∃Z. X1 =?λσ a1 ∧ · · · ∧ Xn =?λσ an
+
+such that ∀1 ≤ i ≤ n, Xi ∈ X , ai is a pattern, and:
+
+(i) ∀1 ≤ i < j ≤ n
+
+Xi = Xj ,
+
+(ii) ∀1 ≤ i, j ≤ n
+
+Xi ∈/ Var(aj ),
+
+(iii) ∀1 ≤ i ≤ n
+
+Xi ∈/ Z,
+
+(iv) ∀Z ∈ Z, ∃1 ≤ j ≤ n Z ∈ Var(aj ).
+
+Note that ﬂex-ﬂex equations (see [5]) do not occur in λσ-pattern solved forms. A solved form therefore trivially determines a unique grafting which is its uniﬁer. In order to state the transformation rules, we need the following deﬁnitions and properties.
+
+Deﬁnition 12 A de Bruijn index k is said to have a rigid occurrence in an atomic pattern
+• λa if k + 1 has a rigid occurrence in a,
+• (n a1 . . . ap) if k = n or k has a rigid occurrence in some ai, • X[s] never.
+
+Deﬁnition 13 A de Bruijn index k is said to have a ﬂexible occurrence in an atomic pattern:
+• λa if k + 1 has a ﬂexible occurrence in a,
+
+• (n a1 . . . ap) if k has a ﬂexible occurrence in some ai,
+• X[a1 . . . ap. ↑n] if some ai is k.
+Proposition 14 If k has a ﬂexible occurrence in a then a has a subterm of the form X[a1 . . . ap. ↑n] at depth l and some ai is equal to k + l. We say that k has a ﬂexible occurence in a, in the ith argument of the variable X.
+Given a λσ-pattern uniﬁcation problem, the transformation rules described in Figures 4 and 5 allow normalizing it into a solved form when it has solutions, or into F otherwise.
+The main diﬀerences between pattern uniﬁcation and λσ-uniﬁcation lie in the Exp-app rule of [5]. This rule, that implements for λσ-uniﬁcation the imitation and projection steps of Huet’s algorithm, is mainly replaced by the rules Pruning1, Pruning2 and Invert. This is due to the fact that when starting from a λσpattern uniﬁcation problem, if we reach an equation of the form: X[s] =?λσ a, the substitution s is a pattern substitution and is thus right invertible. This allows us to bypass the Exp-app rule and also to solve all ﬂex-ﬂex equations except the ones with the same head variable, for which the Same-variable rule is applied.
+Since there is no transformation introducing disjunctions, the unitary character of λσ-pattern uniﬁcation becomes trivial once the completeness and correctness of the rules is shown together with a terminating strategy of the rules application.
+Let us show how these rules act on the pattern equation λx λy λz (F z y) =?βη λx λy λz (z (G y x)). In de Bruijn indices this equation is λλλ(F 1 2) =?λσ λλλ(1 (G 2 3)), after pre-cooking, becomes
+λλλ(F [↑3] 1 2) =?λσ λλλ(1 (G[↑3] 2 3)).
+Using Dec-λ this equation simpliﬁes to (F [↑3] 1 2) =?λσ (1 (G[↑3] 2 3)). Using Exp-λ four times we instantiate F by λλX and G by λλY . So we get:
+X[2.1. ↑3] =?λσ (1 (Y [3.2. ↑3])).
+Now consider the substitution 2.1. ↑3 the only de Bruijn number not occurring in it is 3. This number occurs in the right member in Y [3.2. ↑3]. Thus with the rule pruning2 we add the equation Y =?λσ Z[↑]. With the rule Replace we get X[2.1. ↑3] =?λσ (1 (Z[2. ↑3])). Now 3 no longer occurs on the right-hand side. Thus Invert is applicable and yields X =?λσ (1 (Z[2. ↑3]))[2.1. ↑] that is X =?λσ (2 (Z[1. ↑2])). This gives F =?λσ λλ(2 (Z[1. ↑2])), G =?λσ λλ(Z[↑]). With Anti-Exp-λ we get Z =?λσ (H[↑] 1) and:
+F =?λσ λλ(2 (H[↑2] 1)), G =?λσ λλ(H[↑2] 2).
+which is the pre-cooking of F =?λσ λλ(2 (H 1)), G =?λσ λλ(H 2) i.e. F =?βη λu λv (u (H v)), G =?βη λu λv (H u).
+Proposition 15 Any rule r in PatternUnif is correct (i.e. P →→r P ⇒ Uλσ(P ) ⊆ Uλσ(P )) and complete (i.e. P →→r P ⇒ Uλσ (P ) ⊆ Uλσ(P )).
+4.2 A uniﬁcation algorithm
+We should now show how the rules in PatternUnif can be used in order to solve a λσ-pattern uniﬁcation problem, i.e., reduce it to a λσ-pattern solved form. We
+
+Dec-λ Dec-app1 Dec-app2
+
+P ∧ λAa =?λσ λAb →→ P ∧ a =?λσ b
+P ∧ (n a1 . . . ap) =?λσ (n b1 . . . bp) →→ P ∧ ( i=1..p ai =?λσ bi)
+P ∧ (n a1 . . . ap) =?λσ (m b1 . . . bq) →→ F if n = m
+
+Exp-λ
+
+P
+→→ ∃Y : (A · Γ B), P ∧ X =?λσ λAY if (X : Γ A → B) ∈ Var(P ), Y ∈ Var(P ),
+and X is not a solved variable
+
+Occur-check
+
+P ∧ X =?λσ a →→ F
+if X ∈ Var(a)
+
+Replace
+
+P ∧ X =?λσ a →→ {X → a}(P ) ∧ X =?λσ a if X ∈ Var(P ), X ∈ Var(a) and a ∈ X ⇒ a ∈ Var(P )
+
+Normalize
+
+P ∧ a =?λσ b →→ P ∧ a =?λσ b if a or b is not in long normal form
+where a (resp. b ) is the long normal form of a (resp. b) if a
+(resp. b) is not a solved variable and a (resp. b) otherwise
+
+Anti-Exp-λ Anti-Dec-λ
+
+P →→ ∃Y (P ∧ X =?λσ (Y [↑] 1)) if X ∈ Var(P ) such that ΓX = A.ΓX where Y ∈ X , and TY = A → TX , ΓY = ΓX
+P ∧ a =?λσ b →→ P ∧ λAa =?λσ λAb if a =?λσ b is well-typed in a context ∆ = A.∆
+
+Figure 4: PatternUnif: Rules for pattern uniﬁcation in λσ: Part 1
+
+Pruning1
+
+P ∧ X[s] =?λσ b →→ F if b is an atomic pattern, s is a pattern substitution and
+some index k has no occurrence in s but a rigid occur-
+rence in b
+
+Pruning2
+
+P ∧ X[s] =?λσ b →→ ∃Z(P ∧ X[s] =?λσ b ∧ Y =?λσ Z[1 . . . i − 1. ↑i]) if b is an atomic pattern, s is a pattern substitution and
+some index k has no occurrence in s and a ﬂexible occurrence in b in the ith argument of the variable Y
+
+Invert
+
+P ∧ X[s] =?λσ b →→ P ∧ X =?λσ b[s] if b is an atomic pattern, s is a pattern substitution and X
+does not occur in b, all the de Bruijn indices occuring in
+b occur in s
+
+Same-variable
+
+P ∧ X =?λσ X[a1 . . . an. ↑n] →→ ∃Y (P ∧ X =?λσ Y [i1 . . . ir. ↑n]) where a1 . . . an. ↑n is a pattern substitution and i1 . . . ir are the
+indices such that ai = i
+
+Figure 5: PatternUnif: Rules for pattern uniﬁcation in λσ: Part 2
+
+ﬁrst check that atomic pattern uniﬁcation problems are stable under the uniﬁcation transformations, i.e. applying a uniﬁcation rule of PatternUnif on an atomic pattern problem yields an atomic problem after normalization. Then one can prove that an atomic pattern uniﬁcation problem is in normal form for the rules in PatternUnif, if it is either F or a in solved form.
+After any application of Pruning2 or Same-variable the rule Replace is applicable, after any application of Invert one of the rules Occur-check, Same-variable or Replace is applicable. Thus on an unsolved form one of these sequences can be applied: (Dec-*), (Pruning1), (Pruning2; Replace; Normalize), (Invert; Normalize; Occur-check), (Invert; Normalize; Same-variable; Replace; Normalize), (Invert; Normalize; Replace; Normalize), (Same-variable; Replace; Normalize), (Replace; Normalize). At each application, the sum of the sizes of the contexts of the unsolved variables decreases, but for the rule Dec-* that keeps the sum of the sizes of the contexts of the unsolved variables and decreases the size of the problem. Thus we get:
+Proposition 16 The above strategy in the application of the PatternUnif rules is terminating on atomic pattern problems. Thus uniﬁcation of atomic λσ-patterns is decidable and unitary.
+For non-atomic pattern problems the application of the rules (Exp-λ; Replace; Normalize) is trivially terminating and yields an atomic pattern problem. Thus:
+Theorem 17 Uniﬁcation of λσ-patterns is decidable and unitary.
+
+If the problem we start with is the pre-cooking of some problem in λ-calculus in a context Γ, then we may want to translate back the solved problem in λ-calculus. This can be done with the rules Anti-* of [5]. As shown in the full paper, starting from a pattern uniﬁcation problem in the simply typed λ-calculus, pre-cooking followed by the application of the PatternUnif rules under the strategy we have described and ended by the Anti-* rules, provides a correct and complete way of solving pattern uniﬁcation.
+In comparison with the standard presentation of pattern uniﬁcation, our presentation does not need mixed preﬁxes to simplify abstractions. Here we just reap the beneﬁt of the encoding of scopes constraints in the calculus itself [5]. Similarly, the raising step is merely our Anti-Exp-λ rule. Most ﬂexible-rigid and ﬂexible-ﬂexible cases can be uniformly reduced to inversion of a pattern substitution, with the case of two identical head variables being the only exception (rule Same-variable).
+5 Towards an eﬃcient implementation
+The literal interpretation of the algorithm in Section 4.2 is still quite impractical. For example, pruning is done one variable at a time, and so the right-hand side of a variable/term equation would have to be traversed and copied many times. In this section we present an algorithm which is close to the actual eﬃcient implementation of pattern uniﬁcation in the MLF (modular LF) language [8].
+Since we generalize pattern uniﬁcation to a constraint simpliﬁcation algorithm which does not require the pattern restriction, we use ξ and ζ to range over pattern substitutions, later to be distinguished from arbitrary substitutions.
+5.1 Atomic weak head normal forms
+The rule Normalize is not practical, since it is in general too expensive to reduce the whole term into normal form, perhaps only to discover later that the two terms we unify disagree in their top-level constructor. Instead, we transform the term only into weak head-normal form (see also [2]).
+Deﬁnition 18 A λσ-term a is in atomic weak head-normal form if it has the form:
+• λAa, where a is arbitrary,
+• (n a1 . . . ap) where a1, . . . , ap are arbitrary,
+• X[s] where s is arbitrary.
+Proposition 19 If every meta-variable in a has atomic type, then a has an atomic weak head-normal form.
+If a contains meta-variables with non-atomic type, we can obtain an equivalent term (with respect to uniﬁcation) by instantiating functional variables with new variables of lower type (see rule Exp-λ in Figure 4). This instantiation must be recorded as an equation, so converting a term to atomic weak head-normal form may introduce new constraints.
+So as not to clutter the notation, we assume a global constraints store CS to which new equations may be added during the transformations. In its simplest form (e.g., when all terms are patterns), CS represents a substitution. We write a for the atomic weak head-normal form of a obtained by successive head reduction as modelled in the λσ-calculus. As noted, this operation may add equations to the constraints store.
+
+AA a1 a2 =?λσ b1 b2 → a1 =?λσ b1 ∧ a2 =?λσ b2
+
+LL λAa =?λσ λAb → a =?λσ b
+
+LT λAa =?λσ b → a =?λσ (b[↑]1) if b is not of the form λAb1
+
+TL NN = NN =
+NA AN VV VT TV OC1 OC2
+
+b =?λσ λAa → a =?λσ (b[↑]1) if b is not of the form λAb1 n =?λσ n → T n =?λσ m → F if n = m
+n =?λσ b1 b2 → F b1 b2 =?λσ n → F X[ξ] =?λσ X[ζ] → X =?λσ Y [ξ ∩ ζ] X[ξ] =?λσ b → X =?λσ b[ξ]−1 if b[ξ]−1 exists and X not rigid in N F (b) b =?λσ X[ξ] → X =?λσ b[ξ]−1 if b[ξ]−1 exists and X not rigid in N F (b) X[ξ] =?λσ b → F if neither VV nor VT applies b =?λσ X[ξ] → F if neither VV nor TV applies
+
+Figure 6: Practical transformations
+
+5.2 Constraints transformations
+In this section we postulate (and maintain) that in an equation all terms are in atomic weak head-normal form unless the equation is solved, that is, of the form X =?λσ b where X does not occur in b. Furthermore, solved equations are immediately applied in that X is replaced by b throughout the other constraints, i.e., Replace is applied eagerly. In the implementation, this is modelled by an eﬃcient destructive update of a pointer associated with X in the manner familiar from Prolog implementations.
+The PatternUnif rules can be implemented by the transformation rules described in Figure 6 with the auxiliary operations ξ∩ζ and a[ζ]−1 which are explained below.
+The main diﬀerences between the PatternUnif rules and the implemented ones are the following. The η-expansion is done lazily by the rules LT and TL. The decomposition of applications is done incrementally, using the fact that applications are always rigid terms since meta-variables are assumed to be atomic. The rule Same-variable is replaced by the computation of the substitution ξ ∩ ζ. Inverting a substitution and applying the inverse to a term is now a single operation. Pruning is replaced by adding equations during this operation. We also omit the context Γ which could be reconstructed easily.
+The rules VT, TV, OC1 and OC2 contain side conditions on occurrences of a meta-variable X in a term. For the pattern fragment, any meta-variable occurrence is rigid, so simply the occurrence or absence of X from the normal form of b is in question. These rules remain valid under the generalization away from patterns in section 5.4, but only if we restrict the occurrences to be rigid. In the actual implementation this is not checked separately (which would require expensive traversal and possibly normalization of b), but simultaneously with the computation of b[ξ]−1 in rules VT and TV.
+Given two pattern substitutions ξ and ζ with the same domain and co-domain,
+
+A (a1 a2)[ξ]−1 = (a1[ξ]−1) (a2[ξ]−1) L (λAa)[ξ]−1 = λA(a[1.(ξ◦ ↑)]−1)
+
+NK >
+
+n[↑k]−1 = n − k if n > k
+
+NK ≤
+
+n[↑k ]−1
+
+fails if n ≤ k
+
+ND =
+
+n[n.ξ]−1 = 1
+
+ND =
+
+n[m.ξ]−1 = (n[ξ]−1)[↑] if n = m
+
+D (a.ζ) ◦ ξ−1 = a[ξ]−1.(ζ ◦ ξ−1)
+
+UD ↑m ◦ (a.ξ)−1 = (↑m ◦ ξ−1)◦ ↑
+
+UU1 ↑m ◦ (↑n)−1 = ↑m−n if m ≥ n
+
+UU2 ↑m ◦ (↑n)−1 = (m + 1). ↑m+1 ◦ (↑n)−1 if m < n
+
+V+ (Y [ζ])[ξ]−1 = Y [ζ ◦ ξ−1] if ζ ◦ ξ−1 exists
+
+V− (Y [ζ])[ξ]−1 = Y [(ζ ◦ ζ) ◦ ξ−1] if ζ ◦ ξ−1 does not exist,
+
+adding constraint Y =?λσ Y [ζ ] where ζ = ζ | ξ
+
+and Y is a new meta-variable
+
+Figure 7: Inverse Computations
+
+we deﬁne ξ ∩ ζ by:
+i.ξ ∩ i.ζ = i.(ξ ∩ ζ) i.ξ ∩ j.ζ = ξ ∩ ζ if i = j (n + 1).ξ∩ ↑n = (n + 1).(ξ∩ ↑n+1) i.ξ∩ ↑n = ξ∩ ↑n+1 if i = n + 1 ↑m ∩(m + 1).ζ = (m + 1).(↑m+1 ∩ζ) ↑m ∩j.ζ = ↑m+1 ∩ζ if j = m + 1 ↑n ∩ ↑n = ↑n
+Note that ↑n ∩ ↑m for n = m cannot arise, since the substitutions are required to have the same domain and co-domain.
+
+5.3 Inverting substitutions
+
+The properties from Section 3 show that the right inverse of a pattern substitution
+
+exists. The proof of this property is constructive and implicitly deﬁnes an algo-
+
+rithm to compute this inverse. In this section we write out another version of this
+
+algorithm in a form amenable to an eﬃcient implementation.
+
+Assume we have:
+
+Γ b:A
+
+Γξ∆
+
+where b is in atomic weak head-normal form. We deﬁne b[ξ]−1 so that ∆ b[ξ]−1 : A and (b[ξ]−1)[ξ] = b if b[ξ]−1 exists and b contains no free variables. If b does contain
+free variables, then the inversion may generate some additional constraints (as in the pruning rules). In that case we have (b[ξ]−1)[ξ] = b only modulo the solution
+to the generated constraints. We need to deﬁne the operation mutually recursively with ζ ◦ ξ−1, where:
+ΓζΓ
+Γξ∆
+
+and then ∆ ζ ◦ ξ−1 Γ and (ζ ◦ ξ−1) ◦ ξ = ζ if ζ ◦ ξ−1 exists.
+The application of an inverse substitution is described in Figure 7. In the ﬁnal case, ζ = ζ | ξ is the pruning substitution which guarantees that (ζ ◦ ζ)◦ ξ−1 exists.
+
+Such a pruning substitution always exists but we must take care to construct it such that no solutions are lost. It is deﬁned by:
+(b.ζ) | ξ = 1.((ζ | ξ)◦ ↑) if b[ξ]−1 exists (b.ζ) | ξ = (ζ | ξ)◦ ↑ if b[ξ]−1 does not exist ↑m | (a.ξ) = ↑m | ξ ↑m | ↑n = (m + 1). ↑m+1 | ↑n if m < n ↑m | ↑n = id if m ≥ n
+5.4 Constraint simpliﬁcation: the general case
+Extensive practical experience with languages like λProlog and Elf has shown that a static restriction of the language to employ only patterns in their terms is too severe. An empirical study conﬁrming this observation can be found in [12]. These experiments suggest an operational model, whereby equations which lie entirely within the pattern fragment of the typed λ-calculus should be solved immediately with the pattern uniﬁcation algorithm. Others (including certain ﬂex-rigid and ﬂex-ﬂex equations) should be postponed as constraints in the hope that they will be instantiated further by solutions to other constraints. Such a general scheme of deduction with constraints has been studied in ﬁrst order logic with equality [10] and has shown a fundamental improvement in the theorem proving techniques. In our situation, this technique avoids all branching during constraint simpliﬁcation (as opposed to Huet’s algorithm, for example). The resulting pattern simpliﬁcation algorithm is described in [20] in the framework of the Elf programming language. The implementation [22] is practical, but not nearly as eﬃcient as uniﬁcation would be for a language such as Prolog. Some of these ineﬃciencies can be addressed using a calculus of explicit substitutions.
+We modify the previous algorithm by computing inverses of general terms (Y [t])[ξ]−1 (where t is not a pattern substitution) if they can be computed without introducing any additional constraints. Otherwise appropriate equations are added to a global constraints store. Constraints are awakened and reconsidered when the meta-variable at the head of a term is instantiated.
+This generalized algorithm still always terminates. If it succeeds without unsolved constraints, the induced answer substitution is guaranteed to be a principal solution. If it fails there is no solution. If some constraints remain there may or may not be a solution, and the algorithm is therefore not as complete as Huet’s. However, the remaining constraints and the original constraints have the same set of solutions (restricted to the original variables), and we are thus free to employ other algorithms to determine satisﬁability of remaining constraints at the end if we wish. The algorithm is also obviously still sound and complete for uniﬁcation problems consisting entirely of patterns. A more detailed description can be found in [6].
+In practice it has proved superior to Huet’s algorithm in many cases, primarily because the latter makes non-deterministic choices which may have to be undone and backtracked later. Furthermore, we have the guarantee that any produced solution without remaining constraints is indeed a most general solution, which is important, for example, in type reconstruction.
+
+6 Related and future work
+Perhaps most closely related is work by Nadathur [17, 18, 15] who independently developed a calculus quite similar to explicit substitutions and sketched an implementation of Huet’s algorithm for higher-order uniﬁcation in it. Another solution has been adopted in Prolog/Mali [3]. As far as we know, nobody has considered this question for patterns or constraints. Qian [23] gives a linear algorithm for higherorder pattern uniﬁcation, but to our knowledge it has never been implemented and its practicality remains open. He also does not consider more general constraints.
+One interesting question we plan to consider in future work is if an explicit substitution calculus might be exposed at the level of the programming language, rather than remain conﬁned to the implementation. This raises a number of tantalizing possibilities as pointed out by Duggan [7].
+Besides MLF [8], the ALF system [11] also employs an explicit substitution calculus with dependent types and makes it available to the user, but its operational properties (such as uniﬁcation) have not yet been fully investigated.
+Acknowledgements. We would like to thank Robert Harper for many useful and stimulating discussions and Peter Borovansky for his implementation of pattern uniﬁcation in ELAN. This research has been partly supported by the HCM European network Console and by NSF grant CCR-9303383.
+References
+[1] Martin Abadi, Lucas Cardelli, Pierre-Louis Curien, and Jean-Jacques L´evy. Explicit substitutions. Journal of Functional Programming, 1(4):375–416, 1991.
+[2] P. Borovansky´. Implementation of higher-order uniﬁcation based on calculus of explicit substitutions. In Moroslav Bartoˇsek, Jan Staudek, and Jiˇr´i Wiedermann, editors, Proceedings of the SOFSEM’95: Theory and Practice of Informatics, volume 1012 of Lecture Notes in Computer Science, pages 363–368. Springer-Verlag, 1995.
+[3] P. Brisset. Compilation de LambdaProlog. PhD thesis, Rennes I, March 1992.
+[4] Pierre-Louis Curien and Alejandro Rios. Un r´esultat de compl´etude pour les substitutions explicites. Compte-rendus de l’Acad´emie des Sciences de Paris, 312(I):471–476, 1991.
+[5] Gilles Dowek, Th´er`ese Hardin, and Claude Kirchner. Higher-order uniﬁcation via explicit substitutions, extended abstract. In Dexter Kozen, editor, Proceedings of LICS’95, pages 366–374, San Diego, June 1995.
+[6] Gilles Dowek, Th´er`ese Hardin, Claude Kirchner, and Frank Pfenning. Uniﬁcation via explicit substitutions: The case of higher-order patterns. Rapport technique, INRIA, Rocquencourt, France, 1996. Forthcoming.
+[7] Dominic Duggan. Logical closures. In Frank Pfenning, editor, Proceedings of the 5th International Conference on Logic Programming and Automated Reasoning, pages 114–129, Kiev, Ukraine, July 1994. Springer-Verlag LNAI 822.
+[8] Robert Harper and Frank Pfenning. A module system for a programming language based on the LF logical framework. Journal of Logic and Computation, 1996. To appear.
+[9] J.-P. Jouannaud and Claude Kirchner. Solving equations in abstract algebras: a rule-based survey of uniﬁcation. In Jean-Louis Lassez and G. Plotkin, editors, Computational Logic. Essays in honor of Alan Robinson, chapter 8, pages 257–321. The MIT press, Cambridge (MA, USA), 1991.
+
+[10] Claude Kirchner, H´el`ene Kirchner, and M. Rusinowitch. Deduction with symbolic constraints. Revue d’Intelligence Artiﬁcielle, 4(3):9–52, 1990. Special issue on Automatic Deduction.
+[11] Lena Magnusson. The Implementation of ALF—A Proof Editor Based on MartinL¨of ’s Monomorphic Type Theory with Explicit Substitution. PhD thesis, Chalmers University of Technology and Go¨teborg University, January 1995.
+[12] Spiro Michaylov and Frank Pfenning. An empirical study of the runtime behavior of higher-order logic programs. In D. Miller, editor, Proceedings of the Workshop on the λProlog Programming Language, pages 257–271, Philadelphia, Pennsylvania, July 1992. University of Pennsylvania. Available as Technical Report MS-CIS-92-86.
+[13] Spiro Michaylov and Frank Pfenning. Higher-order logic programming as constraint logic programming. In Position Papers for the First Workshop on Principles and Practice of Constraint Programming, pages 221–229, Newport, Rhode Island, April 1993. Brown University.
+[14] Dale Miller. A logic programming language with lambda-abstraction, function variables, and simple uniﬁcation. Journal of Logic and Computation, 1(4):497–536, 1991.
+[15] Gopalan Nadathur. A notation for lambda terms II: Reﬁnements and applications. Technical Report CS-1994-01, Department of Computer Science, Duke University, January 1994.
+[16] Gopalan Nadathur and Dale Miller. An overview of λProlog. In Kenneth A. Bowen and Robert A. Kowalski, editors, Fifth International Logic Programming Conference, pages 810–827, Seattle, Washington, August 1988. MIT Press.
+[17] Gopalan Nadathur and Debra Sue Wilson. A representation of lambda terms suitable for operations on their intensions. In M. Wand, editor, Proceedings of the 1990 ACM Conference on Lisp and Functional Programming, pages 341–348, 1990.
+[18] Gopalan Nadathur and Debra Sue Wilson. A notation for lambda terms I: A generalization of environments (revised). Technical Report CS-1994-03, Department of Computer Science, Duke University, January 1994.
+[19] Tobias Nipkow and Lawrence C. Paulson. Isabelle-91. In D. Kapur, editor, Proceedings of the 11th International Conference on Automated Deduction, pages 673–676, Saratoga Springs, NY, 1992. Springer-Verlag LNAI 607. System abstract.
+[20] Frank Pfenning. Logic programming in the LF logical framework. In G´erard Huet and Gordon Plotkin, editors, Logical Frameworks, pages 149–181. Cambridge University Press, 1991.
+[21] Frank Pfenning. Uniﬁcation and anti-uniﬁcation in the Calculus of Constructions. In Sixth Annual IEEE Symposium on Logic in Computer Science, pages 74–85, Amsterdam, The Netherlands, July 1991.
+[22] Frank Pfenning. Elf: A meta-language for deductive systems. In A. Bundy, editor, Proceedings of the 12th International Conference on Automated Deduction, pages 811– 815, Nancy, France, June 1994. Springer-Verlag LNAI 814. System abstract.
+[23] Zhenyu Qian. Linear uniﬁcation of higher-order patterns. In M.-C. Gaudel and J.-P. Jouannaud, editors, Proceedings of the Colloquium on Trees in Algebra and Programming, pages 391–405, Orsay, France, April 1993. Springer-Verlag LNCS 668.
+[24] A. R´ıos. Contributions a` l’´etude des λ-calculs avec des substitutions explicites. Th`ese de Doctorat d’Universit´e, U. Paris VII, 1993.
+
+

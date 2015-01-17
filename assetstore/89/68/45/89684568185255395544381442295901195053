@@ -1,0 +1,719 @@
+ELSEVIER
+
+Theoretical Computer Science 169 (1996) 81-l 12
+
+Theoretical Computer Science
+
+The Qu-Prolog unification algorithm: formalisation and correctness
+
+Peter Nickolas”, Peter J. Robinsonb%*
+
+a Department
+
+qf Mathematics, University of Wollongong, Northjields Avenue, Wollongong, Australia
+b Software Verification Research Centre, Department of Computer Science, The University of Queensland, Qld 4072, Australia
+
+,liSW 2522.
+
+Abstract
+Qu-Prolog is an extension of Prolog which performs meta-level computations over object languages, such as predicate calculi and I-calculi, which have object-level variables, and quantifier or binding symbols creating local scopes for those variables. As in Prolog, the instantiable (meta-level) variables of Qu-Prolog range over object-level terms, and in addition other QuProlog syntax denotes the various components of the object-level syntax, including object-level variables. Further, the meta-level operation of substitution into object-level terms is directly represented by appropriate Qu-Prolog syntax. Again as in Prolog, the driving mechanism in Qu-Prolog computation is a form of unification, but this is substantially more complex than for Prolog because of Qu-Prolog’s greater generality, and especially because substitution operations are evaluated during unification. In this paper, the Qu-Prolog unification algorithm is specified, fotmalised and proved correct. Further, the analysis of the algorithm is carried out in a framework which straightforwardly allows the ‘completeness’ of the algorithm to be proved: though fully explicit answers to unification problems are not always provided, no information is lost in the unification process.
+
+1. Introduction
+Qu-Prolog [ 10, 1,111 is a logic programming language designed to allow natural high-level reasoning about data which has a much more general syntactic structure than the data about which Prolog reasons. Ordinary Prolog may be viewed as performing meta-level computations over a simple object-level language of Herbrand, or ground, terms. Qu-Prolog, by contrast, performs meta-level computations over complex object languages which may have their own object-level variables, and quantifier symbols creating local scopes for them. Object-level syntaxes may thus be at least as expressive as the language of full first-order predicate calculus, and encompass standard logical
+
+* Corresponding author. E-mail: pjr@cs.uq.edu.au.
+
+0304-3975/96/$15.00 @ 1996-Elsevier PII SO304-3975(96)00115-6
+
+Science B.V. All rights reserved
+
+82 P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+
+and mathematical notations, and the notations required in reasoning about program correctness.
+The power and utility of Qu-Prolog in such contexts arise not merely from the generality of the intended object-level data, but also from the fact that the full syntactic structure of that data is directly representable at the Qu-Prolog language level. As in Prolog, the instantiable meta-level variables of Qu-Prolog range over object-level terms, and in addition other Qu-Prolog syntax models each individual component of the object-level syntax, including the object-level variables and bindings of those variables. Further, the meta-level operation of substitution into object-level terms is directly represented by appropriate Qu-Prolog syntax. These facilities allow expression of, and reasoning about, the properties of object-level data in a very natural fashion, and in particular without the need for the elaborate encoding of such data which a lower-level language would require.
+As in Prolog, the driving mechanism in Qu-Prolog computation is a form of unification, but this is substantially more complex than for Prolog because of Qu-Prolog’s greater generality. In both cases, unification is the attempt to construct an instantiation of the variables of two meta-level terms so that the instantiated terms denote, for each valuation of their variables, terms which are equal in the corresponding object-level language. For Prolog, this is equivalent to the simple requirement that the instantiation make the terms syntactically identical. In Qu-Prolog, however, where the most significant notion of equality at the object level is not syntactic identity but a-equivalence - identity up to change of bound variables - there is no simple meta-level syntactic criterion of this kind, and it is necessary to work directly with the semantic description of unifiability.
+We give some examples which illustrate informally some of the considerations involved in unifying Qu-Prolog terms. In these examples we use the concrete syntax of Qu-Prolog, whereas in the rest of the paper we use an abstract Qu-Prolog syntax which is simpler and more uniform, and therefore easier to analyse. (This abstract syntax also reflects the data-structures used in Qu-Prolog 3.2, the current Qu-Prolog implementation.) Suppose that q is Qu-Prolog notation representing a quantifier symbol at the object level, that f represents an object-level unary function symbol, that x and y are Qu-Prolog variables which represent object variables, and that A and B are schematic Qu-Prolog variables representing (like the variables of Prolog) arbitrary object-level structures.
+
+Example 1. Consider the unification of the Qu-Prolog terms q x f(x) and q y f(y). These terms represent object-level terms which are a-equivalent, so the terms unify, with no bindings made.
+
+Example 2. More generally, consider unification of q x A and q y f(y). minimal instantiation after whose application the two terms will represent object-level terms. Clearly the instantiation which binds A to f(x) needed.
+
+We seek a a-equivalent is what is
+
+P. Niekolas, P.J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+
+83
+
+Example 3. More generally again, consider unification of q x A and q y B, in which for simplicity we suppose that x and y are known to represent distinct object-level variables. Informally, we seek to make A and B the same, except that free occurrences of x in A should correspond to free occurrences of y in B. Thus one most general unifier instantiates A to [x/y] * B, where the latter expression denotes the substitution of x for each free occurrence of y in B. For this to be correct, however, requires also that x does not occur free in B, so the answer must be accompanied by this sidecondition. Clearly, an attempted unification must fail if x is free in B, since x is then free in q y B but not free in q x A. This is indeed the information returned by the Qu-Prolog unification algorithm in this case: non-freeness information and substitutions are managed as central features of unification computations.
+Example 4. To illustrate some other issues, consider unification of [A/x] * B and u, where a represents an object-level constant symbol. The unification can proceed either by binding B to a or by binding B to x and A to a. Thus, unique most general unifiers may not exist for Qu-Prolog unification problems, and computation of answers in such cases will require branching in the unification algorithm. The current Qu-Prolog unification algorithm avoids branching, and will instead delay such problems, so that bindings made elsewhere in the computation may provide sufficient information to make branching unnecessary. This for example allows the implementation of applicationspecific extensions of the unification algorithm, and such extensions have been found useful in applying Qu-Prolog to the implementation of interactive theorem provers.
+
+In this paper we specify, formalise and prove correct the Qu-Prolog unification algorithm. As Example 4 above suggests, a unification algorithm necessarily involves a compromise between the demand for computational tractability and the demand for fully explicit answers. A changed view of where the balance between the two demands lies will result in an altered algorithm. It is therefore useful for us to analyse Qu-Prolog unification within a framework general enough to allow many specific algorithms - such as the one currently in use, and variants of it - to be derived by relatively straightforward means. In particular, it is useful to work within a framework which permits the analysis of branching unification algorithms, even though the currently implemented algorithm does not make use of branching.
+Our analysis makes use of ideas developed in [9] for the analysis of unification and constraint solution algorithms. Prolog unification (with occurs check) always produces unifiers which are most general, and the framework of [9] emphasises a notion of “completeness” which captures the idea of maximal generality even in contexts such as the present one where fully explicit answers to unification problems cannot always be constructed.
+In this introductory section, we have not detailed our method for managing, during unification, the Qu-Prolog notations which represent object-level variable bindings. A plausible candidate method for this is the use of a modified de Bruijn notation [2]. As will become clear later, however, we follow a different route here. There are several
+
+84 P. Nickolas. P.J. Robinson I Theoretical Computer Science 169 (1996) 81-112
+reasons for this. First, our technique allows straightforward management not only of bound variable notations, but also of substitution notations in Qu-Prolog terms. Second, it permits relatively straightforward extension to, for example, a generalised Qu-Prolog which permits the simultaneous binding of several object-level variables. Third, an implementation as least as efficient as one using de Bruijn notation can be achieved using our technique. The first of these points will be clarified by later sections. Lack of space precludes a detailed discussion in this paper of the other points, but the last of them is touched on briefly in the final section.
+The approach taken in Qu-Prolog to the formal schematic representation of complex object-level languages is not the only possible one, though it deserves investigation since it naturally mirrors much common meta-mathematical usage. Much work in this area has instead represented object-level languages using terms in a typed A-calculus; the language AProlog [6] (see also [7]), for example, makes use of the higher-order hereditary Harrop formulae, which form a computationally convenient subclass of the A-terms. Huet has studied unification in the setting of A-terms, and has specified a practical algorithm for it [3] (used in particular in AProlog). There are loose correspondences between certain rules in Huet’s algorithm and our own, reflecting, for example, a similarity between /?-reduction of A-terms and substitution evaluation in Qu-Prolog. However, while languages based on A-terms employ (meta-level) variable-binding crucially, Qu-Prolog is a free-variable logic programming language - object-level variablebindings are represented by free-variable notations at the Qu-Prolog level - so precise correspondences cannot be expected. In [8], Paterson analysed a preliminary version of Qu-Prolog unification, though not in the general and extendible framework used here, and showed that Qu-Prolog unification (like the unification of A-terms) is semidecidable but not decidable.
+The outline of the remainder of the paper is as follows. In Section 2, we discuss Qu-Prolog and its object languages in detail. In Section 3, we set up the framework mentioned above in which the formalisation and analysis of Qu-Prolog unification will take place. Finally, in Section 4, we develop and analyse the unification algorithm itself.
+2. Qu-Prolog
+In this section, we specify in detail the formal syntax of Qu-Prolog and of its intended domains of discourse, and investigate some technical properties of both levels.
+We comment on our notation first. The discussion in much of the rest of the paper uses languages at three distinct levels. These are first the object-level languages about which Qu-Prolog reasons, second the Qu-Prolog language itself, which constitutes a formal meta-language describing some aspects of the syntax of the object languages, and third the informal mathematical meta-language used to define and discuss the other levels. We do not attempt to provide distinctive notations for each level, preferring to avoid the proliferation of symbols or fonts necessary for that. The resulting simplicity of notation is worthwhile, and confusion is always avoidable by reference to context.
+
+P Nickolas, P.J. Robinson/ Theoretical Computer Science 169 (1996) 81-112
+
+85
+
+2.1. Qu-Prolog ‘s object level
+First we define and discuss the object-level languages which are the intended domains of discourse of the language of Qu-Prolog. (More precisely, we consider the object languages of Qu-Prolog 3.2, the version of Qu-Prolog available at the time of writing.) The terms in each such language are formed recursively from a finite set of (object) constant symbols, or just (object) constants, and a countably infinite set of (object) variables as follows.
+1. Each constant is a term. 2. Each variable is a term. 3. If tl and t2 are terms then @(tl, t2) is a term. 4. If x is a variable and t is a term then x l t is a term. Thus, up to a change in notation, and interpreting @ as an application operator and l as an abstraction or binding operator, object-level terms are those of a simple iLcalculus. The class of languages considered is parameterised by the set of constants involved. As mentioned earlier, Qu-Prolog provides syntax for the explicit representation of the operation of substitution in object-level terms, so a prerequisite for our analysis of QuProlog unification is a precise and convenient way of discussing that operation. Dealing correctly with substitution in the A-calculus is notoriously awkward, and we shall need to deal here not only with substitution of a single term for a single variable, but with parallel or simultaneous substitution of several terms for several variables. We therefore seek an approach to substitution which is as simple as possible, and we have chosen that developed by Stoughton [12]. The key to the simplicity of this approach lies in its policy of variable-renaming: in a term which is to be the object of a substitution, all bound variables are systematically changed to ‘new’ variables before the substitution is applied. Not only is the definition of substitution simpler in Stoughton’s account, but the approach leads to significantly easier proofs of many elementary results on substitution, and in particular permits some proofs to proceed by structural induction on terms, rather than by the more complex route of induction on term length which some other approaches make necessary. Further, some arguments normally performed by induction can be made induction-free. (See [12] for an illustration of these points.) We remark that Stoughton treats substitution only in the case of pure i-calculi - those without constant symbols - but that his definitions and arguments extend routinely to our case; we make appropriate minor revisions of his results as needed. We now detail the approach. We define the set vars(t) of variables free in a term t in the standard way, as follows. 1. If c is a constant, then vars(c) = 0. 2. If x is a variable, then vars(x) = {x}. 3. If ti and t2 are terms, then vars(@(tl, t2)) = vars(t,) U vars(t2). 4. If x is a variable and t is a term, then vars(x l t) = vars(t) \ {x}. Substitutions are functions from variables to terms, which fix all but finitely many variables. If a substitution s maps the (distinct) variables x1,x2,. . .,x, to terms tl, t2,. ,
+
+86 P. Nickolas, P. J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+
+tn, respectively, and leaves fixed all other variables, we may represent s in the form (h/x1 9t2/x2,. . . >tn/xn). (The latter expression is of course merely one representation of S; a given substitution will have many such representations, but the substitution can clearly be recovered unambiguously from any of them.) A function new is defined as follows: given a variable x, a term t and a substitution S, new(x, t,s) is the non-empty set of variables
+
+{y : y @ uars(s(z)), for all z E uars(t) \ (x}}.
+
+Equivalently, new+, t, s) is the set of variables complementary
+zewUs(t)\u{ax}rs(s(z)).
+
+to the set
+
+A choice function on non-empty sets of variables is assumed fixed once and for all. Then the result st of the (simultaneous) substitution of s(x) for x in t for all variables x is defined by structural recursion as follows.
+1. If c is a constant, then SC = c. 2. If x is a variable, then sx = s(x). 3. If tl and t:! are terms, then s@(tl,t2) = @(stl,st2). 4. If x is a variable and t is a term, then s(x l t) = y l (s @ (y/x))t, where y is the variable selected from new(x, t,s) by the choice function, and s CB(y/x) is the substitution which maps x to y and otherwise behaves as does s. Recall that in our approach, all bound variables in a term are replaced by “new” variables before the application of a substitution. The set new(x, t,s) contains precisely those variables which can be correctly used as new variables when s is to be applied to x l t ; that is, the variables whose use in place of x will not result in the unintended binding of a free variable. Thus, for example, if we assume that x and z denote distinct variables, then
+
+(x/4(x l @W>) = Y . ((44 @(Yl4hIzm~X) = Y . @(((x/z)@(Y/4h<W
+
+@(Y/X)rw>
+
+where y is chosen as in the last clause of the definition of substitution application. The (right-to-left) composition of substitutions s1 and ~2, denoted by s1 o ~2, is
+defined by setting (si o s2)(x) = s1s2x, for all variables x. We write id for the identity
+substitution. The relation - of cl-equivalence on terms is defined to be the least equivalence
+relation on terms satisfying the following conditions.
+1. If tl, t2, u1 and 2.42are terms, then @(tl,tz) N @(u~,zQ) if tl - q and t2 - 242. 2. If x and y are variables and t and u are terms, then x l t N y l u if either x = y and t N u or y $! vurs(t) and (y/x)t - u. Note that we have id t N t, for all terms t [ 12, Lemma 3.l(vi)]. The stronger assertion that id t = t fails in general.
+
+P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+2.2. The Qu-Prolog language level Let an object language be fixed for the following discussion.
+
+87
+
+2.2.1. Primitives As indicated earlier, Qu-Prolog has primitives intended to represent each specific
+element of object-level syntax, as well as schematic or meta-level variables intended to range over all object-level terms. A key additional syntactic feature of Qu-Prolog is explicit notation to represent object-level substitution and substitution application.
+The constant symbols and variables of Qu-Prolog are as follows. First, for each object constant symbol, Qu-Prolog has a constant symbol intended to name that object-level symbol; we call these Qu-Prolog constant symbols object-const constants. Second, there is a countably infinite set of variables, called object-var variables, intended to range over object variables. Third, there is a countably infinite set of variables, the schematic variables, which are intended to range over all object-level terms, and which correspond to the ordinary variables of Prolog. These three sets of symbols are assumed disjoint.
+We shall typically denote schematic variables by upper-case symbols such as X, Y and Z, and object-var variables by lower-case symbols such as x, y and z. In some situations, however, it is useful to allow X, Y and Z to denote objects which may be either schematic variables or object-var variables. (See, for example, the definition of instantiations, below.) The convention in use at any point will always be made explicit.
+
+2.2.2. Terms Qu-Prolog terms are defined by recursion as follows. 1. Each object-const constant is a term. 2. Each object-var variable is a term. 3. Each schematic variable is a term. 4. If tl and tz are terms, then @(tl, t2) is a term. 5. If x is an object-var variable and t is a term, then x l t is a term. 6. If x1,x2 , . . . ,x, are object-var variables and tl, t2,. , t, and t are terms, then
+[tl/xl, tz/x2,. . , t,/x,] * t is a term. Note that l is, at the Qu-Prolog level, simply a two-place infix operator (which could
+otherwise be denoted, say, as quantzyy(x, t)), not a variable-binding operator. Qu-Prolog notations using l are formal meta-level expressions designed to conveniently represent object-level variable-binding. Similarly, the notation used in the last clause above is simply formal Qu-Prolog syntax designed to represent object-level substitution; it does not entail any form of substitution in Qu-Prolog terms.
+Often it is convenient to speak of the expression [tl/xl,. . ., t,/x,] on its own as a substitution (or strictly a substitution notation). Note that there are no unstated constraints on the formation of such a substitution: we do not forbid the case n = 0, the case ti = xi for any i, or the case xi = xj for any distinct i and j. (As we shall see later, if xi = xj then the leftmost of the entries may be deleted without changing
+
+88 P. Nickolas, P. J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+
+the meaning of the substitution.) We refer to xi,. . . ,x, as the domain variables of the substitution [ti /xl, . . . , t,/x,], and to the terms tl,. . . , tn as the range elements.
+
+2.2.3. Formulae The formulae of @-Prolog may in general include user-defined predicates specific
+to particular applications - that is, representing assertions about the syntax of specific object languages. Two predicates, = and not-free-in, are however primitive elements of the syntax. The formulae involving these predicates are the only formulae with which we are concerned in a discussion of unification, and they are as follows.
+1. If tl and t2 are terms, then tl = t2 is a formula. 2. If x is an object-var variable and t is a term, then x not-free-in t is a formula.
+
+2.2.4. Instantiations For any integer n > 0, let Xi, X2,. . . ,X, be distinct object-var variables or schematic
+variables, and let tl, t2,. . . , t,, be terms, with the restriction that for any i for which Xi is an object-var variable, ti is also an object-var variable. These data define a function G, say, from terms to terms, by means of the following recursive clauses, and we call Q an instantiation.
+1. If c is an object-const constant, then B(C) = c. 2. If x is an object-var variable, then G(X) = ti if x is Xi for some i, and a(x) = x otherwise. 3. If X is a schematic variable, then o(X) = ti if X is Xi for some i, and a(X) = X otherwise. 4. If tl and t2 are terms, then a(@(tl, t2)) = @(o(tl),o(t2)). 5. If x is an object-var variable and t is a term, then CT(Xl t) = CT(X)l o(t). 6. If xi,. . . ,x, are object-var variables and tl,. . . , t,, and t are terms, then
+
+&I/&l* t>=at1 /Xl, . . . ,
+
+[5(t1)/5(a
+
+)I * 40), . . ., 5(&l )/5(x,
+
+Thus, informally, an instantiation (T “passes through all the structure” of any term to which it is applied. We may represent cr by the expression
+
+[X, .+ t*,...,x, .-+ t,].
+
+(As with object-level substitutions above, the representation is not unique.) The support of an instantiation 5, denoted supp(a), is the set of variables X satisfying
+o(X) # X. The support is finite for all instantiations. We note that the set of instantiations is closed under composition. To see this, we can
+argue as in the classical first-order case ([4], for example). In fact, given instantiations 5 = [Xl H tl,. . .,& H tl] and r = [Yi H ~1,. . ., Y, H urn], the (right-to-left) composite 5 o 7 is given (non-uniquely) by the expression [Zi H vi,. . ,Z, H v,J, where the list Zi H vi,. . . , Z,, H v, is formed from the list Xl H tl, . . . ,Xl H tl, Yl 6 a(ul), . . . , Y, H a(u,) by deleting any expression Xi H ti in which Xi = Yi for some j. Clearly the constructed instantiation agrees with 5 o 7 on all variables, and a straightforward induction then shows that the two instantiations are equal.
+
+P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 11996) 81-l 12
+
+89
+
+It is clear that the identity function on terms, denoted by id, is an instantiation.
+
+2.3. Semantics
+As above, we consider a fixed object language. A variable valuation is a function which maps (all) schematic variables to objectlevel terms and (all) object-var variables to object variables. The (intended) meaning is the function m which maps each Qu-Prolog constant symbol to the object-level constant which it is intended to name. Given a variable valuation v, we extend m to a meaning rnt defined on terms and substitutions by the recursive conditions below. 1. If c is an object-const constant, then m:(c) = m(c). 2. If x is an object-var variable, then m:(x) = v(x) 3. If X is a schematic variable, then m,“(X) = v(X). 4. If tl and t2 are terms, then mz(@(tl,tz)) = @(mt(tl),m;(t2)). 5. If x is an object-var variable and t is a term, then m,+(x l t) = m:(x) l m,“(t). 6. If XI,. . .,x, are object-var variables and tl,. . , tn and t are terms, then
+m,*([4h,...,tn/x,l * t) = (U1/Y1,...,Umlym)mI*(t),
+where the sequence of expressions
+t~dYI,...,u,lY,
+is defined to be that obtained from the sequence of expressions
+
+by deleting every mz(ti)/mt(Xi) for which there is an mz(tj)/mE(xj) with i < j and m,*(xj) = m:(xj).
+If s is the Qu-Prolog substitution notation [tl/x,, . . , t,,/x,,] above, it is often convenient to refer to the object-level substitution represented by (ul/yi, . . , um/ym) above as m,“(s). We can then, for example, write m:(s * t) = mz(s)m:(t), for any term t.
+We extend the meaning rnz to formulae as follows. 1. If tl and t2 are terms, then m;?*(tl = t2) is true if m:(tl) N m:(t2), and is false otherwise. 2. If x is an object-var variable and t is a term, then mt(x not-free-in t) is true if m;(x) 6 var.s(mE(t)), and is false otherwise.
+2.4. Preliminary results at the object level
+We collect in this section a number of definitions and results about our object-level languages; these (and the results of the following section) are vital for our correctness proof. Fortunately, Stoughton in [ 121 has studied the elementary properties of the syntax of such languages in detail, though his languages lack constant symbols, and some of the results below are straightforward extensions of Stoughton’s to our setting.
+
+90 P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+All references to “terms”, “substitutions”, etc. in this section are to those of some fixed object-level language.
+The following result is Theorem 3.2 of [ 121.
+Lemma 2.1. Zf s1 and s2 are substitutions and t is a term, then slszt = (~1o s2)t.
+The following result is a restatement of Lemma 3.1 (ii) of [ 121.
+Lemma 2.2. Let t be a term and s a substitution. Then vars(st) = UxEvarsCvtjars(sx).
+The next result is a straightforward consequence of the preceding one.
+Lemma 2.3. Let t and u be terms and s a substitution. Zf vars(t) = vars(u), then vars(st) = vars(su).
+The next result is a restatement of Lemma 3.1 (iii) of [ 121.
+Lemma 2.4. Let t and u be terms. Zf t - u, then vars(t) = vars(u).
+The following result is a restatement of Corollary 3.8 of [12].
+Lemma 2.5. Let t and u be terms and let SI and s2 be substitutions. Zf t - u, and if s1.x- szx for all x E vars(t), then s1t N ~224.
+The following result is a straightforward extension of Corollary 3.10 of [12].
+Lemma 2.6. Zf t and u are terms such that t N u, then one of the following holds: (a) t and u are equal constants; (b) t and u are equal variables; (c) there are terms tl, t2, UI and u2 such that t = @(tl, t2) and u = @(ul,u2), and
+tl - u1 and t2 - ~2; or (d) there are variables x and y and terms to and uo such that t = x l to and
+u = y l UC,a, nd either x = y and to N ug or y $! vars(to) and (y/x)to N ug.
+The next result follows from Lemma 2.6 and the definition of the relation N.
+Lemma 2.7. Zf tl, t2, u1 and u2 are terms, then @(tl,tz) N @(u1,u2) if and only if tl - u1 and t2 - 242.
+The following result is a straightforward consequence of Lemma 2.6.
+Lemma 2.8. Let x be a variable and let t and u be terms. Zf x l t - x l u, then t N u.
+Lemma 2.9. Let x and y be variables and t a term. Zf x @vars(t), then (y/x)t N t.
+
+P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 (1996) X1-112
+
+91
+
+Proof. Clearly (y/x)z N idz for all variables z E z;ars(t), so the result follows from Lemma 2.5. 0
+
+Lemma 2.10. Let x and y he variables and t a term. IJ’y $ vars(t), then (x/y) (y1.y) t - t.
+Proof. If z E vu-s(t), then z # y, and so it is clear that (x/y)(.v/x)z = z = id; (whether or not z = x). The conclusion follows by Lemma 2.5. El
+Lemma 2.11. Let x and y be variables und t a term. !f x # y. then x 4 vars( (1.i.xt)).
+Proof. By Lemma 2.2, x E vars((y/x)t) if and only if x E vars((y/x)z) for some z E vars(t). Fix such a z. If z = x, we have x = y, a contradiction. If z # x, we have x E vars(z), and therefore z =x, which is also a contradiction, giving the result. L
+
+The proof of the next result follows similar lines, and is omitted.
+
+Lemma 2.12. Let x be a variable, c a constant, and t u term. Then vurs((c/x)t) = tiars(t) \ {x}.
+
+Lemma 2.13. Let s be a substitution, x a variable, and t u term. Then s(x l t ) y 0 (s 8 (y/x))& for every y E new(x, t,s).
+
+Proof. Fix a variable y E new(x, t,s). If yo is the variable selected from new(x, t,s) by the choice function, then the definition of substitution gives s(x l t) N yo l (.~a (yo,k) )t, and so it suffices to prove that yo l (s 8 (yo/x))t N y l (s CB(y/x))t. Clearly we need only consider the case when yo # y. Then, by the definition of the relation w, it suffices to prove y $ vars((s CD(yo/x))t) and (y/y~)((s 9 (yo/x))t) N (s @ (ylx))t.
+For the first of these, Lemma 2.2 gives
+
+tlffrs((s 8, (yo/x))t) = IJ vars((s 33(y~/x))w> wEcars
+
+= {Yo> ” WELuYXY(l)\va{Xrs}(sw) if x E cars(t)
+
+wW7Urs(t)\(sv} ars(sw)
+
+if x $ vars(t).
+
+Since yo # y, it therefore suffices to show that y $ UwEvur,,(tj,lxl vars(sw), and this is
+given by the fact that y E new(x, t,s).
+To show that (y/yo)((s$ (_yo/x))t) N (~9 (y/x))t, it suffices by Lemma 2.1 to show
+that ( (Y/YO) 0 (s @ (yolx) ))t - (s @ (y/xi )t, and for this it suffices, by Lemma 2.5, to show that ((Y/Yo) 0 (s CE(YO/~)))Z N (s @ (y/x))z, for all variables z E vars(t). This is clear if z = x. Otherwise, if z E vars(t) \ {x}, we have yo e vars(sz), since yo E new(x, t,s). Therefore ((y/ye) o (s @ (yo/x)))z = (y/yo).~z - sz, by Lemma 2.9.
+Since also (s ~3 (y/x))z = .sz, the result follows. 0
+
+92 P. Nickolas, P.J. RobinsonI Theoretical Computer Science I69 (1996) 81-112
+Lemma 2.14. Let s be a substitution, let x and y be variables, and let t be a term. Suppose that y # x and y $ vars(t), and that sy = y and y cf vars(sz) for all variables z # y. Then s(x l t) N y l (s( (y/x)t)).
+Proof. If z E vars(t) \ {x}, then z # y, and so y 6 vars(sz). Therefore y E Izew(x, t, s). By Lemma 2.13, we have s(x l t) - y l (s @ (y/x))t, and it suffices, by Lemma 2.5 and the definition of the relation N, to show that (S @ (y/x) )w = (s o (y/x) )w, for all variables w. This follows easily from the fact that sy = y. 0
+
+2.5. Preliminary results at the Qu-Prolog level
+We collect now some definitions and results dealing with the language of Qu-Prolog, and its relation to its object level.
+We define a function vars on terms by a straightforward recursion, as follows. 1. If c is an object-const constant, then vars(c) = 0. 2. If x is an object-var variable, then vars(x) = {x}. 3. If X is a schematic variable, then vars(X) = {X}. 4. If tl and t2 are terms, then vars(@(tl, tz)) = vars(tl) U vars(t2). 5. If x is an object-var variable and t is a term, then vars(x l t) = vars(x) U mm(t). 6. Ifx I,. . . ,x, are object-var variables and tl,. . . , t,, and t are terms, then
+
+vars([tl/xl, . . . , t,/x,] * t) = ij vars(t,) U lj VWS(Xi)
+i=l i=l
+
+U vars(t).
+
+If s is the substitution notation [tl/xl, . . . , t,,/x,,] above, it is also convenient to define vars(s) = U:=, vars(ti) U Uy=, vars(xi). Clearly we then have vars(s * t) = vars(s) U vars( t ).
+We extend th.e application of the function .,vars to instantiations, by setting
+
+vars(o) = supp(a) U U
+XESUPP(fl)
+
+vars(a(X)),
+
+for an instantiation g.
+
+Lemma 2.15. Let t be a Qu-Prolog term and let v be a variable valuation. Then
+vars(mXt)) C UXEvarvsacrtjs@W)).
+Proof. The proof proceeds by induction over the structure of t. We consider only the final case, when t is s * to, where s is [tl/xl ,. . . , t&J for some terms tl,. . ., t,, and some object-var variables XI,. . . ,x,,, and where to is a term. Assume that the desired statement holds for t 1,. . . ,tn and to. Now by Lemma 2.2,
+vars(m,*(t)) = vars(m:(s)m~(to)) = U vars(m,*(s)x). xEuurs(m:(to))
+Fix an object variable y in the latter set, so that y E vars(m;(s)x) for some object variable x E vars(m:(to)). Write m:(s) = (q/yl,. . . ,um/ym), where the right-hand side
+
+P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+
+93
+
+is obtained as in the definition of m:. Now if x # yi for all i, then m:(s)x = x, while if x = yi for some i, then mt(s)x = ui, and ui = m,*(t,) for some j. In the first case, we have y = x, giving y E vars(mz(to)), while in the second case, we have y E vars(m~(tj)). Applying the inductive assumption for to and t, and using the definition of tlars(s * to) gives the desired statement for t. 0
+
+Simple examples show that equality is not always achieved in the above result.
+
+Definition 2.1. Let 2: and w be variable valuations and V a set of variables. We say that 1) and w agree (up to -) on V if v(X) N w(X), for all X E V.
+
+We henceforth omit the phrase “up to N”.
+
+Lemma 2.16. If‘ v and w are valuations which agree on u set V of variables, then m,*(t) N m:,(t), for all terms t satisfying vars(t) C V.
+
+Proof. If t is a variable, the relation holds by definition of rnz and rnc, and the rest of the proof proceeds by a straightforward induction. 0
+
+Lemma 2.17. Let s1,s2,. . . , s, be substitutions, for some n 20, and let I‘ and w be
+
+valuations which agree on U:=, vars(si). Zf t and u are object-level terms such that
+
+t N u, then m:(sI)m,*(sz)...mz(s,)t
+
+N mf(q)mE(s2)...m,*(s,)u.
+
+Proof. For any i, the definition of ma and rnz, and Lemmas 2.6 and 2.16, show that m,*(si)x N mc,(si)x, for all object-level variables x. The result follows by Lemma 2.5 and induction over n. 0
+
+Lemma 2.18. Let SI,S~,...,S, be substitutions, ,for some n30, let x he an object variable, and let v be a valuation. Zf mt(sl)mf(sz ). ..rn:(s,)x # x, then there is un object-var variable X E vars(q), for some i = 1,2,. , n, such that m:(x) = x.
+
+Proof. From rn:(sl )m,*(sz) . . . m,*(s,)x # x, it follows that mz(Si)X # x, for some i. The required assertions now follow from the definition of m,*(si). 0
+
+The following definition of, loosely, the composition of a valuation and an instantiation plays an important role in later sections.
+
+Definition 2.2. If cs is an instantiation and v is a valuation, then vocr is the valuation defined by setting (voa)(X) = m,+(o(X)) for all (schematic or object-var) variables X.
+
+Lemma 2.19. Let o be an instantiation and v a valuation. Then mrO,(t) = m:(a(t)), for all terms t.
+
+Proof. The required equality holds by the definitions of v o cr and m:,, when t is a variable, and the result follows by induction over the structure of t. 0
+
+94 P. Nickolas. P.J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+We note that v o id = v, for all valuations v. Also, though we will not use the fact explicitly, we note that it follows easily from the preceding lemma that v o (ai o 02) = (v o gi ) o 02, for all valuations v and instantiations CJ~and (r2.
+3. A framework for unification
+In [9], an abstract framework is developed for the formalisation of unification and constraint solution problems. We cannot apply that scheme directly to our analysis of Qu-Prolog unification, which requires a scheme differing in a number of significant details, but the central notions of [9] are still relevant, and we adopt them for use here. Specifically, the focus of the analysis in [9] is on the properties of individual unification and constraint solution steps (or “refinements”). Each of these steps can be viewed in a precisely defined way as the conversion of implicit information in the form of constraints into explicit information in the form of instantiations (“substitutions” in [9]), and the form of the conversion provides a straightforward guarantee that the process preserves information. The specification of any fixed set of such steps essentially defines a non-deterministic unification or constraint solution algorithm, and such an algorithm will be information-preserving (“complete”, in the terminology of [9]), because its individual steps are. A deterministic algorithm may then be obtained by specifying the order in which particular steps are to be applied.
+We develop below a version, suitable for our use, of the framework of [9]. Once our framework is established, we shall derive a number of general results which will assist in the derivation of specific Qu-Prolog unification algorithms, including the presently implemented one (Qu-Prolog 3.2) and future variants of it.
+Throughout this section, we work with a fixed object language, and a fixed meaning function m.
+3.1. Constraints and theorems
+We first define the set of constraints in Qu-Prolog recursively, as follows. 1. Each formula is a constraint (an atomic constraint). 2. The atom succeed is a constraint. 3. If C is a constraint, then so is X. 4. If Cr and C2 are constraints, then so is Cr -+ C2. We now define the action of the meaning functions on constraints. Let v be a valuation. Then m,*(C) is already defined for all atomic constraints C, and we extend its definition as follows. 1. If C is succeed, then m:(C) is true. 2. If C is any constraint, then m:(X) is true if and only if m:(C) is false. 3. If Ci and C2 are constraints, then m:(Ci + C,) is true if and only if the truth of m,*(Ci) implies the truth of m,*(Cz). We also introduce the notion of theoremhood for constraints.
+
+P. Nickolas, P.J. Robinson1 Theoretied Computer Science 169 (1996) 81-112
+
+95
+
+Definition 3.1. If C is a constraint, then C is a theorem, written k C, if m:(C) is true for all valuations U.
+
+We note that theoremhood here is a semantic notion; we use the term “theorem” and the symbol “E ” for consistency with the terminology and notation of [9]. (See also the next two lemmas below, and the comments which follow them.)
+We define Cl A C, to be an abbreviation of -(Cl + X2), and we define Cl H Cz to be an abbreviation of (Ci + CZ) A (Cl --j Cl )_ Further, notation Ci A C, A. . A C,, is taken to signify succeed if II = 0 and Ci if n = 1, and as usual abbreviates a suitably parenthesised repeated application of A when n 3 2. For Qu-Prolog terms tI and tz, we abbreviate -(tl = t2) as tl # t2.
+It is straightforward to verify that, for any n, m:(C, A C’2A . . A C,) is true if and only if m:(C) is true for i = 1,2,. . . , n, and that k Ci A Cl A . . A C,, if and only if E C, for i = 1,2,. . , n. Also, it is clear that mF(Ci ++ C2) is true if and only if the truth values of m:(Ci ) and m,T(C2) are equal.
+The two results below are useful and easily proved.
+
+Lemma 3.1. Let Cl, C2 and C, he constraints.
+
+ä(a>
+
+CI +(C2-+C1);
+
+Then
+
+(b) k (CI + (C2 + G))
+
++ ((Cl
+
++ C2) + (CI - G));
+
+(c) t (4,
+
++ 42)
+
+4 ((1c,
+
++ C2) --i C,).
+
+and
+
+Lemma 3.2. If Cl and C2 are constraints such thut t CI and k C1 + Cl, then k C,.
+
+Lemma 3.1 shows that each constraint which is a formal instance of one of the standard axiom schemes of propositional calculus ([5], for example) is a theorem, and Lemma 3.2 shows that a formal counterpart of Modus Ponens holds in the language of constraints. Hence we may prove theorems in our sense by mimicking the steps permitted in a Hilbert-style inference system for propositional calculus. In particular, if C is a constraint which is a formal instance of any schematic classical propositional tautology, then t C. It is worth noting too that a formal analogue of the Deduction Theorem for the propositional calculus ([S, p. 301, for example) holds for our constraint language, and may be used in proofs as needed. We later refer to proofs constructed by these mechanisms as proceeding “by propositional reasoning”.
+For example, as well as for later use, we note the following, which is easily proved by propositional reasoning, using the fact that t succeed.
+
+Lemma 3.3. Let C be a constraint. Then (a) t C if and only if k succeed H C; and (b) t -C iJ‘and only if t Tsucceed H C.
+
+For later use also, we note that the following classical properties of equality hold.
+
+96 P. Nickolas, P. J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+Lemma 3.4. Let t, tl, t2 and t3 be terms. Then (a) t--t = t; (d) t---(tl=t2)--+(t2=tl);and (c) k (t1 = t2) A (t2 = t3) + (4 = t3 ).
+We extend the action of the function vars to constraints in general in a natural way. Specifically, the action of vars is already defined on atomic constraints, and we then define vars(succeed) = 0, vars( 4) = uars(C) and vars(C1 --f C2) = uars(Cl ) U vars(C2), for arbitrary constraints C, Cr and C2. We note the following extension of Lemma 2.16 to constraints. The proof is by a straightforward inductive argument, using Lemmas 2.4 and 2.6.
+Lemma 3.5. If u and w are valuations which agree on a set V of variables, then m,*(C) is true tf and only if m:(C) is true, for all constraints C satisfying vars(C) 5 V.
+We also extend the action of instantiations to constraints in general. Specifically, if D is an instantiation, then the action of B on C is already defined for atomic constraints C, and we then define o(succeed) = succeed, a(X) = -a(C) and cr(Ct + C2) = a(C1) -+ c~(Cz), for arbitrary constraints C, Cl and C2. We note the following straightforward extension of Lemma 2.19.
+Lemma 3.6. Let o be an instantiation and v a valuation. Then ma,,(C) is true tf and only tfm,*(a(C)) is true, for all constraints C.
+3.2. Problems, solutions and refinements
+We now develop the framework within which we formalise and discuss Qu-Prolog unification. As already mentioned, we make free use of ideas from [9] here. Familiarity with [9] is not assumed, however.
+For convenience we write uars(o, C) for vars(o) U uars(C), for any instantiation g and any constraint C.
+Definition 3.2. A problem branch is a triple (a, C, V) in which (T is an instantiation, C is a constraint and V is a finite set of variables such that vars(a, C) C V.
+When b is a problem branch (a, C, V), we define oars(b) to be the set V. When the instantiation o in b is id, we may represent b by the pair (C, V). We think of a branch (0, C, V) as a representation of (part of) a partially solved unification problem: the instantiation cr is explicit information about the answer to the original problem, in the form of variable bindings, the constraint C is implicit information, the so far unsolved part of the original problem, and V is a set of a variables large enough to contain all variables so far introduced during the partial solution of the original problem.
+Definition 3.3. A problem is a list of problem branches.
+
+P. Nickolas, P. J. Robinson1 Theoretical Computer Science 169 11996) 81-112
+
+97
+
+All problems considered here will be finite, and we may therefore express a typical problem in the form
+
+for suitable problem branches (al, Ct , VI), (~2, CZ, V2), . . ., (on, C,, V,). The empty problem is written fail. A singleton problem is identified with its single branch. For problems p and p’, pip’ denotes the concatenation of p and p’.
+
+Definition 3.4. A solution for a constraint C is a valuation u such that m:(C) is true.
+
+Some of our earlier definitions may of course be rephrased in terms of solutions. For example, if Cl and CZ are constraints, then b C1 + C2 if and only if every solution for Cl is also a solution for C2.
+
+Definition 3.5. A solution for a problem branch (cr, C, V) is a valuation of the form L’o g. for some valuation v which is a solution for C.
+
+Definition 3.6. A solution for a problem is a valuation which is a solution to one of the branches of that problem.
+
+After a preliminary definition, we define the key notions of problem refinement and composition of problems, following [9].
+
+Definition 3.7. We say that a problem p’ is a variable extension written p < varSp’, if for every branch b’ of p’ there is a branch vars(b) C vars(b’).
+
+of a problem p, b of p such that
+
+Definition 3.8. A problem p’ is a rejinement of a problem p, written p d p’, if
+(a) pd..,,p’; (b) for every branch b of p and every solution a for b, there is a branch b’ of p’ with solution x’ such that vars(b) CIvars(b’) and r and TX’agree on vars(b); and (c) for every branch b’ of p’ and every solution CI’for b’, there is a branch b of p with solution x such that vars(b) G vars(b’) and x and M’ agree on vars(b).
+
+Thus, informally, solutions are neither lost nor added in refinement, so that refinement leaves the set of solutions unchanged. We illustrate the definitions, and the central role of the “composition” o, by examination of a simplified case. Suppose that, by some sequence of refinements, an initial problem (id, C, V) has been successfully refined to the entirely explicit final form (o,succeed, V). Then all valuations of the form 1:o ci, for all valuations v, are solutions of (o,succeed, V), and therefore also of the initial problem (id,C, V). Hence m:,,(C) is true. Therefore, by Lemma 3.6, we see that m,*(a(C)) is true, for all valuations U. That is, t-- o(C), and the instantiation o plays the role of a most general unifier with respect to the original constraint C.
+It is straightforward to check that the relation < is reflexive and transitive.
+
+98 P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+We define composition of branches and of problems. (For this, recall that the composition o of instantiations introduced earlier is right-to-left composition.)
+Definition 3.9. The composition (0, C, V) o (o’, C’, V’) of two branches (cr, C, V) and (a’, C’, V’) is defined when V’ C V, and is then defined to be the branch
+(0 0 O’, c A o(C’), V).
+Definition 3.10. The composition p o p’ of two problems p and p’ is defined when the composition b o b’ is defined for all branches b of p and b’ of p’, and is then defined to be the list of all such composite branches b o 6’.
+(We assume that the list is ordered in some systematically defined way which we do not specify.)
+The next theorem is the central result establishing the utility of these definitions. The statement of the result is identical to that of Theorem 8.3 of [9], despite the differences in the underlying definitions. We shall give an independent proof of the theorem.
+Theorem 3.1. Zf p< p’ and p o p” is dejined, then p’ o p” is dejked, and p o p” < pl 0 p”.
+Proof. Since p d p’, we have p ~.,~p’. Therefore for any branch b’ of p’, there is a branch b of p such that vars(b) C vars(b’). But since p o p” is defined, we have vars(b”) C vars(b), for all branches b” of p”. Therefore p’ o p” is defined, and it follows easily that p o p” dvarsp’ o p”, giving (a) in the definition of refinement.
+To show (b), suppose that b = (a, C, V) is a branch of p, that b” = (CT”,C”, V”) is a branch of p”, and that v o (rs o 0”) is a solution for b o b” = ([To G”, C A a(C”), V), for some valuation v. Then V” C V, and both m:(C) and m,*(a(C”)) are true. Clearly vo o is a solution for 6, and so there is a branch b’ = (C-J’C, ’, V’) of p’ with a solution w o c’ that agrees with u o o on V. In particular, mG(C’) is true. We show first that w o (G’ o CJ”) is a solution for b’ o b” = (CJ’o rf’, C’ A a(C”), V’) and second that w o ((T’ o cr”) agrees with v o ((T o a”) on V.
+For the first assertion, we show that mz(C’ A a’(C”)) is true. Now we know that mc(C’) is true, so we need only show that m~(a’(C”)) is true. But since v o o and w o cr’ agree on V, and vars(C”) C V, we see that m;, .(C”) and mz,,,(C”) have the same truth value, by Lemma 3.5, and therefore m,*(a(C”)) and m;(a’(C”)) also have the same truth value, by Lemma 3.6. Since mE(a(C”)) is true, mc(a’(C”)) is therefore also true.
+For the second assertion, we fix X E V and show (v o (a o o”))(X) N (w o (a’ o a”))(X). For this, by the definition of o and Lemma 2.19, we need only show rn,*,,(~“(X)) N m*WOg,(o”(X)). Now if X E V \ V”, then o”(X) = X, since vars(u”) c V”. If X E V”, then vars(a”(X)) c V” C V. Thus we have vars(cr”(X)) C V in either case. Since v o o and w o g’ agree on V, the required relation now follows from Lemma 2.16.
+
+P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 (1996) 81 -Il.?
+
+99
+
+Thus we have (b), and (c) follows by a similar argument, which we omit. Z
+
+Quite special cases of this result are all that we shall require in practice. To develop a simple version which will suffice in most cases, we need the following result, which allows us to augment the variable sets on both sides of a refinement.
+Lemma 3.7. Suppose that (CTC, , V) and ((T’,C’, V’) are problem branches sati~fjkg (0, C, V) 6 (CT’C, ’, V’). If W is a set of’ variables such that V n W = V’ n W = 0, then (a,C,VU W),<(a’,C’,V’U W).
+Proof. Suppose that v o c is a solution for (G, C, V U W), for some valuation c. It is immediate that v o CTis also a solution for (0, C, V). Therefore there exists a solution v’ o cr’ for (rr’, C’, V’) such that v o CJand II’ o g’ agree on V. Now define a valuation 0” by setting v”(X) = v’(X) for X E V’, and v”(X) = o(X) otherwise; we show first that z!”o c’ is a solution for (a’, C’, V’ u W ), and second that t.” o 0’ agrees with r o u on vuw.
+First, since uars(C’) C V’, and v” and u’ agree on V’, we have mg,,(C’) true since m;(C’) is true, by Lemma 3.5. Second, fix X E VU W, and consider (v”og’)(X). If X E V, then uars(a’(X)) 2 V’, and so (I!’ o a’)(X) N (c’ o d)(X), by Lemmas 2.16 and 2.19. We then have (ti”oa’)(X) N ( v o a)(X), since v’ o r~’ and t‘ o IT agree on V by hypothesis. If X $ V, then X E W, and hence X $ V’. Therefore
+[u” 0 o’)(X) = m;,,(a’(X)) = m,*,,(X) := v”(X) = F(X) = (u 0 o)(X),
+
+as claimed.
+The proof that every solution for (G’, C’, V’U W) agrees on VU W with some solution for (a, C, V U W) is similar, and is omitted. q
+
+We now state the special case of Theorem 3.1 which suffices for our applications.
+
+Theorem 3.2. Suppose that (CJ,C A Co, V) and (cJ’,C’, V’) are problem branches und that V n V’ = vars(C). Zf (id, C, vars(C)) < (c~‘,C’, V’), then also
+
+(a,CAC~,v)d(o’oa,C’Aa’(Co),VU
+
+V’).
+
+Proof. From the hypotheses, Lemma 3.7 gives (id, C, V) d (CT’C, ’, VU V’). Both branches in this refinement may clearly be composed with the branch (a, CO, V), and Theorem 3.1 yields the desired conclusion. 0
+
+Thus from a partially solved unification problem (a, C A Co, V), we may extract the problem (id, C, vars(C)), refine it to (o’, C’, V’), and then merge the latter into the problem again, yielding (cr’ o cr,C’ A a’(Co), V U V’) as a refinement of the original problem, provided that any variables introduced in the refinement of (id, C, vars( C)) to (O’, C’, V’) are ‘new” - that is, that V n V’ = uars(C).
+
+100 P. Nickolas, P. J. Robinson I Theoretical Computer Science 169 (1996) 81-112
+3.3. Some generic rejinements
+We proceed below to derive a small collection of very simple but general refinements. Their generality permits a broad range of specific refinements for Qu-Prolog constraints to be derived with relatively little extra argument.
+The first result is a routine consequence of the fact that m:(Tsucceed) is false for all valuations u.
+Theorem 3.3. Let (a, C, V) be a problem branch. Then (rs, lsucceed A C, V) is also a problem branch, and (a, Tsucceed A C, V) <fail.
+The next result and its corollaries are routine consequences of the relevant definitions, along with propositional reasoning.
+Theorem 3.4. Let (a, Cl, V) and (a, C2, V) be problem branches, and suppose that t Cl H C,. Then
+
+The first three corollaries follow immediately from Theorem 3.4 by propositional reasoning.
+Corollary 1. Let (o, Cl A C, V) and (a, C2 A C, V) be problem branches, and suppose that t C + (Cl H CZ). Then
+
+(0,Cl
+
+A c, V)<(a,Cz
+
+A c, V).
+
+Corollary 2. Let (a, Cl A C, V) be a problem branch. If /-- C -+ Cl then (a) (a,Cl A C, V)d(a,C, V), and
+(b) (~3 C, V> d (a, Cl A C, J’).
+
+Corollary 3. Let (a, Cl A C2, V) be a problem branch. Then
+
+(O,Cl
+
+A c2, Vd(o,C2
+
+A Cl, 0
+
+Corollary 4. Let (a, C, V) be a problem branch, and suppose that t- C. Then
+
+(0, C, V) d (G, succeed, V).
+
+Proof. The result is immediate from the theorem and Lemma 3.3. 0
+
+Coronary 5. Let (a, CIA&, V) be a problem branch. If/--- C, + 7~2 or /..- C, -+ 7~,, then
+
+(o,Cl A C2, V)<fail.
+
+P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 11996) 81-112
+
+101
+
+Proof. If t- Cl + -X2, then we have t Cl + (C2 H lsucceed) by Lemma 3.3 and propositional reasoning. Corollaries 3 and 1 and Theorem 3.3 then give
+(Cl A C,, V)<(C2 A C,, V)d(lsucceed A Cl, V)<fail,
+and we have the first statement. The second follows similarly. 1
+
+Corollary 6. Let (r~,C, V) be a problem branch. If /-- -C, then (~7,C, V) <fail.
+
+Proof. From b -C we have k C 4 lsucceed, by Lemma 3.3. Therefore, by Corollary 2 and Theorem 3.3, we have
+(a,C, V)b(rr,7succeedA C,V)dfail,
+as required. 0
+
+It is convenient to introduce a relation which, crudely, is intermediate in strength between + and 6, as follows. Let C and C’ be constraints and V a set of variables. Then we write C --+v C’ if for every solution v for C there is a solution w for C’ such that c and w agree on V.
+The following result is easily checked.
+
+Theorem 3.5. Let (C, V) be a problem branch, and suppose that C’ is a constraint and V’ is a set of variables such that vars(C’) C V U V’ and V n V’ = 0. Then (C A C’, V U V’) is a problem branch, and if C -+v C’, then
+(C, V)G(C A c’, vu V’).
+
+Corollary 1. Let (C, V) be a problem branch, and suppose that there is a variable X E V and a term t such that vars(t) n V = 0. Then (C A (X = t), V u vars(t)) is a problem branch, and if C -+v (X = t), then
+(C, V)<(C A (X = t), V U uars(t)).
+Proof. The result is immediate if we take C’ to be X = t and V’ to be vars(t) in the previous theorem. 0
+
+The last of the generic refinements may be seen as an abstract form of instantiation with occurs check.
+
+Theorem 3.6. Suppose that (id, (X = t)r\C, V) is a problem branch, for some variable X and some term t, and that IS is the instantiation [X H t]. Then (0,0(c), V) is a problem branch, and if t- G(C) + (o(t) = t), then
+(id,(X = t) A C, V)<(a,a(C), V).
+
+102 P. Nickolas, P.J. Robinson/ Theoretical Computer Science 169 (1996) 81-112
+Proof. The fact that (cr, a(C), V) is a problem branch follows straightforwardly from the fact that (id, (X = t) A C, V) is a problem branch. Clause (a) in the definition of refinement is clearly satisfied, and we show (b) and (c).
+To show (b), let u o id = v be a solution for the left-hand branch, so that m:(X) N m:(t) and m:(C) is true. We claim that v o 0 is a solution for the right-hand branch, agreeing with v on V. Now we have (v o o)(X) = mE(a(X)) = m:(t) N m:(X) = v(X), while for any variable Y other than X, we have (v o O)(Y) = m:(o( Y)) = m:(Y) = v(Y), and so v o o agrees with v on I’. But since ma(C) is true, it follows by Lemmas 3.5 and 3.6 that m&(C), and therefore m,*(o(C)), is true, as required.
+Conversely, to show (c), let v o o be a solution for the right-hand branch, so that m:(o(C)) is true. We claim that (voa)oid = VO(Tis a solution for the left-hand branch, and that it agrees with v o cr on V. The second claim is certainly true. For the first, we require that V&,(C) be true and that m:,,(X) N mEOg(t); that is, by Lemma 2.19, that mz(a(X)) - m:(o(t)). The truth of m:,, (C) follows from the truth of m:(o(C)) by Lemma 3.6. Also, from the hypothesis k a(C) + (o(t) = t), since ma(o(C)) is true and, by the definition of O, we have mE(a(X)) - m:(o(t)), completing the proof. 0
+4. Qu-Prolog unification
+In this section, we specify an abstract Qu-Prolog algorithm in detail, by giving a list of refinements, and we prove the correctness of the algorithm using the framework and results developed in earlier sections. We also briefly discuss some of the issues arising in implementation of the algorithm.
+In the interests of brevity, we will adopt some notational conventions consistently throughout this section for various elements of Qu-Prolog syntax. Specifically, unless explicitly noted otherwise, c will denote an object-const constant, X, y and z will denote object-var variables, X, Y and Z will denote schematic variables, and t and u will denote terms. Also, s will be used to denote Qu-Prolog substitutions, but we postpone a complete explanation of our conventions for denoting substitutions, since more than just notational considerations are involved. Subscripts may also be applied to any of the above symbols.
+We refer to the non-deterministic algorithm defined by the refinements below as “abstract”, because the refinements are specified at a level of abstraction which permits some implementation considerations to be ignored. For example, many of the refinements are accompanied by side-conditions requiring that certain constraints be theorems. In specifying a concrete algorithm, we need to be able to argue that these theorems are amenable to automated proof in a useful number of cases, and to provide algorithms for proving them. These issues are not the subject of this paper, but are discussed briefly later.
+
+P. Nickolas, P. J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+
+103
+
+4.1. An abstract Qu-Prolog unification algorithm
+4. I. 1. Preliminary discussion The constraints arising directly in Qu-Prolog computations are always conjunctions
+of constraints of the form tl = t2, along possibly with non-freeness constraints of the form x not-free-in t. During the processing of such constraints, additional constraints of the form x # y may be introduced also. Constraints arising in practice will thus not explicitly involve the connective -+.
+Because of our emphasis on the analysis of individual refinement steps, we know that any collection whatsoever of refinements yields a non-deterministic unification algorithm which is correct, and is also complete in the sense of [9] - even the empty set of refinements defines such an algorithm. Deterministic algorithms may then be derived by imposition of any desired scheme for the selection of a specific refinement when several apply. We aim, however, at an algorithm which is not merely correct, but is also practical, so we wish not merely to specify a set of refinements, but also to specify a set which we can argue is widely applicable in practice.
+A further consequence of our analysis is that we can frequently concentrate attention in a particular refinement on just one conjunct of a complex constraint (cf. Theorem 3.2). To motivate the choice of the specific set of refinements presented below, which constitute our abstract Qu-Prolog unification algorithm, consider the refinement of a simple equality constraint tl = t2.
+Our refinements dealing with such a constraint fall into three classes, as follows. First, there are a few general refinements, which apply regardless of the internal structure of tl and t2. For example, we have (t = t, V)<(succeed, V) (Refinement 3 below), and (t, = t2, V)<(t2 = tl, V) (Refinement 4), irrespective of the form of t, tl and t2. Second, there are refinements which, under suitable conditions, allow an equality constraint between an instantiable variable and a term to be converted into an explicit instantiation. For example (a special case of Refinement 9), we have (id,X = t, V) < (a,succeed, V), where a = [X ++ t], provided that t- a(t) = t. Third, and most frequent in number, there are refinements which, on the basis of information about the structure of one or both terms involved, perform some simplification of those terms. A straightforward example (Refinement 7) is (@(tl,ul) = @(tz,ux), V)<((tl = tz)~(ul = 242),V); more complex cases arise in refinement of terms involving the operator l and/or substitution notations.
+In general, the decision whether or not to present a refinement of an equality constraint in which the terms have some specific syntactic structure depends on the details of that structure. For example, we have no refinement dealing with a general constraint of the form si * t = s2 * u (other than those in the first group above, which deal with terms without regard to their structure) because no straightforward simplification is possible within the defined vocabulary and semantics. In practice, such a constraint is delayed, so that instantiations made elsewhere may provide more information on the structure of some part of the constraint. On the other hand, constraints of some forms may be covered by more than one refinement: special cases may be dealt with more
+
+104 P. Nickolas, P. J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+efficiently by special-purpose refinements. There are in particular a few refinements which are at first sight ad hoc, but which can be used to refine equality constraints of highly specific forms which arise frequently in practice. For example, one refinement (Refinement 15) applies to constraints of the rather specific form ([v/x] * t = U, V), provided that a certain side-condition is satisfied.
+There are also some general considerations which enable us to reduce somewhat the number of cases for which we need to provide refinements. Rather than considering terms s * c, for example, it suffices to consider c by itself: clearly t--s * c = c, and one of our general refinements (Refinement 5) will allow us to use that as justification for the systematic replacement of s * c by c on either side of an equality constraint. Similarly, we clearly have k s * @(t, u) = @( s * t,s * tr), and so we will be able to replace any term of the form s * @(t,u) everywhere by a term of the nominally simpler form @(ts,ug). Of course, we cannot likewise simplify a general term of the form s *x l t to one of the form x0 l to. We note, however, that we need not consider terms of the form x l t separately, because we clearly have t- [ ] * x l t = x l t: an empty substitution notation can be assumed present if need be. Refinement 4, as mentioned, allows us to replace a constraint tl = t2 by t2 = ti, and this avoids the need to list each equality constraint refinement in two forms.
+Similar considerations to those above guide our choice of a practical set of refinements for constraints of the form x not-free-in t.
+4.1.2. The notation for substitutions As mentioned earlier, the notation we use for Qu-Prolog substitutions in the following
+refinements needs to be explained and justified. When below we use s (with or without a subscript), it is taken to abbreviate a sequence of one or more substitutions, rather than (necessarily) a single substitution. Thus, for example, Refinement 6, which states that
+(t = s * @(t1,t2), V<(t = @(s* t1,s * t2), V),
+in fact stands for the scheme of refinements
+(t = Sl * s2 * . . . * sn * @(4>tz), V)
+~(t=@(S~*S2*~~~*S,*t~,Sl*S2*~~~*S,*t2),V),
+for n = 1,2,3 ,... (and where si,sz , . . . ,s, are single substitutions). The gain in the generality of our refinements achieved by this convention is significant, since multiple substitutions arise frequently in practice, and it is important that our refinements are general enough to deal with them.
+In our refinement proofs, however, we will never expand notation for a repeated substitution such as s above into the sequence of single substitutions that it represents, and this requires justification. Now the central steps of all refinement proofs take place at the object level (though not all our proofs are written explicitly at that level of detail), and the steps at which it is significant that s abbreviates sl* s2 *. . . es,
+
+P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+
+105
+
+are just those at which the fact that m:(s * t) = mz(s)mz(t) is used. For a single substitution s, this equation is merely part of the definition of m,*, but when s is a sequence of substitutions, the notation on the right-hand side requires definition. We define mf(sl * s2 * ... * s,) to abbreviate mf(s, ) 0 m,*(sz) o . . . o ma(s,), and note that the above equation is correct, since, by Lemma 2.1 and the definition of
+m:,
+
+m:(s * t) = m,*(sl * s2 * . . . * s, * t)
+
+= mZ(sl
+
+)(m:(s2)(.
+
+. . (m:(s,>mC(t>>.
+
+.))
+
+= (m:(q) 0 mu*(s2) 0 . . 0 m:(s,))mE(t)
+
+= m:(s)mt(t).
+
+This argument justifies our convention.
+
+4.1.3. The abstract rejnements We now introduce our refinements. In these, it is implicitly hypothesised that the
+expressions on the left-hand sides of the refinements are problem branches. Formally, proof is required that under that hypothesis the expressions on the corresponding righthand sides are problems or problem branches, but this is obvious in all cases. As previously mentioned, the following refinements amount to an abstract Qu-Prolog unification algorithm.
+Refinement 1. (x not-$-ee_in x, V) <fail.
+Refinement 2. ((tl = t2) A C, V) d fail, provided that t- C --f tl # t2.
+Refinement 3. (t = t, V) d (succeed, V).
+Refinement 4. (tl = tz, V)<(tz = tl, V).
+Refinement 5. ((tl = t2) A C, V)<((tl = t3) A C, V), provided that t-C 4 t2 = t3.
+Refinement 6. (t = s * @(tl,t2), V)<(t = @(s * tl,s * tz), V).
+Refinement 7. (@(tl,ul) = @(tz,q), V)<((tl = t2) A (UI = IQ), V).
+Refinement 8. ((s, *x 0 t = s2 * y . u), V)<(((Sl * [z/x] * t = s2 * [z/y] * 2.4A) C), v u {z}),
+for any z @ V, where C is the conjunction of the constraints z not-free-in X, for all (schematic and object-var) variables X E V.
+Refinement 9. (id, ((X = t)A C), V)<((r, o(C), V), where G = [X H t], provided that k o(C) ---f (o(t) = t).
+
+106 P. Nickolas, P.J. Robinson1 Theoretical Computer Science I69 (1996) 81-112
+
+Refinement 10. (id,((x = y) A C), V)<(CJ,CJ(~), V), where o = [x H y].
+
+Refinement 11. ((s*X = c) A c, V)<((X = c) A c, V),
+provided that t C 4 (s * x # c) for all x.
+
+Refinement 12.
+
+(((s *A- = @(t, u)) A C), V) G((s *x = @(t,u)) A (X = @(Al,&))
+
+A c, v u {~I,&)),
+
+for any XI,& $! V, provided that t C + (s *x # @(to, ug)) for all x, to and ug
+
+Refinement 13.
+
+((q *x=s2*x
+
+0 t)/IC,V)
+
+<((S, *x=sz*x
+
+0 t)/l(X=z
+
+.&)Ac,vu{&,z}),
+
+for any &,z +I!V, provided that t-- C + (q * y) # no l to,for all y, x0 and to,
+
+Refinement 14.
+((s * [x/y] * t =x) A C, v)<((t = y) A C, V), provided that E C + ((x = s *x) A (x # s * t)).
+Refinement 15. (([y/x] * t = u) A C, V)<((t = [x/y] * u) A (x not-free-in u) A C, V), provided that t-- C + y not-free-in t.
+
+Refinement 16. (x not-free-in c, V) d succeed. Refinement 17. (x not-free-in y, V) d (x # y, V).
+
+Refinement 18. (x not-free-in s * @(t, u), V) < ((x not-free-in s * t) A (x not-free-in s * u), V).
+Refinement 19. (x not-free-in s * y l t, V)<(x not-free-in s * [c/y] * t, V), for any c.
+
+4.2. Proofs
+We prove here the correctness of the refinements specified above. For this, it is useful to adopt one further notational convention. Most steps of the longer proofs below take place in the object-level language under consideration, via mappings from the Qu-Prolog level of the form m,*, for various valuations v. Where it is reasonable
+
+P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+
+107
+
+to do so, we shall signal application of rnz by adding “v” as a superscript to the QuProlog term to which rn: has been applied. Thus, for example, m;(C) may be written as C” if C is a constraint, and m;(s *x l t) = m:(s)@(x) l m:(t) may be written as s’x” l t”. We will still write occurrences of rn: explicitly at times, however, for clarity.
+
+Proof of Refinement 1. It is clear that k 7(x not-free-in x), so the refinement follows from Corollary 6 of Theorem 3.4.
+
+Proof of Refinement 2. The proof is immediate from Corollary 5 of Theorem 3.4.
+
+Proof of Refinement 3. The proof is immediate from Lemma 3.4(a) and Corollary 4 of Theorem 3.4.
+
+Proof of Refinement 4. The proof is immediate from Lemma 3.4(b) and Theorem 3.4.
+
+Proof of Refinement 5. We have t-- C --j ((tl = t2) H (tl = tj)), from the sidecondition and Lemma 3.4(c), and the result follows from Corollary 1 of Theorem 3.4.
+
+Proof of Refinement 6. By definition of the action of object-level substitutions, we have ts * @(ti,k) = @( s * tl,s * t2). Hence, by Lemma 3.4(c) and propositional reasoning, we have k (t = s * @(tl,t2)) H (t = @(s * tl,s * t2)). The result follows from Theorem 3.4.
+
+Proof of Refinement 7. We have t (@(tl,ul) = @(t~,u~)) ++ ((tl = t2) A (IAL= UZ)), by Lemma 2.7, and the result follows from Theorem 3.4.
+
+Proof of Refinement 8. We first show that
+
+(s, *x
+
+u)0 t = s2 * y 0
+
+-“+v
+
+(s, * [z/x] * t = s2 * [z/y] * 24)A c.
+
+From this, Theorem 3.5 gives
+
+((q *x 0 t = s2 * y 0 u), V)
+<(((s, *x . t = s2 * y 0 24)A (q * [z/x] * t = s2 * [z/y] * 24)A C), v u {z}).
+
+We next show that
+t (Sl * [z/x]* t = s2 * [z/y] * u) A c + (s, *x 0 t = s2 * y 0 24).
+From this, Corollary 2 of Theorem 3.4 gives
+((s, *x 0 t = s-2 * y . 24)A (s1 * [z/x] * t = s2 * [z/y] * 2.4)A c, v u {z}) <((q * [z/x] * t = s2 * [z/y] * u) A c, vu {z}).
+
+The transitivity of the relation < then gives the result.
+
+108 P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+Consider the first of the desired statements. Let v be a solution for its left-hand side, so that mt(si *x l t) N rn:(sz * y l u); that is, so that s~(x” l t”) N sg(y” l u’). Let wc be an object-level variable such that wo E new(x’, P,s;)), wo E new(y”,u”,s;), and wo $! v~Ks(X”), for all (schematic and object-var) variables X E I’. Then by Lemma 2.13, we have wo l s’; @ (w&“)t” N wo l s.$@ (w~/y”)u”. Therefore, by Lemma 2.8, we have s’; @ (wc/x”)t” N s; $ (wc/y”)u”.
+We claim that s’; o (wo/x”)t” N s; o (wo/y”)u”, and for this it suffices, by Lemma 2.5, to show that ~7 @ (wo/xO)w N s’; o (wo/xv)w, for a11 objet t variables w E var,s(P), and s; @ (wo/y”)w N s; o (wo/y”)w, for all object variables w E VUKS(ZP).Clearly, if w # x”, then s’; @ (wo/x”)w = $w = s’; o (wa/x”)w. Also, sy @ (wo/x”)x” = wo and ST o (wo/xU)x” = S~WO,and if sywa # WO, then by Lemma 2.18 there is an object-var variable Wo E V such that R” = WO, and this contradicts our choice of WO. Therefore we have the first relation, and the second follows similarly.
+Now define a valuation o’ by setting u’(z) = WO, and v’(X) = v(X) for all other schematic and object-var variables X. Then by the above, and using Lemmas 2.16, 2.5 and 2.17, we have m;,(si * [z/x] * t = s2 * [z/y] * u). Also, m:,(C) is true because of our choice of WO, and by Lemmas 2.4 and 2.16. Since v and v’ agree on V, we have the first statement.
+Consider the second of the desired statements. Let v be a solution for the left-hand side, so that m,*(si * [z/x] * t) N 4(s2 * [z/y] *u), that is, s~(z”/x”)t” N s$‘(zD/y”)u”, and z” $ zxxs(X”), for all (schematic and object-var) variables X E V. Then by definition of the relation N, we have z” l (8; (z”/x”)t”) - z” 0 (s~(z”/y”)u”). It will follow from Lemma 2.14 that sy(x” l t”) N sz(y” l d’), making o a solution for the right-hand side, if we show that (i) zU # x” and z” # y’, (ii) z” +! mm(P) and z’ $ ua~s(zP), (iii) s’;z” = z” and s;z” = z”, and (iv) z” q! vars(st;w) and z” 6 vurs(s;w), for all object-level variables w # z”.
+The condition on z” clearly gives us (i). Also, the condition clearly implies that zU 4 UXEvars(t) vu~$X~), and so by Lemma 2.15 we have z” $! vurs(P). Similarly, zD 4 vurs(u”), and we have (ii). If st;w # w for any object-level variable w, then by Lemma 2.18 there is an object-var variable W E V such that W” = w. But the condition on z” now implies that z” # w, and so s;)z” = z”. Similarly, siz” = z’, and we have (iii). Finally, suppose that z” E vars(spw) for some object-level variable w # z”. If syw = w, then we have z” = w, contrary to our assumption. Therefore, as before, there is an object-var variable W E V such that W” = w. But by Lemma 2.15,
+
+vurs(s;iw) = vurs(s~C”) = vurs(mt(sl *W))C
+
+u vurs(X”),
+
+XEmrs(sl *W)
+
+giving a contradiction, since the condition on z” implies that zv is not in the set on the right-hand side. Therefore z’ 4 vurs(syw). Similarly, z” 4 vurs(s!jw), and we have (iv). By our earlier remarks, the proof is complete.
+Proof of Refinement 9. The result is immediate from Theorem 3.6.
+
+P. Nickolas, P.J. Robinson/ Theoretical Computer Science 169 (1996) 81-112
+Proof of Refinement 10. The result follows easily from Theorem 3.6.
+
+109
+
+Proof of Refinement 11. We shall show that t-- (s *X = c) A C tf (X = c) A C, from which the result follows by Theorem 3.4.
+
+Suppose that the valuation v is a solution for the left-hand side, so that m:(s *X) = s”X” N m:(c) = c” and so that m,*(C) = C” is true. By the side-condition, we then have s”x’ - c” false for all x. Since s”X” - c”, Lemma 2.6 shows that sUXL’is a constant (and is equal to the constant c”). It follows from the definition of object-level substitution application that X” is either a constant or a variable. If X” is a variable, then by Lemma 2.18 there is an object-var variable x such that x” = X”, and so we have sUxUN c”, a contradiction. Therefore Xv is a constant, and we have XV = s”X” = c”, and v is a solution for the right-hand side.
+Conversely, if v is a solution for the right-hand side, then X” w c”. By Lemma 2.6 again, XU is a constant, and we therefore have sUXU- c’, making v a solution for the left-hand side. This completes the proof.
+
+Proof of Refinement 12. It suffices to prove ((s * X = @(t,u)) A C) -+ (X = @(Xl ,X2)), by Corollary 1 of Theorem 3.5. Thus, suppose that a valuation v is a solution for the left-hand side, so that s”X” N @(t”, u’), and C” is true. Now Lemma 2.6 shows that either X” is an object variable, or X”’ = @(p, q), for some object-level terms p and q. If the former holds, then by Lemma 2.18 there is an object-var variable x such that x” = A’“, giving s”xU N @(t”, u”), which contradicts the side-condition. Therefore, X” = @(p,q) as earlier. If we define a valuation v’ by setting v’(Xi ) = p and v/(X2) = q, and v’(Y) = v(Y) for all other variables Y, then clearly c.’ is a solution for the right-hand side above, and agrees with v on V. This completes the proof.
+
+Proof of Refinement 13. The proof is similar in structure to the previous one, and is omitted.
+
+Proof of Refinement 14. By Corollary 1 of Theorem 3.4, it will suffice if we prove that b C -+ ((s * [x/y] * t = x) c) (t = y)). Let v be a valuation such that m:(C) is true, so that x” - s”x” holds and x” - s’t” is false.
+First suppose that also m:(s * [x/y] * t = x); that is, that s”(x”/y”)P N x”. (Note that m,*([x/y]) may legitimately be represented as (x”/y”) even if x” = y”.) Since x’ is an object variable, Lemma 2.6 and the definition of object-level substitution show that t” is also an object variable. If t” # y”, then we have x’ - s’t”, a contradiction. Therefore, t” = y”, and m:(t = y), as required.
+Second, if ml(t = y), so that, by Lemma 2.6, t” = y” (and in particular t” is an object variable), then we have s”(xD/yU)t” = s”xu N x”, so mz(s * [x/y] * t = x) as required. This completes the proof.
+
+110 P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+
+Proof of Refinement 15. By Corollary 1 of Theorem 3.4, it suffices to prove that k C --f (([y/x] * t = u) t) (t = [x/y] * 24)A (x not-free-in u)).
+
+Let u be a valuation such that C” is true, so that y” @ vars(t”). First, suppose that also m,*([y/x] * t = u) is true; that is, that (y’/x”)t” N u”. Then
+
+by Lemma 2.5, we have (x”/y”)(y”/x”)t” - (x”/y”)u”. But by Lemma 2.10, we have (x”/y”)(y”/x”)t” - t”, and so we have t” - (x”/y”)u”. That is, m,*(t = [x/y] * u) is
+
+true. We also wish to show that mE(x not-free-in u), that is, that xv 4 V(IYS(U~).This follows if xU # y”, by Lemmas 2.4 and 2.11, since (y”/x”)t” N u”. If x” = y”, then we
+
+also have tU - u”, so again x” $! vars(u) follows from Lemma 2.4.
+Second, suppose that mE(t = [x/y] * u) and m:(x not-free-in u) hold,
+(x”lY”)u” and xv $ uars(u). Then an argument paralleling that above (y”/x”)t”, so that m,“([y/x] * t = u) is true. This completes the proof.
+
+so that tV N gives uU -
+
+Proof of Refinement 16. It suffices to prove Ex not-free-in c, by Corollary 4 of Theorem 3.4, and this is clear by the definition of UUYSat the object level.
+
+Proof of Refinement 17. It suffices to prove t--- (x not-free-in y) H (x # y), by Theorem 3.4, and this is clear by the definition of vars at the object level.
+
+Proof of Refinement 18. By Theorem 3.4, it suffices to prove t- (x not-free-in s * @(t, 24))4-3(.x not-free-in s * t) A (x not-free-in s * u),
+and this is clear by the definition of uars at the object level.
+
+Proof of Refinement 19. By Theorem 3.4, it suffices to prove k (x not-free-in s * y 0 t) H (x not-free-in s * [c/y] * t).
+This follows easily from Lemmas 2.12 and 2.3.
+
+4.3. Implementation issues
+We briefly discuss the unification algorithm of the current Qu-Prolog implementation, Qu-Prolog 3.2 [lo]. This algorithm is a direct translation into deterministic terms of the abstract algorithm given above. Rather than describing it in detail, we highlight some of the major issues arising in implementation.
+We first consider Refinements 8 and 15, which are typically used in combination during the unification of quantified terms. An application of Refinement 8 typically adds many non-freeness constraints to the collection of constraints, while in Refinement 15 there is a requirement to show that a certain non-freeness constraint holds. We now briefly describe the technique employed in the implementation of Qu-Prolog 3.2 to avoid both the generation of the non-freeness constraints of Refinement 8 and the testing of such constraints in Refinement 15. This technique allows an efficient implementation of quantifier unification.
+
+P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+
+III
+
+We begin by dedicating a subclass of object-var variables, called local variables, for use when choosing the variable z in Refinement 8. We use the term “local” to reflect the fact that z is used to represent a local use of a variable in a binding. The implementation of Qu-Prolog 3.2 forbids local variables from occurring in programs, and in other user input such as interactive queries. Because local variables can therefore only be introduced into computations by internal manipulations such as applications of Refinement 8, we can prove that it is a consequence of the constraints that each local variable is not free in all other variables. This allows the implementation to leave such constraints involving local variables implicit. Hence, when applying Refinement 8, the implementation generates no non-freeness constraints, and when the variable v of Refinement 15 is a local variable, no non-freeness test is required.
+The utility of local variables extends further than this. We can prove (the argument is not given here) that the presence of the term [y/x] * t in a constraint, where x is a local variable, guarantees that y not-free-in t is a consequence of the constraints. This means that Refinement 15 can also be used when x is a local variable without resorting to a test. The implementation in fact uses Refinement 15 only when either x or y is a local variable. Note that an application program can extend the unification algorithm by, for example, applying Refinement 15 in other cases where the appropriate constraint can be deduced by the application.
+We next consider “dereferencing” in Qu-Prolog, and begin by noting that the implementation of Qu-Prolog has a more complex dereferencing procedure than ordinary Prolog. In ordinary Prolog the procedures for variable instantiation and dereferencing give an efficient implementation of the construction and management of the instantiations produced during unification. A similar technique is used in the implementation of Qu-Prolog, except that dereferencing is enhanced to allow the replacement of one variable by another which is known to be equal to it, and also to allow simplification and ‘evaluation’ of substitutions. Refinement 5 above provides the justification for such steps. Information needed for these steps is typically derived from the constraints appearing during unification, and Qu-Prolog’s dereferencing algorithm is therefore tightly coupled to its unification algorithm. In refinements with conditions of the form “provided t Cl + Czl’, the tests that prove C, typically use Cl to dereference terms related to Cz, and in doing so simplify substitutions occurring in Cl.
+As a straightforward illustration of the simplification steps just referred to, consider a term [x/y] * z. If z is the same variable as y, then the term dereferences to x. If, however, z # y can be inferred from the other constraints, or if x and y are the same variable, then the term dereferences to z. In all other cases, dereferencing leaves the term unchanged.
+Many of the refinements have side-conditions requiring that certain constraints be theorems. Theoremhood is of course a semantic notion here, and the implementation only has access to Qu-Prolog syntax. In the implementation, therefore, each semantic side-condition is replaced by a syntactic check which is sufficient (but not usually necessary) for the truth of that side-condition. The syntactic check typically involves inspecting the structure of a substitution in order to determine the presence or absence
+
+112 P. Nickolas, P.J. Robinson1 Theoretical Computer Science 169 (1996) 81-112
+of a particular term. Refinement 11 illustrates this. Here, we carry out a simple scan of the substitution s. If the required object-const constant c, or a variable, does not occur in a range element of any of the single substitutions making up the sequence s, then it is guaranteed that c # s * x for all X. For each range element of the form SO* x0, this test is recursively applied.
+Finally, we note that in the implementation of Qu-Prolog 3.2, substitutions are restricted in two related ways. First, their domain variables must be syntactically distinct; the Qu-Prolog parser flags occurrences of repeated domain elements as syntax errors. Second, their (syntactically distinct) domain variables are implicitly constrained to represent distinct object variables; that is, each two such variables x and y are accompanied by the implicit constraint x # y. Our abstract analysis of Qu-Prolog unification can clearly model these restrictions without requiring modification.
+Software availability
+Qu-Prolog is available by anonymous FTP at f tp . cs . uq. oz. au.
+Acknowledgements
+Thanks are due to John Staples for constructive criticisms of this work.
+References
+[I] A.S.K. Cheng, P.J. Robinson and J. Staples, Higher level meta programming in Qu-Prolog 3.0, in: Proc. 8th Internat. Co& on Logic Programming (MIT Press, Cambridge, MA 1991) 285-298.
+[2] N.G. de Bruijn, Lambda calculus notation with nameless dummies, Nederl. Akad. Wetensch. Series A 75 (1972) 381-392.
+[3] G. P. Huet, A unification algorithm for typed I-calculus, Theoret. Comput. Sci. 1 (1975) 27-57. [4] J. W. Lloyd, Foundations of Logic Programming (Springer, Berlin, New York, 2nd ed., 1987). [5] E. Mendelson, Introduction to Mathematical Logic (Wadsworth and Brooks/Cole, CA, 3rd ed., 1987). [6] G. Nadathur and D. Miller, An overview of 1Prolog, in: R.A. Kowalski and K.A. Bowen, eds., Logic
+Programming: Proc. 5th Internat. Conf and Symp. (MIT Press, Cambridge, MA 1988) 810-827. [7] G. Nadathur and D. Miller, Higher-order logic programming, in: D. Gabbay, C. Hogger and A. Robinson,
+eds., Handbook of Logic in Artijcial Intelligence and Logic Programming (Oxford University Press, to appear). [8] R. Paterson, Unification of schemes of quantified terms, in: UNZF ‘90, Leeds, 1990. [9] R. A. Paterson and J. Staples, Unification and constraint solution for metaprogramming: an overview, in: M. Bruynooghe, ed., Proc. 2nd Workshop on Meta-Programming in Logic, Leuven, Belgium (April 1990) 367-380. [lo] P. J. Robinson and A. Cheng, Qu-Prolog 3.2 - reference manual, Technical Report No. 93-18, Software Verification Research Centre, Department of Computer Science, University of Queensland, December 1993. [Ill J. Staples, P.J. Robinson, R.A. Paterson, R.A. Hagen, A.J. Craddock and P.C. Wallis, Qu-Prolog: an extended Prolog for meta level programming, in: Meta-Programming in Logic Programming (MIT Press, Cambridge, MA 1989) 435452. [ 121 A. Stoughton, Substitution revisited, Theoret. Comput. Sci. 59 (1988) 317-325.
+
+
