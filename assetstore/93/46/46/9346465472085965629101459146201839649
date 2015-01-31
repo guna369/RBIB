@@ -1,0 +1,365 @@
+A Formalization of the Theorem of Existence of First-Order Most General Uniﬁers∗
+Andre´ia B Avelar1,† Andre´ L Galdino3, Fla´vio LC de Moura2‡ and Mauricio Ayala-Rinco´n1,2§
+Departamentos de 1Matema´tica e 2Cieˆncia da Computac¸a˜o, Universidade de Bras´ılia, Bras´ılia, Brazil 3Departamento de Matema´tica, Universidade Federal de Goia´s, Catala˜o, Brazil {andreia@mat., flaviomoura@, galdino@, ayala@}unb.br
+
+This work presents a formalization of the theorem of existence of most general uniﬁers in ﬁrst-order signatures in the higher-order proof assistant PVS. The distinguishing feature of this formalization is that it remains close to the textbook proofs that are based on proving the correctness of the wellknown Robinson’s ﬁrst-order uniﬁcation algorithm. The formalization was applied inside a PVS development for term rewriting systems that provides a complete formalization of the Knuth-Bendix Critical Pair theorem, among other relevant theorems of the theory of rewriting. In addition, the formalization methodology has been proved of practical use in order to verify the correctness of uniﬁcation algorithms in the style of the original Robinson’s uniﬁcation algorithm.
+
+1 Introduction
+
+A formalization in the proof assistant PVS of the theorem of existence of most general uniﬁers (mgu’s) in ﬁrst-order theories is presented. There are several applications of this theorem on computational logic, which range from the correctness of ﬁrst-order resolution [19], the correctness of the Knuth-Bendix completion algorithm [15] to the correctness of principal type algorithms [13] and their implementations in programming and speciﬁcation languages. This well-known result is stated as follows:
+Theorem 1 (Existence of mgu’s) Let s and t be terms. Then, if s and t are uniﬁable then there exists an mgu of s and t.
+The analytic proof of this theorem is constructive and the ﬁrst proof was introduced by Robinson himself in [19]. In Robinson’s seminal paper, the uniﬁcation algorithm either gives as output a most general uniﬁer for each uniﬁable pair of terms, or fails when there are no uniﬁers. Essentially, the proof of correctness of this algorithm consists in, ﬁrstly, proving that the algorithm always terminates and, secondly, proving that, when it terminates and returns an mgu it implies the existence theorem.
+Several variants of this ﬁrst-order uniﬁcation algorithm appear in well-known textbooks on computational and mathematical logic, semantics of programming languages, rewriting theory, type theory etc. (e.g., [17, 9, 6, 3, 2, 14]). Since the presented formalization follows the classical proof schema, only a sketch of this proof will be given here.
+The development of the PVS theory uniﬁcation was motivated by the formalization of a PVS library for term rewriting systems [11] in which the theorem of existence of mgu’s is essential in order to obtain complete formalizations of relevant results such as the well-known Knuth-Bendix(-Huet) Critical Pair
+∗Work supported by CNPq Universal Grant 481783/2010-5 and FAPDF PRONEX Grant 2009/00091-0. †Author supported by the Brazilian research agency CNPq. ‡Author currently taking one-year leave at Laboratoire PPS, Universite´ Paris-Diderot, France. §Corresponding author, partially supported by the Brazilian research agency CNPq.
+
+Ronchi della Rocca, S., Pimentel, E. (Eds.): 6th Workshop on Logical and Semantic Frameworks with Applications 2011 (LSFA 2011). EPTCS 81, 2012, pp. 63–78, doi:10.4204/EPTCS.81.5
+
+c Avelar, Galdino, de Moura and Ayala-Rinco´n This work is licensed under the Creative Commons Attribution License.
+
+64 A Formalization of the Theorem of Existence of First-Order m.g.u.’s
+theorem [12]. In addition to this application of the formalization of the theorem of existence of mgu’s, in [1] it was reported a general veriﬁcation methodology of ﬁrst-order uniﬁcation algorithms, illustrated through the formalization of the correctness of a greedy version of Robinson’s uniﬁcation algorithm, that follows the lines of the formalization of the theorem of existence of mgu’s presented in this paper, in order to check termination and soundness of the algorithm. Essentially, in that work it is illustrated how the veriﬁcation of completeness of a uniﬁcation algorithm depends on the particular way in that the algorithm deals with the detection of non uniﬁable inputs. But also, in the exercise of formalization of correctness of efﬁcient uniﬁcations algorithms, it is of main relevance the speciﬁc data types and reﬁned strategies used to efﬁciently detect and solve differences appearing among the terms being uniﬁed.
+In Sec. 2, the necessary analytic concepts (terms, subterms, positions and substitutions) together with their corresponding speciﬁcations in PVS are given. The formalization of the theorem of existence of mgu’s is presented in Sec. 3. Also in Sec. 3 it is illustrated how speciﬁc uniﬁcation algorithms a` la Robinson are veriﬁed using this methodology. In the sequel related work and conclusions are presented. The PVS ﬁles of the formalization of the theorem of existence of mgu’s and veriﬁcation of Robinson’s style uniﬁcation algorithms are available as part of the theory for term rewriting systems (trs) in the NASA LaRC PVS libraries http://shemesh.larc.nasa.gov/fm/ftp/larc/PVS-library/pvslib.html.
+2 Speciﬁcation of terms, positions, subterms and substitutions
+Although it is supposed familiarity with uniﬁcation and its standard notations (e.g. as in [2, 3]), analytical concepts will be presented together with their associated speciﬁcations in PVS.
+Consider a signature Σ in which function symbols and their associated arities are given as well as an enumerable set V of variables.
+Deﬁnition 1 (Well-formed terms) The set of well-formed terms, denoted by T (Σ,V ), over the signature Σ and the set V of variables is recursively deﬁned as: i) x ∈ V is a well-formed term and ii) for each n-ary function symbol f ∈ Σ and well-formed terms t1, . . . ,tn, f (t1, . . . ,tn) is a well-formed term.
+Note that constants are 0-ary well-formed terms. In the sequel, for brevity “terms” instead of “well-formed terms” will be used. The hierarchy of the theory uniﬁcation is presented in Fig. 1. This is part of the theory trs for term rewriting systems presented in [11], which includes also the subtheory ars for abstract reduction systems [10]. The most relevant notions related with uniﬁcation are inside the subtheories positions, subterm and substitution. The PVS notions used for specifying these basic concepts are taken from the prelude theories for finite sequences and finite sets. Finite sequences are used to specify well-formed terms which are built from variables and function symbols with their associated arities. This is done by application of the PVS DATATYPE mechanism which is used to deﬁne recursive types.
+term[variable: TYPE+, symbol: TYPE+, arity: [symbol -> nat]] : DATATYPE BEGIN vars(v:variable): vars?
+app(f:symbol, args:{args:finite_sequence[term] | args‘length=arity(f)}): app? END term
+Notice that the fact that a term is well-formed, that is, that function symbols are applied to the right number of arguments is guaranteed by typing the arguments of each function symbol f as a ﬁnite sequence of length arity(f).
+Finite sets and sequences are also used to specify sets of subterms and sets of term positions, as is shown below.
+
+A.B. Avelar, A.L. Galdino, F.L.C. de Moura and M. Ayala-Rinco´n
+
+65
+
+trs
+
+identity o
+
+ uniﬁcation o
+ substitution
+ compatibility
+
+robinsonuniﬁcationEF 
+robinsonuniﬁcation
+/ extending rename
+
+ replacement
+ subterm
+ IUnion extra o
+
+ finite sets
+ positions
+ variables term
+ term
+
+ ars
+ finite sequences extras
+ / finite sequences
+
+Figure 1: Hierarchy of unification inside the theory trs
+
+2.1 The subtheories positions and subterm
+
+As usual, positions of a term are deﬁned as ﬁnite sequences of positive naturals, which simpliﬁes the deﬁnitions of subterms and occurrences. A dot “·” is used for the operation of concatenation of two naturals m and n, m · n, and for the concatenation of the elements in sets of naturals; that is N · M := {n · m | n ∈ N, m ∈ M}. For simplicity n · M denotes {n} · M.
+
+Deﬁnition 2 (Positions, subterms, occurrences) The set of positions of a term t in T (Σ,V ), denoted as
+
+Pos(t), is deﬁned inductively as i) Pos(x) := {ε} and ii) Pos( f (t1, . . . ,tn)) := {ε} ∪
+
+n i=1
+
+i
+
+·
+
+Pos(ti
+
+),
+
+where ε denotes the empty sequence that represents the root position of the term t. The subterm at a
+
+given position π ∈ Pos(t) of a term t is deﬁned inductively as i) t|ε := t and ii) f (t1, . . . ,tn)|i·π := ti|π .
+
+The set of subterms of a term t is the set {t|π | π ∈ Pos(t)}.
+
+Whenever s = t|π , it is said that there is an occurrence of the subterm s of t at position π. The set of
+
+positions of occurrences of a term s in t is given by the set {π | t|π = s}.
+
+The (ﬁnite) set of positions positionsOF of a term t is recursively speciﬁed on its structure as below, where only empty seq is a set containing an empty ﬁnite sequence only, that is the set containing the root position only.
+
+positionsOF(t: term): RECURSIVE positions = (CASES t OF vars(t): only_empty_seq, app(f, st): IF length(st) = 0 THEN only_empty_seq ELSE union(only_empty_seq, IUnion((LAMBDA (i: upto?(length(st))): catenate(i, positionsOF(st(i-1)) )))) ENDIF ENDCASES)
+MEASURE t BY <<
+
+66 A Formalization of the Theorem of Existence of First-Order m.g.u.’s
+where the operator IUnion builds the union of all sets of positions of the arguments of a functional term app(f, st) in which f is the name of the function and st is the sequence of arguments, that is a sequence of length equal to the arity of f. The positions of the ith argument are preﬁxed by i in order to build the sequence of positions inside this argument relative to the whole term.
+Several necessary results on terms, subterms and positions are formalized by induction on the structure of terms following the lines of this abstract datatype speciﬁcation. For instance, properties, such as the one that states that the set of positions of a term is ﬁnite as well as the one that states that the set of variables occurring in a term is ﬁnite (lemma vars of term finite in the subtheory subterm), and that terms with the same heading symbol (applications) have the same number of arguments, presented below, are proved by structural induction on the abstract datatype for terms.
+positions_of_terms_finite : LEMMA is_finite(positionsOF(t))
+equal_symbol_equal_length_arg : LEMMA FORALL (s, t: term, fs, ft: symbol, ss:{args: finite_sequence[term] | args‘length = arity(fs)}, st:{argt: finite_sequence[term] | argt‘length = arity(ft)}) : (s = app(fs, ss) AND t = app(ft,st) AND fs = ft) => ss‘length = st‘length
+For p ∈ Pos(t), in the subtheory subterm, the subterm of t at position p also is speciﬁed in a recursive way (now on the length of p), as follows:
+subtermOF(t: term, (p: positions?(t))): RECURSIVE term = IF length(p) = 0 THEN t ELSE LET st = args(t), i = first(p), q = rest(p) IN subtermOF(st(i-1), q) ENDIF
+MEASURE length(p)
+where first and rest are constructors that return, respectively, the ﬁrst element and the rest of a ﬁnite sequence, and positions?(t) is the (dependent) type of all positions in t, which is speciﬁed as follows:
+positions?(t: term): TYPE = {p: position | positionsOF(t)(p)}
+Other results are formalized by induction on the length of (sequences representing) positions; for instance the ones below stating the equality t|p.q = (t|p)|q and that whenever p is a position of t and q a position of t|p, p.q is a position of t, are proved by structural induction on terms.
+pos_subterm: LEMMA FORALL (p, q: position, t: term): positionsOF(t)(p o q) => subtermOF(t, p o q) = subtermOF(subtermOF(t, p), q)
+pos_o_term: LEMMA FORALL (p, q: position, t: term): positionsOF(t)(p) & positionsOF(subtermOF(t, p))(q) => positionsOF(t)(p o q)
+2.2 The subtheory substitution
+By using the deﬁnition of position, the notion of replacement of a subterm of a term is stated easily.
+Deﬁnition 3 (Replacement of subterms) Consider t ∈ T (Σ,V ) and π ∈ Pos(t). The term resulting from replacing the subterm at position π of t by the term s is denoted by t[π ← s].
+Alternatively, the notation t[s]π is also frequently used in the literature.
+Deﬁnition 4 (Substitution) A substitution σ is deﬁned as a function from V to T (Σ,V ), such that the domain of σ , deﬁned as the set of variables {x | x ∈ V, xσ = x} and denoted by Dom(σ ), is ﬁnite.
+
+A.B. Avelar, A.L. Galdino, F.L.C. de Moura and M. Ayala-Rinco´n
+
+67
+
+Deﬁnition 5 (Homomorphic extension of a substitution) The homomorphic extension of a substitution σ , denoted as σˆ , is inductively deﬁned over the set T (Σ,V ) as i) xσˆ := xσ and ii) f (t1, . . . ,tn)σˆ := f (t1σˆ , . . . ,tnσˆ ).
+Given the notion of homomorphic extension, it is possible to deﬁne substitution composition.
+Deﬁnition 6 (Composition of substitutions) Consider two substitutions σ and τ, their composition σ ◦ τ is deﬁned as the substitution σ ◦ τ such that Dom(σ ◦ τ) = Dom(σ ) ∪ Dom(τ) and for each variable x in this domain, x(σ ◦ τ) := (xτ)σˆ .
+The subtheory substitution speciﬁes the algebra of substitutions. In this subtheory the type of substitutions is built as functions from variables to terms sig : [V -> term], whose domain is ﬁnite: Sub?(sig): bool = is finite(Dom(sig)) and Sub: TYPE = (Sub?). Also, the notions of domain, range, and the variable range are speciﬁed, closer to the usual theory of substitution as presented in well-known textbooks (e.g., [2]). These notions are speciﬁed as follows:
+Dom(sig): set[(V)] = {x: (V) | sig(x) /= x}
+Ran(sig): set[term] = {y: term | EXISTS (x: (V)): member(x, Dom(sig)) & y = sig(x)}
+VRan(sig): set[(V)] = IUnion(LAMBDA (x | Dom(sig)(x)): Vars(sig(x)))
+where (V) denotes the type of all terms that are variables and Vars(t) denotes the set of all variables occurring in a term t.
+Also, in the subtheory substitution the homomorphic extension ext(sig) of a substitution sig is speciﬁed inductively over the structure of terms:
+ext(sigma)(t): RECURSIVE term = CASES t OF
+vars(t): sigma(t), app(f, st): IF length(st) = 0 THEN t ELSE LET sst = (# length := st‘length,
+seq := (LAMBDA (n: below[st‘length]): ext(sigma)(st(n)))#) IN app(f, sst) ENDIF ENDCASES MEASURE t BY <<
+The composition of two substitutions, denoted by comp, is speciﬁed as
+comp(sigma, tau)(x: (V)): term = ext(sigma)(tau(x))
+In standard rewriting notation, the homomorphic extension of a substitution σ from its domain of variables to the domain of terms is denoted by σˆ , but to simplify notation, usually textbooks do not distinguish between a substitution σ and its extension σˆ . In the formalization this distinction should be maintained carefully. For instance observe the following lemma and its formalization.
+Lemma 2 Let s be term, p a position of s and σ a substitution. Then (sσˆ )|p = (s|p)σˆ .
+subterm_ext_commute: LEMMA FORALL (p: position, s: term, sigma: Sub): positionsOF(s)(p) => subtermOF(ext(sigma)(s), p) = ext(sigma)(subtermOF(s, p))
+Several important results useful for the development of subtheory uniﬁcation were formalized in the subtheory substitution, e.g., the property that states that the application of a homomorphic extension of a substitution preserves the original set of positions of the instantiated term, formalized as:
+ext_preserv_pos: LEMMA FORALL (p: position, s: term, sigma: Sub): positionsOF(s)(p) => positionsOF(ext(sigma)(s))(p)
+
+68 A Formalization of the Theorem of Existence of First-Order m.g.u.’s
+The lemma below formalizes the set of positions of the instantiation of a term by a substitution.
+positions_of_ext: LEMMA positionsOF(ext(sigma)(t)) = union({p | positionsOF(t)(p) & (NOT vars?(subtermOF(t, p)))}, {q | EXISTS p1, p2: q = p1 o p2 AND positionsOF(t)(p1) AND vars?(subtermOF(t, p1)) AND positionsOF(ext(sigma)(subtermOF(t, p1)))(p2)})
+Additional formalized lemmas, presented below, state that all variables in the domain but not in the range of a substitution σ disapear in all σ instantiated terms and that non-variable subterms, i.e. function symbols, remain untouched after any possible instantiation.
+vars_subst_not_in: LEMMA FORALL t, sigma, x: Dom(sigma)(x) AND (FORALL r: Ran(sigma)(r) => NOT member(x, Vars(r))) => NOT member(x, Vars(ext(sigma)(t)))
+ext_preserve_symbol : LEMMA FORALL(s:term, sig:Sub, p:position | positionsOF(s)(p)): app?(subtermOF(s, p)) => f(subtermOF(s, p)) = f(subtermOF(ext(sig)(s), p))
+3 Formalization of ﬁrst-order uniﬁcation
+The formalization of the existence of ﬁrst-order mgu’s is presented and then it is explained how the formalization technology was applied to verify a speciﬁc uniﬁcation algorithm. Again, deﬁnitions and their corresponding speciﬁcations are included. The theory uniﬁcation consists of 57 lemmas from which 30 are type proof obligations (TCCs) that are lemmas automatically generated by the prover during the type checking. The speciﬁcation ﬁle has 273 lines and its size is 9.8 KB and of the proof ﬁle has 11540 lines and 657 KB.
+Two terms s and t are said to be uniﬁable whenever there exists a substitution σ such that sσˆ = tσˆ .
+Deﬁnition 7 (Uniﬁers) The set of uniﬁers of two terms s and t is deﬁned as U (s,t) := {σ | sσˆ = tσˆ }.
+Deﬁnition 8 (More general substitutions) Given two substitutions σ and τ, σ is said to be more general than τ whenever, there exists a substitution γ such that γ ◦ σ = τ. This is denoted as σ ≤ τ.
+Deﬁnition 9 (Most General Uniﬁer) Given two terms s and t such that U (s,t) = 0/ . A substitution σ such that for each τ ∈ U (s,t), σ ≤ τ, is said to be a most general uniﬁer of s and t. For short it is said that σ is an mgu of s and t.
+Now, it is possible to state the theorem of existence of mgu’s.
+Theorem 3 (Existence of mgu’s) Let s and t be terms in T (Σ,V ) built over a signature Σ. Then, U (s,t) = 0/ implies that there exists an mgu of s and t.
+The analytic proof of this theorem is constructive and the ﬁrst introduced proof was presented by Robinson himself in [19]. In Robinson’s paper, a uniﬁcation algorithm was introduced, which either gives as output a most general uniﬁer for each uniﬁable pair of terms or fails when there are no uniﬁers. The proof of correctness of this algorithm, which consists in proving that the algorithm always terminates and that when it terminates it gives an mgu implies the existence theorem. Several variants of this ﬁrstorder uniﬁcation algorithm appear in well-known textbooks on computational and mathematical logic, semantics of programming languages, rewriting theory, etc. (e.g., [17, 9, 6, 3, 2, 14]). Since the presented formalization follows the classical proof schema, no analytic presentation of this proof is given here.
+Basic notions on uniﬁcation are speciﬁed straightforwardly in the language of PVS. For instance the notion of most general substitution is given as
+
+A.B. Avelar, A.L. Galdino, F.L.C. de Moura and M. Ayala-Rinco´n
+
+69
+
+<=(theta, sigma): bool = EXISTS tau: sigma = comp(tau, theta)
+From this speciﬁcation, one proves that the relation <= is a pre-order (i.e., reﬂexivity and transitivity). The notions of uniﬁer, uniﬁable, the set of uniﬁers of two terms and a most general uniﬁer of two terms are speciﬁed as
+unifier(sigma)(s,t): bool = ext(sigma)(s) = ext(sigma)(t)
+unifiable(s,t): bool = EXISTS sigma: unifier(sigma)(s,t)
+U(s,t): set[Sub] = {sigma: Sub | unifier(sigma)(s,t)}
+mgu(theta)(s,t): bool = member(theta, U(s,t)) & FORALL sigma: member(sigma, U(s,t)) => theta <= sigma
+Several auxiliary lemmas related with the previous notions were also formalized as the ones presented below: unifier o formalizes the fact that, whenever σ ∈ U (sθˆ ,tθˆ ), σ ◦ θ ∈ U (s,t); mgu o, that whenever ρ ≥ σ , ρ ◦ θ ≥ σ ◦ θ ; unifier and sub, that instantiations of uniﬁers are uniﬁers; idemp mgu iff all unifier that the idempotence property of mgu’s holds, and; unifiable terms unifiable args formalizes the fact that corresponding subterms of uniﬁable terms are uniﬁable, .
+unifier_o: LEMMA member(sig, U(ext(theta)(s),ext(theta)(t))) => member(comp(sig,theta), U(s,t))
+mgu_o: LEMMA sig <= rho => comp(sig, theta) <= comp(rho, theta)
+unifier_and_subs: LEMMA member(theta, U(s,t)) => (FORALL (sig: Sub): member(comp(sig, theta), U(s,t)))
+idemp_mgu_iff_all_unifier: LEMMA FORALL (theta: Sub | member(theta, U(s,t))): mgu(theta)(s,t) & idempotent_sub?(theta) <=> (FORALL (sig: Sub | member(sig, U(s,t))): sig = comp(sig, theta))
+unifiable_terms_unifiable_args: LEMMA FORALL (s: term, t: term, p: position | positionsOF(s)(p) & positionsOF(t)(p)):
+member(sig, U(s,t)) => member(sig, U(subtermOF(s, p), subtermOF(t, p)))
+The uniﬁcation algorithm receives two uniﬁable terms as arguments and is speciﬁed as the function unification algorithm, presented below. This function together with the two auxiliary functions sub of frst diff and resolving diff, to be explained in the remaining of this section, conform the kernel of the uniﬁcation speciﬁed mechanism.
+unification_algorithm(s: term, (t: term | unifiable(s,t))): RECURSIVE Sub = IF s = t THEN identity ELSE LET sig = sub_of_frst_diff(s, t) IN
+comp( unification_algorithm((ext(sig))(s), (ext(sig)(t))), sig) ENDIF MEASURE Card(union(Vars(s), Vars(t)))
+In this speciﬁcation, the function sub of frst diff(s, t), presented below, gives as result a substitution that resolves the ﬁrst difference (left-most, outer-most in the structure of the terms) between the terms s and t, that are uniﬁable and different terms. In order to generate this substitution, the subterms that generate the difference must occur in the same position of s and t, one of these terms must be a variable and the other, a term without occurrences of this variable. The unification algorithm recursive function has a pair of uniﬁable terms as domain type, given by the parameters s and t, and in the interesting case, after encountering the resolving substitution σ for the ﬁrst difference, it returns the composition of the result of the recursive call with the arguments sσˆ and tσˆ and σ .
+The functions resolving diff and sub of frst diff, presented below, have the same type of parameters, and the former returns the ﬁrst (left-most, outer-most) position of conﬂict between the uniﬁable and different terms s and t, as previously explained, while the latter returns the substitution that solves the conﬂict at the position generated by the function resolving diff.
+
+70 A Formalization of the Theorem of Existence of First-Order m.g.u.’s
+resolving_diff(s: term, (t: term | unifiable(s,t) & s /= t ) ): RECURSIVE position = (CASES s OF vars(s): empty_seq, app(f, st): IF length(st) = 0 THEN empty_seq ELSE (CASES t OF vars(t): empty_seq, app(fp, stp): LET k: below[length(stp)] = min({kk: below[length(stp)] | subtermOF(s,#(kk+1)) /= subtermOF(t,#(kk+1))}) IN add_first(k+1, resolving_diff(subtermOF(s,#(k+1)), subtermOF(t,#(k+1)))) ENDCASES) ENDIF ENDCASES)
+MEASURE s BY <<
+sub_of_frst_diff(s: term , (t: term | unifiable(s,t) & s /= t )): Sub = LET k: position = resolving_diff(s,t) IN LET sp = subtermOF(s,k) , tp = subtermOF(t,k) IN IF vars?(sp) THEN (LAMBDA (x: (V)): IF x = sp THEN tp ELSE x ENDIF) ELSE (LAMBDA (x: (V)): IF x = tp THEN sp ELSE x ENDIF) ENDIF
+3.1 Termination
+Notice that the measure of the function unification algorithm is the cardinality of the union of the sets of variables occurring in the term parameters s and t. From this measure, the PVS type-checker generates an interesting type proof obligation concerning the property of decreasingness of this measure, that guarantees the termination of the algorithm for all pairs of uniﬁable terms.
+unification_algorithm_TCC6: OBLIGATION FORALL (s, (t | unifiable(s, t))): NOT s = t => (FORALL (sig: Sub): sig = sub_of_frst_diff(s, t) =>
+Card(union(Vars(ext(sig)(s)), Vars(ext(sig)(t)))) < Card(union(Vars(s), Vars(t))))
+Although this key TCC is automatically generated, it is not automatically proved by PVS. In order to prove this TCC, one should ﬁrst prove the following auxiliary lemma:
+vars_ext_sub_of_frst_diff_decrease: LEMMA FORALL (s: term, t: term | unifiable(s, t) & s /= t): LET sig = sub_of_frst_diff(s, t) IN Card(union( Vars(ext(sig)(s)), Vars(ext(sig)(t)))) < Card(union( Vars(s), Vars(t)))
+To prove the previous lemma, one requires the following additional lemma:
+union_vars_ext_sub_of_frst_diff : LEMMA FORALL (s : term, t : term | unifiable(s, t) & s /= t) : LET sig = sub_of_frst_diff(s, t) IN union(Vars(ext(sig)(s)), Vars(ext(sig)(t))) = difference(union( Vars(s), Vars(t)), Dom(sig))
+The proof of the previous lemma requires that the substitution σ , that resolves the ﬁrst conﬂict between the given terms, maps a variable into a term without occurrences of this variable. From this fact, it is possible to guarantee that the mapped variable disappears from the instantiated terms sσˆ and tσˆ , and hence the decreasing property holds. This is formalized as the lemma:
+sub_of_frst_diff_remove_x : LEMMA FORALL (s:term, t:term | unifiable(s, t) & s /= t): LET sig = sub_of_frst_diff(s, t) IN Dom(sig)(x) => (NOT member(x, Vars(ext(sig)(s)))) AND (NOT member(x, Vars(ext(sig)(t))))
+
+A.B. Avelar, A.L. Galdino, F.L.C. de Moura and M. Ayala-Rinco´n
+
+71
+
+Two other lemmas, one for s and the other for t, formalize the fact that the variables in the σ instantiated terms are contained in the set of variables occurring in the original terms being uniﬁed.
+vars_sub_of_frst_diff_s_is_subset_union : LEMMA FORALL (s : term, t : term | unifiable(s, t) & s /= t): LET sig = sub_of_frst_diff(s, t) IN subset?(Vars(ext(sig)(s)), union( Vars(s), Vars(t)))
+Applying the previous lemmas, it is formalized the fact that the cardinality of the set of variables occurring in the terms being uniﬁed decreases after resolving each conﬂict between the terms.
+In the remaining of this section the formalization of lemma union vars ext sub of frst diff, the lemma presented above, will be explained. After a ﬁrst step of skolemization and simpliﬁcations, the following sequent is obtained.
+{-1} sub_of_frst_diff(s, t) = sig |-------
+{1} union(Vars(ext(sig)(s)), Vars(ext(sig)(t)))(x) IFF difference(union(Vars(s), Vars(t)), Dom(sig))(x)
+Note that there is a variable x, resulting from an application of the PVS proof command “decomposeequality” that simpliﬁes the equality between sets in the consequent formula into a biconditional, where the following assertion is established: x is a member of Vars(sσˆ )∪Vars(tσˆ ) if, and only if, x is a member of Vars(s) ∪ Vars(t) \ Dom(σ ). At this point, a propositional simpliﬁcation is applied and the proof is divided in two branches, presented below, one for each direction of the biconditional:
+• x ∈ Vars(sσˆ ) ∪Vars(tσˆ ) implies x ∈ Vars(s) ∪Vars(t) \ Dom(σ ). After expanding the deﬁnitions of difference and union, the following sequent is obtained:
+{-1} Vars(ext(sig)(s))(x) OR Vars(ext(sig)(t))(x) [-2] sub_of_frst_diff(s, t) = sig
+|------{1} (Vars(s)(x) OR Vars(t)(x)) AND NOT Dom(sig)(x)
+Then, after propositional simpliﬁcation, the proof divides into four branches:
+1. In this case, x ∈ Vars(sσˆ ) and one should verify that either x ∈ Vars(s) or x ∈ Vars(t), which is done by application of lemma vars sub of frst diff s is subset union.
+2. In this case, x ∈ Vars(sσˆ ) and one should verify that x ∈/ Dom(σ ), which is done by application of lemma sub of frst diff remove x.
+3, 4. These cases are similar to the previous two cases for the term t.
+• x ∈ Vars(s) ∪Vars(t) \ Dom(σ ) implies x ∈ Vars(sσˆ ) ∪Vars(tσˆ ). In this branch, after propositional simpliﬁcation, one should verify that x ∈ Vars(s) implies x ∈ Vars(sσˆ ) or, x ∈ Vars(t) implies x ∈ Vars(tσˆ ). This is true because if x ∈/ Dom(σ ), then for a position π ∈ Pos(s) such that s|π = x, one has (s|π )σˆ = (sσˆ )|π = x.
+3.2 Soundness
+After establishing the termination of the speciﬁed function unification algorithm, its correctness is formalized and applied in order to prove the Theorem 1 of existence of mgu’s that is speciﬁed as:
+
+72 A Formalization of the Theorem of Existence of First-Order m.g.u.’s
+unification: LEMMA unifiable(s,t) => EXISTS theta: mgu(theta)(s,t)
+This lemma is proved applying the two lemmas below. The ﬁrst one states that the substitution given by the function unification algorithm is, in fact, a uniﬁer and the second one that it is an mgu.
+unification_algorithm_gives_unifier: LEMMA unifiable(s,t) => member(unification_algorithm(s, t), U(s, t))
+unification_algorithm_gives_mg_subs: LEMMA member(rho, U(s, t)) => unification_algorithm(s, t) <= rho
+The formalization of the lemma unification algorithm gives unifier is done by induction on the cardinality of the set of variables occurring in s and t. For proving this lemma three auxiliary lemmas are necessary:
+• the lemma vars ext sub of frst diff decrease described in the previous subsection, which guarantees that the set of variables decreases;
+• ext_sub_of_frst_diff_unifiable: LEMMA FORALL (s: term, t: term | unifiable(s, t) & s /= t): LET sig = sub_of_frst_diff(s, t) IN unifiable(ext(sig)(s), (ext(sig)(t)))
+which states that the instantiations of two different and uniﬁable terms sσˆ and tσˆ with the substitution σ that resolves the ﬁrst conﬂict between these terms, are still uniﬁable; and
+• the lemma unifier o, presented at the beginning of this section, which states that for any uniﬁer θ of sσˆ and tσˆ , θ ◦ σ is a uniﬁer of s and t.
+The formalization of the lemma unification algorithm gives mg subs is done by induction on the cardinality of the set of variables occurring in s and t too. For proving this lemma two auxiliary lemmas are applied: the lemma vars ext sub of frst diff decrease and the lemma presented below, which states that for each uniﬁer ρ of s and t, two different and uniﬁable terms, and given σ the substitution that resolves the ﬁrst difference between these terms, there exist θ such that θ ◦ σ = ρ.
+sub_of_frst_diff_unifier_o: LEMMA FORALL (s:term, t:term | unifiable(s, t) & s /= t): member(rho, U(s, t)) => LET sig = sub_of_frst_diff(s, t) IN EXISTS theta: rho = comp(theta, sig)
+In the remaining of this section the formalization of sub of frst diff unifier o will be explained.
+It should be proved that θ ◦ σ and ρ map each variable x in their domain, that should be the same set of variables, into the same terms. The formalization starts by a skolemization and then, in order to provide a name, p, for the position in which the ﬁrst difference between terms s and t is detected, an application of the PVS proof command “name” is done. In this way the additional premise resolving diff(s, t) = p is included.
+{-1} resolving_diff(s, t) = p [-2] sub_of_frst_diff(s, t) = sig [-3] member(rho, U(s, t))
+|------[1] EXISTS theta: rho = comp(theta, sig)
+The proof strategy is to instantiate the existential formula in the consequent with ρ itself, having in mind that if ρ ∈ U (s,t) then ρ ∈ U (s|q,t|q), for any valid position q of s and t, and in particular, for the position of the ﬁrst detected difference p. It is known that at position p, either s|p or t|p should be a variable; so the strategy is to analyze both possible cases. The sequent below is obtained in the case in which s|p is a variable. In this sequent x is an arbitrary variable.
+
+A.B. Avelar, A.L. Galdino, F.L.C. de Moura and M. Ayala-Rinco´n
+
+73
+
+{-1} vars?(subtermOF(s, p))
+
+[-2]
+
+ext(rho)(subtermOF(t, p)) [-3]
+
+[-4] sub_of_frst_diff(s, t) = sig [-5]
+
+|-------
+
+[1] rho(x) = ext(rho)(sig(x))
+
+ext(rho)(subtermOF(s, p)) = resolving_diff(s, t) = p ext(rho)(s) = ext(rho)(t)
+
+The variable x in the consequent of this sequent appears after an application of the PVS proof command “decompose-equality” that simpliﬁes equality between substitutions into equality of the application of the substitutions to any variable: ρ ◦ σ = ρ, whenever for any x (xσ )ρˆ = xρ.
+The proof is obtained by case analysis: when x = s|p and when x = s|p,
+• In the former case, the formula x = subtermOF(s, p) is added to the antecedents.
+Note that (s|p)σˆ = t|p, that is ext(sig)(subtermOF(s, p)) = subtermOF(t, p), by deﬁnition of sub of frst diff, and (s|p)ρˆ = (t|p)ρˆ . Then, one can conclude that (s|p)ρˆ = ((s|p)σˆ )ρˆ . But, in this case, x = s|p; thus, one can complete this branch of the proof expanding the deﬁnition of sub of frst diff with an application of the proof command “expand” and making simpliﬁcations with the commands “replace” and “assert”.
+• In the latter case, the sequent to be considered is presented below. Notice that the negated equality that characterizes this case is positively presented as a consequent of the sequent.
+
+[-1] vars?(subtermOF(s, p)) ext(rho)(subtermOF(t, p))
+[-4] sub_of_frst_diff(s, t) = sig |-------
+{1} x = subtermOF(s, p)
+
+[-2] ext(rho)(subtermOF(s, p)) = [-3] resolving_diff(s, t) = p [-5] ext(rho)(s) = ext(rho)(t)
+[2] rho(x) = ext(rho)(sig(x))
+
+In this case, note that x does not belong to the domain of substitution σ , because the domain of σ is the singleton {s|p}. Then xσ = x. Therefore the equality xρ = (xσ )ρˆ is true, which is sufﬁcient to complete this branch of the proof.
+
+At this point, two cases remain to be considered: the case where t|p is a variable, that is formalized in a way entirely analogous to the previous case, and the case where neither s|p nor t|p are variables.
+In the latter case, again one should apply that at a conﬂicting position of two uniﬁable terms it is impossible that none of the subterms is a variable. This result was already formalized as a lemma called resolving diff vars. Then using this lemma and instantiating appropriately one obtains the sequent:
+{-1} p = resolving_diff(s, t) => vars?(subtermOF(s, p)) OR vars?(subtermOF(t, p)) [-2] resolving_diff(s, t) = p
+|------[1] vars?(subtermOF(t, p)) [2] vars?(subtermOF(s, p))
+
+In this sequent the contradiction is already established, and can be captured with a simple application of the PVS proof command “assert”. The proof of the main lemma used in this branch of the proof, resolving diff vars, previously mentioned, follows by induction on the structure of the term s as explained below.
+If s is a variable, the position p should be the root position empty seq and at this position, the term s|ε is a variable. If s is an application, the proof follows by expanding the deﬁnition of resolving diff and considering the three possible cases, namely:
+
+1. s is a constant. Then the position of the ﬁrst difference should be ε and t should be a variable, since the terms are uniﬁable.
+
+74 A Formalization of the Theorem of Existence of First-Order m.g.u.’s
+
+2. s is a non constant application and t is a variable. Similar to the previous case.
+3. s is a non constant application and t is an application. The position p cannot be the root position. The sequent corresponding to this case is presented below.
+
+{-1} p = add_first(k, resolving_diff(subtermOF(s, #(k)), subtermOF(t, #(k))))
+
+[-2] FORALL (x: below[args(s)‘length]):
+
+FORALL (t: term | unifiable(args(s)‘seq(x), t) & args(s)‘seq(x) /= t,
+
+p: position | positionsOF(args(s)‘seq(x))(p) & positionsOF(t)(p)):
+
+p = resolving_diff(args(s)‘seq(x), t) =>
+
+vars?(subtermOF(args(s)‘seq(x), p)) OR vars?(subtermOF(t, p))
+
+|-------
+
+[1] vars?(t)
+
+[2] length(args(s)) = 0
+
+[3] vars?(subtermOF(s, p)) [4] vars?(subtermOF(t, p))
+
+In this sequent the induction hypotesis, that is the antecedent formula [-2], should be instantiated with k - 1, in order to capture the subterm of s|k, i.e., the (k − 1)-th element of the sequence of arguments of the root symbol of s, args(s)‘seq(k - 1). Then, the position p equals the concatenation of k with the ﬁrst difference between terms s|k and t|k, here denoted as p = k ◦ q. By induction hypotesis either (s|k)|q or (t|k)|q is a variable. But (s|k)|q = s|k◦q and (t|k)|q = t|k◦q, which concludes the proof.
+
+3.3 Veriﬁcation of uniﬁcation algorithms
+This methodology of proof of the existence of mgu’s can be applied in order to formalize the completeness of uniﬁcation algorithms a` la Robinson, as presented in detail in [1] for a greedy uniﬁcation algorithm. This is illustrated in the theory robinsonuniﬁcation also available inside trs as well as in a more recent efﬁcient speciﬁcation robinsonuniﬁcationEF (see the trs hierarchy in Fig. 1).
+The main functions in the theory robinsonuniﬁcation are: first diff, link of frst diff and robinson unification algorithm whose roles are analogous respectively to the ones of the functions resolving diff, sub of frst diff and unification algorithm. These functions are speciﬁed in such a way that whenever unsolvable differences are detected (by the function first diff) the substitution “fail” is returned. This substitution is built explicitly as the substitution with the singleton domain {xx} and image ff(xx), where xx and ff are, respectively, a constant and a unary function. In this way, the substitution fail is discriminated from any other possible uniﬁer which is built by the function robinson unification algorithm for all pair of terms.
+The function link of frst diff, presented below, either builds the resolving link substitution for the ﬁrst difference whose position is detected by first diff or returns fail. According to these two options, the function robinson unification algorithm, also presented below, either builds the mgu or returns fail.
+link_of_frst_diff(s : term , (t : term | s /= t )) : Sub = LET k : position = first_diff(s,t) IN LET sp = subtermOF(s,k) , tp = subtermOF(t,k) IN IF vars?(sp) THEN IF NOT member(sp, Vars(tp)) THEN (LAMBDA (x : (V)) : IF x = sp THEN tp ELSE x ENDIF) ELSE fail ENDIF ELSE IF vars?(tp) THEN IF NOT member(tp, Vars(sp))
+
+A.B. Avelar, A.L. Galdino, F.L.C. de Moura and M. Ayala-Rinco´n
+
+75
+
+THEN (LAMBDA (x : (V)) : IF x = tp THEN sp ELSE x ENDIF) ELSE fail ENDIF ELSE fail ENDIF ENDIF
+robinson_unification_algorithm(s, t : term) : RECURSIVE Sub = IF s = t THEN identity ELSE LET sig = link_of_frst_diff(s,t) IN IF sig = fail THEN fail ELSE LET sigma = robinson_unification_algorithm(ext(sig)(s) , ext(sig)(t)) IN IF sigma = fail THEN fail ELSE comp(sigma, sig) ENDIF ENDIF ENDIF MEASURE Card(union(Vars(s), Vars(t)))
+The theory robinsonuniﬁcation consists of 47 lemmas from which 24 are TCCs. The speciﬁcation ﬁle has 249 lines and its size is 8.6 KB, and the whole proof ﬁle has 12091 lines and 739 KB and was described in detail in [1].
+The subtheory robinsonuniﬁcationEF includes an “efﬁcient” version of the uniﬁcation algorithm in which after resolving each conﬂicting position between two terms the next conﬂict is searched starting from the position of conﬂict previously resolved instead from the root position of the instantiated terms as it is done in the theories uniﬁcation and robinsonuniﬁcation. The main functions found in this improved version of the algorithm are next position and robinson unification algorithm aux.
+The function next position takes as arguments two terms and a valid position π of both terms, and returns the next conﬂicting position. Once all differences between the terms occurring in previous positions to π (left-most, outer-most) and at position π itself have been resolved, the next conﬂict should occur in a position to the right, and therefore there is no need to scan again the instantiated terms starting from the root position.
+The function robinson unification algorithm aux also takes as arguments two terms and a position of these terms, and returns a substitution, but now in the process of uniﬁcation the next conﬂict position is fetched from the ﬁrst position of conﬂict, using the function next position.
+next_position(s, t : term, p : position | positionsOF(s)(p) AND positionsOF(t)(p)):
+RECURSIVE position = IF p = empty_seq THEN empty_seq ELSE LET pi0 = delete(p,length(p) - 1) IN
+IF f(subtermOF(s,pi0)) /= f(subtermOF(t,pi0)) THEN pi0 ELSE LET pi = add_last(delete(p, length(p) - 1), last(p) + 1) IN
+IF positionsOF(s)(pi) THEN IF subtermOF(s, pi) /= subtermOF(t, pi) THEN pi ELSE next_position(s,t, pi) ENDIF
+ELSE IF pi0 /= empty_seq THEN next_position(s, t, pi0) ELSE empty_seq ENDIF
+ENDIF ENDIF ENDIF MEASURE IF p = empty_seq THEN lex2(0,0)
+ELSE lex2(length(p), arity(f(subtermOF(s, delete(p,length(p) - 1)))) - last(p))
+ENDIF
+robinson_unification_algorithm_aux(s, t : term, p : position | positionsOF(s)(p) AND positionsOF(t)(p)) : RECURSIVE Sub =
+IF subtermOF(s,p) = subtermOF(t,p) THEN
+
+76 A Formalization of the Theorem of Existence of First-Order m.g.u.’s
+LET pi = next_position(s, t, p) IN IF pi = empty_seq THEN identity ELSE robinson_unification_algorithm_aux(s,t,pi) ENDIF
+ELSE LET sig = link_of_frst_diff(subtermOF(s,p),subtermOF(t,p)) IN IF sig = fail THEN fail ELSE LET pi = next_position(ext(sig)(s), ext(sig)(t), p o first_diff(subtermOF(s,p),subtermOF(t,p))) IN IF pi = empty_seq THEN sig ELSE LET sigma = robinson_unification_algorithm_aux( ext(sig)(s), ext(sig)(t), pi) IN IF sigma = fail THEN fail ELSE comp(sigma, sig) ENDIF ENDIF ENDIF ENDIF
+MEASURE lex2(Card(union(Vars(s), Vars(t))), Card(right_pos(s,p)))
+Formalization of correctness of this speciﬁcation requires several additional effort and, in particular, specialized inductive proof that are based on the more elaborated measures necessaries for the previous two functions.
+4 Related work
+Correctness of uniﬁcation algorithms has been the center of several formalizations in a variety of theorem provers. Starting from a formalization in LCF [18], other formal proofs have been given, for example, in Isabelle/HOL, Coq [20, 4, 16], ALF [5] and ACL2 [21].
+The earlier LCF formalization of the uniﬁcation algorithm was given by Paulson [18]. Paulson’s approach was followed by Konrad Slind in the theory Unify formalized in Isabelle/HOL from which an improved version called Unification is available now. Unlike other approaches, in Slind’s formalization as in the presented here idempotence of the computed uniﬁers is unnecessary to prove neither termination nor correctness of the speciﬁed uniﬁcation algorithm. In contrast with our textbook style termination proof, which is based on the fact that the number of different variables occurring in the terms being uniﬁed decreases after each step of the uniﬁcation algorithm (Section 3.1), the termination proof of the theory Unify is based on separated proofs of non-nested and nested termination conditions and the uniﬁcation algorithm is speciﬁed taking as basis a speciﬁcation of terms built by a binary combinator operator (Comb).
+Recent Coq formalizations of uniﬁcation algorithms were presented in [4] and [16]. The formalization in [4] is part of a library called CoLoR, and the most signiﬁcant difference is that here substitutions are speciﬁed as ﬁnite maps from unrestricted variables into general terms, whereas in CoLoR they are speciﬁed as functions from type variables to a generalized term structure. In [16], Kothari and Caldwell presented a speciﬁcation of a uniﬁcation algorithm for equalities in the language of simple types. This kind of uniﬁcation has direct applications in type inference algorithms. This uniﬁcation algorithm is proved correct by showing that it satisﬁes four axioms: that the computed mgu is a uniﬁer; that it is in fact a most general uniﬁer; that its domain is restricted to the set of free variables in the input equational problem and that the theorem of existence of mgu’s holds. In a later work, the same authors showed that three additional axioms, being one of them idempotence of mgu’s, are also satisﬁed. Since simple types are built in a language of symbols for basic types and a unique binary operator symbol, (→), the current approach can be directly applied to the restricted language of simple types treated in [16]. An additional fact that makes the current formalization closer to the usual theory of uniﬁcation as presented in wellknown textbooks (e.g., [17, 2]), is the decision to specify terms as a data type built from variables and
+
+A.B. Avelar, A.L. Galdino, F.L.C. de Moura and M. Ayala-Rinco´n
+
+77
+
+the operator app that builds terms as an application of a function symbol (of a given arity) to a sequence of terms with the right length. In this way, substitutions were speciﬁed as a function from variables to terms and the construction of the homomorphic extension results straightforward.
+Earlier related work in Coq includes [20], where an algorithm similar to Robinson’s one was extracted from a formalization that uses a generalized notion of terms, that uses binary constructors in the style of Manna and Waldinger, whose translation to the usual notation is not straightforward. More recently, in [7], a certiﬁed resolution algorithm for the propositional calculus is extracted from a Coq speciﬁcation that requires uniﬁcation of propositional expressions.
+In [5] a formalization of a ﬁrst-order uniﬁcation algorithm is given. The main difference with the current formalization is that here one deﬁnes the application of a substitution to a term only by recursion on the term, and there the author deﬁnes the application of a substitution to a term in two ways: by recursion on the term (parallel application) and by recursion on the substitution (sequential application). Thus, for a given substitution and a given term, the application of the substitution to the term might result in different terms, depending on whether one follows the deﬁnition of the parallel application or the sequential application. However, both applications give the same result for idempotent substitutions. In other words, unlike the current approach, idempotence of the computed uniﬁers is necessary to prove the correctness of the speciﬁed uniﬁcation algorithm.
+In [21] a formalization of the correctness of an implementation of an O(n2) run-time uniﬁcation algorithm in ACL2 is presented. The speciﬁcation is based on Corbin and Bidoit’s development [8] as presented in [2] in which terms are represented as directed acyclic graphs (DAGs). The merit of this formalization is that by taking care of an speciﬁc data structure such as DAGs for representing terms, the correctness proof results much more elaborated than the current one. But in the current paper, the focus is to have a natural mechanical proof of the existence of mgu’s, that is the strictly necessary in a formalization of the correctness of the Critical Pair Knuth-Bendix theorem. Although the representation of terms is sophisticated (via DAGs), the referred formalization diverges from textbooks proofs of correctness of the uniﬁcation algorithm in which it is ﬁrst-order restricted. In fact, instead representing second-order objects such as substitutions as functions from the domain of variables to the range of terms, they are speciﬁed as ﬁrst-order association lists. In our approach, taking the decision to specify substitutions as functions allows us to apply all the theory of functions available in the higher-order proof assistant PVS, which makes our formalization very close to the ones available in textbooks.
+As mentioned in the introduction, as part of the PVS theory trs presented in [11] there are formalizations of non-trivial results on rewriting, such as the well-known Knuth-Bendix Critical Pair Theorem, that requires the theorem of existence of mgu’s. The style of formalization of existence of mgu’s can be followed in order to verify the soundness and completeness of uniﬁcation algorithms a` la Robinson, as illustrated in [1] for a greedy algorithm. The proof methodology used to prove termination and soundness in the formalization of the theorem of existence of mgu’s is adapted in order to verify the correctness of uniﬁcation algorithms as described in [1].
+
+5 Conclusions and Future Work
+A formalization developed in the language of the proof assistant PVS of the theorem of existence of mgu’s was presented. This formalization is close to textbooks proofs and was applied to present a complete formalization of the well-know Knuth-Bendix Critical Pair theorem. The methodology of proof can be directly applied in order to certify the correctness of ﬁrst-order uniﬁcation algorithms a` la Robinson.
+
+78 A Formalization of the Theorem of Existence of First-Order m.g.u.’s
+As future work, it is of great interest the extraction of certiﬁed uniﬁcation algorithms alone or in several contexts of its possible applications such as the ones of ﬁrst order resolution and of type inference.
+References
+[1] A. B. Avelar, F.L.C. de Moura, A. L. Galdino & M. Ayala-Rinco´n (2010): Veriﬁcation of the Completeness of Uniﬁcation Algorithms a` la Robinson. In: Proc. 17th Int. Workshop on Logic, Language, Information and Computation (WoLLIC), LNCS 6188, Springer, pp. 110–124 doi:10.1007/978-3-642-13824-9_10.
+[2] F. Baader & T. Nipkow (1998): Term Rewriting and All That. Cambridge University Press. [3] M. Bezem, J.W. Klop & R. de Vrijer, editors (2003): Term Rewriting Systems by TeReSe. Cambridge Tracts
+in Theoretical Computer Science 55, Cambridge University Press. [4] F. Blanqui & A. Koprowski (2011): CoLoR: a Coq library on well-founded rewrite relations and its applica-
+tion to the automated veriﬁcation of termination certiﬁcates. Available at http://color.inria.fr. [5] A. Bove (1999): Martin-Lo¨f Type Theory: Uniﬁcation - A non-trivial Example. Ph.D. thesis, Chalmers
+University of Technology. Licentiate thesis. [6] S. N. Burris (1998): Logic for Mathematics and Computer Science. Prentice Hall. [7] R. Constable & W. Moczydlowski (2009): Extracting the resolution algorithm from a completeness
+proof for the propositional calculus. Ann. of Pure and Appl. Logic 161(3), pp. 337–348 doi:10.1007/ 978-3-540-72734-7_11. [8] J. Corbin & M. Bidoit (1983): A Rehabilitation of Robinson’s Uniﬁcation Algorithm. In: IFIP Congress, pp. 909–914. [9] H. D. Ebbinghaus, J. Flum & W. Thomas (1984): Mathematical Logic. Springer. [10] A. L. Galdino & M. Ayala-Rinco´n (2008): A Formalization of Newman’s and Yokouchi Lemmas in a HigherOrder Language. Journal of Formalized Reasoning 1(1), pp. 39–50. [11] A. L. Galdino & M. Ayala-Rinco´n (2009): A PVS Theory for Term Rewriting Systems. In: Proceedings of the Third Workshop on Logical and Semantic Frameworks, with Applications - LSFA 2008, Electronic Notes in Theoretical Computer Science 247, pp. 67–83 doi:10.1016/j.entcs.2009.07.049. [12] A. L. Galdino & M. Ayala-Rinco´n (2010): A Formalization of the Knuth-Bendix(-Huet) Critical Pair Theorem. J. Auto. Reas. 45(3), pp. 301–325 doi:10.1007/s10817-010-9165-2. [13] J.R. Hindley (1969): The principal type-scheme of an object in combinatory logic. Trans. American Mathematical Society 146, pp. 29–60. [14] J.R. Hindley (1997): Basic Simple Type Theory. Cambridge Tracts in Theo. Computer Science 42, CUP. [15] D. E. Knuth & P. B. Bendix (1970): Computational Problems in Abstract Algebra, chapter Simple Words Problems in Universal Algebras, pp. 263–297. J. Leech, ed. Pergamon Press, Oxford, U. K. [16] S. Kothari & J. Caldwell (2009): A Machine Checked Model of MGU Axioms: Applications of Finite Maps and Functional Induction. In: 23th Int. Workshop on Uniﬁcation UNIF2009, pp. 17–31. [17] J. W. Lloyd (1987): Foundations of Logic Programming, second edition. Symbolic Computation – Artiﬁcial Intelligence, Springer. [18] Lawrence C. Paulson (1985): Verifying the Uniﬁcation Algorithm in LCF. Science of Computer Programming 5(2), pp. 143–169. [19] J. A. Robinson (1965): A Machine-oriented Logic Based on the Resolution Principle. Journal of the ACM 12(1), pp. 23–41 doi:10.1145/321250.321253. [20] J. Rouyer (1992): De´veloppement de l’Algorithme d’Uniﬁcation dans le Calcul des Constructions. Technical Report 1795, INRIA. [21] J.-L. Ruiz-Reina, F.-J. Mart´ın-Mateos J.-A. Alonso & M.-J. Hidalgo (2006): Formal Correctness of a Quadratic Uniﬁcation Algorithm. J. of Auto. Reas. 37(1-2), pp. 67–92 doi:10.1007/s10817-006-9030-5.
+
+
