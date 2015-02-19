@@ -1,0 +1,838 @@
+Proof-Carrying Authentication∗
+Andrew W. Appel and Edward W. Felten Secure Internet Programming Laboratory
+Department of Computer Science Princeton University
+Princeton, NJ 08544 USA
+August 9, 1999
+
+Abstract
+We have designed and implemented a general and powerful distributed authentication framework based on higher-order logic. Authentication frameworks — including Taos, SPKI, SDSI, and X.509 — have been explained using logic. We show that by starting with the logic, we can implement these frameworks, all in the same concise and eﬃcient system. Because our logic has no decision procedure — although proof checking is simple — users of the framework must submit proofs with their requests.
+1 Introduction
+Distributed authentication frameworks allow sharing of access to resources across administrative boundaries in a distributed system. The main abstractions they support are name-tokey bindings, access control, and delegation.
+∗To appear in 6th ACM Conference on Computer and Communications Security, November 1999. Copyright c 1999 by the Association for Computing Machinery, Inc. Permission to make digital or hard copies of part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for proﬁt or commercial advantage and that copies bear this notice and the full citation on the ﬁrst page or intial screen of the document. Copyrights for components of this work owned by others than ACM must be honored. Abstracting with credit is permitted. To copy otherwise, to republish, to post on servers, or to redistribute to lists, requires prior speciﬁc permission and/or a fee. Request permissions from Publications Dept., ACM Inc., fax +1(212)869-0481, or permissions@acm.org.
+
+Statements in these frameworks are represented as data structures that are often digitally signed to ensure their integrity.
+Several authentication frameworks exist; we mention a few here as examples. The Taos operating system provided support for secure remote procedure call and data structures to represent authority and identity [6]. X.509 [15] is a widely-used standard for expressing and using digital certiﬁcates. SPKI [4] and SDSI [14] (since merged under the joint name SPKI) were reactions to the perceived complexity of X.509; in both cases the ‘S’ stands for ‘simple.’ PolicyMaker [3] is a language for expressing security policies; it can be applied to distributed security policies. Kerberos [12], unlike the other frameworks, uses symmetric-key encryption to authenticate users. Each framework has a diﬀererent semantics and oﬀers a diﬀerent kind of ﬂexibility.
+Formal logic has been used successfully to explain authentication frameworks and protocols, most notably in the design of the Taos distributed operating system [1, 6]. The designers of Taos started by constructing an elegant and expressive logic of authentication as an extension of propositional calculus. They proved this logic sound — any provable statement is true in all models — which makes the logic an attractive basis for constructing a system. However, since they wanted a server presented with a request to be able to decide whether to grant the request, they chose to implement
+
+1
+
+only a decidable subset of their authentication logic. In a decidable logic, there is an algorithm for determining the truth (or falsehood) of any statement.
+Using a simple and decidable logic would have had advantages: it’s easier to prove metatheorems such as “there’s no way Alice can access the ﬁle bar.” Why, then, do we use an undecidable logic? Previous approaches have taken a set of basic inference rules and added application-speciﬁc inference rules to make application-speciﬁc logics; but the new rules must be trusted, i.e. proved sound. By allowing quantiﬁcation over predicates, we can use a single set of inference rules, with application-speciﬁc rules proved as lemmas; therefore, the application-speciﬁc rules can be used to prove access requests to servers that know only the basic logic. However, logics with quantiﬁcation over predicates – higherorder logics – tend to be undecidable: there is no general algorithm for producing proofs of all true statements.
+Still, a server presented with a request must be able to ﬁgure out what to do. We solve this problem by analogy with proof-carrying code [9]: the client desiring access must construct a proof, and the server will simply check that proof. Even in an undecidable logic, proof checking can be simple and eﬃcient. We put the burden of proof on the requester. We will show several diﬀerent strategies by which requesters can construct proofs, for example by picking an application-speciﬁc decidable subset of our general logic.
+Each of the existing frameworks has chosen a particular set of concepts and abstractions: a particular form of delegation, a key-binding mechanism, certain access control rules, and so on. Although these choices are as reasonable as any, no set of choices is right for everybody. By using higher-order logic, our framework allows the speciﬁcation and use of new abstractions and new variants on the existing abstractions.
+Since all the application-speciﬁc logics are expressed using the same general inference
+
+rules, they can safely interoperate: We can take one theorem proved using the SPKI deﬁnitions, and another proved using Taos deﬁnitions, and combine them to prove access even to a server that has seen neither set of deﬁnitions before.
+Although we have expressed SPKI in our logic, we don’t really recommend the use of SPKI 5-tuples for authorization; the operators we outline in sections 4 and 5 seem more natural.
+2 An Example
+Suppose three principals, a client Alice, a ﬁle server Bob, and a certiﬁcation authority Charlie, are interacting across a network. (See Figure 1.) Bob receives a request to “read foo.” Bob’s access control list says that a principal called Alice can read foo — but is the request from Alice? Bob trusts Charlie to guarantee key-to-name bindings, and Bob knows that Charlie’s key is Kc. Alice has obtained a certiﬁcate signed by Kc that “Ka is Alice’s key,” and uses Ka to sign “read foo.” Armed with all of this information, Bob can safely grant the request to read foo.
+Our framework can express this as follows. We can treat “read foo” as an uninterpreted atom, meaning that the logic doesn’t know what it means although the participants do. Digital signing is a primitive of our logic, so (Ka signed read foo) is a statement of the logic.
+Each principal is modeled as the set of formulas that she will admit as true. Thus, Alice(∀x.x → x) means that Alice is willing to claim that (∀x.x → x). That’s not admitting much, as the statement is a tautology! But in fact any principal is required to admit any statement provable from other statements she admits.
+We translate the statement “Alice wants to read foo” as Alice(read foo). We translate “read foo if Alice says to” as follows:
+Alice(read foo) → read foo.
+Charlie’s certiﬁcation that Ka is Alice’s key
+
+2
+
+I want to read foo.
+
+Charlie Certification
+
+Key certificate:
+
+Authority
+
+01001110=sign(Kc, keybind(Ka, Alice))
+
+OK to read foo? Prove it to me!
+
+Alice
+
+Request: read foo
+Proof: [S1: signature 10010111 Ka ReadFoo] [S2: signature 01001110 Kc (keybind Ka Alice)] controls_e A3
+(keybind_e (controls_e (trustedCA_e A1) (keybind_e A2 S2))
+S1).
+
+Bob
+A1: trustedCA(Charlie) A2: keybind(Kc,Charlie) A3: controls(Alice, read foo)
+
+Figure 1: Distributed authentication.
+
+we translate as
+
+Kc signed (∀F. (Ka signed F ) → (Alice(F ))).
+
+Bob’s knowledge of Charlie’s key is stated as
+
+∀F. (Kc signed F ) → Charlie(F ).
+
+Finally, Bob’s trust in Charlie is expressed as a memorandum to himself:
+∀k.∀p. Charlie((∀S. (k signed S) → p(S))) →
+∀S. (k signed S) → p(S).
+
+These statements are expressed in a higherorder logic (i.e., one in which we can quantify over formulas and predicates), with inference rules given in Figure 3.
+Since these statements are rather unwieldy, it is only natural for the participants to have agreed upon some deﬁnitions:
+
+keybind(k, p) stands for ∀S. (k signed S) → p(S). That is, k is p’s key, so that if k signs some statement S then p should be considered to believe it.
+
+p controls S stands for p(S) → S. That is, p “controls” the statement S, so if p says S then S will be considered true.
+
+trustedCA(c)
+
+stands
+
+for
+
+∀k.∀p. c controls keybind(k, p), meaning
+
+that c is a trusted certiﬁcation authority: if c says some key binding, we can trust that key binding.
+
+These particular deﬁnitions may be wellsuited to our example transaction, but they are hardly likely to be general enough for the real world. The strength of our approach is that it does not “build in” a ﬁxed set of deﬁnitions but allows the participants in each application to deﬁne and use their own abbreviations.
+Some useful lemmas follow immediately from these deﬁnitions. For example, we can prove the lemma controls e, which states that if p controls S and p says S, then S is true:
+
+p controls S S
+
+p(S) controls e
+
+Additional lemmas allow one to use statements by a trusted certiﬁcation authority, and to make inferences from key bindings:
+
+c
+
+trustedCA(c) controls keybind(k, p)
+
+trustedCA
+
+e
+
+keybind(k, p) p(S)
+
+k signed S
+
+keybind e
+
+2.1 Constructing a proof.
+Bob starts with the following assumptions in his security database:
+
+A1 = trustedCA(Charlie)
+
+3
+
+C
+
+trustedCA(C) controls keybind(Ka, A)
+
+trustedCA
+
+e
+
+keybind(Ka, A)
+
+A controls read foo
+
+read foo
+
+keybind(Kc, C) C(keybind(Ka,
+A(read
+
+Kc signed keybind(Ka,
+
+A))controls e
+
+Ka signed
+
+foo) controls e
+
+A) keybind e read foo keybind
+
+e
+
+Figure 2: Proof that Alice can read foo.
+
+A2 = keybind(Kc, Charlie) A3 = Alice controls read foo
+
+Using these assumptions, and the lemmas
+
+shown above, Alice can prove to Bob that he
+
+should allow her to read foo. Before Alice can
+
+do this, Bob must publish his assumptions –
+
+his security policy – so that she can construct a
+
+valid proof. Some parts of the policy – such as
+
+“Alice controls read foo” – he may not wish to
+
+broadcast to the whole world, but he should at
+
+least tell each client the assumptions relevant
+
+to her.
+
+The proof is illustrated in Figure 2. It has
+
+ﬁve premises: the security policy A1, A2, A3 and two digital signatures sent by Alice with the
+
+proof. Alice can sign the statement read foo
+
+with her own key Ka; she must ask Charlie to
+
+sign the statement keybind(Ka, A) with his own
+
+key Kc.
+
+The proof is checked as follows. First
+
+we check the two digital signatures to
+
+establish the facts Ka signed read foo and
+
+Kc signed keybind(Ka, A). From assumption
+
+A1 we prove C controls keybind(Ka, A)
+
+by the lemma trustedCA e.
+
+From
+
+A2 and a digital signature we prove C(keybind(Ka, A)) by the keybind e lemma.
+
+Now from C controls keybind(Ka, A) and
+
+C(keybind(Ka, A)) we prove keybind(Ka, A)
+
+by the controls e lemma. From this and
+
+a signature we prove A(read foo) by the
+
+keybind e lemma. Finally, from assumption
+
+A3 and A(read foo) we prove read foo by controls e.
+
+The deﬁnitions, and the proofs of the lem-
+
+mas, can be included with the proof for the
+
+beneﬁt of any participant who was not already familiar with the deﬁnitions and their consequences.
+
+3 The Logic
+
+We are using a higher-order logic with the type form of formulas and a base type, string, which will be used to represent keys, signatures, local names, and for many other purposes. The inference rules of the logic are given in Figure 3; except for the last four rules, it is standard higher-order logic. The last four inference rules allow reasoning about digital signatures and statements by principals derived from signatures and names (strings). For reasoning about time, we also need the type integer and rules for arithmetic, which we do not show here.
+The type form → form – which is a predicate on formulas – represents the worldview of an actor in the system: a principal (an individual or machine), a group of principals, or some other such combination. We will deﬁne a principal P as a worldview that has the properties
+
+∀F. F → P (F )
+
+and
+
+∀F ∀G. P (F ) ∧ P (F → G) → P (G)
+
+that is, if F is true then P admits it, and if G is a consequence of other things P admits, then P admits G.
+A principal may be constructed from a string by the built-in function N (). For any string s the inference rules name r and name imp e guarantee that the worldview N (s) satisﬁes the properties required of principals.
+We represent a cryptographic key as a string in the X.509 SubjectPublicKeyInfo format, that is, an AlgorithmIdentifer followed by a bit
+
+4
+
+AB A∧B
+
+and
+
+i
+
+A∧B A
+
+and
+
+e1
+
+A∧B B
+
+and
+
+e2
+
+A A∨B
+
+or
+
+i1
+
+B A∨B
+
+or
+
+i2
+
+A∨B
+
+[A]
+C
+
+C
+
+[B]
+C or e
+
+[A]
+
+B A→B
+
+imp
+
+i
+
+A→B B
+
+A imp e
+
+A(Y )
+
+Y
+
+not occurring in ∀x.A(x)
+
+∀x.A(x)
+
+forall
+
+i
+
+∀x.A(x) A(T )
+
+forall
+
+e
+
+X
+
+= Z H(Z) H (X )
+
+congr
+
+X = X reﬂ
+
+string that is the actual key [15]. The rule signed says that if s is the digital signature with key k of statement F , then N (k)(F ): the principal N (k) must admit any statement signed by k. The informal k signed F stands for the formal N (k)(F ).
+There is an inﬁnite family of digital signature axioms, one for each triple s, k, F where s is the digital signature with key k of the representation of the formula F . The proofchecking infrastructure must be able to check digital signatures using one or more encryption algorithms.
+Because deﬁnitions such as “keybind” and “controls” are not part of our trusted computing base – such deﬁnitions are part of application-speciﬁc customizable protocols – each server must be able to mechanically check all proofs of their properties. As we will explain in Section 8, we have implemented a proofchecker for our logic (as will be necessary for the operation of a server in a distributed authentication system). Every lemma and theorem that we state in this paper has been mechanically veriﬁed.
+
+F N (s)(F )
+
+name
+
+i
+
+N (s)(F ) N (s)(F N (s)(G)
+
+→ G)
+
+name
+
+imp
+
+e
+
+digital
+
+signature(s, k, F ) N (k)(F )
+
+signed
+
+Figure 3: Inference rules of the logic. Quantiﬁcation and equality (e.g., ∀x.∃y.x = y) are polymorphic: the quantiﬁed variables may be of base type (such as string) or formulas, functions, or predicates. The logic also has operators and inference rules for integer arithmetic, existential quantiﬁcation, and falsehood, which are not shown here.
+
+4 Using the Logic
+Since a worldview is just a predicate on formulas, worldviews can exhibit a wide variety of behaviors. This fact can be useful, as we will see below, but it also has its drawbacks. To simplify things, it is useful to deﬁne two special classes of worldviews, and to prove some lemmas about the behavior of these kinds of worldviews.
+Principals. The ﬁrst special class of worldviews includes those made by the N () operator, and other worldviews that behave like them; these satisfy
+prin(P ) ≡ (∀F. (F → P (F ))) ∧(∀F ∀G.(P (F ) → P (F → G) → P (G))).
+Intuitively, prin(P ) means that we can assume that P admits all tautologies, and that P
+
+5
+
+admits any formula that can be deduced from other formulas it admits. The following two lemmas are provable:
+
+prin(P ) P (F )
+
+F prin taut
+
+prin(P )
+
+P (F ) P (F P (G)
+
+→ G)
+
+prin
+
+imp
+
+e
+
+From the name r and name imp e inference rules, we can prove the lemma
+
+prin(N (s)) n is prin
+
+We can use function composition on worldviews:
+(A ◦ B)(F ) ≡ A(B(F )).
+A ◦ B can be thought of as “A quoting B”. Composition of two principals is a principal:
+
+prin(A) prin(B) prin(A ◦ B)
+
+prin
+
+comp
+
+We can also deﬁne a ∧ w operator on worldviews, so that A ∧ wB admits a formula whenever both A and B admit it.
+
+(A ∧ wB)(F ) ≡ A(F ) ∧ B(F ).
+
+We can then prove the lemma
+
+prin(A) prin(A ∧
+
+prin(B) wB)
+
+prin
+
+∧
+
+along with lemmas saying that ∧ w is associative and commutative.
+Similarly, we can deﬁne a ∨ w operator:
+
+(A ∨ wB)(F ) ≡ A(F ) ∨ B(F ).
+
+The ∨ w operator can be used to construct groups of worldviews in which any member can speak on behalf of the group. ∨ w is associative and commutative. However, if prin(A) and prin(B), this does not imply prin(A ∨ wB). (For example, we could have A(F ) and B(F → G), but neither A(G) nor B(G).) Groups
+
+evidently satisfy a weaker property than prin(); we write this property as
+
+group(A) ≡ ∀F.(F → A(F )).
+
+We can then prove the following lemmas:
+
+prin(A) group(A)
+
+prin
+
+is
+
+grp
+
+group(A) A(F )
+
+F grp taut
+
+group(A) group(B) group(A ◦ B)
+
+grp
+
+comp
+
+group(A) group(B) group(A ∧ wB)
+
+grp
+
+∧
+
+group(A) group(B) group(A ∨ wB)
+
+grp
+
+∨
+
+In addition to these classes of worldviews, any application is free to deﬁne its own classes.
+
+4.1 Says and Quoting
+The system as described so far is adequate, but some may ﬁnd the representation of principals as functions confusing. In order to make the system more palatable to these users, we can deﬁne operators to abstract away the representation of worldviews.
+We do this by deﬁning a says operator:
+
+A says F ≡ A(F ).
+
+Some simple lemmas about says follow:
+
+group(A) F A says F
+
+says taut
+
+prin(A)
+
+A
+
+says F A says A says G
+
+(F
+
+→ G)
+
+says
+
+imp
+
+e
+
+We can then deﬁne a quoting operator | as
+
+A|B ≡ A ◦ B,
+
+and it follows that
+
+(A|B) says F ↔ A says (B says F ) quote ident.
+
+6
+
+The ∧ w and ∨ w operators will lead to the identities
+
+Speaksfor. The operator A speaksfor B ≡ ∀x.(A says x → B says x)
+
+(A ∧ wB) says F ↔ (A says F ) ∧ w(B says F ) says that everything said by A is also said by
+
+B. Generally, if A speaks for B, then A can
+
+exercise any rights that B has. (A ∨ wB) says F ↔ (A says F ) ∨ (B says F )
+
+If we use a logical framework that support abstract data types, we could choose to hide the representation of principals, says, and quoting, and simply expose the set of lemmas they
+
+Names. The ability to translate any string S into a principal N (S) gives us the ability to deﬁne name-spaces. For example, we can deﬁne a localname operator as
+
+satisfy.
+
+LN (A, S) ≡ A|N (S).
+
+5 Application-Speciﬁc Operators
+
+Now A can give principal B the right to speak
+
+We expect that the designers of speciﬁc appli- for LN (A, S) by making the statement
+
+cations will often have in mind their own sets of operators and rules for manipulating them.
+
+A says (B speaksfor N (S)).
+
+Our system allows users to deﬁne new operators with manipulation rules, so it can implement application-speciﬁc operators. In this section, we give as an example a set of operators we have found useful.
+Any application using our system is free to deﬁne whatever operators it likes and prove lemmas about them. This kind of extensibility
+
+Now (assuming prin(A)) it follows that B speaksfor LN (A, S)2.
+We can also use local names to implement roles, with LN (A, role : admin) referring to A’s administrative role; A could then make a statement F on behalf of the role, such as (A says (N (role : admin) says F )).
+
+is the main advantage of our logic-based approach.
+
+5.1 Access Control
+Suppose a ﬁle server machine M stores a ﬁle
+
+Controls. First we deﬁne the controls opera- f , and M wants to limit who can read f . (We tor1 assume prin(M ).) This can be implemented by
+
+A controls F ≡ ((A says F ) → F ).
+
+requiring each read request on f to carry a proof of (M says read(f )). M can give another prin-
+
+Informally, A controls F means that A can make F true just by saying it. We can prove a simple lemma
+
+cipal A permission to read the ﬁle by making the statement (M says (A controls read(f ))). Now if A makes the request (A says read(f )), A can use the request, along with the statement
+
+A controls F F
+
+A says F controls r.
+
+made by M , to prove M says read(f )3.
+2Proof sketch: Suppose B says F . It follows by
+
+We can then prove a lemma that says control can be handed oﬀ from one principal to another:
+
+says taut that A says (B says F ). Now we have two statements that are said by A: B says F and B speaksfor N (S). These two statements together
+
+imply N (S) says F , so when they are both said
+prin(A) A controls F A says (B controls F ) by A, and since prin(A) holds, we can infer that
+
+B controls F
+
+. A says (N (S) says F ). By the deﬁnition of localname,
+
+this equals LN (A, S) says F .
+
+1This deﬁnition diﬀers from the one given in Section 2
+
+3To prove this result, we start with A says read (f ),
+
+in order to account for the says abstraction.
+
+and then (using prin(M )) apply the says taut lemma to
+
+7
+
+5.2 Public-Key Infrastructure
+
+Statements can be given limited periods of
+
+Public-key certiﬁcates and their use can be im- validity. For example, the statement
+
+plemented in our system as well. A certiﬁcation authority C can issue a certiﬁcate binding key
+
+A says ((now(Bob) < T ) → F ),
+
+Ka to principal A:
+
+implies A says F until Bob’s clock reaches T ;
+
+(cert C Ka A) ≡ C says (N (Ka) speaksfor A). after that it is vacuous. Of course, a statement that expires might be renewed with a later
+
+This certiﬁcate is pointless unless we trust C to expiration time, and statements might come
+
+issue certiﬁcates; this trust can be encoded as with hints about how to renew them. In order
+
+for Alice to generate a proof that will be valid
+
+trustedCA(C) ≡ ∀k∀p. C controls (N (k) speaksfor po).n Bob’s machine, she should ﬁrst learn how
+
+much clock skew there is between her machine
+
+Now we can prove lemmas such as
+
+and Bob’s. Also, if Charlie trusts Bob to keep
+
+trustedCA(C )
+
+(cert C Ka A)
+
+the clock skew between Bob and Charlie under Ka signed F5 seconds, at least until tomorrow, he can issue
+
+A says F
+
+the statement,
+
+indicating that our deﬁnitions are consistent with one model of public-key infrastructure.
+Of course, other deﬁnitions may make sense to other people. The strength of our system is that it allows anyone to make their own deﬁnitions.
+5.3 Expiration and Revocation
+The primitive now() maps strings to integers; now(m) gives the current time as measured on the clock of the host whose name is m. We make no assumptions about how diﬀerent clocks are related, though any principal can make statements and form beliefs about how any two clocks are related.
+When Bob checks the proof of any statement, he will have an assumption in his assumption database of the form,
+
+Kc signed (now(charlie.com) < 100929 → |now(charlie.com) − now(bob.com)| < 5)
+Such certiﬁcates about clock skew can help Alice formulate a proof that her key-certiﬁcate (signed by Charlie) is still valid with respect to Bob’s clock.
+An alternative to expiration is revocation. For example, the statement
+A says (¬revoked(F ) → F )
+says that A says F , unless F has been revoked. A could periodically send out a revocation list; for example
+A says ((now(A) < T ) → ∀x.(revoked(x) → (x = S1 ∨ x = S2 ∨ x = S3))).
+
+now(bob.com) = 83487
+if 83487 is the current time.
+deduce M says (A says read (f )). Then we start with M says A controls read (f ) and expand the deﬁnition of controls to deduce M says ((A says read (f )) → read (f )). The proof is completed by combining the results of the previous two sentences, using the says imp e lemma (and the assumption prin(M )) to deduce M says read (f ).
+
+From this we can infer that (until A’s clock reaches T ) statements other than S1, S2, and S3 have not been revoked. By making T only a short time in the future, we can achieve the eﬀect of on-line revocation list checking. As usual, the cost of frequent revocation list updates has to be balanced against the time required for revocations to propagate through the system.
+
+8
+
+6 Alternative Versions of Says
+The deﬁnition of says given above seems natural, but some applications may want a version of says that behaves diﬀerently. These applications are free to deﬁne and use the primitives they want. We now give two examples of alternate deﬁnitions of says.
+6.1 Says without prin()
+Some users may ﬁnd it more natural to reason about a world where rules like says taut and says imp e hold for all principals. This can be achieved by deﬁning a new operator:
+A saysp F ≡ F ∨ (prin(A) ∧ A(F )).
+Two lemmas follow:
+F A saysp F
+A saysp F A saysp (F → G) A saysp G
+We can then proceed to deﬁne new versions of the other operators such as controls, and to prove the corresponding lemmas.
+6.2 Says without Delegation
+Our ﬁrst deﬁnition of says allows any principal to delegate any rights it may have. Some applications may not like this, so we may want to deﬁne a version of says that does not allow arbitrary delegation. To do this, we deﬁne a “says directly” operator:
+A saysdir F ≡ ∃K.((A = N (K))∧(K signed F )).
+Now if B says ((A saysdir F ) → F ), B has delegated to A all of B’s rights to F , but A cannot delegate these rights further, since the only way A can exercise these rights is to directly sign a request to use them.
+We can deﬁne a “says with optional delegation” operator:
+A saysoptD F ≡ (A saysdir F )∨(D∧(A says F )).
+
+Now A can delegate its rights to B:
+A says ((B saysoptD F ) → F )
+and B can delegate these rights to third parties if and only if D is true.
+There are many variants of says, and our system allows each application to deﬁne and use the variant that best suits its needs.
+7 Encoding Other Authentication Frameworks
+Our system is general enough to encode other distributed authentication frameworks. We encode a framework by expressing its primitives in a set of deﬁnitions, and then proving the framework’s processing rules as lemmas. By providing a single language in which the semantics of several frameworks can be expressed, we provide a way for those frameworks to interoperate with users of our system.
+By describing diﬀerent frameworks in a single logic, we provide a way for those frameworks to interoperate in a principled way. For example, if the semantics of SPKI certiﬁcates and Taos certiﬁcates are clearly speciﬁed in our logic, then certiﬁcates from both frameworks can be used together in the same proof, as long as the requester can show they satisfy the server’s requirements.
+Interoperability has another advantage: it facilitates the deployment of new frameworks. If frameworks can interoperate, then a new framework does not need near-universal deployment in order to attract users. A new framework can be used by a few people at ﬁrst, while those people exploit interoperation to work with the rest of the world.
+7.1 SPKI
+As an example, we now describe how to encode the SPKI [4] framework. Certiﬁcates are the main data structure in SPKI; a certiﬁcate can encode a name-to-key binding or a name-toprivileges binding.
+The SPKI speciﬁcation describes how every certiﬁcate can be translated into a 5-tuple data
+
+9
+
+structure, and it gives rules for combining 5tuples to deduce new 5-tuples, and for deciding whether a particular 5-tuple is suﬃcient evidence to allow access to a resource. In the 5tuple (I, S, D, T, V )
+I is the key that issued the certiﬁcate;
+S is the subject of the certiﬁcate, which could be a key, a name, or a group;
+D is a delegation ﬂag, saying whether the rights associated with the certiﬁcate may be delegated;
+T is a tag, a data structure that describes a request or set of requests; and
+V says when the certiﬁcate is valid, giving a not-valid-before and a not-valid-after time.
+Space does not permit a full description of SPKI semantics; see the SPKI documents [4] for full details.
+Encoding SPKI To encode SPKI, we encode the 5-tuple data structure and the rules for manipulating 5-tuples. Since converting certiﬁcates to 5-tuples is a straightforward (though tedious) translation process, we could also encode this conversion in our logic.
+In practice, one would want to model the SPKI data structures in great detail, for example, by expressing the tag-matching rules in logic. We simplify the model here for brevity.
+We give the following deﬁnition:
+tuple(I, S, D, T, V ) ≡ V → I says (∀x.((S saysoptD ok(x)) → T (x) → ok(x))).
+Here I is the issuing principal; S is the subject principal, which might be a group; D is the delegation ﬂag; the tag T is represented as a predicate on strings (a predicate which admits any string iﬀ that string will successfully match the tag); and the validity interval is represented as a simple predicate V . ok(x) represents the assertion the the operation speciﬁed by x should
+
+be permitted; we encode it as the placeholder ok(x) ≡ (N (ok)|N (x)) says false.
+Now we can prove SPKI’s rules for manipulating 5-tuples as lemmas. To give a simple example, we can prove
+prin(I) prin(J) tuple(I, J, true, A, V ) tuple(J, S, D, A, V )
+tuple(I, S, D, A, V )
+We could also go about proving the other rules for reasoning about 5-tuples, including a rule for extracting a useful result from a SPKI chain:
+J signed ok(X) prin(I) V T (X) tuple(I, N (J), D, T, V ) ok(X )
+Having done this, we could conclude that any client who could have gotten approval for operation X on server I in SPKI will be able to prove I says ok(X). SPKI provides a way to deﬁne local access policies such as
+ok(tag (pkpfs /foo read)) → read /foo
+Although we have not yet done so, we believe that other distributed authentication frameworks could be encoded in a similar way.
+8 Implementation
+Proofs must be produced by the client requesting services and checked by the server, so there must be a machine-readable and -checkable notation for theorem and proof. We use a higher-order logic implemented in Twelf [13], an implementation of the Edinburgh Logical Framework [5]. Research in proof-carrying code [11] has shown that the Logical Framework (LF) is an excellent notation for explicit proofs that are to be transmitted and then checked with a minimal trusted computing base. The algorithm for checking LF proofs is as simple as programming-language type checking, and in fact the Touchstone system for proof-carrying code [11] includes a simple proof-checker written in the C programming language.
+An earlier version of our system was implemented in λProlog instead of Twelf, using
+
+10
+
+controls_e: pf (controls @ A @ F) -> pf (A @ F) -> pf F. keybind_e: pf (keybind @ K @ W) -> pf (digital_signature S K F) -> pf (W @ F). trusted_ca_e: pf (trusted_ca @ Ca) -> pf (controls @ Ca @ (keybind @ K @ A)).
+abc: pf (trusted_ca @ Charlie) -> pf (keybind @ Kc @ Charlie) -> pf (controls @ Alice @ ReadFoo) -> pf (digital_signature B10010111 Ka ReadFoo) -> pf (digital_signature B01001110 Kc (keybind @ Ka @ Alice)) ->
+pf ReadFoo =
+[A1][A2][A3][S1][S2] controls_e A3 (keybind_e (controls_e (trusted_ca_e A1) (keybind_e A2 S2)) S1).
+
+Figure 4: Twelf representation of “read foo” theorem and its proof.
+
+higher-order logic with lemmas and deﬁnitions as described by Appel and Felty [2].
+8.1 Proof representation
+Figure 4 shows the Twelf code that implements the theorem that Alice proves to Bob in the example of Section 2.1. The ﬁrst three clauses are the statements of the supporting lemmas; here we have omitted their proofs.
+The name of the theorem, abc, is followed by a statement of the theorem: given proofs of the ﬁve premises, we get a proof of ReadFoo.
+After the = sign comes the proof of the theorem. The variables [A1][A2][A3][S1][S2] stand for the ﬁve premises; the square brackets indicate that they are formal parameters of the proof, and the body of the proof may refer to them by name. We have chosen the name A1,A2,A3 for the ﬁrst three premises to correspond to the names used in Section 2.1. The variables S1,S2 stand for the two digitalsignature premises.
+The last line shows the proof tree, written out in Twelf notation. It is the same tree shown in Figure 2, but in a form more suited to machine processing.
+Another illustration is the controls e lemma (Figure 5). The ﬁrst line declares the type of the name controls, as a predicate, i.e. a function taking a worldview and a formula and returning a formula. Next, it deﬁnes the
+
+name controls to stand for the (higher-order) formula λaλf. (a f ) → f . We have made functions (λ) explicit in our logic using the lam operator, and function-application explicit using the @ operator.
+The controls_e lemma states that, given a proof that A controls F , and a proof that A says F , we can construct a proof of F . The proof ﬁrst uses another lemma, def2_e, to expand the deﬁnition of controls in the premise P1; then the implication-elimination rule imp_e to complete the proof.
+The Twelf notation will allow the recipient of a proof (and associated lemmas) to check the validity of each lemma, and then to use the lemma in checking the proof of the main theorem (and of other lemmas).
+8.2 Measurements
+The implementation of our logic in Twelf is quite concise. Such a checker could be used as the core of a distributed authentication system. The logical inference rules are speciﬁed in 46 lines, excluding rules for arithmetic, which can be speciﬁed in another dozen or so.
+The Twelf proof-checker itself [13] is implemented in Standard ML [8]: the parser is 2549 lines of commented code, and the proofchecking algorithm is 1540 lines. The parser need not be considered part of the trusted computing base, since a broken parser cannot
+
+11
+
+controls: tm (worldview arrow form arrow form) = lam[A] lam[F] (A @ F) imp F. controls_e: pf (controls @ A @ F) -> pf (A @ F) -> pf F = [P1][P2] imp_e (def2_e P1) P2.
+
+Figure 5: Representation of controls and controls e.
+
+cause an invalid proof to be accepted by the
+
+checker. Necula [11] has also implemented an
+
+LF proof-checker; its current size is about 2000
+
+lines of commented C code [7].
+
+Clients who want to generate proofs will
+
+need application-speciﬁc deﬁnitions and lem-
+
+mas, which might amount to several hundred
+
+lines of Twelf, but this will be outside the
+
+trusted computing base – the lemmas can be in-
+
+dependently checked by the recipients of proofs.
+
+Proofs are really just s-expressions extended
+
+with a primitive notion of binding; that is, trees
+
+whose operators are names of inference rules
+
+and lemmas. Each use of a lemma with n
+
+arguments should add approximately n words
+
+to the size of the proof, and each statement-
+
+and-proof of a lemma should add a number of
+
+words proportional to the size of the lemma and
+
+its proof. A good approximation to the size,
+
+in words, of the representation of a proof is
+
+the number of non-punctuation tokens in the
+
+fully explicit form of its Twelf syntax. We
+
+can measure the size of the proof illustrated in
+
+Figure 1:
+
+Concept Deﬁnition Lemma Proof
+
+controls 21 29 33
+
+keybind 20 39 42
+
+trustedCA
+
+32
+
+15 33
+
+Main theorem
+
+84 123
+
+Since Bob’s security database contains state-
+
+ments of the form trustedCA(Charlie), he
+
+presumably also has copies of the relevent def-
+
+initions, lemmas, and proofs. Thus, Alice can
+
+simply send a 84-word theorem and 123-word
+
+proof to justify read foo. But if other lemmas
+
+turn out to be helpful in structuring the proof,
+
+they can be represented in a very reasonable
+
+size, as the table shows. These numbers are
+
+gross overestimates of what can be achieved
+
+in practice; Necula [10] has shown methods
+
+of reducing the redundancy in LF proofs and cutting their size by large factors.
+Some servers – such as programmable disk controllers or active-network routers – are so specialized that they will not even want to have a full proof checker. In this case, they can rely on certiﬁcates. Suppose Doris the disk controller trusts Bob to check proofs for her; she can rely on the single inference rule
+
+Kb
+
+signed
+
+(Doris F
+
+says
+
+F)
+
+trust
+
+bob
+
+Now if Alice wants service format disk from Doris, she can submit a proof of (Doris says format disk ) to Bob, who will check it and issue the certiﬁcate.
+Bob should not sign time-dependent statements such as now(bob.com) = 1998 which can become false. He can avoid this by not putting any such assumptions into his database while checking proofs of statements that he is being asked to sign.
+
+9 Conclusion
+Higher-order logic allows application-speciﬁc modal logics to be deﬁned and proved in a simple and general framework. The apparent disadvantage of such a logic — undecidability — can be overcome by submitting a proof with each authentication request, in the same way that proof-carrying code submits proofs of safety with programs.
+We have demonstrated that proofs can be small, that proof checking is simple to implement, and that existing authentication frameworks can be expressed as application-speciﬁc deﬁnitions and lemmas in our logic. Although proof generation is undecidable in general, we have shown by example that in cases of interest,
+
+12
+
+the requester will have a good idea why she should be able to access a resource.
+References
+[1] Martin Abadi, Michael Burrows, Butler Lampson, and Gordon D. Plotkin. A Calculus for Access Control in Distributed Systems. ACM Transactions on Programming Languages and Systems, 15(4):706–734, September 1993.
+[2] Andrew W. Appel and Amy Felty. Lightweight Lemmas in Lambda Prolog. In 16th International Conference on Logic Programming. MIT Press, November 1999.
+[3] Matt Blaze, Joan Feigenbaum, and Jack Lacy. Distributed Trust Management. In Proc. of 17th IEEE Symposium on Security and Privacy, pages 164–173, May 1996.
+[4] Carl M. Ellison, Bill Frantz, Butler Lampson, Ron Rivest, Brian M. Thomas, and Tatu Ylonen. Simple Public Key Certiﬁcate. Internet Draft draft-ietf-spki-cert-structure-05.txt, 1998.
+[5] Robert Harper, Furio Honsell, and Gordon Plotkin. A Framework for Deﬁning Logics. Journal of the ACM, January 1993. To appear. A preliminary version appeared in Symposium on Logic in Computer Science, pages 194–204, June 1987.
+[6] Butler Lampson, Martin Abadi, Michael Burrows, and Edward Wobber. Authentication in Distributed Systems: Theory and Practice. ACM Transactions on Computer Systems, 10(4):265–310, November 1992.
+[7] Peter Lee. personal communication, 1999.
+[8] Robin Milner, Mads Tofte, Robert Harper, and David MacQueen. The Deﬁnition of Standard ML (Revised). MIT Press, Cambridge, MA, 1997.
+[9] George C. Necula. Proof-Carrying Code. In Procedings of the 24th Annual ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages (POPL ’97), pages 106–119, January 1997.
+[10] George C. Necula and Peter Lee. Eﬃcient Representation and Validation of Proofs. In In Proceedings of the 13th Annual Symposium on Logic in Computer Science, 1998.
+
+[11] George Ciprian Necula. Compiling with Proofs. PhD thesis, School of Computer Science, Carnegie Mellon University, Pittsburgh, PA, September 1998.
+[12] B. Cliﬀord Neuman and Theodore Ts’o. Kerberos: An Authentication Service for Computer Networks. IEEE Communications, 32(9):33–38, September 1994.
+[13] Frank Pfenning and Carsten Schu¨rmann. System Description: Twelf — A Meta-Logical Framework for Deductive Systems. In The 16th International Conference on Automated Deduction. Springer-Verlag, July 1999.
+[14] Ron Rivest and Butler Lampson. SDSI – A Simple Distributed Security Infrastructure. September 1996.
+[15] International Telecommunications Union. ITUT Recommendation X.509: The Directory: Authentication Framework. Technical Report X.509, ITU, www.itu.int, 1997.
+
+13
+
+

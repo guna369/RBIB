@@ -1,0 +1,1160 @@
+Deciding knowledge in security protocols under (many more) equational theories
+Mart´ın Abadi Computer Science Department, University of California at Santa Cruz, USA
+Ve´ronique Cortier Loria, INRIA & CNRS, Nancy, France
+
+Abstract
+In the analysis of security protocols, the knowledge of attackers is often described in terms of message deducibility and indistinguishability relations. In this paper, we pursue the study of these two relations. We establish general decidability theorems for both. These theorems require only loose, abstract conditions on the equational theory for messages. They subsume previous results for a syntactically deﬁned class of theories that allows basic equations for functions such as encryption, decryption, and digital signatures. They also apply to many other useful theories, for example with blind digital signatures, homomorphic encryption, XOR, and other associative-commutative functions.
+1 Introduction
+The design and analysis of security protocols typically relies on reasoning about the knowledge of honest protocol participants and attackers. In formal approaches, two main kinds of deﬁnitions have been given for this knowledge.
+• Many formal methods deﬁne knowledge in terms of deduction (e.g., [12, 16, 17, 20]). Given some messages φ and another message M , one asks whether M can be computed (“deduced”) from φ. For example, whether an attacker can obtain a session key from a set of messages and some prior knowledge can be cast as a deduction problem.
+• Some formal methods complement deduction with an indistinguishability equivalence relation (e.g., [2, 3]). Indistinguishability is also prominent in computational approaches to cryptography (e.g., [11, 15]). Given two lists of messages φ and ψ, one asks whether they can be distinguished. For example, φ and ψ may be transcripts of the messages for two sessions of a
+
+protocol, each with a different value for a parameter, and then the equivalence would express that the value of this parameter is not revealed by session transcripts. The choice of this value may remain secret even though an attacker may be able to compute every possible value for the parameter—as would be the case if the parameter is a boolean or a password drawn from a small dictionary.
+In both cases, messages are represented by formal expressions, and correspondingly the computations allowed are “black-box” symbolic manipulations on those expressions. These symbolic manipulations are sometimes as powerful as probabilistic polynomial-time computations on bitstrings (e.g., [4]). In both cases, too, the deﬁnitions concern observations on messages at a particular point in time. Accordingly, the equivalence relation is sometimes called static equivalence, and the deduction relation should perhaps be called static deduction. Despite the static character of these relations, they are useful in analyzing the dynamics of protocols and attacks. In particular, proof methods for safety properties often rely on deduction, and process equivalences can be reduced to static equivalences plus standard bisimulation conditions.
+In this paper we pursue the study of deduction and static equivalence. Both of these relations depend on the underlying equational theory that governs the function symbols that appear in expressions, in particular function symbols that represent cryptographic operations. Our goal is to obtain characterizations and decidability results that hold for a wide class of equational theories. We aim to support the standard uses of function symbols for representing encryption, digital signatures, and the like. We also aim to allow some elaborate features of particular schemes, such as blinding for digital signatures. Finally, we aim to support associativity and commutativity properties, in particular for the XOR (exclusive or) operation.
+Several of the equational theories that we treat are important in applications. Therefore, deduction and (to a lesser
+
+1
+
+extent) static equivalence under some of these theories have already played a role in the context of various frameworks and tools for protocol analysis (e.g., [2, 20]). However, usually, special techniques are developed for each particular case.
+Only a few general decidability results appear in the literature. In a recent paper [1], we have shown that deduction and static equivalence are decidable in PTIME for a syntactically deﬁned class of equational theories, the convergent subterm theories. These theories allow basic equations for functions such as encryption, decryption, and digital signatures. Noting that deduction and static equivalence are undecidable for some other equational theories, we have also shown that static equivalence can be undecidable even when deduction is not. Comon-Lundh and Treinen [9] have studied the decidability of deduction for a class of equational theories incomparable with ours. Their work, and all the work cited below, considers only deduction and not static equivalence unless otherwise noted. Delaune and Jacquemard [10] have shown that deduction is decidable for a subclass of convergent subterm theories, also considering active attacks. (Section 6 mentions other, ongoing related work that addresses active attackers.) None of these previous results allows associativity and commutativity properties. In fact, even results on speciﬁc theories with AC (associative-commutative) functions are rare. Three important exceptions are decidability results for deduction with XOR [6, 8], in an Abelian group [8], and under certain “AClike” theories with homomorphisms [14].
+Thus, prior work typically relies on syntactic restrictions on equational theories, focusing on one particular theory at a time or on syntactically deﬁned classes of theories. In this paper, we adopt a different perspective: we assume only loose, abstract conditions on the underlying equational theories. In this respect, we are inspired by Comon-Lundh’s current investigations [7] (discussed further in Section 6).
+Under those assumptions, we establish general decidability theorems for both deduction and static equivalence. These theorems subsume the previous ones for convergent subterm theories. They also apply to many other useful theories, for example with blind digital signatures, homomorphic encryption, XOR, and other AC functions. Several of the decidability results that we obtain are new.
+Checking that a particular theory satisﬁes the hypotheses of our theorems may involve some work, though often less than direct proofs of decidability. In some cases, it may also involve some (fairly elementary and pleasant) mathematics, such as facts on Z-modules. We expect that some of the techniques that we employ in our examples may be reused in the study of other theories.
+The next section, Section 2, introduces notations and deﬁnitions. In Section 3, we present the hypotheses of our theorems. We give some examples of theories that satisfy
+
+these hypotheses in Section 4. We prove the theorems in Section 5. Finally, we conclude in Section 6.
+
+2 Basic deﬁnitions
+
+Next we review deﬁnitions from previous work, particularly from the applied pi calculus [2]. Much of the material in this section is borrowed or adapted from previous work. In Section 2.1 we give the syntax of expressions. In Section 2.2 we explain a representation for the information available to an observer who has seen messages exchanged in the course of a protocol execution. In Sections 2.3 and 2.4 we present the relations and ≈s, which provide the two formalizations of the knowledge that the observer has on the basis of that information.
+
+2.1 Syntax
+
+A signature Σ consists of a ﬁnite set of function symbols, such as enc and pair, each with an arity. Let ar(Σ) be the maximal arity of a function symbol in Σ. A function symbol with arity 0 is a constant symbol.
+Given a signature Σ, an inﬁnite set of names N , and an inﬁnite set of variables, the set of terms is deﬁned by the
+grammar:
+
+L, M, N, T, U, V ::= k, . . . , n, . . . , s x, y, z f (M1, . . . , Ml)
+
+terms name variable function application
+
+where f ranges over the function symbols of Σ and l
+
+matches the arity of f . Although names, variables, and con-
+
+stant symbols have similarities, we ﬁnd it clearer to keep
+
+them separate. A term is closed when it does not have
+
+free variables (but it may contain names and constant sym-
+
+bols). We write fn(M ) for the set of names that occur in the
+
+term M . We use meta-variables u, v, w to range over names
+
+and variables. The size |T | of a term T is deﬁned by |u| = 1
+
+and |f (T1, . . . , Tl)| = 1 +
+
+l i=1
+
+|Ti|.
+
+We
+
+write
+
+st(T ) for
+
+the set of subterms of T .
+
+We equip the signature Σ with an equational theory E,
+
+that is, an equivalence relation on terms that is closed un-
+
+der substitutions of terms for variables or names and closed
+
+under application of contexts. We write M =E N when M and N are closed terms and the equation M = N is
+
+in E. We use the symbol == to denote syntactic equality
+
+of closed terms. As in these deﬁnitions, we often focus on
+
+closed terms for simplicity.
+
+2.2 Assembling terms into frames
+
+After a protocol execution, an attacker may know a sequence of messages M1, . . . , Ml. This means that it knows
+
+each message but it also knows in which order it received the messages. So it is not enough for us to say that the attacker knows the set of terms {M1, . . . , Ml}. Furthermore, we should distinguish the names that the attacker had before the execution from those that were freshly generated and which may remain secret from the attacker; both kinds of names may appear in the terms.
+Such a sequence of messages can be organized into a frame νnσ, where n is a ﬁnite set of names (intuitively, the fresh names), and σ is a substitution of the form:
+
+{M1/x1 , . . . ,Ml /xl } with dom(σ) =def {x1, . . . , xl}
+
+The variables enable us to refer to each Mi, for example
+
+for keeping track of their order of transmission. We always
+
+assume that the terms Mi are closed. The size of a frame
+
+φ = νn{M1/x1 , . . . ,Ml /xl } is |φ| =def
+
+l i=1
+
+|Mi|.
+
+The set
+
+fn(φ) of free names of φ consists of the free names of the
+
+Mi that are not in n.
+
+2.3 Deduction
+
+Given a frame φ that represents the information available to an attacker, we may ask whether a given closed term M may be deduced from φ. This relation is written φ M
+(following Schneider [20]). It is axiomatized by the rules:
+
+if ∃x ∈ dom(σ) νnσ M s.t. xσ = M
+
+s∈n νnσ s
+
+φ M1 · · · φ Mk f ∈ Σ φ f (M1, . . . , Mk)
+
+φ M M =E M φM
+
+Intuitively, the deducible messages are the terms of φ and the names that are not protected in φ, closed by equality in E and closed by application of functions.
+We have the following characterization of deduction [1]:
+
+Proposition 1 Let M be a closed term and νnσ be a frame. Then νnσ M if and only if there exists a term ζ such that fn(ζ) ∩ n = ∅ and ζσ =E M .
+
+Example 1 As a ﬁrst example, we consider the theory of an encryption scheme that has an homomorphism property. This property is simply that the encryption of a pair is the pair of the encryptions; the literature (e.g., [18]) suggests other homomorphism properties. This property is modeled by the equation:
+
+enc( x, y , z) = enc(x, z), enc(y, z)
+
+We also assume an analogous equation for decryption:
+
+dec( x, y , z) = dec(x, z), dec(y, z)
+
+As usual, we write x, y instead of pair(x, y). The signature Σ1 is {pair, enc, fst, snd, dec}, and the theory E1 is deﬁned by the axioms:
+enc( x, y , z) = enc(x, z), enc(y, z) dec( x, y , z) = dec(x, z), dec(y, z)
+fst( x, y ) = x snd( x, y ) = y dec(enc(x, y), y) = x
+Suppose for example that the attacker listens to two messages: enc( n1, n2 , k) and enc(n3, enc(n1, k)). Since enc( n1, n2 , k) =E1 enc(n1, k), enc(n2, k) , the corresponding frame can be written
+φ1 = ν(n1, n2, n3, k) { enc(n1, k), enc(n2, k) /x1, enc(n3, enc(n1, k))/x2}
+Then φ1 enc(n1, k), φ1 enc(n2, k), and φ1 n3. Furthermore, enc(n1, k) =E1 fst(x1)φ, enc(n2, k) =E1 snd(x1)φ, and n3 =E1 dec(x2, fst(x1))φ.
+2.4 Static equivalence
+Given two frames φ and ψ that represent the information available to an attacker in two “possible worlds” (e.g., two different runs of a protocol), we may ask whether the attacker may distinguish φ and ψ, more precisely whether the attacker may differentiate φ and ψ by applying them (roughly) as substitutions and obtaining observably different results. This scenario motivates the following deﬁnitions.
+We say that two terms M and N are equal in the frame ϕ for the equational theory E, and write (M =E N )ϕ, if and only if ϕ = νnσ, M σ =E N σ, and {n} ∩ (fn(M ) ∪ fn(N )) = ∅ for some names n and substitution σ. Then we say that two frames ϕ and ψ are statically equivalent, and write ϕ ≈s ψ, when dom(ϕ) = dom(ψ) and when, for all terms M and N , we have (M =E N )ϕ if and only if (M =E N )ψ.
+Example 2 Let φ1 =def νk{k/y, enc(n1, k)/z} and φ2 =def νk{k/y, enc(n2, k)/z}, where k, n1, and n2 are distinct names. Using the equation dec(enc(x, y), y) = x, the attacker can tell the difference between these two frames by checking whether the decryption of z with y produces n1. In other words, we have (dec(z, y) =E1 n1)φ1 but not (dec(z, y) =E1 n1)φ2. Therefore, φ1 ≈s φ2.
+Example 3 Let φ1 =def νn{M/x1, M/x2, N/x3} and φ2 =def νn{M/x1, N/x2, M/x3}. In general, these frames are not statically equivalent, since x1 and x2 are always equal in the frame φ1 but not in the frame φ2. On the other hand, the
+
+same terms can be deduced from these two frames. As this example illustrates, the association of terms with variables affects static equivalence but not deduction.
+3 The hypotheses
+We establish decidability results for equational theories that satisfy three properties. The purpose of this section is to deﬁne and start to explain these three properties; Section 4 explains them further through examples.
+3.1 AC-convergence
+Our ﬁrst hypothesis is an adaptation of the standard notion of convergence for theories with AC symbols.
+Let E an equational theory, and let ⊕1, . . . , ⊕k be the binary functional symbols such that the equations x⊕i (y ⊕i z) = (x ⊕i y) ⊕i z (associativity) and x ⊕i y = y ⊕i x (commutativity) are in E.
+For two terms U and V , we write U =AC V if U and V are equal in the theory induced by the equations x ⊕i (y ⊕i z) = (x⊕i y)⊕i z and x⊕i y = y ⊕i x for 1 ≤ i ≤ k. When this theory is empty (because we have no AC symbols), =AC is simply syntactic equality.
+When R is a rewriting system, we write U →AC V if there exists W such that U =AC W and W → V . The relation →∗AC denotes the reﬂexive and transitive closure of →AC.
+Deﬁnition 1 (AC-convergent) An equational theory E is AC-convergent if there exists a ﬁnite rewriting system R such that:
+• R is AC-terminating, that is, for every closed term U , there is no inﬁnite sequence U →AC U1 →AC · · · Uk →AC · · · . For every term U , the set of normal forms U↓ (closed modulo AC) of U is the set of terms V such that U →∗AC V and V has no successor for →AC.
+• R is AC-conﬂuent, that is, for every closed terms U , U1, and U2 such that U →AC U1 and U →AC U2, there exist V1 and V2 such that U1 →∗AC V1, U2 →∗AC V2, and V1 =AC V2.
+• For all closed terms U and V , the equality U =E V holds if and only if there exists a term T ∈ (U↓ ∩ V ↓).
+By AC-convergence, the set U↓ is always ﬁnite and for all V, W ∈ U↓, the equality V =AC W holds. AC-convergence immediately implies the decidability of equations on closed terms.
+In what follows, E is an AC-convergent equational theory and R is a rewriting system associated with E that satisﬁes the conditions of Deﬁnition 1. If R consists of a ﬁnite
+
+set of rules
+
+k i=1
+
+{Mi
+
+→
+
+Ni},
+
+the
+
+size
+
+cE
+
+of
+
+the
+
+theory
+
+E
+
+is deﬁned as cE = max1≤i≤k(|Mi|, |Ni|, ar(Σ) + 1). As a
+
+special case, cE = ar(Σ) + 1 when R is empty.
+
+Note that E need not have AC symbols. A theory de-
+
+ﬁned by a convergent rewriting system without AC symbol
+
+is of course an AC-convergent theory. In that case, we may
+
+simply say that the theory is convergent.
+
+Example 4 Let us consider again the theory E1 of an encryption scheme with a homomorphism property. We consider the rewriting system R1 obtained from E1 by orienting the equations from left to right. With this choice of R1, the theory E1 is convergent. Indeed, the only critical pair is joinable.
+dec(enc( x1, x2 , y), y)
+
+x1, x2
+
+dec( enc(x1, y), enc(x2, y) , y)
+
+dec(enc(x1, y), y), dec(enc(x2, y), y)
+
+x1, dec(enc(x2, y), y)
+
+Example 5 The theory of XOR is also AC-convergent. The
+
+XOR operator is represented by the ⊕ function symbol, with
+
+the following properties:
+
+⎧⎫
+
+E2
+
+⎪⎪⎨ = ⎪⎪⎩
+
+x ⊕ (y ⊕ z) x⊕y x⊕x x⊕0
+
+= = = =
+
+(x ⊕ y) ⊕ z y⊕x
+
+⎪⎪⎬
+
+0 x
+
+⎪⎪⎭
+
+where 0 is a constant symbol and the signature Σ2 is {0, ⊕}. We associate to E2 the rewriting system R2:
+
+R2 =
+
+x⊕x → 0 x⊕0 → x
+
+Using this choice of R2, it is easy to verify that E2 is ACconvergent.
+
+3.2 Local stability
+
+Our second hypothesis roughly says that, for every
+frame, there is a ﬁnite set of terms deducible from the frame
+that satisﬁes certain closure conditions. Stating this hy-
+potheses precisely requires a few auxiliary deﬁnitions and
+notations. Assume that there exists some rule M0 → N0 of the
+rewriting system R and some substitution θ such that either there exists a term U1 such that U =AC U1, U1 = M0θ, and V = N0θ, or there exist terms U1 and U2 such that U =AC U1 ⊕ U2 for some AC symbol ⊕, U1 = M0θ, and V =AC N0θ ⊕ U2. Then we say that the reduction U → V occurs in head, and we write U →h V .
+
+We write α ·⊕ M for the term M ⊕ · · · ⊕ M , α times (for α ∈ N∗). We simply write αM when the AC symbol is clear from the context. Given a set of terms S and a set of names n, we write sum⊕(S, n) for the set of arbitrary sums of terms of S and other names, closed modulo AC-
+rewriting:
+
+⎧sum⊕(S, n) =def ⎨ (α1 ·⊕ T1) ⊕ · · · ⊕ (αn ·⊕ Tn)
+
+⎩
+
+⊕ (β1 ·⊕ n1) ⊕ · · · ⊕ (βk ·⊕ nk)
+
+αi, βi
+
+∈ N∗,
+
+⎫ ⎬
+
+ni ∈/ n, Ti ∈ S
+
+⎭
+
+Typically, the names in n will be private, and the others public. Then we deﬁne sum(S, n) as the union of the sum⊕(S, n) for any AC symbol ⊕ of the theory.
+In our previous paper [1], the main step of the proof of the decidability of and ≈s for convergent subterm theories was the existence, for each frame φ, of a set sat(φ) stable
+by application of “small” contexts. We generalize this con-
+dition by requiring that the application of a rewriting rule to a “small” context C applied to arbitrary sums of terms in sat(φ) is again a “small” context C applied to sums of terms in sat(φ). The deﬁnition of “small” is partly arbitrary; we bound the size of C by cE and the size of C by cE2, but other ﬁnite size bounds may be suitable.
+
+Deﬁnition 2 (locally stable) An AC-convergent equational theory E is locally stable if, for every frame φ = νn{M1/x1, . . . , Mk/xk}, where the terms Mi are closed and in normal form, there exists a ﬁnite (computable) set sat(φ), closed modulo AC, such that
+1. for every 1 ≤ i ≤ k, Mi ∈ sat(φ), and for every n ∈ fn(φ), n ∈ sat(φ),
+2. if M1, . . . , Mk ∈ sat(φ) and f (M1, . . . , Mk) ∈ st(sat(φ)), then f (M1, . . . , Mk) ∈ sat(φ),
+3. if C[S1, . . . , Sl] →h M , where C is a context such that |C| ≤ cE and fn(C) ∩ n = ∅, and where S1, . . . , Sl ∈ sum⊕(sat(φ), n) for some AC symbol ⊕ (or Si ∈ sat(φ) if there is no AC symbol), then there exist a context C , a term M , and S1, . . . , Sk ∈ sum⊕(sat(φ), n) (or S1, . . . , Sk ∈ sat(φ) if there is no AC symbol), such that |C | ≤ c2E, fn(C ) ∩ n = ∅, and M →∗AC M =AC C [S1, . . . , Sk],
+4. if M ∈ sat(φ) then φ M .
+
+The set sat(φ) need not be unique, nor minimal. Any set that satisﬁes the four conditions is adequate for our present purposes.
+
+Example 6 For the equational theory E1 of Example 1, given a frame φ in normal form, the set sat(φ) is simply
+
+obtained by adding subterms of φ deducible from φ. For example, the deducible subterms of the frame φ1 of Example 1 are enc(n1, k), enc(n2, k), and n3, so sat(φ1) is the set
+{ enc(n1, k), enc(n2, k) , enc(n3, enc(n1, k)), enc(n1, k), enc(n2, k), n3}
+In Section 4.2 we prove that this construction satisﬁes the requirements.
+In general, establishing that an equational theory is locally stable may be difﬁcult. We give other examples of locally stable theories in Section 4.
+3.3 Local ﬁniteness and local decidability
+For our third hypothesis, we consider a certain set of “small” equations that a frame satisﬁes. One of our results says that this set characterizes the frame. The third hypothesis, which this section presents, pertains to deciding whether another frame satisﬁes this set. In fact, this section discusses two versions of the third hypothesis, called local ﬁniteness and local decidability. Either is sufﬁcient for our purposes; the former has been more attractive in applications; the latter is more general. As the use of equations may suggest, we rely on the third hypothesis in the study of static equivalence but not deduction.
+For each frame φ = νnσ, we assume a ﬁxed set of terms R(φ) = {ζM | M ∈ sat(φ)} such that for each ζM , fn(ζM ) ∩ n = ∅ and ζM σ =E M . Intuitively, the term ζM explains how M may be obtained from the terms of φ. Since all the terms of sat(φ) are deducible, such a set exists by Proposition 1. For instance, for Example 6, the terms associated with enc(n1, k), enc(n2, k), and n3 are respectively ζenc(n1,k) = fst(x1), ζenc(n2,k) = snd(x1), and ζn3 = dec(x2, fst(x1)).
+With each frame φ, we associate a set of “small” equations Eq(φ) such that two frames are equivalent if and only if they satisfy the equations of each other’s set (see Proposition 7).
+Deﬁnition 3 Let φ = νnσ be a frame in normal form. The set Eq(φ) is the set of equations of the form
+C1[χ1, . . . , χk] = C2[χ1, . . . , χl]
+where (C1[χ1, . . . , χk] =E C2[χ1, . . . , χl])φ, (fn(C1) ∪ fn(C2)) ∩ n = ∅, |C1| ≤ cE, |C2| ≤ c2E, and the χi and χi are in the set sum⊕(R(φ), n) for some AC symbol ⊕ (or χi and χi are in R(φ) if there is no AC symbol).
+When φ and ψ are frames and (M =E N )ψ for every (M = N ) ∈ Eq(φ), we say that ψ satisﬁes the equations of Eq(φ), and write ψ |= Eq(φ).
+
+Deﬁnition 4 (locally decidable) A locally stable equational theory is locally decidable if the question of whether ψ |= Eq(φ), for frames φ and ψ, is decidable.
+The set Eq(φ) may in general be inﬁnite since the χi may be of arbitrary size. Local ﬁniteness means that the set Eq(φ) is always equivalent to a ﬁnite set of equations.
+Deﬁnition 5 (locally ﬁnite) A locally stable equational theory is locally ﬁnite if, for every frame φ, there exists a ﬁnite (computable) set of equations Eq (φ) such that, for every frame ψ:
+ψ |= Eq(φ) if and only if ψ |= Eq (φ)
+This property sufﬁces for local decidability:
+Proposition 2 Every locally ﬁnite equational theory is locally decidable.
+Local ﬁniteness is always true when there are no AC symbols since then the set Eq(φ) contains only ﬁnitely many equations up to renaming:
+Proposition 3 Let E be a locally stable equational theory with no AC symbols. Then, for any frame φ, there exists a ﬁnite set of equations Eq (φ) such that for every frame ψ, we have ψ |= Eq(φ) if and only if ψ |= Eq (φ). In other words, E is locally ﬁnite.
+Each equation of Eq(φ) is of the form C1[χ1, . . . , χk] = C2[χ1, . . . , χl] with χi, χi in R(φ). Thus it contains a ﬁnite number of names (bounded by cE + c2E). The set Eq (φ) is obtained from Eq(φ) by renaming the names on a ﬁxed set of names.
+In Section 4 we present some non-trivial examples of locally ﬁnite theories with AC symbols. Establishing local ﬁniteness is our preferred way of proving local decidability for such theories. Here we show that at least an (inﬁnite) subset of Eq(φ) may always be replaced by a ﬁnite number of equations.
+Deﬁnition 6 Let φ = νnσ be a frame. Let N be a set of public names (that is, such that N ∩ n = ∅). We write Eq⊕(φ, N ) for the set of equations of the form χ1 = χ2 such that χ1, χ2 ∈ sum⊕(R(φ), n), fn(χ1) ∪ fn(χ2) ⊆ N , and (χ1 =E χ2)φ.
+Note that Eq⊕(φ, N ) is a subset of Eq(φ). We show that the set Eq⊕(φ, N ) may always be replaced by a ﬁnite number of equations if N is a ﬁnite set of public names.
+Proposition 4 Let φ = νnσ be a frame and N a ﬁnite set of names such that N ∩ n = ∅. There exists a ﬁnite set Eqb⊕(φ, N ) ⊆ Eq⊕(φ, N ), such that for every frame ψ:
+ψ |= Eq⊕(φ, N ) if and only if ψ |= Eqb⊕(φ, N )
+In addition, the cardinality of Eqb⊕(φ) is at most the cardinality of sat(φ) plus the cardinality of N .
+
+This proposition can be proved using elementary results on Z-modules. (Facts on Z-module may be found in [19], for example.) Assume that sat(φ) = {M1, . . . , Mk}, N = {n1, . . . , nl}, and let Γ ∈ Zk+l. For 1 ≤ i ≤ k + l, Γi denotes the ith coefﬁcient of Γ, and Γ denotes the equation:
+
+ΓiζMi ⊕
+
+Γini
+
+Γi >0,i≤k
+
+Γi >0,i>k
+
+= (−Γi)ζMi ⊕ (−Γi)ni
+
+Γi <0,i≤k
+
+Γi <0,i>k
+
+Let Eq⊕(φ, N ) = {Γ | Γ ∈ Zk+l, (Γ)φ}. It is easy to verify that for any frame ψ, ψ |= Eq⊕(φ, N ) if and only if ψ |= Eq⊕(φ, N ). It is also easy to verify (simplifying the equations) that Eq⊕(φ, N ) is a Z-submodule of Zk+l and thus can be generated by a ﬁnite number of vectors V1, . . . , Vr with r ≤ k + l. We deﬁne Eqb⊕(φ, N ) = {V1, . . . , Vr}. It is then easy to conclude that, for any frame ψ, ψ |= Eq⊕(φ, N ) if and only if ψ |= Eqb⊕(φ, N ).
+Example 7 Consider for example a pure AC theory with only one AC symbol + (and no other function symbol), and the frame
+
+φ2 = ν(n1, n2, n3) {3n1 + 2n2 + 4n3/x1, n2 + 3n3/x2, n1 + 2n3/x3, 3n2 + n3/x4}
+
+The set Eq(φ2) consists of the equations of the form α1x1 + α2x2+α3x3+α4x4+T = α1x1+α2x2+α3x3+α4x4+T with αi, αi ∈ N, and T and T sums of names distinct from n1, n2, and n3. By convention, if αi = 0 (resp. αi = 0) then the term αixi (resp. αixi) does not appear in the sum. Since the equation is true for φ2, we must have T = T , thus it is sufﬁcient to consider the equations of the form α1x1 + α2x2 + α3x3 + α4x4 = α1x1 + α2x2 + α3x3 + α4x4 with αi, αi ∈ N. Adopting the convention that a negative term αx (with α < 0) in an equation actually appears on
+the other side of the equation, it is sufﬁcient to consider the
+equations of the form α1x1 +α2x2 +α3x3 +α4x4 = 0, with αi, αi ∈ Z. For example, the equation 3x1 − 2x2 + x3 = 0 stands for the equation 3x1 + x3 = 2x2. Then, the set of vectors (α1, α2, α3, α4) such that the equation α1x1 + α2x2 + α3x3 + α4x4 = 0 holds for φ2 is exactly the set of vectors U of Z4 such that AU = 0 with
+⎛⎞ 3010
+A=⎝ 2 1 0 3 ⎠
+4321
+
+By using classical elementary operations on rows and
+
+columns, we ﬁnd that AU = 0 if and only if
+
+⎛⎞ 1
+
+U
+
+=
+
+λ ⎜⎜⎝
+
+1 −3
+
+⎟⎟⎠
+
+−1
+
+for λ ∈ Z. We deduce that the set of equations satisﬁed by
+φ2 is exactly the set of equations of the form: λx1 + λx2 = 3λx3 + λx4. Thus, in order to decide whether a frame ψ satisﬁes Eq(φ2), it is sufﬁcient to check whether ψ satisﬁes the single equation x1 + x2 = 3x3 + x4.
+
+4 Examples
+
+In this section, we give examples of locally stable and locally ﬁnite equational theories. In Section 5, we prove that local stability implies the decidability of deduction, and that local stability and local ﬁniteness imply the decidability of static equivalence.
+Several equational theories related to cryptographic operations are locally stable and locally ﬁnite. In particular, we prove that the convergent subterm theories of our previous work [1] are locally stable. We show that a theory of homomorphic encryption, a simple theory for addition, and a theory for blind signatures (which are not subterm theories) are also locally stable. These equational theories do not have AC symbols, so local ﬁniteness follows from Proposition 3. As examples of theories with AC symbols, we prove that the pure AC theory and a theory of the XOR operator are locally stable and locally ﬁnite. The proofs of these properties require only a few lines, and thus are much simpler than direct proofs of decidability. One can also show that the theory of Abelian groups is locally stable and locally ﬁnite, but in that case the proofs are quite tedious—probably more than direct proofs of the decidability of deduction and static equivalence.
+As the examples may suggest, proving local stability often requires a precise understanding of the cryptographic primitives represented by an equational theory. In particular, removing some equations need not always preserve local stability.
+4.1 Convergent subterm theories
+
+A convergent subterm theory is simply a theory deﬁned by a ﬁnite set of equations ki=1{Mi = Ni}, where Ni is either a subterm of Mi or a constant symbol, such that the rewriting system obtained by orienting the equations from
+left to right is convergent. We have proved [1] that both
+deduction and static equivalence are decidable in PTIME
+for convergent subterm theories.
+
+Destructor-constructor rules like those for pairing, encryption, and digital signatures may be expressed in convergent subterm theories:
+fst( x, y ) = x snd( x, y ) = y dec(enc(x, y), y) = x check(x, sign(x, sk(y)), pk(y)) = ok
+Convergent subterm theories also enable us to capture the theory of an inverse function:
+{I(I(x)) = x, I(x) × x = 1, x × I(x) = 1}
+Other usual equations (such as x × 1 = x, 1 × x = x, and I(1) = 1) may be added, provided the theory remains convergent.
+More examples may be found in our previous paper [1]. It is easy to verify that the deﬁnition of sat(φ) given there ﬁts our requirements for local stability.
+Proposition 5 Every convergent subterm theory is a locally ﬁnite theory.
+4.2 Homomorphism
+We consider again the equational theory E1 (deﬁned in Example 1), which represents an encryption scheme with a homomorphism property. The size of the theory is 7.
+Comon-Lundh and Treinen [9] have investigated a very similar equational theory. They showed that its deduction relation is decidable in PTIME. Here we show that E1 is locally stable, and it is obviously locally ﬁnite (since it has no AC symbol). These properties will imply that both deduction and static equivalence are decidable.
+Let φ = νn{M1/x1, . . . , Mk/xk} be any frame in normal form. We deﬁne sat(φ) to be the smallest set such that:
+1. for every 1 ≤ i ≤ k, Mi ∈ sat(φ), and for every n ∈ fn(φ), n ∈ sat(φ),
+2. if M1, . . . , Mk ∈ sat(φ) and f (M1, . . . , Mk) ∈ st(sat(φ)), then f (M1, . . . , Mk) ∈ sat(φ),
+3. if M1, M2 ∈ sat(φ) and dec(M1, M2) →h M and the rule dec(enc(x, y), y) → x has been applied, or fst(M1) →h M , or snd(M1) →h M , then M ∈ sat(φ).
+The set sat(φ) is ﬁnite since we add only subterms of terms of φ. It trivially satisﬁes conditions 1, 2, and 4 of Definition 2. Let us show that it satisﬁes condition 3. Let M1, . . . , Mk ∈ sat(φ) and assume that C[M1, . . . , Mk] →h M where |C| ≤ 7. The case where C is a single hole is covered by the fact that the terms are in normal form. The other cases are covered by rule 3 except in the following cases:
+
+• C = enc( , ), C = enc( , T ), or C = enc(T, ) where fn(T ) ∩ n = ∅ and |T | ≤ 5.
+– For enc(M1, M2) → M with M1, M2 ∈ sat(φ): In this case, M1 must be of the form M1 = M1, M2 and M = enc(M1, M2), enc(M2, M2) . By rule 3, we know that both M1 and M2 are in sat(φ) since fst(M1) → M1 and snd(M1) → M2. Thus M is a context over terms of sat(φ) where the context may be chosen as C = enc( , ), enc( , ) since |C | = 7 ≤ 72 = 49.
+– For enc(M1, T ) → M with M1 ∈ sat(φ), fn(T ) ∩ n = ∅, and |T | ≤ 5: We have similarly that M = enc(M1, T ), enc(M2, T ) with M1 and M2 in sat(φ). Thus M is a context over terms of sat(φ) where the context may be chosen as C = enc( , T ), enc( , T ) since |C | ≤ 5 + 2|T | ≤ 15 ≤ 72 = 49.
+– For enc(T, M2) → M with M2 ∈ sat(φ), fn(T ) ∩ n = ∅, and |T | ≤ 5: We must have T = T1, T2 with |T1| + |T2| ≤ 4. We obtain M = enc(T1, M2), enc(T2, M2) , so M is a context over terms of sat(φ) where the context may be chosen as C = enc(T1, ), enc(T2, ) since |C | ≤ 5 + |T1| + |T2| ≤ 9 ≤ 49.
+• C = dec( , ), C = dec( , T ), or C = dec(T, ) where fn(T ) ∩ n = ∅ and |T | ≤ 5, and the rule dec( x, y , z) → dec(x, z), dec(y, z) has been applied.
+These three cases are very similar to the three cases
+above.
+
+4.3 Addition
+
+We consider a simple theory for addition. Let Σ3 be any signature that contains 0, s, pred, and plus, with the equa-
+
+tions:
+
+⎧⎫ ⎨ plus(x, s(y)) = plus(s(x), y) ⎬
+
+E3 = ⎩
+
+plus(x, 0) = x pred(s(x)) = x
+
+⎭
+
+The size cE3 of this theory is at least 4 (and possibly higher if Σ3 contains symbols other than 0, s, pred, and plus). We deﬁne R3 by simply orienting the equations from left to right. Using this choice of R3, it is easy to verify that E3 is convergent. (Note that E3 has no AC symbol.) For local stability, when φ = νn{M1/x1, . . . , Mk/xk} is any frame in normal form, we deﬁne sat(φ) to be the smallest set such
+that:
+
+1. for every 1 ≤ i ≤ k, Mi ∈ sat(φ), and for every n ∈ fn(φ), n ∈ sat(φ),
+
+2. if M1, . . . , Mk ∈ sat(φ) and f (M1, . . . , Mk) ∈ st(sat(φ)), then f (M1, . . . , Mk) ∈ sat(φ),
+3. if pred(M ) →h M and M ∈ sat(φ) then M ∈ sat(φ).
+The set sat(φ) is ﬁnite since we add only subterms of terms of φ. The set sat(φ) trivially satisﬁes conditions 1, 2, and 4 of Deﬁnition 2. Let us show that it satisﬁes condition 3. Assume that C[M1, . . . , Mk] →h M with Mi ∈ sat(φ) and |C| ≤ cE3 . The only non-trivial case is the one where plus(M1, M2) →h M with M1, M2 ∈ sat(φ) and the rule plus(x, s(y)) → plus(s(x), y) has been applied. We must have that M2 = s(M2). Hence pred(M2) →h M2, so M2 ∈ sat(φ). Now, we have M = plus(s(M1), M2), with M1, M2 ∈ sat(φ) and |plus(s( ), )| = 4 ≤ 42, so condition 3 is satisﬁed.
+Note that, were we to omit the equation pred(s(x)) = x in our equational theory, the proof of local stability would
+no longer be valid.
+
+4.4 Blind signatures
+
+We consider a theory recently introduced by Kremer and
+
+Ryan [13] in order to model blind signatures and related
+
+constructs in their analysis of a protocol for electronic vot-
+
+ing. This theory treats signatures much like that of Sec-
+
+tion 4.1, with four differences: the checking construct is
+
+called checksign (rather than check); checking does not re-
+
+quire plaintext; there is no separate signature-key compu-
+
+tation (no function sk); and, most importantly, this theory
+
+also describes signature blinding and unblinding functions.
+
+Let Σ4 be any signature that contains open, commit, getpk, host, checksign, sign, unblind, and blind, with the equa-
+
+tions: ⎧ ⎪⎪⎪⎪⎨
+
+open(commit(x, y), y) = x getpk(host(x)) = x
+
+⎫ ⎪⎪⎪⎪⎬
+
+E4
+
+=
+
+⎪⎪⎪⎪⎩
+
+checksign(sign(x, y), pk(y)) unblind(blind(x, y), y)
+unblind(sign(blind(x, y), z), y)
+
+= = =
+
+x x sign(x,
+
+z)
+
+⎪⎪⎪⎪⎭
+
+The size cE4 of the theory is at least 7 (and possibly higher if Σ4 contains additional symbols). We deﬁne R4 by simply orienting the equations from left to right. The theory
+E4 is clearly convergent. To prove that E4 is locally stable, we extend the deﬁnition of subterms by requiring that
+sign(M1, M3) is a subterm of sign(blind(M1, M2), M3). More formally, we deﬁne:
+
+stext(u) = u
+
+stext(sign(blind(M1, M2), M3)) =
+
+{sign(M1, M3)} ∪ {sign(blind(M1, M2), M3)}
+
+∪ stext((blind(M1, M2)) ∪ stext(M3)
+
+stext(f (M1, . . . , Mk)) =
+
+{f (M1, . . . , Mk)} ∪
+
+k i=1
+
+stext(Mi
+
+)
+
+otherwise (that is, for other terms)
+
+When φ = νn{M1/x1, . . . , Mk/xk} is any frame in normal form, we deﬁne sat(φ) to be the smallest set such that:
+1. for every 1 ≤ i ≤ k, Mi ∈ sat(φ), and for every n ∈ fn(φ), n ∈ sat(φ),
+2. if M1, . . . , Mk ∈ sat(φ) and f (M1, . . . , Mk) ∈ st(sat(φ)), then f (M1, . . . , Mk) ∈ sat(φ),
+3. if C[M1, . . . , Mk] →h M , Mi ∈ sat(φ) and M ∈ stext(sat(φ)) then M ∈ sat(φ).
+The set sat(φ) is ﬁnite since we add only extended subterms of terms of φ. The set sat(φ) trivially satisﬁes conditions 1, 2, and 4 of Deﬁnition 2. Let us show that it satisﬁes condition 3. Assume that C[M1, . . . , Mk] →h M with Mi ∈ sat(φ) and |C| ≤ cE4 . If one of the four ﬁrst rules of R4 has been applied, then M is a subterm of C[M1, . . . , Mk]. Thus either M = C [M1, . . . , Mk] for some context C and condition 3 is satisﬁed or M is a subterm of one of the Mi, thus M ∈ sat(φ) and condition 3 is satisﬁed. If the ﬁfth rule of R4 has been applied, then three (non-trivial) cases may arise.
+• If M2 →h M then M is an extended subterm of M2, so M ∈ sat(φ) and condition 3 is satisﬁed.
+• Similarly, if unblind(M1, M2) →h M then M is an extended subterm of M1, so M ∈ sat(φ) and condition 3 is satisﬁed.
+• Finally, suppose that unblind(sign(M1, M2), M3) →h M . It must be the case that M1 = blind(M1, M3). Since unblind(M1, M3) →h M1 and M1 is a subterm of M1, we have M1 ∈ sat(φ). Now, since M = sign(M1, M2) and |sign( , )| = 3 ≤ 72, condition 3 is satisﬁed.
+
+4.5 Pure AC theory
+
+We consider the case where the signature contains only
+constant symbols and AC symbols ⊕1, . . . , ⊕k and the equational theory E5 contains only the AC equations for each symbol:
+
+k
+E5 =
+i=1
+
+(x ⊕i y) ⊕i z = x ⊕i (y ⊕i z) x ⊕i y = y ⊕i x
+
+With the empty rewriting system R5 = ∅, E5 is an ACconvergent theory. When φ = νn{M1/x1, . . . , Mk/xk} is any frame, we deﬁne sat(φ) to be the smallest set such that:
+
+1. for every 1 ≤ i ≤ k, Mi ∈ sat(φ), and for every n ∈ fn(φ), n ∈ sat(φ),
+
+2. if M1, M2 ∈ sat(φ) and M1 ⊕i M2 ∈ st(sat(φ)), then M1 ⊕i M2 ∈ sat(φ),
+3. if M1 =AC M2 and M1 ∈ sat(φ) then M2 ∈ sat(φ).
+The set sat(φ) is ﬁnite since we add only terms smaller or equal than the maximal size of the terms of φ. The set sat(φ) trivially satisﬁes conditions 1, 2, and 4 of Deﬁnition 2. It also satisﬁes condition 3 since the rewriting system R5 is empty. Thus E5 is locally stable.
+Now, for any frame φ = νnσ, the set of equations Eq(φ) simply consists of Eq⊕(φ, N − n). Since names that do not appear in φ need not be considered, Eq⊕(φ, N − n) is equivalent to Eq⊕(φ, N ) where N is the set of free names of φ, in the sense that for any frame ψ, ψ |= Eq⊕(φ, N − n) if and only if ψ |= Eq⊕(φ, N ). By Proposition 4, we conclude that the equational theory E5 is locally ﬁnite.
+4.6 XOR
+
+We consider the theory E2 of the XOR operator (deﬁned in Example 4).
+We have seen that E2 is AC-convergent. We wish to verify that E2 is locally stable. When φ = νn{M1/x1, . . . , Mk/xk} is any frame in normal form, we deﬁne sat(φ) to be the smallest set, closed under AC, such that:
+
+1. for every 1 ≤ i ≤ k, Mi ∈ sat(φ), and for every n ∈ fn(φ), n ∈ sat(φ), and 0 ∈ sat(φ),
+
+2. if M1, . . . , Mk ∈ sat(φ) and f (M1, . . . , Mk) ∈ st(sat(φ)), then f (M1, . . . , Mk) ∈ sat(φ),
+
+3. if M1, M2 ∈ sat(φ), then (M1 ⊕ M2)↓ ⊆ sat(φ),
+4. if a is a name not in n and if M ⊕ a →AC M with M ∈ st(sat(φ)), then M ∈ sat(φ).
+
+Let us ﬁrst show that sat(φ) is ﬁnite. Let the set sst(φ) of
+
+simple subterms of φ be the set of subterms of φ whose head
+
+symbol is not ⊕. Let S = {T1⊕· · ·⊕Tn | Ti ∈ sst(φ), Ti = 0, Ti = Tj ⇒ i = j} be the set of sums of distinct terms of sst(φ). The set S is ﬁnite and sat(φ) ⊆ S. Indeed, it is easy
+
+to show that S satisﬁes the four conditions above, using that
+
+st(S) = S.
+
+The set sat(φ) trivially satisﬁes conditions 1, 2, and 4
+
+of Deﬁnition 2. Let us show that it satisﬁes condition 3.
+
+Let M1, . . . , Mk ∈ sat(φ) and C be a context such that
+
+fn(C) ∩ n = ∅ and assume that C[M1, . . . , Mk] →h M . We
+
+have that C[M1, . . . , Mk] =AC
+
+k i=1
+
+Mi
+
+⊕
+
+n i=1
+
+ai
+
+,
+
+where
+
+each ai is a name not in n or the constant 0. Let us show that
+
+one of the normal forms of C[M1, . . . , Mk] is a context of
+
+terms in sat(φ). Applying recursively rule 3, we obtain that
+
+( we
+
+k i=1
+
+Mi
+
+)↓
+
+⊆
+
+obtain that
+
+sat(φ). Now, applying C[M1, . . . , Mk]↓ =AC
+
+recursively rule 4,
+
+M⊕
+
+r j=1
+
+aij
+
+,
+
+with M ∈ sat(φ). By AC-convergence, we know that
+
+M →∗AC=AC M ⊕
+
+r j=1
+
+aij
+
+with
+
+M
+
+⊕
+
+r j=1
+
+aij
+
+∈
+
+sum⊕(sat(φ), n), since none of the aij is 0 (for otherwise
+
+the term would not be in normal form), so the context C
+
+that simply consists of a hole satisﬁes the required condi-
+
+tions.
+
+Like in the pure AC case, for any frame φ, the set of
+
+equation Eq(φ) simply consists of Eq⊕(φ, N − n) since the only constant is 0 and 0 is itself in sat(φ). Since
+
+names that do not appear in φ do not need to be considered,
+
+Eq⊕(φ, N − n) is equivalent to Eq⊕(φ, N ) where N is the set of free names of φ, in the sense that for any frame ψ,
+
+ψ |= Eq⊕(φ, N − n) if and only if ψ |= Eq⊕(φ, N ). Thus, by Proposition 4, the equational theory E2 is locally ﬁnite.
+
+Note that, in this example, we can also conclude without
+
+using Proposition 4. Indeed, we can consider the set Eq (φ)
+
+that consists of the equations
+
+k1 k2
+
+l1
+
+l2
+
+ζMij ⊕
+
+nij =
+
+ζMij ⊕
+
+nij
+
+j=1
+
+j=1
+
+j =k1 +1
+
+j =k2 +1
+
+such that
+
+⎛⎞
+
+k1 k2
+
+l1
+
+l2
+
+⎝ ζMij ⊕
+
+nij =E
+
+ζMij ⊕
+
+nij ⎠ φ
+
+j=1
+
+j=1
+
+j =k1 +1
+
+j =k2 +1
+
+nij ∈ fn(φ), and l = j =⇒ Mil = Mij , nil = nij . Clearly, Eq (φ) is ﬁnite and it is easy to verify that, for any
+frame ψ, ψ |= Eq⊕(φ, n) if and only if ψ |= Eq (φ).
+
+5 Decidability results
+
+In this section, we state and prove our decidability results for deduction and static equivalence.
+
+5.1 Decidability of deduction
+
+Theorem 1 For locally stable equational theories, deduction is decidable.
+The proof is based on the following lemma.
+Lemma 1 Let E be a locally stable theory. Let φ = νnσ be a frame. For every context C1 such that fn(C1) ∩ n = ∅, for every Mi ∈ sat(φ), for every term T such that C1[M1, . . . , Mk] →AC T , there exist a context C2 such that fn(C2) ∩ n = ∅, and terms Mi ∈ sat(φ), such that T →∗AC C2[M1, . . . , Ml ].
+This lemma is a weak version of Lemma 3 presented in Section 5.2. Applying repeatedly this lemma leads to the following corollary.
+
+Corollary 1 Let E be a locally stable theory. Let φ = νnσ be a frame. For every context C1 such that fn(C1) ∩ n = ∅, for every Mi ∈ sat(φ), for every term T in normal form such that C1[M1, . . . , Mk] →∗AC T , there exist a context C2 such that fn(C2) ∩ n = ∅, and terms Mi ∈ sat(φ), such that T =AC C2[M1, . . . , Ml ].
+Assuming Lemma 1, let φ = νnσ be a frame, C1 be a context such that fn(C1) ∩ n = ∅, Mi ∈ sat(φ), and T a term in normal form such that C1[M1, . . . , Mk] →∗AC T . Either C1[M1, . . . , Mk] =AC T and we are done or we have C1[M1, . . . , Mk] →AC T →∗AC T . By Lemma 1, there exist a context C2 such that fn(C2) ∩ n = ∅, and terms Mi ∈ sat(φ), such that T →∗AC C2[M1, . . . , Ml ]. By ACconﬂuence of the equational theory and since T is in normal form, C2[M1, . . . , Ml ] →∗AC T . Since the equational theory is AC-terminating, we repeat this transformation until we obtain that T =AC C3[M1 , . . . , Ml ] for some terms Mi ∈ sat(φ) and some context C3.
+We show that for any term deducible from a frame φ, one of its normal forms is a context over terms in sat(φ).
+Proposition 6 Let φ = νnσ be a frame, M be a closed term, and M↓ its set of normal forms. Then φ M if and only if there exist a term T ∈ M↓, a context C, and terms M1, . . . , Mk ∈ sat(φ) such that fn(C) ∩ n = ∅ and T == C[M1, . . . , Mk].
+If there exists T ∈ M↓ such that T == C[M1, . . . , Mk] with fn(C) ∩ n = ∅, then T =E C[ζM1 , . . . , ζMk ]σ, by construction of ζM1 , . . . , ζMk . Therefore, by Proposition 1, φ T , so φ M .
+Conversely, if φ M , then by Proposition 1, there exists ζ such that fn(ζ) ∩ n = ∅ and M =E ζσ. Thus there exists T ∈ (M↓ ∩ (ζσ)↓). Since ζσ →∗AC T , applying Corollary 1, we obtain that T =AC C[M1, . . . , Mk] for some M1, . . . , Mk ∈ sat(φ) and C such that fn(C) ∩ n = ∅. Thus we end the proof by choosing T == C[M1, . . . , Mk].
+We derive that φ M can be decided by checking whether one of the terms in M↓ is of the form C[M1, . . . , Mk] with Mi ∈ sat(φ).
+5.2 Decidability of static equivalence
+Theorem 2 For locally decidable equational theories, static equivalence is decidable. A fortiori, for locally ﬁnite equational theories, static equivalence is decidable.
+The proof is based on two main lemmas that we prove in the Appendix.
+Lemma 2 Let E be a locally stable theory. Let φ = νnσ and ψ = νn σ be two frames such that ψ |= Eq(φ). For all contexts C1 and C2 such that (fn(C1) ∪ fn(C2)) ∩ n = ∅, for all terms Mi, Mi ∈
+
+sat(φ), if C1[M1, . . . , Mk] =AC C2[M1, . . . , Ml ], then (C1[ζM1 , . . . , ζMk ] =E C2[ζM1 , . . . , ζMl ])ψ.
+Lemma 3 Let E be a locally stable theory. Let φ = νnσ be a frame. For every context C1 such that fn(C1) ∩ n = ∅, for every Mi ∈ sat(φ), for every term T such that C1[M1, . . . , Mk] →AC T , there exist a context C2 such that fn(C2) ∩ n = ∅, and terms Mi ∈ sat(φ), such that T →∗AC C2[M1, . . . , Ml ] and for every frame ψ |= Eq(φ), (C1[ζM1 , . . . , ζMk ] =E C2[ζM1 , . . . , ζMl ])ψ.
+As for Corollary 1, applying repeatedly Lemma 3 leads to the following corollary.
+Corollary 2 Let E be a locally stable theory. Let φ = νnσ be a frame. For every context C1 such that fn(C1) ∩ n = ∅, for every Mi ∈ sat(φ), for every term T in normal form such that C1[M1, . . . , Mk] →∗AC T , there exist a context C2 such that fn(C2)∩n = ∅, and terms Mi ∈ sat(φ), such that T =AC C2[M1, . . . , Ml ] and for every frame ψ |= Eq(φ), (C1[ζM1 , . . . , ζMk ] =E C2[ζM1 , . . . , ζMl ])ψ.
+In order to check whether two frames satisfy the same equations, we show (using these two lemmas) that it is sufﬁcient to check whether they satisfy the same “small” equations.
+Proposition 7 Let E be a locally stable theory. For all frames φ and ψ, we have φ ≈s ψ if and only if φ |= Eq(ψ) and ψ |= Eq(φ).
+By deﬁnition of static equivalence, if φ ≈s ψ then φ |= Eq(ψ) and ψ |= Eq(φ).
+Conversely, assume now that ψ |= Eq(φ) and consider M and N such that there exist n and σ such that φ = νnσ, (fn(M ) ∪ fn(N )) ∩ n = ∅, and (M =E N )φ. Then M σ =E N σ, so ((M σ)↓ ∩ (N σ)↓) = ∅. Let T ∈ ((M σ)↓∩(N σ)↓). Since M σ →∗AC T , applying Corollary 2, we obtain that there exist M1, . . . , Mk ∈ sat(φ) and CM such that fn(CM ) ∩ n = ∅, T =AC CM [M1, . . . , Mk], and (M =E CM [ζM1 , . . . , ζMk ])ψ. Since N σ →∗AC T , we obtain similarly that there exist M1, . . . , Ml ∈ sat(φ) and CN such that fn(CN ) ∩ n = ∅, T =AC CN [M1, . . . , Ml ], and (N =E CN [ζM1 , . . . , ζMl ])ψ. Moreover, since CM [M1, . . . , Mk] =AC CN [M1, . . . , Ml ], we derive from Lemma 2 that (CM [ζM1 , . . . , ζMk ] =E CN [ζM1 , . . . , ζMl ])ψ, thus (M =E N )ψ. Symmetrically, if (M =E N )ψ and φ |= Eq(ψ), then (M =E N )φ. We conclude that φ ≈s ψ.
+Therefore, given φ and ψ, we may consider Eq(φ) and Eq(ψ) in order to decide whether φ ≈s ψ. By local decidability of the theory, we can decide whether φ |= Eq(ψ) and ψ |= Eq(φ).
+
+6 Conclusion
+In this paper we study message deducibility and static equivalence, two formal representations for knowledge in the analysis of security protocols. This study yields a general, positive result: message deducibility and static equivalence are decidable under a wide class of equational theories. This class includes, in particular, standard theories for basic cryptographic primitives. It also includes some less standard, more advanced examples: theories of XOR, homomorphic encryption, blind signatures, addition, and pure AC theories. We succeed in giving a uniﬁed treatment for this disparate collection of theories, with a body of techniques that apply to all of them plus special techniques for verifying that particular theories belong in the class.
+We have not considered complexity issues for the corresponding decision procedures. Their performances obviously depend on the choice of equational theory, and we do not expect them to be very good in many cases. The second author is currently working on implementing a variant of our procedures for speciﬁc theories. We expect that the resulting algorithms will be efﬁcient enough to be applicable in practice.
+As indicated in the introduction, deduction and static equivalence are static notions, but they play an important role in analyses with respect to active attacks. Nevertheless, it remains challenging to obtain decidability results with respect to active attacks. This problem is addressed in recent and ongoing work. That work is still largely under way, so detailed descriptions may be premature, but we brieﬂy mention some interesting developments. Going beyond the work of Delaune and Jacquemard [10] (described in the introduction), Baudet [5] has proved that both deduction and static equivalence are decidable under convergent subterm theories. Comon-Lundh [7] is studying the decidability of deduction under general equational theories, including associativity and commutativity properties. Overall, this ﬁeld appears as a lively one, with increasingly sophisticated techniques and powerful theorems. We may therefore look forward to much progress in algorithmic reasoning about the knowledge of active attackers in security protocols.
+Acknowledgments
+We are grateful to Michael Rusinowitch and Mathieu Baudet for very helpful discussions.
+Mart´ın Abadi’s work was partly supported by the National Science Foundation under Grants CCR-0204162 and CCR-0208800. Ve´ronique Cortier’s work was partly supported by the IST AVISPA http://www. avispa-project.org and the ACI Jeunes Chercheurs JC9005.
+
+References
+[1] M. Abadi and V. Cortier. Deciding knowledge in security protocols under equational theories. In Proc. 31st Int. Coll. Automata, Languages, and Programming (ICALP 2004), volume 3142 of LNCS, pages 46–58, Turku, Finland, July 2004. Springer.
+[2] M. Abadi and C. Fournet. Mobile values, new names, and secure communication. In Proceedings of the 28th ACM Symposium on Principles of Programming Languages (POPL’01), pages 104–115, January 2001.
+[3] M. Abadi and A. D. Gordon. A calculus for cryptographic protocols: The spi calculus. Information and Computation, 148(1):1–70, Jan. 1999.
+[4] M. Abadi and P. Rogaway. Reconciling two views of cryptography (The computational soundness of formal encryption). Journal of Cryptology, 15(2):103–127, 2002.
+[5] M. Baudet. Private communication. 2005. [6] Y. Chevalier, R. Kuester, M. Rusinowitch, and M. Tu-
+rani. An NP decision procedure for protocol insecurity with xor. In Proceedings of the 18th Annual IEEE Symposium on Logic In Computer Science (LICS’03), pages 261–270, 2003. [7] H. Comon-Lundh. Intruder theories (ongoing work). In Foundations of Software Science and Computation Structures (FoSSaCS’04), volume 2987 of LNCS, pages 1–4. Springer, 2004. [8] H. Comon-Lundh and V. Shmatikov. Intruder deductions, constraint solving and insecurity decision in presence of exclusive or. In Proceedings of the 18th Annual IEEE Symposium on Logic In Computer Science (LICS’03), pages 271– 280, 2003. [9] H. Comon-Lundh and R. Treinen. Easy intruder deductions. Technical Report LSV-03-8, Laboratoire Spe´ciﬁcation et Ve´riﬁcation, ENS de Cachan, France, 2003. [10] S. Delaune and F. Jacquemard. A decision procedure for the veriﬁcation of security protocols with explicit destructors. In Proceedings of the 11th ACM Conference on Computer and Communications Security (CCS’04), pages 278–287, Washington, D.C., USA, October 2004. ACM Press. [11] S. Goldwasser and S. Micali. Probabilistic encryption. Journal of Computer and System Sciences, 28:270–299, Apr. 1984. [12] R. Kemmerer, C. Meadows, and J. Millen. Three systems for cryptographic protocol analysis. Journal of Cryptology, 7(2):79–130, Spring 1994. [13] S. Kremer and M. D. Ryan. Analysis of an electronic voting protocol in the applied pi-calculus. In M. Sagiv, editor, Programming Languages and Systems –Proceedings of the 14th European Symposium on Programming (ESOP’05), volume 3444 of LNCS, pages 186–200, Edinburgh, U.K., April 2005. Springer. [14] P. Lafourcade, D. Lugiez, and R. Treinen. Intruder deduction for ac-like equational theories with homomorphisms. In Proceedings of the 16th International Conference on Rewriting Techniques and Applications (RTA’05), volume 3467 of LNCS, pages 308–322, Nara, Japan, April 2005. Springer.
+
+[15] P. Lincoln, J. Mitchell, M. Mitchell, and A. Scedrov. A probabilistic poly-time framework for protocol analysis. In Proceedings of the Fifth ACM Conference on Computer and Communications Security, pages 112–121, 1998.
+[16] G. Lowe. Breaking and ﬁxing the Needham-Schroeder public-key protocol using FDR. In Tools and Algorithms for the Construction and Analysis of Systems, volume 1055 of LNCS, pages 147–166. Springer, 1996.
+[17] L. C. Paulson. The inductive approach to verifying cryptographic protocols. Journal of Computer Security, 6(1– 2):85–128, 1998.
+[18] R. L. Rivest, L. Adleman, and M. L. Dertouzos. On data banks and privacy homomorphisms. In R. DeMillo, D. Dobkin, A. Jones, and R. Lipton, editors, Foundations of Secure Computation, pages 169–180. Academic Press, 1978.
+[19] P. Samuel. Algebraic Theory of Numbers. Hermann, 1970. [20] S. Schneider. Security properties and CSP. In IEEE Sympo-
+sium on Security and Privacy, pages 174–187, 1996.
+
+Appendix: Proof of Lemmas 2 and 3
+
+Deﬁnition 7 The set P(M ) of paths of a term M is deﬁned inductively by:
+
+P(u) = P(f (M1, . . . , Mn)) =
+
+n
+∪ i · P(Mi) for i ≤ n
+i=1
+
+The subterm of M at position p ∈ P(M ), written M |p, is deﬁned inductively by:
+
+M| = M f (M1, . . . , Mn)|i·p = Mi|p for i ≤ n
+
+Lemma 2. Let E be a locally stable theory. Let φ = νnσ and ψ = νn σ be two frames such that ψ |= Eq(φ). For all contexts C1 and C2 such that (fn(C1) ∪ fn(C2)) ∩ n = ∅, for all terms Mi, Mi ∈ sat(φ), if C1[M1, . . . , Mk] =AC C2[M1, . . . , Ml ], then (C1[ζM1 , . . . , ζMk ] =E C2[ζM1 , . . . , ζMl ])ψ.
+This lemma is proved by induction on the sum of the sizes of C1 and C2.
+Base case: If |C1|, |C2| ≤ cE, then the equation
+(C1[ζM1 , . . . , ζMk ] = C2[ζM1 , . . . , ζMl ])
+is in Eq(φ) since |C1| ≤ cE and |C2| ≤ cE ≤ c2E, so ψ |= Eq(φ) implies (C1[ζM1 , . . . , ζMk ] =E C2[ζM1 , . . . , ζMl ])ψ.
+Inductive step: If neither C1 nor C2 is a hole, then C1 == f (C11, . . . , C1r) and C2 == f (C21, . . . , C2r). There are two cases.
+
+• f is not an AC symbol. Then, for every 1 ≤ i ≤ r, C1i [M1, . . . , Mk] =AC C2i [M1, . . . , Ml ]. By applying the induction hypothesis, we obtain
+(C1i [ζM1 , . . . , ζMk ] =E C2i [ζM1 , . . . , ζMl ])ψ, so (C1[ζM1 , . . . , ζMk ] =E C2[ζM1 , . . . , ζMl ])ψ.
+
+• f is an AC symbol ⊕. We write C1 = C11 ⊕ · · · ⊕ C1r ⊕ x1 ⊕ · · · ⊕ xp and C2 = C21 ⊕ · · · ⊕ C2r ⊕ y1 ⊕ · · · ⊕ yp in such a way that the head symbol of the C1i and C2j is not ⊕, C1i and C2j are not holes, and the xi and yj refer to the holes
+of C1 and C2. If the equation can be split, with
+C1 =AC C1 ⊕ C1 and C2 =AC C2 ⊕ C2 such that (C1[ζM1 , . . . , ζMk ] =E C2[ζM1 , . . . , ζMl ])φ and (C1 [ζM1 , . . . , ζMk ] =E C2 [ζM1 , . . . , ζMl ])φ, then we conclude as above, applying the induc-
+
+tion hypothesis. On the other hand, if the equa-
+
+tion cannot be split, for every 1 ≤ i ≤ r,
+
+Ni C2j
+
+=def [M1
+
+,
+
+C1i [M1, . . . . , Ml ]
+
+.. so
+
+, Mk] is not equal it must be a subterm
+
+to of
+
+some some
+
+Mj. Since each Mj is in sat(φ) and by apply-
+
+ing recursively rule 2 of Deﬁnition 2, we get that
+
+Ni is in sat(φ), thus there exists ζNi ∈ R(φ)
+such that ζNi σ =E Ni. Symmetrically, for every 1 ≤ j ≤ r, Nj =def C1j[M1, . . . , Mk] is not equal to some C1i[M1, . . . , Ml], so Nj ∈ sat(φ) and there exists ζNj ∈ R(φ) such that ζNj σ =E Nj.
+
+– From Ni == C1i[M1, . . . , Mk] and ap-
+
+plying the induction hypothesis, we get
+
+ζNi σ =E larly, ζNj σ
+
+=CE1i [ζCM2j1[ζ, M. .1.,,.ζ.M. ,k
+
+]σ ζMk
+
+and ]σ .
+
+simi-
+
+– Renaming the C1i[M1, . . . , Mk] by Ni in our
+
+initial equation, we get N1 ⊕ · · · ⊕ Nr ⊕
+
+M1 ⊕ · · · ⊕ Mp = N1 ⊕ · · · ⊕ Nr ⊕ M1 ⊕
+
+· · · ⊕ Mp . Applying the base case, we get
+
+(ζN1 ⊕ · · · ⊕ ζNr ⊕ ζM1 ⊕ · · · ⊕ ζMp =E
+
+ζN1 ⊕ · · · ⊕ ζNr ⊕ ζM1 ⊕ · · · ⊕ ζMp )σ.
+
+Since this equation is in Eq(φ), we deduce
+
+(ζN1 ⊕ · · · ⊕ ζNr ⊕ ζM1 ⊕ · · · ⊕ ζMp =E ζN1 ⊕ · · · ⊕ ζNr ⊕ ζM1 ⊕ · · · ⊕ ζMp )σ .
+
+Combining these equations, we get
+
+(C1[ζM1 , . . . , ζMk ] =E C2[ζM1 , . . . , ζMl ])ψ
+If C1 or C2 is a hole, then let us say C1 == f (C11, . . . , C1r) and C2 == . Let M, M1, . . . , Mk ∈ sat(φ) and assume C1[M1, . . . , Mk] =AC M . Again we consider two cases.
+• f is not an AC symbol. Then we have
+f (C11[M1, . . . , Mk], . . . , C1r[M1, . . . , Mk]) =AC M
+
+For every 1 ≤ i ≤ r, let Ni =def C1i [M1, . . . , Mk]. Thus, each Ni is a subterm of M , so it is in st(sat(φ)). Since each Mj is in sat(φ) and by applying repeatedly rule 2 of Deﬁnition 2, we get that Ni is in sat(φ). Thus there exists ζNi ∈ R(φ) such that ζNi σ =E Ni.
+– From Ni == C1i[M1, . . . , Mk] and applying the induction hypothesis, we get ζNi σ =E C1i [ζM1 , . . . , ζMk ]σ .
+– From M =AC f (N1, . . . , Nr) and applying the base case, we get ζM σ =E f (ζN1 , . . . , ζNr )σ .
+Combining these equations, we get
+(ζM =E C1[ζM1 , . . . , ζMk ])ψ
+• f is an AC symbol ⊕. We write C1 = C11 ⊕ · · · ⊕ C1r ⊕ x1 ⊕ · · · ⊕ xp and C2 = x, and we have C11[M1, . . . , Mk]⊕. . .⊕C1r[M1, . . . , Mk]⊕M1⊕ . . . ⊕ Mp =AC M . Each Ni =def C1i [M1, . . . , Mk] is a subterm of M ∈ sat(φ) thus is in sat(φ). Again, there exists ζNi ∈ R(φ) such that ζNi σ =E Ni. – From Ni == C1i[M1, . . . , Mk] and applying the induction hypothesis, we get ζNi σ =E C1i [ζM1 , . . . , ζMk ]σ . – From N1⊕. . .⊕Nr ⊕M1⊕. . .⊕Mp =AC M and by the equation ζN1 ⊕ · · · ⊕ ζNr ⊕ ζM1 ⊕ · · ·⊕ζMp =E ζM is in Eq(φ), we get (ζN1 ⊕ · · · ⊕ ζNr ⊕ ζM1 ⊕ · · · ⊕ ζMp =E ζM )σ .
+Combining these equations, we get
+(C1[ζM1 , . . . , ζMk ] =E ζM )ψ
+Lemma 3. Let E be a locally stable theory. Let φ = νnσ be a frame. For every context C1 such that fn(C1) ∩ n = ∅, for every Mi ∈ sat(φ), for every term T such that C1[M1, . . . , Mk] →AC T , there exist a context C2 such that fn(C2) ∩ n = ∅, and terms Mi ∈ sat(φ), such that T →∗AC C2[M1, . . . , Ml ] and for every frame ψ |= Eq(φ), (C1[ζM1 , . . . , ζMk ] =E C2[ζM1 , . . . , ζMl ])ψ.
+An easy case is when the reduction occurs inside one of the Mi: Mi →AC Mi . By deﬁnition of sat(φ) (since E is locally stable), we know that there exists C such that |C| ≤ c2E, fn(C) ∩ n = ∅, and Mi →∗AC C[M1 , . . . , Ml ] where Mi ∈ sat(φ). In addition, the equation ζMi = C[ζM1 , . . . , ζMl ] is in Eq(φ) (since |C| ≤ c2E), thus (ζMi =E C[ζM1 , . . . , ζMl ])ψ. We obtain that
+T == C1[M1, . . . , Mi−1, Mi , Mi+1, . . . , Mk] →∗AC C1[M1, . . . , C[M1 , . . . , Ml ], . . . , Mk]
+
+and
+
+⎛ (C1[ζM1 , . . . , ζMk ]
+⎝ =E
+
+⎞ ⎠ψ
+
+C1[ζM1 , . . . , C[ζM1 , . . . , ζMl ], . . . , ζMk ]
+
+We now consider the case where the reduction does not occur inside the terms Mi. We can assume that
+
+for every path p of C1, if C1|p[M1, . . . , Mk] is in sat(φ), then C1|p is the single hole context.
+
+(*)
+
+Indeed, if there exists a path p of C1 such that T1 =def C1|p[M1, . . . , Mk] ∈ sat(φ) and C1|p is not a hole then C1[M1, . . . , Mk] == C1[T1, M1, . . . , Mk] where T1, Mi ∈ sat(φ) and C1 is a context strictly smaller than C1. In that case, we consider C1[T1, M1, . . . , Mk] instead of C1[M1, . . . , Mk] and we apply the transformation again
+until property (*) holds.
+We have
+
+C1[M1, . . . , Mk] ==
+r
+C3[M ⊕ M ⊕ Ci[M1, . . . , Mk], M1, . . . , Mk]
+i=1
+
+where M = M1 ⊕ . . . ⊕ Ml , M = M1 ⊕ . . . ⊕ Ml with
+
+Mi ⊕ Mi ∈ sat(φ), the head symbol of the Ci is not ⊕, Ci
+
+is not a single hole, and T1 =def M ⊕
+
+r i=1
+
+Ci
+
+[M1
+
+,
+
+.
+
+.
+
+.
+
+,
+
+Mk
+
+]
+
+is an instance M0θ (modulo AC) of the left-hand side of
+
+some rule M0 → N0 of the rewriting system associated
+
+with E.
+
+For each variable x of M0, we consider the occurrences of xθ in T1.
+
+1. Either xθ occurs as a subterm of one of the Mi or Mi ;
+
+2. or there exists a subterm of T1, of the form N1 ⊕ . . . ⊕
+Np with Ni =AC Ni ⊕Ni ∈ sat(φ) for some Ni such that xθ =AC N1 ⊕ . . . ⊕ Np;
+
+3. or there exists a subterm of T1, of the form N1 ⊕
+
+. . . ⊕ Np ⊕
+
+r i=1
+
+Ci
+
+[M1,
+
+.
+
+.
+
+.
+
+,
+
+Mk ]
+
+(modulo
+
+AC),
+
+where the head symbols of the Ci are not ⊕ and the
+
+Ci are not a hole, and xθ =AC N1 ⊕ . . . ⊕ Np ⊕
+
+r i=1
+
+Ci
+
+[M1, . . . , Mk]
+
+with
+
+Ni
+
+=AC
+
+Ni ⊕ Ni
+
+∈
+
+sat(φ) for some Ni , thus the Ni are subterms of terms
+
+of sat(φ).
+
+Note that case 3 cannot occur simultaneously with case 1 or case 2 for the same variable x. Indeed, if case 3 oc-
+curs simultaneously with case 1 or case 2, we have that some Ci [M1, . . . , Mk] is a subterm of some Mi or Mi , thus applying recursively rule 2 of Deﬁnition 2, we get that
+
+Ci [M1, . . . , Mk] ∈ sat(φ), which contradicts property (*) (since Ci is not a hole).
+Without loss of generality, we assume that the variables
+of M0 are x1, . . . , xk1 , y1, . . . , yk2 where the variables xi are in case 1 or case 2 and the variables yj are in case 3. For each variable yj, we consider the l occurrences of yj in T1.
+
+yj θ =AC N11 ⊕ . . . ⊕ Nk11 ⊕
+
+r1 i=1
+
+Ci1
+
+[M1
+
+,
+
+.
+
+.
+
+.
+
+,
+
+Mk
+
+]
+
+...
+
+=AC
+
+N1l ⊕ . . . ⊕ Nkll ⊕
+
+rl i=1
+
+Cil[M1,
+
+.
+
+.
+
+.
+
+,
+
+Mk
+
+]
+
+where the Nij are subterms of terms in sat(φ) and the head symbols of the Cij are not ⊕.
+We write cl (Cij[M1, . . . , Mk]) for the class of Cij[M1, . . . , Mk] modulo AC, and we associate a fresh name symbol acl(Cij[M1,...,Mk]) with the class of each Cij [M1, . . . , Mk]. Therefore, acl(Cij11 [M1,...,Mk]) and acl(Cij22 [M1,...,Mk]) are the same symbol whenever Cij11 [M1, . . . , Mk] =AC Cij22 [M1, . . . , Mk]. In each equation
+
+rj1
+
+N1j1
+
+⊕
+
+...
+
+⊕
+
+N j1
+kj1
+
+⊕
+
+Cij1 [M1, . . . , Mk]
+
+i=1
+
+rj2
+
+=AC
+
+N1j2
+
+⊕
+
+...
+
+⊕
+
+N j2
+kj2
+
+⊕
+
+Cij2 [M1, . . . , Mk]
+
+i=1
+
+every Cij1 [M1, . . . , Mk] must be equal modulo AC to one of the Cij2 [M1, . . . , Mk]. Indeed, if Cij1 [M1, . . . , Mk] were equal to some subterm of the Nij2 , Cij1 [M1, . . . , Mk] would be a term of sat(φ), contradicting property (*). Thus, we obtain that
+
+=AC
+
+N11 ⊕ . . . ⊕ Nk11 ⊕ ...
+
+ar1
+i=1 Ci1[M1,...,Mk]
+
+N1l ⊕ . . . ⊕ Nkll ⊕
+
+a = Trl def
+
+i=1 Cil[M1,...,Mk]
+
+yj
+
+We consider the substitution θ such that xiθ = xiθ
+
+and yj θ = Tyj . We deﬁne θ (acl(Cij[M1,...,Mk])) = Cij[M1, . . . , Mk].
+
+We also consider the term T2 that is obtained from
+
+r i=1
+
+Ci
+
+[M1,
+
+.
+
+.
+
+.
+
+,
+
+Mk ]
+
+by
+
+replacing
+
+each
+
+Cij
+
+[M1
+
+,
+
+.
+
+.
+
+.
+
+,
+
+Mk
+
+]
+
+with acl(Cij [M1,...,Mk]).
+
+We have T2 == C2[S1, . . . , Sk] for some context C2
+
+such that | ⊕ C2| ≤ |M0| ≤ cE and Si ∈ sum⊕(sat(φ), n).
+
+Since M ⊕ T2 is an instance M0θ of M0 we have M ⊕
+
+M ⊕ T2 →AC M ⊕ N0θ . Applying condition 3 of Def-
+
+inition 2, there exist Si ∈ sum⊕(sat(φ), n), there exists a context C , such that |C | ≤ c2E, fn(C ) ∩ n = ∅, and M ⊕ N0θ →∗AC C [S1, . . . , Sl]. Applying the substitution θ , we deduce that M ⊕ N0θ =AC M ⊕ N0θ θ →∗AC
+
+C [S1, . . . , Sl]θ . Note that C [S1, . . . , Sl]θ is a context of terms of sat(φ):
+
+C [S1, . . . , Sl]θ = C [M1, . . . , Mk, S1, . . . , Sl]
+
+To each sum S = α1M1 ⊕ · · · ⊕ αnMn ⊕ β1n1 ⊕ · · · ⊕
+βknk in sum⊕(sat(φ), n), we associate the term ζS = α1 ·⊕
+ζM1 ⊕ · · · ⊕ αn ·⊕ ζMn ⊕ β1 ·⊕ n1 ⊕ · · · ⊕ βk ·⊕ nk. Now, since the equation ζM ⊕M ⊕ C2[ζS1 , . . . , ζSk ] =
+C [ζS1 , . . . , ζSl ] is in Eq(φ), we deduce
+
+(ζM ⊕M ⊕ C2[ζS1 , . . . , ζSk ] = C [ζS1 , . . . , ζSl ])ψ If acl(Cij11 [M1,...,Mk]) = acl(Cij22 [M1,...,Mk]), we have
+Cij11 [M1, . . . , Mk] =AC Cij22 [M1, . . . , Mk]
+
+thus (by Lemma 2) we have
+
+(Cij11 [ζM1 , . . . , ζMk ] = Cij22 [ζM1 , . . . , ζMk ])ψ So we can reconstruct M ⊕ T1 and obtain
+
+ζM ⊕M
+
+r
+⊕ Ci[ζM1 , . . . , ζMk ]
+i=1
+= C [ζM1 , . . . , ζMk , ζS1 , . . . , ζSl ])ψ
+
+which allows us to conclude the proof of Lemma 3.
+
+

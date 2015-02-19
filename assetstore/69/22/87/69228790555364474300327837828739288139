@@ -1,0 +1,568 @@
+A Calculus for Access Control in Distributed Systems
+MART´IN ABADI, MICHAEL BURROWS, and BUTLER LAMPSON Digital Equipment Corporation
+and
+GORDON PLOTKIN University of Edinburgh
+We study some of the concepts, protocols, and algorithms for access control in distributed systems, from a logical perspective. We account for how a principal may come to believe that another principal is making a request, either on his own or on someone else’s behalf. We also provide a logical language for access control lists and theories for deciding whether requests should be granted. Categories and Subject Descriptors: C.2.4 [Computer-Communication Networks]: Distributed Systems; D.4.6 [Operating Systems]: Security and Protection—access control; authentication; veriﬁcation; F.4.1 [Mathematical Logic and Formal Languages]: Mathematical Logic General Terms: Security, Theory Additional Key Words and Phrases: cryptography, cryptographic protocols, modal logic
+1. THE PROBLEM At least three ingredients are essential for security in computing systems:
+(1) A trusted computing base: the hardware and systems software should be capable of preserving the secrecy and integrity of data.
+(2) Authentication: it should be possible to determine who made a statement; for example, a user should be able to request that his ﬁles be deleted and to prove that the command is his, and not that of an intruder.
+(3) Authorization, or access control: access control consists in deciding whether the agent that makes a statement is trusted on this statement; for example, a user may be trusted (hence obeyed) when he says that his ﬁles should be deleted.
+These ingredients are fairly well understood in centralized systems.
+This is an extended version of a paper presented at the Crypto ‘91 conference, August 1991. Part of the work of G. Plotkin was completed while at Digital Equipment Corporation, Systems Research Center. Authors’ address: M. Abadi, M. Burrows, and B. Lampson, Systems Research Center, Digital Equipment Corporation, 130 Lytton Avenue, Palo Alto, CA 94301, USA; G. Plotkin, Department of Computer Science, University of Edinburgh, King’s Building, Edinburgh EH9 3JZ, Scotland, UK.
+
+·2 M. Abadi et al.
+Distributed systems pose new problems. Scale becomes an issue, as ultimately one would want to envision a global distributed system with a global name space and global security. In addition, there are diﬃculties with communication, booting, loading, authentication, and authorization.
+The computing base of a distributed system need not reside in a single location under a single management. This implies, in particular, that secure communication cannot be taken for granted. Since it is hard to provide physically secure communication lines, some form of encryption is typically required. In what follows, we assume that shared-key encryption (e.g., [8]) and public-key encryption (e.g., [9, 22]) are available where needed, but we use them frugally. In addition, there are problems of secure booting and loading of software. For instance, the operating system that a host runs may be obtained from a repository across the network; a mechanism is needed to guarantee that this software is an authentic release, free of viruses. This mechanism will inevitably rely on authentication and access control, as it is necessary to restrict who can make a release.
+The nodes of a distributed system may act on their own behalf or on behalf of users. Users and nodes trust one another to diﬀerent extents. Moreover, a user may be trusted only when he is working at certain nodes; he may have more rights at his oﬃce than at a remote public terminal. Therefore, both users and nodes need to be authenticated and their identities considered in access control decisions.
+These issues give rise to a change in the nature of authentication and access control. The basic questions of authentication and access control are, always, “who is speaking?” and “who is trusted?” Typically the answer is the name of a simple principal (a user or a host). In a distributed environment these questions can receive a variety of answers; the notion of principal can be extended, to include:
+— Users and machines.
+— Channels, such as input devices and cryptographic channels. There is no formal reason to distinguish channels from users and machines, and it is advantageous not to. Cryptographic channels are identiﬁed by keys, and so we may write that the key K says s when s is asserted in a message decrypted with K.
+— Conjunctions of principals, of the form A ∧ B. If A and B make the same statement s, then A ∧ B says s as well. It often happens that A ∧ B is trusted on s, but neither A nor B is trusted by himself—a “joint signature” is required.
+— Groups. It is often inconvenient to list explicitly all of the principals that are trusted in some respect, both because the list would be long and because it may change too often. Groups provide an indirection mechanism. The use of groups implies the need for a scheme for deciding whether a principal is a member of a group. This is not always straightforward, for example when the registrar for a group is remote; group membership certiﬁcates then become necessary.
+— Principals in roles, of the form A as R. The principal A may adopt the role R and act under the name A as R when he wants to diminish his powers, in particular as a protection against blunders. For example, a system manager may act in the role normal-user most of the time, and enable the manager role only on occasion. Similarly, a machine may adopt a weak role before running a piece of untrusted software or before delegating authority to an untrusted machine.
+— Principals on behalf of principals, of the form B for A. The principal A may delegate authority to B, and B can then act on behalf of A, using the identity
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·A Calculus for Access Control
+
+3
+
+B for A. In the most common case, a user A delegates to a machine B. It is also possible for a machine to delegate to another machine and for delegations to be cascaded (iterated); then we encounter expressions such as C for (B for A).
+This list raises formal questions of some practical importance. First, there is a need to determine which of the operations on principals should be viewed as primitive and which can be deﬁned from the others. Then one may ask what laws the operations satisfy, as for example whether the principals B for (A ∧ A ) and (B for A) ∧ (B for A ) are in some sense equivalent; if two principals are equivalent then they should be granted the same requests. The resulting theory of principals should provide a reasonable degree of expressiveness and it should be amenable to a mathematical justiﬁcation. It is also essential that the theory of principals be simple, because users need to specify permissions on resources and programs need to make access control decisions.
+Further, a variety of protocols and algorithms must be designed and analyzed. Mechanisms are required for secure booting and loading, for joining groups and for proving membership, for adopting roles, for delegations of authority and for certifying such delegations, and for deciding whether a request should be granted.
+This paper is a study of some of the concepts, protocols, and algorithms for security in distributed systems, with a focus on access control. Our treatment is fairly formal, as it is based on logics. Our main goal is to isolate some useful and mathematically tractable concepts. We account for how a principal may come to believe that another principal is making a request, either on his own or on someone else’s behalf. We also provide a logical language for access control lists (ACLs) and theories for deciding whether requests should be granted. The logic enables us to explain a variety of protocols which can diﬀer from one another in subtle but important ways.
+On occasion, the formal analysis has suggested ideas for implementations, for example that some digital signatures could be saved. Moreover, logics make it possible to describe protocols and policies at a reasonable level of abstraction; we avoid the need for ad hoc arguments about particular implementations. This abstraction is important in the context of heterogeneous distributed environments, where several implementations of a design may coexist.
+Our study is intended as a formal basis for parts of a security architecture, and for the Digital Distributed Systems Security Architecture (DSSA) in particular [11]; this architecture is currently under implementation. Other formal explanations of security are conceivable. We hope that this work clariﬁes some of the issues that these alternative accounts may address.
+The next section is an overview. We describe the basic logical framework in Section 3. Sections 4 and 5 extend the treatment with roles and delegation. Then, in Section 6, we consider delegation schemes and algorithms for making access control decisions. Section 7 is a brief discussion of additional constructs. A short glossary appears at the end.
+This paper does not cover many issues in the area; some of these issues are brieﬂy mentioned in passing. We study only authorization mechanisms based on ACLs; we do not examine particular security policies nor matters connected with mandatory access control. Most implementation considerations are left to a companion paper [17] and to future work.
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·4 M. Abadi et al.
+2. OVERVIEW
+Composite principals play a central role in informal reasoning; for example, one often talks about “A and B” and “B on behalf of A.” Therefore, we start by introducing formal notations for composite principals.
+Some classical constructors for composite principals such as conjunction and disjunction come to mind ﬁrst:
+— A ∧ B: A and B as cosigners. A request from A ∧ B is a request that both A and B make. (It is not implied that A and B make this request in concert.)
+— A ∨ B is the dual notation; A ∨ B represents the group of which A and B are the sole members.
+Conjunction is important in our designs. Disjunction is often replaced with implication, in particular in dealing with groups. As discussed further below, “A is a member of the group G” can be written A ⇒ G. The group G can be named, as all other principals; it need not be given a deﬁnition beyond that implicit in formulas such as A ⇒ G. The membership of G can be deduced from what formulas of the form A ⇒ G have been asserted. We do not include disjunction among our basic primitives.
+There are also new connectives, in particular:
+— A as R: the principal A in role R.
+— B|A: the principal obtained when B speaks on behalf of A, not necessarily with a proof that A has delegated authority to B; by deﬁnition, B|A says s if B says that A says s; we pronounce B|A as “B quoting A.”
+— B for A: the principal obtained when B speaks on behalf of A, with appropriate delegation certiﬁcates; B for A says s when A has delegated to B and B says that A says s, possibly after some checking that s is reasonable.
+Of these, only | is primitive in our approach; for and as are important but they are coded in terms of ∧ and |. Since for is stronger than |, we tend to use | only for encoding for and as.
+In order to deﬁne the rights of these composite principals, we develop an algebraic calculus. In this calculus, one can express equations such as
+(B ∧ C) for A = (B for A) ∧ (C for A)
+and then examine their consequences. Since ∧ is the standard meet in a semilattice, we are dealing with an ordered algebra, and we can use a partial order ⇒ among principals: A ⇒ B stands for A = A ∧ B and means that A is at least as powerful as B; we pronounce this “A implies B” or “A speaks for B.”
+A modal logic extends the algebra of principals. In this logic, A says s represents the informal statement that the principal A says s. Here s may function as an imperative (“the ﬁle should be deleted”) or not (“C’s public key is K”); imperative modalities are not explicit in the formalism.
+The modal logic is a basis for various algorithms and protocols. For example, it is possible to explain logically how two principals A and B establish a public key Kd for B for A.
+The logic also underlies a theory of ACLs. We write ⊃ for the usual logical implication connective and A controls s as an abbreviation for (A says s) ⊃ s,
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·A Calculus for Access Control
+
+5
+
+which expresses trust in A on the truth of s; in the logic, an ACL for a formula s is a list of assertions of the form A controls s. If s represents a command to a server, then the ACL entry A controls s records the server’s trust in A on s, and hence that A will be obeyed when he says s. When s is clear from context, the ACL for s may simply be presented as the list of principals trusted on s.
+If A ⇒ B and B controls s, then A controls s as well. Therefore, ACLs may not mention all trusted principals explicitly; when B is listed, access should be granted to any A such that A ⇒ B. It is not always entirely trivial to decide whether a request should be granted, and our theory addresses this issue.
+So far we have discussed ACLs for logical formulas, with the view that each formula corresponds to a separate assertion or command, and that it can have a separate ACL. In practice these ACLs could be combined, and there may be dependencies between them. For example, the ACLs that pertain to reading and writing a ﬁle might be related, and an ACL that controls modiﬁcations to another ACL might also control modiﬁcations to itself. We do not model these combinations and dependencies.
+Secure channels, including those secured by cryptography, are represented as principals; we have no formal treatment of encryption functions. The logic does not consider the problems associated with timestamps and lifetimes, either. Therefore, we do not explain how principals come to believe that messages are recent and are not replays. In these respects the logic is more abstract than the logic of authentication proposed in [4]. The logic of authentication has as its goal describing and debugging fairly low-level authentication protocols; in contrast, the logic discussed here is intended as an aid in developing and applying a general design.
+
+3. THE BASIC LOGIC
+This section describes the basic logical framework, with syntax, axioms, and semantics. The laws for as and for appear in Sections 4 and 5.
+This section includes discussions of alternative approaches and of relevant mathematical concepts; in particular, Section 3.4 presents some interesting axioms that we do not adopt. The essential material is in the main bodies of Sections 3.1 and 3.2.
+3.1 A Calculus of Principals
+We study a calculus of principals in a minimal syntax. As discussed later, this syntax suﬃces for expressing roles and the needed delegation connectives.
+Principals form a semilattice under the operation of conjunction, and obey the usual semilattice axioms:
+— ∧ is associative, commutative, and idempotent.
+As usual, A ⇒ B can be taken as an abbreviation for A = A ∧ B, or = can be deﬁned in terms of ⇒.
+Implication is often used to represent group membership. This notion of membership is slightly peculiar, and in particular it is transitive. We have found that transitivity is rather convenient for reasoning about hierarchical groups (groups with subgroups). For example, if A is a member of G and G a subgroup of F , we may write A ⇒ G and G ⇒ F , and then it follows that A ⇒ F , which expresses
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·6 M. Abadi et al.
+that A is a member of F . Moreover, ⇒ has a fairly pleasant interaction with the other connectives of our calculus.
+However, our treatment of groups is incomplete. It would be desirable to provide group subtraction and intersection operations. It would also be desirable to provide naming support for usual subgroups—so that there would be a standard operation that one applies to a group name G to obtain the group of principals with a certain position or job in G. Most probably these operations would appear only at the lowest level of logical formulas, and would not mix with other constructs. Therefore, we do not include these additional operations here; intersection and subtraction are discussed in Section 7.
+The principals form a semigroup under |:
+— | is associative.
+The ﬁnal axiom is the multiplicativity of | in both of its arguments, which means:
+— | distributes over ∧.
+Multiplicativity implies monotonicity. In short, the axioms given for principals are those of structures known as multi-
+plicative semilattice semigroups. (Often, these same axioms are taken for structures with some sort of union or disjunction, instead of ∧, and then the term additive is preferred to multiplicative.) A common example of a multiplicative semilattice semigroup is an algebra of binary relations over a set, with the operations of union and composition; algebras of binary relations are discussed further below.
+The syntax for reasoning about principals is much the obvious one. We manipulate equations between principal expressions, built from atoms A0, A1, A2, . . . with the symbols ∧ and |. We combine equations into boolean formulas and then adopt the usual axioms from propositional logic and the axioms for the algebraic structures of choice (multiplicative semilattice semigroups, when not stated otherwise).
+Section 6 discusses decidability issues for the calculus of principals.
+On binary relations. As mentioned, an example of a multiplicative semilattice semigroup is an algebra of binary relations over a set, with the operations of union and composition. Now we discuss binary relations in some detail; we use them in the rest of the paper in semantic discussions. Those readers not interested in formal semantics may wish to skip all references to binary relations.
+A multiplicative semilattice semigroup isomorphic to an algebra of binary relations is called representable. In fact, the binary-relation example is common in a mathematical sense: every free multiplicative semilattice semigroup is representable (e.g., [3, 21]). This implies that the equational theory of multiplicative semilattice semigroups coincides with that of binary-relation algebras.
+Equational theories do not suﬃce for reasoning about access rights, as for example group-membership assumptions are needed. Since the binary-relation model is a clear, appealing one, it is then natural to hope that every multiplicative semilattice semigroup is representable. Andr´eka has recently proved that this is not the case [3]. She has also studied the distributive multiplicative semilattice semigroups, which are deﬁned by the additional distributivity axiom:
+— if B ∧ C ⇒ A then there exist B and C such that B ⇒ B , C ⇒ C , and A=B ∧C .
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·A Calculus for Access Control
+
+7
+
+Every distributive multiplicative semilattice semigroup is representable. The class of distributive multiplicative semilattice semigroups is a quasi-variety, but neither a variety nor ﬁnitely axiomatizable.
+The algorithmic applications of the distributivity axiom are hard to see because of its existential nature. Therefore, in the remainder of the paper, we examine both the axiomatic and the model-theoretic possibilities. We tend to work axiomatically, with the theory of multiplicative semilattice semigroups, but rely on binary relations as a way of constructing models. Moreover, Section 6 describes an algorithm for the binary-relation model.
+Other algebraic structures. It is possible, and somewhat natural, to consider operators on principals beyond ∧ and |. Here we consider a few operators with a mathematical origin. These operators are used very seldom elsewhere in this paper.
+A unit 1 turns the semigroup into a monoid; 1 can be viewed as a perfectly honest principal. The unit introduces further distinctions between the axiomatic and the binary-relation viewpoints. For example, any relation smaller than the unit is idempotent, but this is not a theorem of multiplicative semilattice monoids. Thus, Andr´eka’s remarkable representability result seems intriguingly fragile.
+A disjunction operation turns the distributive semilattice into a distributive lattice. Andr´eka has proved that some multiplicative semigroup distributive lattices are not representable, but the free ones are representable.
+If the lattice operations are generalized to the inﬁnite case, then we have a quantale. In a quantale, the product fully distributes over one of the lattice operations; here it is ∧. In particular, this says that the empty meet 0 is absorbent for |. Quantales provide models for (intuitionistic) linear logics [13, 26]. In these logics the multiplicative conjunction connective (|, in our case) is often understood as a form of parallel composition [1, 7, 25]. In our setting, | is in fact a special form of parallel composition, though a noncommutative one.
+Finally, it is possible to add the remaining operator of Kleene algebras [16], namely Kleene’s iteration operator ( )∗. We have not yet found a need for this.
+3.2 A Logic of Principals and Their Statements
+Here we develop a modal logic based on the calculus of principals.
+Syntax. The formulas are deﬁned inductively, as follows:
+— a countable supply of primitive propositions p0, p1, p2, . . . are formulas; — if s and s are formulas then so are ¬s and s ∧ s ;
+— if A and B are principal expressions then A ⇒ B is a formula;
+— if A is a principal expression and s is a formula then A says s is a formula.
+We use the usual abbreviations for boolean connectives, such as ⊃, and we also treat equality between principals (=) as an abbreviation. In addition, A controls s stands for (A says s) ⊃ s.
+Axioms. The basic axioms are those for normal modal logics [14]:
+— if s is an instance of a propositional-logic tautology then s;
+— if s and (s ⊃ s ) then s ;
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·8 M. Abadi et al.
+— A says (s ⊃ s ) ⊃ (A says s ⊃ A says s ); — if s then A says s, for every A.
+The calculus of principals is included:
+— if s is a valid formula of the calculus of principals then s.
+Other axioms connect the calculus of principals to the modal logic:
+— (A ∧ B) says s ≡ (A says s) ∧ (B says s); — (B|A) says s ≡ B says A says s; — (A ⇒ B) ⊃ ((A says s) ⊃ (B says s)).
+The last axiom is equivalent to (A = B) ⊃ ((A says s) ≡ (B says s)), a substitutivity property.
+Other relations between principals. Two relations similar to ⇒ deserve mention at this point.
+Let us write A → B if, for every s, if A says s then B says s. Although → is weaker than ⇒, it suﬃces in many of the situations where we currently use ⇒, and hence we have contemplated adding it to the formalism. It may also be convenient to have second-order quantiﬁcation over formulas and over principals. Second-order quantiﬁcation enables us to deﬁne A → B as ∀x.((A says x) ⊃ (B says x)). We do not adopt any of these additional constructs, for the sake of minimality. However, there is no diﬃculty in giving a semantics for them, and the proof rules needed in examples would be simple.
+Another important relation between principals is deﬁned by the formula
+(A says false) ⊃ (B says false)
+which we abbreviate A → B. Intuitively, A → B means that there is something that A can do (say false) that yields an arbitrarily strong statement by B (in fact, false). Thus, A → B means that A is at least as powerful as B in practice. Clearly, A ⇒ B implies A → B. We do not have the converse, and actually the converse does not seem attractive, as for example B → (B|A) is valid but we would not want B ⇒ (B|A) (since B may wish to say s without this being taken as a quotation of A). Nevertheless, the relation → serves as a point of reference in axiomatizing the algebra of principals; a careful study of → may be of some interest.
+3.3 Semantics The simplest semantics is a Kripke semantics, based on accessibility relations [14]. A structure M is a tuple W, w0, I, J , where
+— W is a set (as usual, a set of possible worlds); — w0 is a distinguished element of W ; — I is an interpretation function that maps each proposition symbol to a subset
+of W (the set of worlds where the proposition symbol is true); — J is an interpretation function that maps each principal symbol to a binary
+relation over W (the accessibility relation for the principal symbol).
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·A Calculus for Access Control
+
+9
+
+The meaning function R extends J, mapping a principal expression to a relation:
+R(Ai) = J (Ai) R(A ∧ B) = R(A) ∪ R(B)
+R(B|A) = R(A) ◦ R(B)
+There is no diﬃculty in giving a semantics to other operations on principals such as inﬁnite conjunctions, disjunctions, 0, and 1.
+This simple relational model provides some justiﬁcation for the axioms for principals. If R(A) = R(B), then it is natural to have A = B, and this holds in the semantics. For example, R(C|(B|A)) = R((C|B)|A) provides a justiﬁcation for the associativity of |.
+The meaning function E maps each formula to its extension, that is, to the set of worlds where it is true:
+E(pi) = I(pi) E(¬s) = W − E(s)
+E(s ∧ s ) = E(s) ∩ E(s )
+E(A says s) = {w | R(A)(w) ⊆ E(s)}
+E(A ⇒ B) = W if R(B) ⊆ R(A) and ∅ otherwise
+where R(C)(w) = {w | wR(C)w }. A formula s holds in M at a world w if w ∈ E(s), and it holds in M if it holds
+at w0. In the latter case, we write M |= s, and say that M satisﬁes s. Moreover, s is valid if it holds in all models; we write this |= s. The axioms are sound, in the sense that if s then |= s. Although useful for our application, the axioms are not complete. For example, the formula
+(C says (A ⇒ B)) ≡ ((A ⇒ B) ∨ (C says false))
+is valid but not provable. A more interesting source of incompleteness is that the algebras of principals that underly the semantics are obviously representable, while some multiplicative semilattice semigroups are not. (We do obtain a completeness result for a sublanguage in Section 6.)
+More abstract models. A more abstract model may be desirable in order to avoid the requirement of representability. A ﬁrst step would be to modify the notion of structure. A structure would become a tuple W, w0, I, J, P, F , where P is a multiplicative semilattice semigroup (the principals) and F is a homomorphism from P to W 2. The functions J and R map principal expressions not to binary relations but to principals—the corresponding binary relations being still available via F . The corresponding semantics is
+R(Ai) = J (Ai) R(A ∧ B) = R(A) ∧ R(B)
+R(B|A) = R(A) ◦ R(B)
+...
+E(A says s) = {w | F (R(A))(w) ⊆ E(s)}
+E(A ⇒ B) = W if R(A) ⇒ R(B) and ∅ otherwise
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·10 M. Abadi et al.
+Now it is consistent to have two diﬀerent principals with the same associated binary relation.
+This semantics is imbalanced, as it gives an abstract interpretation of principals but not of propositions. A more balanced, abstract semantics is possible in terms of structures similar to dynamic algebras (see Pratt [21] for a recent discussion of dynamic algebras). The operator says is directly analogous to the usual partial correctness operator [ ] of dynamic logic. It connects the two sorts of the algebras, that of principals and that of propositions.
+3.4 On Idempotence
+Idempotence postulates are attractive. For example, when A is a user there seems to be little advantage in distinguishing A|A and A; in fact, this distinction seems quite artiﬁcial. Therefore, we may postulate that A|A = A, for all A, and hence that A says A says s and A says s are equivalent. The idempotence of | implies the idempotence of for (see Section 5 for details). Here we discuss the idempotence of | and for ; most of the remarks below are written in terms of |, but exactly the same arguments apply to for .
+The idempotence axiom is rather convenient for handling chains of principals. For instance, suppose that G represents a collection of nodes, that B and C represent members of G, and that an ACL includes G|A. Thanks to idempotence, the principal C|B|A obtains access. This means that multiple “hops” within a collection of nodes does not reduce rights and should not reduce security. In particular, there is no need to postulate that G|G ⇒ G, or to make sure that G|G|A appears in the ACL explicitly.
+In addition, idempotence yields (A∧B) ⇒ (B|A), since (A∧B) = (A∧B)|(A∧B) and | is monotonic, and similarly (A ∧ B) ⇒ (B for A). These implications are rather pleasing, but not necessarily intuitive. They complicate the problem of making access control decisions. When (A ∧ B) makes a request, one must check whether either (B|A) or (A|B) is trusted and grant access if either is trusted.
+Finally, the semantics of Section 3.3 does not validate idempotence. We have been unable to ﬁnd a sensible condition on binary relations that would force idempotence and would be preserved by both union and composition. A related symptom is that idempotence seems less compelling for complex principals than for simple ones.
+For all these reasons we prefer to do without idempotence; to compensate we often rely on assumptions of the form G|G ⇒ G, or write less elegant but more explicit ACLs.
+We give a similar treatment to other possible axioms related to idempotence. Although it is often reasonable to assume formulas of the forms A controls (B ⇒ A) and A controls (t ⊃ A says s), this does not seem well founded in general. In particular, when A is a group, if A controls (B ⇒ A) for all B then any member of A can add members to A. Therefore, we choose to adopt neither A controls (B ⇒ A) nor A controls (t ⊃ A says s) as general axioms.
+4. ROLES
+The formal system we have presented so far includes no exotic connectives for roles or delegation. We discuss roles in this section and delegation in the next one. We start with an informal argument on the nature of roles and then describe their logic.
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·A Calculus for Access Control
+
+11
+
+4.1 What Roles Are For
+There are many situations in which a principal may wish to reduce his powers. We now describe a few, as motivation for our treatment of roles. They are all examples of the principle of “least privilege,” according to which a principal should have only the privileges it needs to accomplish its task.
+An administrator may want to have the powers of a normal user most of the time, and exercise his extraordinary powers only when needed. For example, users of the unixTM operating system with system-manager privileges typically run with their own, normal identity when that suﬃces, in order to avoid costly mistakes.
+When a principal wishes to run a piece of untrusted software, he should be able to invoke it with reduced powers. It is important that the untrusted code should not be able to increase its powers beyond those granted initially. This is done in capability systems by restricting capabilities before passing them across address spaces and by passing as few capabilities as possible. In timesharing systems it is common for untrusted software to be tested with unprivileged user accounts that are used for no other purpose.
+Analogously, when a principal wishes to delegate his powers to a machine less trustworthy than his own, he should be able to limit the rights passed.
+These situations can be handled by the use of roles. A principal A may adopt a role R and act with the identity A as R when he wants to diminish his powers. Thus, A can decide to become A as R and then later perhaps A as R as R . Role adoption is not reversible, in the sense that A as R cannot, on his own, recover the full powers of A. This prevents untrusted software that has been granted only limited rights from obtaining the full rights of the user that invoked it. But this does not mean that a user who has once relied on roles can never again exercise his full powers: a process acting on behalf of the user may hold on to the credentials for the user’s original identity, which it could use when instructed.
+As a practical matter it may be best for users to have only restricted powers when they ﬁrst log in. In this way users could be forced to authenticate themselves a second time when they want extraordinary powers. Our general treatment of roles does not require or preclude such implementation decisions, which are however important in building a usable system.
+4.2 Roles, Groups, and Resources
+A principal A may reduce his powers in diﬀerent ways by adopting diﬀerent roles, say R or R . Some ACLs may grant permissions to A as R but not to A as R , and vice versa. There is however no intrinsic diﬀerence between R and R ; that is, if the uses of their names were swapped consistently in all ACLs, the eﬀects of adopting the two roles would be swapped. Moreover, R and R may be used diﬀerently at two independent sites. Thus, the meaning of roles could be a matter of local policy at each site; this policy is reﬂected in the writing of ACLs.
+In practice, we expect many roles to be related to groups. If G is a group, there may be a role Grole associated with it, so that a member of a group G can act in the role of member of G. A member A of several groups F , G, H, . . . can select the privileges associated with one, say G, by adopting the corresponding Grole . Without this role, A matches any ACL with an entry F , but A as Grole need not.
+TMunix is a registered trademark of unix System Laboratories, Inc.
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·12 M. Abadi et al.
+However, A as Grole matches any ACL with an entry G as Grole , and if we accept the rule that G = G as Grole , then A as Grole also matches any ACL with an entry G.
+It is tempting to establish a formal identiﬁcation between the group G and a corresponding role G role. In what follows, for simplicity, we do not identify roles and groups. In fact, this identiﬁcation would interact somewhat strangely with our encoding of roles, given below. We do allow roles related to groups (such as G role), but this relation is not formal; a formal operator for relating groups and roles may be a useful extension of our calculus.
+It is reasonable to expect that not all roles make sense for all principals and that a principal can act only in certain roles. For example, a principal may be allowed to act as G role only if he is a member of G. The simplest implementation of this idea relies on the judicious writing of ACLs. Roles can be adopted freely, and any A can speak in the role G role, with the identity A as G role. However, it may be that no ACL in the system grants access to A as G role, and for example the ACL G as G role does not if A is not a member of G. It is this implementation that we choose.
+Not all roles that arise naturally are related to groups. For example, there may be a role such that adopting it makes it possible to access only a certain directory in the ﬁle system; the role corresponds naturally to a set of resources (ﬁles) rather than to any group of principals.
+4.3 The Encoding
+Given the view that roles can be freely adopted, it is quite satisfactory to deﬁne A as R to equal A|R.
+In many cases this encoding makes some intuitive sense. For example, let A be a machine and R a (possibly untrusted) piece of software that A is running. The requests that A makes while running this software should not emanate from A with full powers; rather, they should emanate from A in some restricted role. The role can be named after the piece of software or after its class (e.g., untrusted-software). In any case, when A makes a request s in this role, A says that R says s. This is precisely A|R says s. Similarly, if A is a user and R is one of his positions, we can think of R as a program that A is following and apply the analysis above.
+Furthermore, this presentation of roles oﬀers formal advantages, thanks to the monotonicity, multiplicativity, and associativity of |.
+— Since | is monotonic in both arguments, if R is a more trusted role than R and A a more trusted principal than A , then A as R is more trusted than A as R ; that is, if R ⇒ R and A ⇒ A then (A as R) ⇒ (A as R ). Thus, it is possible to exploit a hierarchy of roles.
+— The multiplicativity of | yields that A ∧ B in a role R is identical to the conjunction A and B both in role R:
+(A ∧ B) as R = (A as R) ∧ (B as R)
+Similarly, we can exploit the conjunction operation for roles:
+A as (R ∧ R ) = (A as R) ∧ (A as R )
+Both of these properties seem reasonable for roles as we conceive them informally, and they are quite handy.
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·A Calculus for Access Control
+
+13
+
+— Associativity yields a satisfactory interaction between roles and delegation. In particular, the user A in role R on a machine B is identical to the user A on a machine B, with the compound in role R:
+B|(A as R) = (B|A) as R
+and then the encoding of for , given in the next section, yields
+B for (A as R) = (B for A) as R
+Some special properties for roles can be expected:
+— We sometimes rely on the postulates that all roles are idempotent (R|R = R) and commute with one another (R |R = R|R ). This yields
+A as R as R = A as R
+and
+A as R as R = A as R as R
+(We make it explicit when these properties are assumed.) — We assume A ⇒ (A as R) for all A. With a unit, this could just be written
+1 ⇒ R. In the binary-relation model, 1 ⇒ R means that roles are subsets of the identity relation; note that the previous idempotence and commutativity properties follow from this.
+5. DELEGATION
+Delegation is a fairly ill-deﬁned term. Here we explain our approach to delegation; some example schemes for delegation illustrate the use of the logic. Then we give an encoding of delegation.
+5.1 The Forms of Delegation
+Delegation is a basic primitive for secure distributed computing. It is the ability of a principal A to give to another principal B the authority to act on A’s behalf. When B requests a service from a third principal, B might present credentials that are supposed to demonstrate that B is making the request and that A has delegated to B.
+Naturally, access control decisions need to take delegations into account. A range of designs is possible.
+In the simplest case, A delegates all of his rights to B. Upon B’s request, a service will be granted if it would have been granted to A, had A requested it directly.
+An obvious improvement is for A to delegate only some of his rights, such as the right to read certain ﬁles from a ﬁle server. Capability systems (e.g., [10, 18, 23]) embody this approach in the case where delegation certiﬁcates can be transferred; the containment of capabilities is a serious concern. If delegation certiﬁcates are not transferable, cascaded delegations are hampered, as A may have to prepare adequate certiﬁcates for any expected collaborators to B in advance. In all cases the provider of the service never checks that B is a reasonable delegate for A.
+These considerations suggest more sophisticated designs, where access control decisions may depend on the identities of both A and B. For example, the ﬁle server may not let a known malicious workstation read a user’s ﬁles, even if the
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·14 M. Abadi et al.
+user was unlucky enough to log onto the workstation. The ﬁle server may also let a trusted node read ﬁles over which the user has execute-only rights, in the belief that these ﬁles will not be shown to the user, but just executed; here the node acts as a protected subsystem and oﬀers guarantees that its clients cannot provide by themselves. These examples illustrate a desirable ﬂexibility. It exists in some form in a few designs and systems [15, 24], and it is a prominent component of DSSA [12]. We believe that it should and will become widespread.
+Diﬀerent mechanisms embody the concept of delegation in diﬀerent settings. A user might rely on a smart-card for delegating to a workstation, while delegation across the address spaces of a machine might beneﬁt from operating system support. (The use of smart-cards is discussed in [2], with a simplistic view of delegation.) Similarly, credentials can be signed with either shared-key cryptography or with public-key cryptography, or they might not be signed at all when a secure physical channel is available. Recognizing and treating all these variants as mere instances of delegation makes possible a uniform view of access control throughout an entire distributed system.
+Delegation relies on authentication, which is often achieved through authentication protocols (see for example [4, 5, 15, 19, 20]). In fact, some of the messages for delegation can be combined with those for authentication. However, in our study, it is often convenient to view delegation as independent.
+Delegation without certiﬁcates. The framework outlined so far enables us to describe and compare various schemes for delegation. In what follows, A delegates to B, who makes requests to C. For instance, A may be a user with a suﬃciently powerful smart-card, B a workstation, and C a ﬁle server. For simplicity, the authority delegated from A to B is not limited to any particular class of requests and A does not adopt a special role before the delegation.
+We assume that synchronized clocks are available and that appropriate timestamps, lifetimes, sequence numbers, and message type ﬁelds are included and checked for all messages. We also assume that all principals can perform digital signatures, for example with the RSA algorithm [22]. We denote by KA and KB the public keys for A and B, and by KA−1 and KB−1 the matching secret keys. The formula K says X represents the certiﬁcate X encrypted under K−1, which is commonly written {X}K−1 .
+A certiﬁcation authority S provides certiﬁcates for the principals’ public keys as needed. The necessary certiﬁcates are KS says KA ⇒ A and KS says KB ⇒ B, where KS is S’s public key.
+We consider three instances of delegation. In each case we are led to ask whether composite principals, such as B|A, appear on C’s ACL. The simplest instance of delegation is delegation without certiﬁcates:
+(1) When B wishes to make a request r on A’s behalf, B sends the signed request along with A’s name, for example in the format KB says A says r.
+(2) When C receives the request r, he has evidence that B has said that A requests r, but not that A has delegated to B; then C consults the ACL for request r and determines whether the request should be granted under these circumstances.
+The logic serves in describing the reasoning of the service provider, C, who makes the access control decision. Some assumptions are needed. First, C must believe
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·A Calculus for Access Control
+
+15
+
+that KS is S’s public key: KS ⇒ S
+and C obtains a certiﬁcate encrypted under the inverse of KS: KS says (KB ⇒ B)
+These two formulas yield
+
+S says (KB ⇒ B) We should assume that C trusts S for such statements:
+
+S controls (KB ⇒ B) and we immediately obtain that C has B’s key:
+
+KB ⇒ B
+In addition, C sees a message under the inverse of KB, requesting r on behalf of A; in other words,
+
+Immediately, C obtains
+
+KB says A says r
+
+B says A says r
+
+that is,
+
+(B|A) says r
+
+Now C consults an ACL for r. If B|A appears in this ACL, that is, if B|A is trusted on r, then C believes r—access is granted.
+
+Delegation with certiﬁcates. The protocol just described can hardly be considered satisfactory in general. It is preferable for A to issue a delegation certiﬁcate that proves the delegation to B:
+
+(1) After mutual authentication, A issues a certiﬁcate to B under A’s key. This certiﬁcate states that A has delegated some authority to B.
+(2) When B wishes to request r on A’s behalf, no further interaction with A is needed: B can present A’s certiﬁcate to C, along with KB says A says r.
+(3) At this point C has evidence that B has requested r on behalf of A; now C consults the ACL for r and determines whether the request should be granted.
+
+For the time being, let us use the notation B serves A to mean that B is a delegate for A. (But serves need not be primitive; see Section 5.2.) Then the delegation certiﬁcate from A for B can be expressed:
+
+KA says (B serves A) and the usual checking of public-key certiﬁcates from S yields
+
+A says (B serves A)
+
+If C trusts A on this statement, C gets
+
+((B|A) says r) ∧ (B serves A)
+
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·16 M. Abadi et al.
+In our theories, this implies
+(B for A) says r
+Again C can consult the ACL for r, and r will be granted if the list includes B for A. In particular, r will be granted if the list mentions B|A, a weaker principal, but may be granted even otherwise.
+This scheme is illustrated in more detail by an example in Section 6.
+Delegation without delegate authentication. Another variant consists in omitting the authentication between B and C, leaving the responsibility of authenticating B solely to A:
+(1) After mutual authentication, A issues a certiﬁcate to B under A’s key. The certiﬁcate includes a key Kd and B’s name. The inverse key Kd−1 remains a secret known at most to A and B.
+(2) When B wishes to request r on A’s behalf, B can present A’s certiﬁcate to C along with the request under the delegation key Kd.
+(3) At this point C has evidence that B has requested r on behalf of A; now C consults the ACL for r and determines whether the request should be granted.
+The most obvious novelty in this scheme is the introduction of a delegation key Kd. One of the reasons why this is signiﬁcant is that the delegate can simply forget the secret key Kd−1 in order to give up the power of acting on behalf of the delegator; Section 6 discusses this use of delegation keys. For eﬃciency, however, requests would be made under neither KB nor Kd, but rather under a shared session key, for example a DES key [8]. The use of a session key is a signiﬁcant optimization because of the eﬃciency of DES encryption, and does not compromise security.
+The ﬁnal items in these descriptions are deceptively identical. In the previous schemes, C obtains direct evidence that B is making the request. In this scheme, on the other hand, this evidence is provided only by A’s certiﬁcate, which includes B’s name. Accordingly, we may want C to make diﬀerent access control decisions in the two cases. This distinction is necessary, for example in the case in which B is a protected subsystem. It is a distinction that a theory of delegation should allow, and hopefully clarify.
+Let us denote by A on B the compound principal that is obtained by this delegation scheme. It is sensible to assume that A ⇒ (A on B) for A to be believed when he claims that Kd speaks for A on B. This property suggests the deﬁnition (A on B) = (A ∨ (B for A)); the deﬁnition yields suitable properties for on.
+The use of on is problematic in a world where some ACLs may allow B for A but not A on B. The interaction between on and for is unfortunate. In particular, a request from A on B may fail where one from B for A would succeed; this is unpleasant, since for could have appeared in the request instead of on. It poses the problem of how to choose when to use on and when to use for . It seems best to use for throughout. This choice can be made aﬀordable, and it also oﬀers the advantage of simplicity—the design requires fewer credential formats and fewer laws. Therefore, we do not discuss on further.
+5.2 The Encoding
+The delegation of all powers can be deﬁned convincingly: A delegates to B when A says that B speaks for A (that is, when A says (B ⇒ A) holds). The concept of
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·A Calculus for Access Control
+
+17
+
+delegation that interests us here is subtler. When A delegates to B, the powers of B on behalf of A depend on the contents of the ACLs in the distributed system; A may be more reckless with delegations if these powers are small. In turn, the contents of the ACLs depend on how their writers understand the meaning of delegation. There is a circularity here. The meaning of delegation results from the combination of the contents of the ACLs in the system and of the behavior of delegators and delegates. Hence, we conclude that the meaning of delegation is a matter of policy or convention.
+These remarks suggest an approach where the notion of delegation is primitive; we now sketch this approach, assuming for a moment that disjunction is available. The operator serves is taken as primitive and axiomatized. Some straightforward axioms come to mind, and in particular that B serves A is antimonotonic in B and that if Bi serves A for all i, then ( i Bi) serves A. Let E(A) be the weakest principal to which A has delegated and let EB(A) be the weakest principal stronger than B to which A has delegated. Then B for A can be deﬁned to be EB(A)|A, and this equals (B ∧ E(A))|A. Axioms for delegation yield properties of for ; for example, the axioms given yield that for is multiplicative in its second argument. We have not found a satisfactory way to obtain associativity.
+We prefer not having delegation as a logical primitive; the following thought experiment inspires an alternative approach. Imagine that there is a distinguished principal D in the distributed system who operates as a delegation server. The function of D is to certify delegations. When A wants to delegate to B, it suﬃces for A to tell D that if B says that A says s, then D should back B. Thus, if B|A says s then D|A says s. Intuitively, D says that A says s when a delegate of A’s makes this assertion. Thus, we can take (B ∧ D)|A as a formal encoding for B for A. Notice that there is a striking similarity between this encoding of for and the previous formulation.
+It is not actually necessary for D to be implemented, just as typical roles do not correspond to real users and machines. When A wishes to delegate to B, A says that for all s, if B says that A says s then D says that A says s; formally, it suﬃces to have A says (B|A ⇒ D|A). The statement A controls (B|A ⇒ D|A) then represents that A can delegate to B. These two assertions together immediately yield (B|A ⇒ D|A), and when (B|A) says s, we obtain (D|A) says s, and then ((B ∧ D)|A) says s. In this formal derivation it is irrelevant whether D is a real server or not. (It is perhaps even better if D is not a real server, for then it cannot be attacked.)
+Thus, we can take B for A to mean (B ∧ D)|A, where D is a distinguished ﬁctional principal. Similarly, (B|A ⇒ D|A) can represent B serves A; hence, if B serves A then (B|A ⇒ B for A). This expresses the intuition that for is | “plus a delegation.” The logical framework also allows the possibility of weaker delegation statements, where A delegates only some of these rights; we prefer the use of roles for limiting the power of delegations.
+Our encoding has sensible formal consequences:
+— for is monotonic in both arguments.
+— for is multiplicative in both arguments, in fact. This follows from the multiplicativity of | and the deﬁnition of for :
+(B ∧ B ) for (A ∧ A ) = (B ∧ B ∧ D)|(A ∧ A )
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·18 M. Abadi et al.
+= ((B ∧ D) ∧ (B ∧ D))|(A ∧ A ) = ((B ∧ D)|A) ∧ ((B ∧ D)|A )
+∧ ((B ∧ D)|A) ∧ ((B ∧ D)|A ) = (B for A) ∧ (B for A ) ∧ (B for A) ∧ (B for A )
+— B for A is always deﬁned, even if A has not delegated to B. In fact, we have
+(B|A) ∧ (C for A) ⇒ ((B ∧ C) for A)
+and hence also
+(B|A) ∧ (C for A) ⇒ (B for A)
+This somewhat surprising theorem is the consequence of two desirable, basic properties: the monotonicity of for and the antimonotonicity of delegation (which means that if A delegates to C, then it also delegates to the stronger principal B ∧ C).
+Additional properties of D yield further consequences:
+— If D|D ⇒ D then for possesses a weak associativity property:
+C for (B for A) ⇒ (C for B) for A
+which follows from the associativity and the multiplicativity of |:
+C for (B for A) = (C ∧ D)|((B ∧ D)|A) = (C|B|A) ∧ (C|D|A) ∧ (D|B|A) ∧ (D|D|A) ⇒ (C|B|A) ∧ (C|D|A) ∧ (D|B|A) ∧ (D|A) ⇒ (C|B|A) ∧ (D|B|A) ∧ (D|A) = ((C for B)|A) ∧ (D|A) = (C for B) for A
+The other direction of the implication is not valid. The essential reason for this is that C for (B for A) implies C|D|A, while (C for B) for A does not. Intuitively, this is because C’s part in (C for B) for A need not involve checking evidence that B is a delegate for A, or even that A exists. — If A ⇒ D|A then (A ∧ (B|A)) ⇒ (B for A), because | is multiplicative:
+A ∧ (B|A) ⇒ (D|A) ∧ (B|A) = ((B ∧ D)|A) = B for A
+This property means that when A makes a statement himself, there is no need to ﬁnd a corresponding statement by the delegation server. — If A ⇒ D|A and A = A|A then A = A for A, that is, the idempotence of | implies the idempotence of for :
+A for A = ((A ∧ D)|A) = (A|A) ∧ (D|A) = A ∧ (D|A) =A
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·A Calculus for Access Control
+
+19
+
+The additional properties for D are reasonable, and we adopt them. These properties are reminiscent of those for roles. In the binary-relation model, for example, these properties of D and those for roles all amount to saying the same thing, that the associated binary relations are subsets of the identity.
+6. PROTOCOLS AND ALGORITHMS
+In this section we consider some mechanisms for delegation and for access control decisions. The last subsection presents an example.
+6.1 Delegation
+While delegation has a single semantics, substantially diﬀerent implementations are recommended for users and for nodes.
+Delegation from users to nodes. The schemes for delegation discussed in Section 5 do not seem adequate for users. Delegation from users to nodes poses special problems. One diﬃculty is that it is inconvenient for users to refresh delegation certiﬁcates. Refreshing a delegation certiﬁcate may require reintroducing a smartcard, for example. Therefore, it seems desirable that delegation certiﬁcates be relatively long-lived (valid for many hours).
+Long-lived delegation certiﬁcates pose a security threat because a delegation certiﬁcate may be valid long after the user has stopped using the node. An attacker may subvert the node over a relatively long time period and abuse the user’s delegation. To prevent this from happening, it is best to introduce an auxiliary delegation key that the node can forget deliberately when the user leaves. The delegation certiﬁcate remains valid, but becomes useless.
+In more detail, the protocol goes as follows. First the user A delegates to the node B and to a public key Kd provided by the node:
+A says ((Kd ∧ B) serves A)
+The node has the inverse of the public key and it can set up a channel Ch for (Kd ∧ B) for A:
+Kd says A says (Ch ⇒ (Kd ∧ B) for A)
+and
+B says A says (Ch ⇒ (Kd ∧ B) for A)
+Hence
+((Kd ∧ B) for A) says (Ch ⇒ (Kd ∧ B) for A)
+follows logically. When this statement is believed, it yields
+Ch ⇒ (Kd ∧ B) for A
+and then monotonicity leads to the desired result:
+Ch ⇒ B for A
+Hereafter B can make requests for A through the channel Ch. In practice, the channel may be obtained by multiplexing a longer-term secure channel from B; this longer-term channel may well be a DES channel.
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·20 M. Abadi et al.
+The delegation from Kd to the channel has a relatively short lifetime and needs to be renewed frequently. When the node forgets Kd deliberately, it loses the ability to refresh the certiﬁcate for the channel Ch.
+Delegation from nodes to nodes. For nodes the schemes of Section 5 are convenient enough. The one corresponding to the for operator is simple, reasonably secure, and can be made eﬃcient enough for implementation.
+The same ideas work for cascaded delegations. Suppose that user A has delegated to node B and that B can operate with the identity B for A. If a further delegation is needed to a node C, the precise delegation statement is
+(B|A) says (C serves (B for A))
+Since A has delegated to B, it follows logically that:
+(B for A) says (C serves (B for A))
+This statement is believed, and yields
+C serves (B for A)
+Now C can make a request r on behalf of B for A:
+C says (B for A) says r
+and then the delegation from A yields
+(C for (B for A)) says r
+6.2 Access Control Decisions
+Unfortunately, the set of valid formulas of the calculus of principals is not recursive for any useful deﬁnition of validity, but it is recursively enumerable. Undecidability can be proved by a reduction from the word problem for Thue systems, for example. On the other hand, the formulas that arise in access control are not arbitrary; the next two parts discuss decidable access control problems.
+A general access control problem. The problem of making access control decisions is computationally complex. It is important therefore to understand the precise form of its instances. The parts of an instance are:
+— An expression P in the calculus of principals represents the principal that is making the request. In particular, all appropriate delegations are taken into account in constructing this expression. The various relevant certiﬁcates are presented for checking.
+— A statement s represents what is being requested or asserted; the statement is presented explicitly by the requester, and the service provider does not need to derive it logically from other statements. The precise nature of s is ignored—it is treated as an uninterpreted proposition symbol.
+— Assumptions state implications among principals; these typically represent assumptions about group memberships. They have the form Pi ⇒ Gi, where Pi is an arbitrary expression in the calculus of principals and Gi an atom. Note that this syntax is liberal enough to write G|G ⇒ G for every appropriate G of interest, obtaining some of the beneﬁt of the idempotence axiom.
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·A Calculus for Access Control
+
+21
+
+— Certain atomic symbols R0, . . . , Ri, . . . are known to denote roles. This may be obvious from their names.
+— An ACL is a list of expressions E0, . . . , Ei, . . . in the calculus of principals; these represent the principals that are trusted on s.
+The basic problem of access control is deciding whether i(Pi ⇒ Gi), derived from the assumptions, and i(Ei controls s), derived from the ACL, imply P controls s, given the special properties of roles and of the delegation server D. We simplify the problem, and ask instead whether i(Pi ⇒ Gi) implies P ⇒ Ej for some j.
+In this simpliﬁcation, ACL entries are considered one by one, and their possible interactions are ignored. ACL entries written by two diﬀerent users cannot lead to results that neither of them could foresee. The simpliﬁcation of the problem is both convenient and sound, but in some cases it is incomplete. For example, when the model is a monoid of binary relations, if R controls s and R controls s and both R and R are roles, then (R |R) controls s; on the other hand, the requester (R |R) is denied access when the entries R and R are considered separately. We do not know under what general conditions one has completeness; however, we prove a completeness result in the next subsection.
+Fixing a j and introducing an auxiliary atom A, the access control question becomes whether i(Pi ⇒ Gi) and Ej ⇒ A imply P ⇒ A. After some renamings, this is: given expressions P , Q0, . . . , Qi, . . . , and atoms A, B0, . . . , Bi, . . . , does
+i(Qi ⇒ Bi) imply P ⇒ A? This problem has a few interesting, tractable cases. If we ignore roles and D for the time being and allow only the operator ∧, we have the problem of deriving a Horn clause from other Horn clauses. If instead the only operator is |, we have the problem of deciding membership of a word in a context-free language. The word corresponds to P , and the grammar for the context-free language comes from the implications (Qi ⇒ Bi); the atom A serves as initial symbol. It is the combination of ∧ and | that makes the problem hard. More precisely, let us ignore roles and D, allow both | and ∧, and assume the theory of multiplicative semilattice semigroups. Context-free grammars can still be encoded, but in addition the “universal branching” due to ∧ alternates with the “existential branching” that comes from choosing between rules of the encoded grammars. Using these ideas, we have sketched a proof that the problem of making access control decisions is equivalent to the acceptance problem for alternating pushdown automata [6]. It follows that the fairly general access control problem that we posed requires exponential time. We believe that the inclusion of various reasonable properties for roles and for D does not worsen this complexity. (We have considered some of the cases.) Although all of the expressions involved seem likely to be small, we fear that our algorithms would not run fast enough in practice. Further restrictions are wanted.
+A more tractable problem. A second version of the access control problem is based on some further simpliﬁcations:
+
+— The for operator takes a more prominent role. Since it is expected to be common, one would want an algorithm that does not treat it by expanding it in terms of ∧ and |, with an exponential blow-up.
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·22 M. Abadi et al.
+— In eﬀect, for is treated as an associative operator. More precisely, we assume that all ACLs have the weakest parenthesization possible. This enables us to ignore the parenthesization of the requester.
+— The | operator occurs only in the encoding of for and as, and D occurs only in the encoding of for .
+— Roles are diﬀerentiated from other principals (called proper principals) and occur in special positions. The set of atomic symbols for proper principals is P; the set of atomic symbols for roles is Q.
+— Assumptions (group memberships) are restricted to the form atom ⇒ atom, where both atoms are either in P or in Q. In particular, this forbids the assumptions of the form G|G ⇒ G, which would give us some beneﬁts of idempotence where appropriate.
+— It is therefore necessary to include a construct for writing, in an ACL, that any positive number of iterations of a principal are allowed. We introduce a metalogical construct ( )+ for this purpose; for example F for G+ is a shorthand for the list F for G, (F for G) for G, . . . .
+An ACL is a list of ACL entries. In turn, an ACL entry is a conjunction of ACL entries free of ∧, called for -lists. A for -list is a list connected by for ’s, that is, it has the form P0 for . . . for Pm, where each Pi is a principal in roles. A principal in roles is of the form Q as R1 as . . . Rn, where Q is a proper principal and each Rj is a role.
+This deﬁnition is summarized by a grammar:
+ACL = list of Entry
+Requester = Entry
+Entry = conjunction of for -list
+for -list = Principal-in-Roles | for -list for Principal-in-Roles
+Principal-in-Roles = Proper-Principal | Principal-in-Roles as Role
+Membership = Proper-Principal ⇒ Proper-Principal | Role ⇒ Role
+The syntactic conditions can be loosened, as this normal form for ACL entries can be obtained by two syntactic transformations justiﬁed by the laws of the logic. Conjunctions can be pushed outwards, since both as and for distribute over ∧; this normalization is the only source of exponential behavior, and it can be expected to be unimportant in the common examples where conjunctions are rare. Roles can be pushed inwards, into the delegator argument of for ’s; this step is eﬃcient.
+With these syntactic restrictions, a more eﬃcient access control algorithm is possible:
+— The request is granted if the requester implies one of the ACL entries. — Each ACL entry is a conjunction of for -lists, and so is the requester. For the
+requester to imply an ACL entry, it must be that for each conjunct of the ACL entry there exists some conjunct of the requester that implies it. — A for -list implies another if they are of the same length, and each principal in roles of the requester implies the corresponding one of the entry. — A principal in roles Q as R1 as . . . as Rn implies another Q as R1 as . . . as Rn if Q implies Q and for each Rj there exists Rk such that Rj implies Rk.
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·A Calculus for Access Control
+
+23
+
+— An atomic symbol P implies another atomic symbol P if there is a chain of assumptions P = P0 ⇒ . . . ⇒ Pn = P .
+This algorithm is simple to describe to users, and it is also simple to implement. The adequate speed of a prototype implementation suggests that the algorithm might well be practical. The metalogical construct ( )+ does not introduce any major algorithmic diﬃculty. Its treatment is well understood, as it is standard in the context of regular languages.
+The algorithm is sound for the binary-relation model, where we take all roles to be subsets of the identity. The algorithm is also complete for the binary-relation model. Note in particular that the algorithm treats all roles as idempotent, and they all commute with one another.
+Theorem (Soundness and Completeness). Let E0, . . . , Ei, . . . be an ACL, P a requester, and i(Bi ⇒ Bi) a conjunction of assumptions. The algorithm grants the request if and only if
+(Bi ⇒ Bi) ∧ (Ei controls p) ⊃ (P controls p)
+ii
+is valid for all p over binary-relation models.
+proof. The soundness proof is simple. The algorithm works by attempting to prove that P ⇒ Ei for some i from the assumptions, and does so soundly. Moreover, the truth of P ⇒ Ei implies that if i(Ei controls p) holds, then so does P controls p.
+The completeness proof is clearest when there are no assumptions, and hence we ﬁrst treat that case. We suppose that the algorithm does not grant a request and obtain that there is a binary-relation model where i(Ei controls p) holds but P controls p does not, for some p. This requires that p be false, that P says p be true, and that Ei says p be false for all i.
+It suﬃces to ﬁnd some binary-relation model where ¬(w0R(P )w0) and where R(Ei)(w0) ⊆ R(P )(w0) for all i. Then we can deﬁne an interpretation that makes the proposition symbol p true at all w such that w0R(P )w, and false at all other worlds.
+The binary relation model is constructed from strings in a fairly usual way. Let T = P × 2Q and let S be the set of strings over T . The set S is our set of possible worlds; the empty string is w0.
+If Ai ∈ Q, then its interpretation J(Ai) is deﬁned by
+I(Ai) = {(x · (Aj, B), x · (Aj, B)) | Aj ∈ P, Ai ∈ B ⊆ Q}
+Hence roles are interpreted by subsets of the identity, as required. If Ai ∈ P then, instead:
+J(Ai) = {(x, x · (Ai, B)) | B ⊆ Q}
+with the exception of the special constant D:
+J(D) = ∅
+Thus, in this model, for and | are equivalent; this is merely a convenience. The interpretation of a principal expression Q relates the empty string to all
+strings (Pn, {Rn1 , . . . , Rnmn }) · . . . · (P1, {R11, . . . , R1m1 })
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·24 M. Abadi et al.
+such that
+(P1 as R11 as . . . as R1m1 ) for . . . for (Pn as Rn1 as . . . as Rnmn )
+is one of the for -lists in Q, and also to all strings obtained from the strings
+(Pn, {Rn1 , . . . , Rnmn }) · . . . · (P1, {R11, . . . , R1m1 })
+by enlarging the role sets. Note that in any case the empty string is never related to itself, as the for -lists are not empty, so in particular ¬(w0R(P )w0) holds.
+Suppose that, for some i, the algorithm does not manage to prove that P ⇒ Ei. Then there must be some conjunct in Ei that is not implied (according to the algorithm) by any of the conjuncts in P . Suppose this conjunct is
+(P1 as R11 as . . . as R1m1 ) for . . . for (Pn as Rn1 as . . . as Rnmn )
+This implies that the empty string is related to
+(Pn, {Rn1 , . . . , Rnmn }) · . . . · (P1, {R11, . . . , R1m1 })
+by the interpretation of Ei. On the other hand, there is no conjunct in P that establishes this relation. Thus, the model satisﬁes R(Ei)(w0) ⊆ R(P )(w0).
+This proves our initial completeness claim. Next we deal with assumptions. Without loss of generality, we can take the assumptions to be transitive, that is, if both Ai ⇒ Aj and Aj ⇒ Ak are assumed, then so is Ai ⇒ Ak.
+Let us replace each symbol Ai in P with the conjunction of all symbols Aj such that Ai ⇒ Aj is among the assumptions. Let P be the expression obtained after this replacement and after normalization (after ∧’s are moved outwards). The algorithm grants the request to P if and only if it grants the request to P —the additional conjuncts in P do not add strength in presence of the assumptions. Moreover, the algorithm grants the request to P using the assumptions if and only if it grants the request without the assumptions—as the additional conjuncts in P can be exploited to dispense with the assumptions. In short, P obtains access with the assumptions if and only if P obtains access without them.
+Now it suﬃces to show that a similar equivalence holds at the semantic level. Given a model M where i(Ei controls p) does not imply P controls p, we construct a model M where all of the assumptions hold and i(Ei controls p) does not imply P controls p. The models M and M diﬀer only in their interpretation functions, JM and JM :
+JM(Ai) = {JM (Aj) | Ai ⇒ Aj is among the assumptions}
+Note that all roles are still interpreted as roles. The meaning of P in M is equal to the meaning of P in M, and it is equal
+to the meaning of P in M. Moreover, all of the assumptions hold in M. The meaning of the Ei’s in M is larger than in M , thus making weaker the assumption
+i(Ei controls p). This shows that M has the desired properties. 2
+6.3 An Example
+The most typical, complete example is that of a user logging into a workstation, and the workstation making requests on a server.
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·A Calculus for Access Control
+
+25
+
+— The user A authenticates and delegates in some role RA to a workstation B in role RB. The user may rely on a smart-card, and use the scheme for user delegation outlined in Section 6.1. The delegation certiﬁcate is
+KA says RA says ((Kd ∧ (B as RB)) serves (A as RA))
+— The workstation sets up a secure channel to a server. Logically, this requires two statements:
+Kd says (A as RA) says (Ch ⇒ ((B as RB) for (A as RA)))
+under the delegation key, and
+KB says RB says (A as RA) says (Ch ⇒ ((B as RB) for (A as RA)))
+(For simplicity, the workstation acts in the role RB, but any stronger role would do just as well.) — The server needs to check that KA is the user’s key and that KB is the workstation’s key, that is, KA ⇒ A and KB ⇒ B. Typically this requires looking at certiﬁcates from a certiﬁcation authority; it is possible that a chain of certiﬁcation authorities needs to be involved, as there may be no single universally trusted certiﬁcation authority. — With these properties of the keys, it follows from the delegation certiﬁcate that
+(A as RA) says ((Kd ∧ (B as RB)) serves (A as RA))
+and this statement is believed. The channel set-up certiﬁcates yield
+((Kd ∧ (B as RB))|(A as RA)) says (Ch ⇒ ((B as RB) for (A as RA)))
+and this leads to
+((B as RB) for (A as RA)) says (Ch ⇒ ((B as RB) for (A as RA)))
+and then
+Ch ⇒ ((B as RB) for (A as RA)) as (B as RB) for (A as RA) is trusted in this matter. — The user may indicate to the workstation that he wishes to reduce his privileges and adopt a further role RA, in order to make a request r; or the workstation may do this on behalf of the user, on its own initiative:
+(Ch as RA) says r
+The requester here is ((B as RB) for (A as RA)) as RA, which is equivalent to (B as RB) for (A as RA as RA). — The ACL at the server may contain (G as RB) for (G as RA). The server may have, or the workstation may present, certiﬁcates that prove that A ⇒ G, RA ⇒ RA, RA ⇒ RA, and B ⇒ G . — Actually, the group membership certiﬁcates come signed with someone’s public key. In each case it must be possible to resolve this public key into a name and then to discover that the name is that of someone who is trusted to certify membership in the group. — At this point the algorithm for access control can easily determine that access should be granted.
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·26 M. Abadi et al.
+7. EXTENSIONS
+Our main goal in this paper has been to isolate some useful and mathematically tractable concepts. We have only touched on many practical and theoretical matters that deserve more detailed treatments. In addition, the basic logic could be extended in many interesting ways. To conclude, we brieﬂy describe three extensions.
+7.1 Intersection
+An intersection operation ∩ permits the construction of groups from groups. It is not a logical connective in the sense that conjunction is, as it can only be applied to atomic symbols (so for example (Aj|Ai) ∩ Ak is not a legal expression).
+Conjunction is strictly weaker than intersection: (A ∩ B) ⇒ (A ∧ B) is valid but (A ∧ B) ⇒ (A ∩ B) is not. A weaker property than (A ∧ B) ⇒ (A ∩ B) holds: if C ⇒ A and C ⇒ B then C ⇒ (A ∩ B) provided C is in some sense atomic. Atomicity is not a logically deﬁned notion; intuitively, only simple principals such as users and machines are atomic, while the conjunction of two such principals is not.
+An application of intersection concerns restricting access to only a particular member of a group. The ACL entry A ∧ G grants access to A if A is a member of G, but it also grants access to A ∧ B if B is a member of G. In contrast, A ∩ G grants access to A if A is a member of G, but not necessarily to A ∧ B even if B is a member of G.
+7.2 Subtraction
+Another important operation on groups is subtraction (−). It provides the ability to specify that certain named individuals or subgroups within a supergroup should be denied access, even when such access is granted to the supergroup. Subtraction is the only negative construct for ACLs in this paper.
+Subtraction has a simple semantics in centralized systems, where it is easy to decide group membership. There, subtraction is simply set subtraction. The situation is diﬀerent in distributed systems, because in general it is possible to prove only membership in groups, but not nonmembership.
+Consider, for example, a situation in which G − G appears in an ACL, with A ⇒ G, A ⇒ G , G ⇒ G , and G ⇒ G . Should access be granted to A? The facts A ⇒ G and G ⇒ G may not be available to the procedure making the access control decision. Moreover, we cannot expect A to provide proofs for them—as this is probably of no beneﬁt to A. Therefore, the access control decision cannot depend on A ⇒ G and G ⇒ G , and hence access should be granted in this case. In short, G − G means “all members of G , except for those that are members of G only via G.”
+This deﬁnition of subtraction is somewhat operational. Nevertheless, it is the best possible, and it has even been suggested that it provides an intuitive semantics for subtraction.
+Even in distributed systems, there are groups for which it is possible to prove both membership and nonmembership. Typically, these groups are those managed by fairly centralized subsystems of the distributed system. The traditional set subtraction operation can be made available for these groups.
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·A Calculus for Access Control
+
+27
+
+7.3 Variables
+So far, we have provided for only the most basic form of joint signatures, and a more general form would be useful. One would like to be able to express that access should be granted to any two diﬀerent members of a given group when they sign jointly, without listing all allowed combinations. Moreover, one may require that the two signers bear a certain relation to one another.
+The introduction of variables provides the desired expressiveness, and more. Variables can be included in ACLs. When a requester matches an ACL entry, we identify the parts of the requester that match against each of the variables in the ACL entry, and bind the variables to these parts. It is then possible to evaluate arbitrary predicates on these variables.
+For example, the entry y|x is equivalent to G|F when we require that x ⇒ F and y ⇒ G. Other requirements on x and y can be added, for instance that x and y be diﬀerent, or that y be a machine owned by x. (Intuitively, it becomes possible to generalize from unary relations to arbitrary ones.) The entry has an implicit universal quantiﬁer: it means that, for all x and y, if x and y satisfy all requirements then (y|x) controls s, where s is the statement under consideration. Trivially, B|A matches y|x; access is granted if the requirements hold when x is replaced with A and y with B.
+The manipulation of variables can be added to the algorithm of Section 6.2. There are some complications, however. In particular, some metalogical construct to handle lists of principal expressions is needed if variables are to be legal in the scope of the iteration construct ( )+.
+The use of variables may not be the only or best way to provide the desired expressiveness. It seems to deserve further study.
+GLOSSARY
+A says s: A makes the statement s.
+A controls s: A is trusted on s: if A says s then s. This is the meaning of A appearing in the ACL for s.
+A ⇒ B: A is a stronger principal than B. (For example, when B represents a group, A may represent a member or a subgroup of B.) If A says s then B says s, and if B controls s then A controls s.
+A = B: A ⇒ B and B ⇒ A.
+B serves A: B is a delegate for A. This can be deﬁned as (B|A ⇒ B for A).
+A ∧ B: A and B in conjunction; (A∧B) says s if and only if A says s and B says s.
+B|A: B quoting A; (B|A) says s if and only if B says A says s.
+B for A: B on behalf of A. This can be deﬁned in terms of a ﬁctional delegation server D, as (B ∧D)|A. If B says A says s and B serves A then (B for A) says s.
+A as R: A in role R. This can be encoded as A|R.
+A ∩ B: the intersection of A and B, if A and B are atomic symbols.
+A − B: A minus B, if A and B are atomic symbols.
+
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·28 M. Abadi et al.
+ACKNOWLEDGMENTS
+Morrie Gasser, Andy Goldstein, and Charlie Kaufman were at the origin of many of the ideas discussed here. Tim Mann, Garret Swart, and Ted Wobber participated in fruitful discussions about implementations and examples. Bill Shockley convinced us of the practical importance of the extension described in Section 7.3. Greg Nelson and Vaughan Pratt helped in understanding the algebra of principals. Roger Maddux told us about Andr´eka’s work. Luca Cardelli and Cynthia Hibbard provided editorial suggestions.
+REFERENCES
+1. Abadi, M., and Plotkin, G. A logical view of composition. Theor. Comput. Sci. 114, 1 (June 1993), 3–30.
+2. Abadi, M.,Burrows, M., Kaufman, C., and Lampson, B. Authentication and delegation with smart-cards. In Theoretical Aspects of Computer Software, Springer-Verlag Lecture Notes in Computer Science 526, Sept. 1991, 326–345.
+3. Andre´ka, H. Representations of distributive lattice-ordered semigroups with binary relations. Manuscript, Aug. 1989.
+4. Burrows, M., Abadi, M., and Needham, R.M. A logic of authentication. Proceedings of the Royal Society of London A 426 (1989), 233–271.
+5. CCITT. CCITT Blue Book, Recommendation X.509 and ISO 9594-8: The directoryauthentication framework. Geneva, March 1988.
+6. Chandra, A., Kozen, D., and Stockmeyer, L. Alternation. J. ACM 28 , 1 (Jan. 1981), 114–133.
+7. Dam, M. Relevance logic and concurrent computation. In Proceedings of the Third IEEE Symposium on Logic in Computer Science (July 1988), 178–185.
+8. National Bureau of Standards. Data Encryption Standard. Fed. Inform. Processing Standards Pub. 46. Washington D.C., Jan. 1977.
+9. Diffie, W., and Hellman, M. New directions in cryptography. IEEE Trans. Inf. Theor. IT-22, 6 (Nov. 1976), 644–654.
+10. Fabry, R. Capability-based addressing. Commun. ACM 17, 7 (July 1974), 403–412. 11. Gasser, M., Goldstein, A., Kaufman, C., and Lampson, B. The Digital Distributed Sys-
+tem Security Architecture. In Proceedings of the 1989 National Computer Security Conference (Oct. 1989), 305–319. 12. Gasser, M., and McDermott, E. An architecture for practical delegation in a distributed system. In Proceedings of the 1990 IEEE Symposium on Security and Privacy (May 1990), 20–30. 13. Girard, J.-Y. Linear logic. Theor. Comput. Sci. 50 (1987), 1–102. 14. Hughes, G.E., and Cresswell, M.J. An Introduction to Modal Logic. Methuen, New York, 1968. 15. Kohl, J., Neuman, C., and Steiner, J. The Kerberos network authentication service (version 5, draft 3). Available by anonymous FTP from athena-dist.mit.edu, as /pub/doc/kerberos/V5DRAFT3-RFC.{PS,TXT}, Oct. 1990. 16. Kozen, D. A completeness theorem for Kleene algebras and the algebra of regular events. Cornell TR90-1123, May 1990. 17. Lampson, B., Abadi, M., Burrows, M., and Wobber, E. Authentication in distributed systems: theory and practice. ACM Trans. Comput. Syst. 10, 4 (November 1992), 265–310. 18. Levy, H. Capability-based Computer Systems. Digital Press, 1983. 19. Miller, S.P., Neuman, C., Schiller, J.I., and Saltzer, J.H. Kerberos authentication and authorization system. In Project Athena Technical Plan, Section E.2.1, MIT, July 1987. 20. Needham, R.M., and Schroeder, M.D. Using encryption for authentication in large networks of computers. Commun. ACM 21, 12 (Dec. 1978), 993–999. 21. Pratt, V. Dynamic algebras as a well-behaved fragment of relation algebras. In Algebraic Logic and Universal Algebra in Computer Science, Springer-Verlag Lecture Notes in Computer Science 425, 1990, 77–110.
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+·A Calculus for Access Control
+
+29
+
+22. Rivest, R.L., Shamir, A., and Adleman, L. A method for obtaining digital signatures and public-key cryptosystems. Commun. ACM 21 , 2 (Feb. 1978), 120–126.
+23. Saltzer, J., and Schroeder, M. The protection of information in computer systems. Proc. IEEE 63, 9 (Sept. 1975), 1278–1308.
+24. Sollins, K. Cascaded authentication. In Proceedings of the 1988 IEEE Symposium on Security and Privacy (April 1988), 156–163.
+25. Vickers, S. Samson Abramsky on linear process logics. Foundation Workshop Notes, Oct.Nov. 1988.
+26. Yetter, D.N. Quantales and (noncommutative) linear logic. J. Symb. Logic 55, 1 (March 1990), 41–64.
+
+Received August 1991; revised September 1992; accepted November 1992.
+
+ACM Transactions on Programming Languages and Systems, Vol. 15, No. 3, September 1993.
+
+
