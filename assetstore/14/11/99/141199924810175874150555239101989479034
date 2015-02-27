@@ -1,0 +1,737 @@
+Cryptographically Sound and Machine-Assisted Veriﬁcation of Security Protocols
+Michael Backes1 and Christian Jacobi2
+1 IBM Zurich Research Laboratory, Ru¨schlikon, Switzerland† 2 IBM Deutschland Entwicklung GmbH, Processor Development 2, Bo¨blingen, Germany†
+1 mbc@zurich.ibm.com, 2 cjacobi@de.ibm.com
+Abstract. We consider machine-aided veriﬁcation of suitably constructed abstractions of security protocols, such that the veriﬁed properties are valid for the concrete implementation of the protocol with respect to cryptographic deﬁnitions. In order to link formal methods and cryptography, we show that integrity properties are preserved under step-wise reﬁnement in asynchronous networks with respect to cryptographic deﬁnitions, so formal veriﬁcations of our abstractions carry over to the concrete counterparts. As an example, we use the theorem prover PVS to formally verify a system for ordered secure message transmission, which yields the ﬁrst example ever of a formally veriﬁed but nevertheless cryptographically sound proof of a security protocol. We believe that a general methodology for verifying cryptographic protocols cryptographically sound can be derived by following the ideas of this example.
+Keywords: cryptography, speciﬁcation, veriﬁcation, PVS, semantics, simulatability
+1 Introduction
+Nowadays, formal analysis and veriﬁcation of security protocols is getting more and more attention in both theory and practice. One main goal of protocol veriﬁcation is to consider the cryptographic aspects of protocols in order to obtain complete and mathematically rigorous proofs with respect to cryptographic deﬁnitions. We speak of (cryptographically) sound proofs in this case. Ideally, these proofs should be performed machine-aided in order to eliminate (or at least minimize) human inaccuracies. As formally verifying cryptographic protocols presupposes abstractions of them, which are suitable for formal methods, it has to be ensured that properties proved for these abstract speciﬁcations carry over to the concrete implementations.
+Both formal veriﬁcation and cryptographically sound proofs have been investigated very well from their respective communities during the last years. Especially the formal veriﬁcation has been subject of lots of papers in the literature, e.g., [20, 13, 21, 1, 16]. The underlying abstraction is almost always based on the Dolev-Yao model [7]. Here cryptographic operations, e.g., E for encryption and D for decryption, are considered as operators in a free algebra where only certain predeﬁned cancellation rules hold, i.e., twofold encryption of a message m does not yield another message from the basic message space but the term E(E(m)). A typical cancellation rule is D(E(m)) = m.
+† Work was done while both authors were afﬁliated with Saarland University.
+H. Alt and M. Habib (Eds.): STACS 2003, LCNS 2607, pages 675 - 686, February 2003. c Springer-Verlag Berlin Heidelberg 2002.
+
+This abstraction simpliﬁes proofs of larger protocols considerably. Unfortunately, these formal proofs lack a link to the rigorous security deﬁnitions in cryptography. The main problem is that the abstraction requires that no equations hold except those that can be derived within the algebra. Cryptographic deﬁnitions do not aim at such statements. For example, encryption is only required to keep cleartexts secret, but there is no restriction on structure in the ciphertexts. Hence a protocol that is secure in the Dolev-Yao framework is not necessarily secure in the real world even if implemented with provably secure cryptographic primitives, cf. [17] for a concrete counterexample. Thus, the appropriateness of this approach is at least debatable.
+On the other hand, we have the computational view whose deﬁnitions are based on complexity theory, e.g., [8, 9, 5]. Here, protocols can be rigorously proven with respect to cryptographic deﬁnitions, but these proofs are not feasible for formal veriﬁcation because of the occurrence of probabilities and complexity-theoretic restrictions, so they are both prone to errors and simply too complex for larger systems.
+Unfortunately, achieving both points at the same time seems to be a very difﬁcult task. To the best of our knowledge, no cryptographic protocol has been formally veriﬁed such that this veriﬁcation is valid for the concrete implementation with respect to the strongest possible cryptographic deﬁnitions, cf. the Related Literature for more details.
+Our goal is to link both approaches to get the best overall result: proofs of cryptographic protocols that allow abstraction and the use of formal methods, but retain a sound cryptographic semantics. Moreover, these proofs should be valid for completely asynchronous networks and the strongest cryptographic deﬁnitions possible, e.g., security against adaptive chosen ciphertext attack [5] in case of asymmetric encryption.
+In this paper, we address the veriﬁcation of integrity properties such that these properties automatically carry over from the abstract speciﬁcation to the concrete implementation. Our work is motivated by the work of Pﬁtzmann and Waidner which have already shown in [18] that integrity properties are preserved under reﬁnement for a synchronous timing model. However, a synchronous deﬁnition of time is difﬁcult to justify in the real world since no notion of rounds is naturally given there and it seems to be very difﬁcult to establish them for the Internet, for example. In contrast to that, asynchronous scenarios are attractive, because no assumptions are made about network delays and the relative execution speed of the parties. Moreover, [18] solely comprises the theoretical background, since they neither investigated the use of nor actually used formal proof tools for the veriﬁcation of a concrete example.
+Technically, the ﬁrst part of our work can be seen as an extension of the results of [18] to asynchronous scenarios as presented in [19]. This extension is not trivial since synchronous time is much easier to handle; moreover, both models do not only differ in the deﬁnition of time but also in subtle, but important details. The second part of this paper is dedicated to the actual veriﬁcation of a concrete cryptographic protocol: secure message transmission with ordered channels [4]. This yields the ﬁrst example of a machine-aided proof of a cryptographic protocol in asynchronous networks such that the proven security is equivalent to the strongest cryptographic deﬁnition possible.
+Related Literature. An extended version of this work is available as an IBM Research Report [3]. The goal of retaining a sound cryptographic semantics and nevertheless provide abstract interfaces for formal methods is pursued by several researchers: our
+2
+
+approach is based on the model for reactive systems in asynchronous networks recently introduced in [19], which we believe to be really close to this goal. As we already mentioned above, Pﬁtzmann and Waidner have shown in [18] that integrity properties are preserved for reactive systems, but only under a synchronous timing model and they have neither investigated the use of formal methods nor the veriﬁcation of a concrete example. Other possible ways to achieve this goal have been presented in [20, 21, 13, 16, 12, 1], e.g., but these either do not provide abstractions for using formal methods, or they are based on unfaithful abstractions – following the approach of Dolev and Yao [7] – in the sense that no secure cryptographic implementation of them is known.
+In [2], Abadi and Rogaway have shown that a slight variation of the standard Dolev-Yao abstraction is cryptographically faithful speciﬁcally for symmetric encryption. However, their results hold only for passive adversaries and for a synchronous timing model, but the authors already state that active adversaries and an asynchronous deﬁnition of time are important goals to strive for. Another interesting approach has been presented by Guttman et. al. [11], which starts adapting the strand space theory to concrete cryptographic deﬁnitions. However, their results are speciﬁc for the WegmanCarter system so far. Moreover, as this system is information-theoretically secure, its security proof is much easier to handle than asymmetric primitives since no reduction proofs against underlying number-theoretic assumptions have to be made.
+2 Reactive Systems in Asynchronous Networks
+In this section we brieﬂy sketch the model for reactive systems in asynchronous networks from [19]. All details not necessary for understanding are omitted. Machines are represented by probabilistic state-transition machines, similar to probabilistic I/O automata [14]. For complexity we consider every automaton to be implemented as a probabilistic Turing machine; complexity is measured in the length of its initial state, i.e., the initial worktape content (often a security parameter k in unary representation).
+2.1 General System Model and Simulatability
+A system consists of several possible structures. A structure is a pair (Mˆ , S ) of a set Mˆ of connected correct machines and a subset S of the free ports1, called speciﬁed ports. Roughly, speciﬁed ports provide certain services to the honest users. In a standard cryptographic system, the structures are derived from one intended structure and a trust model. The trust model consists of an access structure ACC and a channel model χ. Here ACC contains the possible sets H of indices of uncorrupted machines (among the intended ones), and χ designates whether each channel is secure, reliable (authentic but not private) or insecure. Each structure can be completed to a conﬁguration by adding an arbitrary user machine H and adversary machine A. H connects only to ports in S and A to the rest, and they may interact. The general scheduling model in [19] gives each connection c a buffer, and the machine with the corresponding clock port
+1 A port is called free if its corresponding port does not belong to a machine in Mˆ . These ports are connected to the users and the adversary.
+3
+
+c⊳! can schedule a message when it makes a transition. In real asynchronous cryptographic systems, all connections are typically scheduled by A. Thus a conﬁguration is a
+runnable system, i.e., one gets a probability space of runs and views of individual ma-
+chines in these runs. For a conﬁguration conf , we denote the random variables over this
+probability space by runconf ,k and view conf ,k, respectively. For a polynomial l, we further obtain random variables for l-step preﬁxes of the runs, denoted by runconf ,k,l(k). Moreover, a run r can be restricted to a set S of ports which is denoted by r ⌈S.
+Simulatability essentially means that whatever can happen to certain users in the real
+system can also happen to the same users in the ideal (abstract) system: For every structure struc1 = (Mˆ 1, S1) of the real system, every user H, and every adversary A1 there exists an adversary A2 on a corresponding ideal structure struc2 = (Mˆ 2, S2), such that the view of H in the two conﬁgurations is indistinguishable, cf. Figure 1. Indistinguishability is a well-deﬁned cryptographic notion from [22]. We write this Sysreal ≥sec Sysid
+
+∀H
+
+S M^ 1 Mu
+
+Mv
+
+A1 ∀
+M3
+
+Real configuration
+
+H
+S M^ 2 TH
+∈ f(M^ 1, S)
+
+∃
+A2
+
+Ideal configuration
+
+Fig. 1. Overview of the simulatability deﬁnition. The view of H must be indistinguishable in the two conﬁgurations. In this example, H = {1, 2}.
+
+and say that Sysreal is at least as secure as Sysid. In general, a mapping f may denote the correspondence between ideal and real structures and one writes ≥fsec, but with the further restriction that f maps identical sets of speciﬁed ports. An important feature of the system model is transitivity of ≥sec, i.e., the preconditions Sys1 ≥sec Sys2 and Sys2 ≥sec Sys3 together imply Sys1 ≥sec Sys3 [19].
+In a typical ideal system, each structure contains only one machine TH called trusted host, whereas structures of real systems typically consist of several machines Mi, one for each honest user.
+3 Integrity Properties
+In this section, we show how the relation “at least as secure as” relates to integrity properties a system should fulﬁll, e.g., safety properties expressed in temporal logic. As a rather general version of integrity properties, independent of the concrete formal language, we consider those that have a linear-time semantics, i.e., that correspond to a set of allowed traces of in- and outputs. We allow different properties for different sets of speciﬁed ports, since different requirements of various parties in cryptography are often made for different trust assumptions.
+Deﬁnition 1 (Integrity Properties). An integrity property Req for a system Sys is a function that assigns a set of valid traces at the ports in S to each set S with (Mˆ , S ) ∈
+
+4
+
+Sys. More precisely such a trace is a sequence (vi)i∈N of values over port names and Σ∗, so that vi is of the form vi := p∈S {p : vp,i} and vp,i ∈ Σ∗. We say that Sys fulﬁlls Req
+a) perfectly (written Sys |=perf Req) if for any conﬁguration conf = (Mˆ , S , H, A) ∈ Conf(Sys), the restrictions r⌈S of all runs of this conﬁguration to the speciﬁed ports S lie in Req(S ). In formulas, [(runconf ,k ⌈S )] ⊆ Req(S ) for all k, where [·] denotes the carrier set of a probability distribution.
+b) statistically for a class SMALL (Sys |=SMALL Req) if for any conﬁguration conf = (Mˆ , S , H, A) ∈ Conf(Sys), the probability that Req(S ) is not fulﬁlled is small, i.e., for all polynomials l (and as a function of k),
+
+P (runconf ,k,l(k)⌈S ∈ Req(S )) ∈ SMALL.
+The class SMALL must be closed under addition and contain any function g′ less than or equal to any function g ∈ SMALL. c) computationally (Sys |=poly Req) if for any polynomial conﬁguration conf = (Mˆ , S , H, A) ∈ Confpoly(Sys), the probability that Req(S ) is not fulﬁlled is negligible, i.e.,
+P (runconf ,k ⌈S ∈ Req(S )) ∈ NEGL.
+
+For the computational and statistical case, the trace has to be ﬁnite. Note that a) is
+
+normal fulﬁllment. We write “|=” if we want to treat all three cases together.
+
+3
+
+Obviously, perfect fulﬁllment implies statistical fulﬁllment for every non-empty class SMALL and statistical fulﬁllment for a class SMALL implies fulﬁllment in the computational case if SMALL ⊆ NEGL.
+We now prove that integrity properties of abstract speciﬁcations carry over to their concrete counterparts in the sense of simulatability, i.e., if the properties are valid for a speciﬁcation, the concrete implementation also fulﬁlls concrete versions of these goals. As speciﬁcations are usually built by only one idealized, deterministic machine TH, they are quite easy to verify using formal proof systems, e.g., PVS. Now, our result implies that these veriﬁed properties automatically carry over to the (usually probabilistic) implementation without any further work.
+The actual proof will be done by contradiction, i.e., we will show that if the real system does not fulﬁll its goals, the two systems can be distinguished. However, in order to exploit simulatability, we have to consider an honest user that connects to all speciﬁed ports. Otherwise, the contradiction might stem from those speciﬁed ports which are connected to the adversary, but those ports are not considered by simulatability. The following lemma will help us to circumvent this problem:
+
+Lemma 1. Let a system Sys be given. For every conﬁguration conf = (Mˆ , S , H, A) ∈ Conf(Sys), there is a conﬁguration confs = (Mˆ , S , Hs, As) ∈ Conf(Sys) with S ⊆ ports(Hs), such that runconf ⌈S = runconfs ⌈S , i.e., the probability of the runs restricted to the set S of speciﬁed ports is identical in both conﬁgurations. If conf is polynomial-
+
+time, then confs is also polynomial-time.
+
+2
+
+We omit the proof due to space constraints and refer to [3].
+
+5
+
+Lemma 2. The statistical distance ∆(φ(vark), φ(var′k)) between a function φ of two
+
+random variables is at most ∆(vark, var′k).
+
+2
+
+This is a well-known fact, hence we omit the easy proof.
+
+Theorem 1 (Conservation of Integrity Properties). Let a system Sys2 be given that fulﬁlls an integrity property Req, i.e., Sys2 |= Req, and let Sys1 ≥fsec Sys2 for an arbitrary mapping f . Then also Sys1 |= Req. This holds in the perfect and statistical sense, and in the computational sense if membership in the set Req(S ) is decidable in
+
+polynomial time for all S .
+
+2
+
+Proof. Req is well-deﬁned on Sys1, since simulatability implies that for each (Mˆ 1, S1) ∈ Sys1 there exists (Mˆ 2, S2) ∈ f (Mˆ 1, S1) with S1 = S2. We will now prove that if Sys1 does not fulﬁll the property, the two systems can be distinguished
+yielding a contradiction. Assume that a conﬁguration conf 1 = (Mˆ 1, S1, H, A1) of Sys1 contradicts the theo-
+rem. As already described above, we need an honest user that connects to all speciﬁed
+
+ports. This is precisely what Lemma 1 does, i.e., there is a conﬁguration conf s,1 in which the user connects to all speciﬁed ports, with runconf s,1 ⌈S1 = runconf 1 ⌈S1 , so conf s,1 also contradicts the theorem. Note that all speciﬁed ports are now connected
+to the honest user; thus, we can exploit simulatability.2 Because of our precondition Sys1 ≥fsec Sys2, there exists an indistinguishable conﬁguration conf s,2 = (Mˆ , S , Hs, A2) of Sys2, i.e., view conf s,1 (Hs) ≈ view conf s,2 (Hs). By assumption, the property
+is fulﬁlled for this conﬁguration (perfectly, statistically, or computationally). Further-
+
+more, the view of Hs in both conﬁgurations contains the trace at S := S1 = S2, i.e., the trace is a function ⌈S of the view.
+
+In the perfect case, the distribution of the views is identical. This contradicts the
+
+assumption that [(runconf ⌈s,1,k S )] ⊆ Req(S ) while [(runconf ⌈s,2,k S )] ⊆ Req(S ). In the statistical case, let any polynomial l be given. The statistical distance
+
+∆(view conf ply Lemma
+
+s,1
+2
+
+,k,l(k)(Hs), view conf to the characteristic
+
+s,f2u,kn,cl(tiko)n(H1sv)⌈)S
+
+is a function ∈Req(S ) on
+
+g(k) such
+
+∈ SMALL. We apviews v. This gives
+
+|P (runconf s,1,k,l(k)⌈S ∈ Req(S )) − P (runconf s,2,k,l(k)⌈S ∈ Req(S ))| ≤ g(k). As
+
+SMALL is closed under addition and under making functions smaller, this gives the
+
+desired contradiction.
+
+In the computational case, we deﬁne a distinguisher Dis: Given the view of ma-
+
+chine Hs, it extracts the run restricted to S and veriﬁes whether the result lies in Req(S ). If yes, it outputs 0, otherwise 1. This distinguisher is polynomial-time (in the
+
+security parameter k) because the view of Hs is of polynomial length, and membership in Req(S ) was required to be polynomial-time decidable. Its advantage in dis-
+
+tinguishing is |P (Dis(1k, view conf s,1,k) = 1) − P (Dis(1k, view conf s,2,k) = 1)| = |P (runconf s,1,k⌈S ∈ Req(S )) − P (runconf s,2,k⌈S ∈ Req(S ))|. Since the second term is negligible by assumption, and NEGL is closed under addition, the ﬁrst term also has
+
+to be negligible, yielding the desired contradiction.
+
+2 In the proof for the synchronous timing model, this problem was avoided by combining the honest user and the adversary to the new honest user. However, this combination would yield an invalid conﬁguration in the asynchronous model.
+
+6
+
+In order to apply this theorem to integrity properties formulated in a logic, e.g., temporal logic, we have to show that abstract derivations in the logic are valid with respect to the cryptographic sense. This can be proven similar to the version with synchronous time, we only include it for reasons of completeness (without proof).
+
+Theorem 2.
+a) If Sys |= Req1 and Req1 ⊆ Req2, then also Sys |= Req2. b) If Sys |= Req1 and Sys |= Req2, then also Sys |= Req1 ∩ Req2.
+
+Here “⊆” and “‘∩” are interpreted pointwise, i.e., for each S . This holds in the perfect
+
+and statistical sense, and in the computational sense if for a) membership in Req2(S ) is
+
+decidable in polynomial time for all S .
+
+2
+
+If we now want to apply this theorem to concrete logics, we have to show that the common deduction rules hold. For modus ponens, e.g., if one has derived that a and a → b are valid in a given model, then b is also valid in this model. If Reqa etc. denote the semantics of the formulas, i.e., the trace sets they represent, we have to show that
+
+(Sys |= Reqa and Sys |= Reqa→b) implies Sys |= Reqb.
+
+From Theorem 2b we conclude Sys |= Reqa ∩ Reqa→b. Obviously, Reqa ∩ Reqa→b = Reqa∧b ⊆ Reqb holds, so the claim follows from Theorem 2a.
+
+4 Veriﬁcation of the Ordered Channel Speciﬁcation
+In this section we review the speciﬁcation for secure message transmission with ordered channels [4], and we formally verify that message reordering is in fact prevented.
+
+4.1 Secure Message Transmission with Ordered Channels
+
+Let n and M := {1, . . . , n} denote the number of participants and the set of indices respectively. The speciﬁcation is of the typical form Sysspec = {({THH}, SH)|H ⊆
+M}, i.e., there is one structure for every subset of the machines, denoting the honest
+
+users. The remaining machines are corrupted, i.e., they are absorbed into the adversary.
+
+The ideal machine THH models initialization, sending and receiving of messages. A user u can initialize communications with other users by inputting a command of
+
+the form (snd init) to the port inu? of THH. In real systems, initialization corresponds to key generation and authenticated key exchange. Sending of messages to a user v
+
+is triggered by a command (send, m, v). If v is honest, the message is stored in an
+
+internal
+
+array
+
+deliver
+
+spec u,v
+
+of
+
+THH
+
+together
+
+with
+
+a
+
+counter
+
+indicating
+
+the
+
+number
+
+of
+
+the
+
+message. After that, a command (send blindly, i, l, v) is output to the adversary, l and
+
+i denote the length of the message m and its position in the array, respectively. This
+
+models that the adversary will notice in the real world that a message has been sent and
+
+he might also be able to know the length of that message. Because of the underlying
+
+asynchronous timing model, THH has to wait for a special term (receive blindly, u, i) or (rec init, u) sent by the adversary, signaling, that the message stored at the ith position
+
+7
+
+of
+
+deliver
+
+spec u,v
+
+should
+
+be
+
+delivered
+
+to
+
+v,
+
+or
+
+that
+
+a
+
+connection
+
+between
+
+u
+
+and
+
+v
+
+should
+
+be initialized. In the ﬁrst case, THH reads (m, j) := deliver sup,evc[i] and checks whether
+
+msg
+
+out
+
+spec u,v
+
+≤
+
+j
+
+holds for
+
+a message counter msg
+
+out sup,evc. If
+
+the test is
+
+successful
+
+the
+
+message is delivered at outv ! and the counter is set to j + 1, otherwise THH outputs
+
+nothing.
+
+The
+
+condition
+
+msg
+
+out
+
+spec u,v
+
+≤
+
+j
+
+ensures
+
+that
+
+messages
+
+can
+
+only
+
+be
+
+delivered
+
+in the order they have been received by THH, i.e., neither replay attacks nor reordering
+
+messages is possible for the adversary; cf. [4] for details. The user will receive inputs
+
+of the form (receive, u, m) and (rec init, u), respectively. If v is dishonest, THH will simply output (send, m, v) to the adversary. Finally, the adversary can send a message
+
+m to a user u by sending a command (receive, v, m) to the port from advu ? of THH for a corrupted user v, and he can also stop the machine of any user by sending a command
+
+(stop) to a corresponding port of THH, which corresponds to exceeding the machine’s runtime bound in the real world.
+
+In contrast to the concrete implementation, which we will review later on, the ma-
+
+chine THH is completely deterministic, hence it can be expressed very well within a formal proof system, which supports the required data structures.
+
+4.2 The Integrity Property
+The considered speciﬁcation has been designed to fulﬁll the property that the order of messages is maintained during every trace of the conﬁguration. Thus, for arbitrary traces, arbitrary users u, v ∈ H, u = v, and any point in time, the messages from v received so far by u via THH should be a sublist of the messages sent from v to THH aimed for forwarding to u. The former list is called receive-list, the latter send-list.
+In order to obtain trustworthy proofs, we formally verify the integrity property in the theorem proving system PVS [15]. This will be described in the following. For reasons of readability and brevity, we use standard mathematical notation instead of PVS syntax. The PVS sources are available online.3
+The formalization of the machine THH in PVS is described in [4]. We assume that the machine operates on an input set ITHH (short I), a state set StatesTHH (short S ), and an output set OTHH (short O). For convenience, the transition function δTHH : I × S → S × O is split into δ : I × S → S and ω : I × S → O, which denote the next-state and output part of δTHH , respectively. The function δTHH is deﬁned in PVS’s speciﬁcation language, which contains a complete functional programming language. PVS provides natural, rational, and real numbers, arithmetic, lists, arrays, etc. Furthermore, custom datatypes (including algebraic abstract datatypes) are supported.
+In order to formulate the property, we need a PVS-suited, formal notation of (inﬁnite) runs of a machine, of lists, of what it means that a list l1 is a sublist of a list l2, and we need formalizations of the receive-list and send-list.
+Deﬁnition 2 (Input sequence, state trace, output sequence). Let M be a machine with input set IM, state set StatesM, output set OM, state transition function δ, and output transition function ω. Call sinit ∈ StatesM the initial state. An input sequence i : N → IM for machine M is a function mapping the time (modeled as the set N)
+3 http://www.zurich.ibm.com/∼mbc/OrdSecMess.tgz
+
+8
+
+to inputs i(t) ∈ IM. A given input sequence i deﬁnes a sequence of states si : N → StatesM of the machine M by the following recursive construction:
+si(0) := sinit, si(t + 1) := δ(i(t), si(t)).
+
+The sequence si is called state-trace of M under i. The output sequence oi : N → O of
+
+the run is deﬁned as
+
+oi(t) := ω(i(t), si(t)).
+
+We omit the index i if the input sequence is clear from the context. For components x of
+
+the
+
+state
+
+type,
+
+we
+
+write
+
+x(t)
+
+for
+
+the
+
+content
+
+of
+
+x
+
+in
+
+s(t),
+
+e.g.,
+
+we
+
+write
+
+deliver
+
+spec u,v
+
+(t)
+
+to
+
+denote
+
+the
+
+content
+
+at
+
+time
+
+t
+
+of
+
+the
+
+list
+
+deliver
+
+spec u,v
+
+,
+
+which
+
+is
+
+part
+
+of
+
+the
+
+state
+
+of
+
+THH.
+
+3
+
+These deﬁnitions precisely match the model-intern deﬁnition of views, cf. [19]. In the
+context of THH, the input sequence i consists of the messages that the honest users and the adversary send to THH. In the following, a list l1 being a sublist of a list l2 is expressed by l1 ⊆ l2, l1 being a sublist of the k-preﬁx of l2 by l1 ⊆k l2.
+
+Lemma 3. Let l1, l2 be lists over some type T , let k ∈ N0. It holds:
+
+k < length(l2) ∧ l1 ⊆k l2 =⇒ append(nth(l2, k), l1) ⊆k+1 l2,
+
+that is, one may append the kth element (counted from 0) of l2 to l1 while preserving
+
+the preﬁx-sublist property.
+
+2
+
+Deﬁnition 3 (Receive- and send-list). Let i be an input sequence for machine THH, and let s and o be the corresponding state-trace of THH and the output sequence, respectively. Let u, v ∈ H. The receive-list is obtained by appending a new element m whenever v receives a message (receive, m, u) from THH. The send-list is obtained by appending m whenever u sends a message (send, m, v) to THH. Formally, this is
+captured in the following recursive deﬁnitions:
+
+null
+
+
+
+recvlistiu,v (t)
+
+:=
+
+ append(m,
+
+recvlistiu,v (t
+
+−
+
+1))
+
+  recvlistiu,v(t − 1)
+
+null
+
+
+
+sendlistiu,v (t)
+
+:=
+
+ append(m,
+
+sendlistiu,v (t
+
+−
+
+1))
+
+  sendlistiu,v(t − 1)
+
+if t = −1, if t ≥ 0 ∧ oi(t) = (receive, m, u)
+at outv !. otherwise
+if t = −1, if t ≥ 0 ∧ i(t) = (send, m, v)
+at inu ?. otherwise
+
+3
+
+We now are ready to give a precise, PVS-suited formulation of the integrity property we are aiming to prove:
+
+9
+
+Theorem 3. For any THH input sequence i, for any u, v ∈ H, u = v, and any point in
+
+time t ∈ N, it holds
+
+recvlistiu,v(t) ⊆ sendlistiu,v(t).
+
+(1)
+
+In the following, we omit the index i.
+
+2
+
+Proof (sketch). The proof is split into two parts: we prove recvlistu,v(t − 1) ⊆
+
+deliver sup,evc(t)
+
+and
+
+deliver
+
+spec u,v
+
+(t)
+
+⊆
+
+sendlistu,v (t
+
+−
+
+1).
+
+The
+
+claim
+
+of
+
+the
+
+theorem
+
+then
+
+follows from transitivity of sublists.
+
+The claim deliver sup,evc(t) ⊆ sendlistu,v(t − 1) is proved by induction on t. Both
+
+induction base and step are proved in PVS by the built-in strategy (grind), which
+
+performs automatic deﬁnition expanding and rewriting with sublist-related lemmas. The claim recvlistu,v(t − 1) ⊆ deliver sup,evc(t) is more complicated. The claim is also
+proved by induction on t. However, it is easy to see that the claim is not inductive: in
+
+case of a (receive blindly, u, i) at from advv ?, THH outputs (receive, m, u) to outv !,
+
+where
+
+(m, j)
+
+:=
+
+deliver sup,evc[i],
+
+i.e.,
+
+m
+
+is
+
+the
+
+ith
+
+message
+
+of
+
+the
+
+deliver
+
+spec u,v
+
+list
+
+(cf.
+
+Section 4.1, or [4] for more details). By the deﬁnition of the receive-list, the message m
+
+is
+
+appended
+
+to
+
+recvlistu,v .
+
+In
+
+order
+
+to
+
+prove
+
+that
+
+recvlistu,v
+
+⊆
+
+deliver
+
+spec u,v
+
+is
+
+preserved
+
+during this transition, it is necessary to know that the receive list was a sublist of the
+
+preﬁx
+
+of
+
+the
+
+deliver
+
+spec u,v
+
+list
+
+that
+
+does
+
+not
+
+reach
+
+to
+
+m.
+
+It
+
+would
+
+sufﬁce
+
+to
+
+know
+
+that
+
+recvlistu,v(t − 1) ⊆i deliver sup,evc(t).
+
+Then the claim follows from Lemma 3. We therefore strengthen the invariant to comprise the preﬁx-sublist property.
+However, the value i in the above preﬁx-sublist relation stems from the input (receive blindly, u, i), and hence is not suited to state the invariant. To circumvent this problem, we recursively construct a sequence last rcv blindlyu,v(t) which holds the parameter i of the last valid (receive blindly, u, i) received by THH on from advv ?; then
+recvlistu,v(t − 1) ⊆l deliver sup,evc(t) with l = last rcv blindlyu,v(t)
+
+is an invariant of the system. We further strengthen this invariant by asserting that
+
+last
+
+rcv
+
+blindlyu,v (t)
+
+and
+
+the
+
+j’s
+
+stored
+
+in
+
+the
+
+deliver
+
+spec u,v
+
+list
+
+grow
+
+monotonically.
+
+To-
+
+gether this yields the inductive invariant. We omit the details and again refer the to the
+
+PVS ﬁles available online.3
+
+Applying Deﬁnition 1 of integrity properties, we can now deﬁne that the property Req holds for an arbitrary trace tr if and only if Equation 1 holds for all u, v ∈ H, u = v, and the input sequence i of the given trace tr. Thus, Theorem 3 can be rewritten in the notation of Deﬁnition 1 as [(runconf ,k ⌈S )] ⊆ Req(S ) for all k, i.e., we have shown that the speciﬁcation Sysspec perfectly fulﬁlls the integrity property Req.
+
+4.3 The Concrete Implementation
+For understanding it is sufﬁcient to give a brief review of the concrete implementation Sysimpl, a detailed description can be found in [4]. Sysimpl is of the typical form Sysimpl = {(Mˆ H, SH) | H ⊆ M}, where Mˆ H = {Mu | u ∈ H}, i.e., there is one
+
+10
+
+machine for each honest participant. It uses asymmetric encryption and digital signatures as cryptographic primitives, which satisfy the strongest cryptographic deﬁnition possible, i.e., security against adaptive chosen-ciphertext attack in case of encryption (e.g., [6]) and security against existential forgery under adaptive chosen-message attacks in case of digital signatures (e.g., [10]).
+A user u can let his machine create signature and encryption keys that are sent to other users over authenticated channels. Messages sent from user u to user v are signed and encrypted by Mu and sent to Mv over an insecure channel, representing a real network. Similar to THH each machine maintains internal counters used for discarding messages that are out of order. The adversary schedules the communication between correct machines and it can send arbitrary messages m to arbitrary users.
+Now the validity of the integrity property of the concrete implementation immediately follows from the Preservation Theorem and the veriﬁcation of the abstract speciﬁcation. More precisely, we have shown that the speciﬁcation fulﬁlls its integrity property of Theorem 3 perfectly, which especially implies computational fulﬁllment. As Sysimpl ≥pseocly Sysspec has already been shown in [4], our proof of integrity carries over to the concrete implementation for the computational case according to Theorem 1.
+5 Conclusion
+In this paper, we have addressed the problem how cryptographic protocols in asynchronous networks can be veriﬁed both machine-aided and sound with respect to the deﬁnitions of cryptography. We have shown that the veriﬁcation of integrity properties of our abstract speciﬁcations automatically carries over to the cryptographic implementations, and that logic derivations among integrity properties are valid for the concrete systems in the cryptographic sense, which makes them accessible to theorem provers. As an example, we have formally veriﬁed the scheme for ordered secure message transmission [4] using the theorem proving system PVS [15]. This yields the ﬁrst formal veriﬁcation of an integrity property of a cryptographic protocol whose security is equivalent to the underlying cryptography with respect to the strongest cryptographic deﬁnitions possible.
+References
+1. M. Abadi and A. D. Gordon. A calculus for cryptographic protocols: The spi calculus. Information and Computation, 148(1):1–70, 1999.
+2. M. Abadi and P. Rogaway. Reconciling two views of cryptography: The computational soundness of formal encryption. In Proc. 1st IFIP International Conference on Theoretical Computer Science, volume 1872 of Lecture Notes in Computer Science, pages 3–22. Springer, 2000.
+3. M. Backes and C. Jacobi. Cryptographically sound and machine-assisted veriﬁcation of security protocols. Research Report RZ 3468, IBM Research, 2002.
+4. M. Backes, C. Jacobi, and B. Pﬁtzmann. Deriving cryptographically sound implementations using composition and formally veriﬁed bisimulation. In Proc. 11th Symposium on Formal Methods Europe (FME 2002), volume 2391 of Lecture Notes in Computer Science, pages 310–329. Springer, 2002.
+11
+
+5. M. Bellare, A. Desai, D. Pointcheval, and P. Rogaway. Relations among notions of security for public-key encryption schemes. In Advances in Cryptology: CRYPTO ’98, volume 1462 of Lecture Notes in Computer Science, pages 26–45. Springer, 1998.
+6. R. Cramer and V. Shoup. Practical public key cryptosystem provably secure against adaptive chosen ciphertext attack. In Advances in Cryptology: CRYPTO ’98, volume 1462 of Lecture Notes in Computer Science, pages 13–25. Springer, 1998.
+7. D. Dolev and A. C. Yao. On the security of public key protocols. IEEE Transactions on Information Theory, 29(2):198–208, 1983.
+8. S. Goldwasser and S. Micali. Probabilistic encryption. Journal of Computer and System Sciences, 28:270–299, 1984.
+9. S. Goldwasser, S. Micali, and C. Rackoff. The knowledge complexity of interactive proof systems. SIAM Journal on Computing, 18(1):186–207, 1989.
+10. S. Goldwasser, S. Micali, and R. L. Rivest. A digital signature scheme secure against adaptive chosen-message attacks. SIAM Journal on Computing, 17(2):281–308, 1988.
+11. J. D. Guttman, F. J. Thayer Fabrega, and L. Zuck. The faithfulness of abstract protocol analysis: Message authentication. In Proc. 8th ACM Conference on Computer and Communications Security, pages 186–195, 2001.
+12. P. Lincoln, J. Mitchell, M. Mitchell, and A. Scedrov. A probabilistic poly-time framework for protocol analysis. In Proc. 5th ACM Conference on Computer and Communications Security, pages 112–121, 1998.
+13. G. Lowe. Breaking and ﬁxing the Needham-Schroeder public-key protocol using FDR. In Proc. 2nd International Conference on Tools and Algorithms for the Construction and Analysis of Systems (TACAS), volume 1055 of Lecture Notes in Computer Science, pages 147–166. Springer, 1996.
+14. N. Lynch. Distributed Algorithms. Morgan Kaufmann Publishers, San Francisco, 1996. 15. S. Owre, N. Shankar, and J. M. Rushby. PVS: A prototype veriﬁcation system. In Proc. 11th
+International Conference on Automated Deduction (CADE), volume 607 of Lecture Notes in Computer Science, pages 748–752. springer, 1992. 16. L. Paulson. The inductive approach to verifying cryptographic protocols. Journal of Cryptology, 6(1):85–128, 1998. 17. B. Pﬁtzmann, M. Schunter, and M. Waidner. Cryptographic security of reactive systems. Presented at the DERA/RHUL Workshop on Secure Architectures and Information Flow, Electronic Notes in Theoretical Computer Science (ENTCS), March 2000. http://www. elsevier.nl/cas/tree/store/tcs/free/noncas/pc/menu.htm. 18. B. Pﬁtzmann and M. Waidner. Composition and integrity preservation of secure reactive systems. In Proc. 7th ACM Conference on Computer and Communications Security, pages 245–254, 2000. 19. B. Pﬁtzmann and M. Waidner. A model for asynchronous reactive systems and its application to secure message transmission. In Proc. 22nd IEEE Symposium on Security & Privacy, pages 184–200, 2001. 20. A. W. Roscoe. Modelling and verifying key-exchange protocols using CSP and FDR. In Proc. 8th IEEE Computer Security Foundations Workshop (CSFW), pages 98–107, 1995. 21. S. Schneider. Security properties and CSP. In Proc. 17th IEEE Symposium on Security & Privacy, pages 174–187, 1996. 22. A. C. Yao. Theory and applications of trapdoor functions. In Proc. 23rd IEEE Symposium on Foundations of Computer Science (FOCS), pages 80–91, 1982.
+12
+
+

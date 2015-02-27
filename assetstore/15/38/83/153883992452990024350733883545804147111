@@ -1,0 +1,3128 @@
+EQUATIONAL INFERENCE, CANONICAL PROOFS,
+AND PROOF ORDERINGS
+Leo Bachmair Department of Computer Science State University of New York at Stony Brook Stony Brook, New York 11794, U.S.A.
+Nachum Dershowitz Department of Computer Science University of Illinois at Urbana-Champaign
+Urbana, Illinois 61801, U.S.A. April 14, 1992 Abstract
+We describe the application of proof orderings|a technique for reasoning about inference systems|to various rewrite-based theorem-proving methods, including re nements of the standard Knuth-Bendix completion procedure based on critical pair criteria; Huet's procedure for rewriting modulo a congruence; ordered completion (a refutationally complete extension of standard completion); and a proof by consistency procedure for proving inductive theorems.
+This is a substantially revised version of the paper, \Orderings for equational proofs," co-authored with J. Hsiang and presented at the Symp. on Logic in Computer Science (Boston, Massachusetts, June 1986). It includes material from the paper \Proof by consistency in equational theories," by the rst author, presented at the Third Annual Symp. on Logic in Computer Science (Edinburgh, Scotland, July 1988). This research was supported in part by the National Science Foundation under grants CCR-89-01322, CCR-90-07195, and CCR-90-24271.
+1
+
+1. Introduction
+
+Applications of equational reasoning to computer science comprise the use of equations within programming languages and for speci cations of abstract data types. When equations are interpreted as programs, they are used in one direction only, to rewrite an expression to a simpler one. A rewrite system is a set of such one-way rules. For example, the following system serves as a program for adding and multiplying Peano numbers (0, 00, 000, etc.):
+
+x+0 ! x x + y0 ! (x + y)0 x 0!0 x y0 ! (x y) + x
+
+Equational programs such as this one are usually considered to be nondeterministic: an expression can be rewritten by any equation, the left side of which matches a subterm. For example, one possible computation proceeds as follows:
+
+000 000
+
+! (000 00) + 000
+
+!
+
+((000 0) + 000) + 000 ! (((000 0) + 000) + 00)0 !
+
+(((000 0) + 00)0 + 00)0 ! ((0 + 00)0 + 00)0
+
+!
+
+((0 + 00)0 + 0)00
+
+! ((0 + 0)00 + 0)00
+
+!
+
+(000 + 0)00
+
+! 00000
+
+Here \two times two" reduces, by a sequence of rewrites, to the value \four." Many rewrite systems satisfy the Church-Rosser, or \con uence," property: whenever two
+terms are equivalent, they can be rewritten to a common form. This guarantees that the \normal forms" (unrewritable terms) computed by a program are unique. Another important property is \termination": there are no in nite sequences of rewrites. Termination ensures that there is at least one normal form for every term. A system with both these properties is called \convergent" (or \complete"). A nite convergent system is a decision procedure for the (uniform) free word problem of the underlying equational theory: an identity holds (in all models of the axioms) if and only if both its sides can be rewritten to the identical normal form. The rst rewriting-based decision procedure (for loops) was given by Evans 22], in 1951. See 19] for a survey of the eld.
+In 1970, Knuth and Bendix 42] proposed a procedure that attempts to construct a convergent rewrite system from a nite axiomatization of an equational theory. This \completion" procedure must be supplied with an ordering that is used to determine in which direction a derived equation
+s t is to be oriented into a one-way rule, s ! t or t ! s. It deduces new equations by a process
+(involving uni cation) called \superposition": When the left-hand side of an instance of a rule can be rewritten by another rule, the two possible results of rewriting the left-hand side instance form what is called a \critical pair." (Precise de nitions will be given in Section 2.3.)
+The following version of completion 16] takes as input a set of equations E0 and a well-founded
+ordering . It generates all new critical pairs at once; more practical versions (notably the one in 33]) do this incrementally.
+
+Let E be E0 and R be the empty set. Then repeat the following six steps as long as equations are left in E; if none remain, terminate successfully:
+
+2
+
+1. Remove an equation s t (or t s) from E such that s t. If none exists,
+terminate with failure.
+2. Add the rule s ! t to R. 3. Use R to reduce the right-hand sides of existing rules. 4. Add to E all critical pairs formed using the new rule. 5. (Optional) Remove all old rules from R whose left-hand side contains an instance
+of s. 6. Use R to reduce both sides of equations in E to normal forms. Remove any
+equation whose reduced sides are identical.
+
+The rst example on which Knuth and Bendix tried completion was the following axiomatization of free groups:
+
+ex x? x (x y) z
+
+x e x (y z):
+
+For example, if the associativity axiom is the rst equation examined in step 1 of the procedure,
+
+then with an ordering that assigns greater weight to the left argument of a product, associativity
+
+may be oriented by step 2 into a rule (x y) z ! x (y z). There being no other rules, step 3 does
+
+nothing. In step 4, this rule produces one critical pair, (x1 (x2 y)) z (x1 x2) (y z), which
+
+equates the results of alternative ways of applying associativity to
+6 reduces both sides of the critical pair to the same term, x1 (x2
+
+(tyhezt)e)r,mlea((vxin1g
+
+xR2)wiyth)
+
+z. Step
+one rule
+
+and E empty.
+
+Continuing in this way, and with an appropriate ordering, the following ten rules can be derived:
+
+ex ! x x? x ! e (x y) z ! x (y z)
+e? ! e x? (x y) ! y
+
+xe ! x x x? ! e x?? ! x (x y)? ! y? x? x (x? y) ! y
+
+With this convergent system, any identity of group theory reduces to a trivial equation. Since certain (even nitely-based) equational theories (such as combinatory logic) are undecid-
+able, not every equational theory can be represented as a nite convergent rewrite system. Hence, a completion procedure can have any of three outcomes: it may (i) succeed in constructing a nite convergent system, (ii) fail, or (iii) not terminate and instead compute successive approximations
+Rn of an in nite convergent system R.
+An intriguing feature of the completion procedure is that every rewrite rule that is generated can be used to simplify other, already deduced equations (steps 3, 5, and 6). Thus terms can be kept in fully simpli ed form and redundant equations may be discarded. For example, the rule
+x?? e ! x may be deleted during completion of group theory, since its left-hand side is simpli able by the rule x e ! x. While such optimizations account for the e ciency of completion, it may
+considerably complicate the task of verifying that a procedure is \correct," in the sense that the potentially in nite set of generated, but not discarded, rules forms a convergent system. This notion
+
+3
+
+of correctness is crucial for the use of completion as a (relatively e cient) semi-decision procedure for validity in equational theories, as proposed by Lankford 46] and Huet 33].
+Any such correctness proof has to address three problems: rst, that the deduction mechanism is general enough for construction of convergent systems (which essentially amounts to proving a Church-Rosser property); second, that simpli cation and deletion terminate (which can be done by constructing suitable well-founded orderings); third, and most di cult, that simpli cation and deletion are compatible with deduction (that is, discarded equations are all redundant and any two terms that ever had a common form will have one using persisting, undiscarded rules). In the past, Church-Rosser properties for rewrite systems have been proved by induction with respect to various orderings on terms. Some particularly elegant proofs are given by Huet in 32]. An intricate and rather complicated proof of correctness of a speci c completion procedure can be found in 33].
+We believe that simpli cation and deletion mechanisms are best discussed in a proof-theoretic setting, where correctness of completion can be formulated as a proof normalization property. Classical inference systems work from the axioms, \expanding" the set of established formulae by inferring new formulae from old; in this paper, we develop a proof-theoretic formalism for inference systems that also \contract" the set of established formulae via simpli cation and deletion. We design suitable orderings on proofs to establish proof normalization properties (and hence correctness of completion). The advantage of this approach is not only that it is conceptually simpler than previous arguments, but that the correctness results cover a wide variety of di erent completion procedures. We specify precise and e ective conditions which ensure that a control strategy yields a correct completion procedure. As we will see, too much simpli cation can make a procedure incorrect!
+We reformulate the Knuth-Bendix completion method as an equational inference system and demonstrate that it can be viewed as a process of proof simpli cation, the goal of which is to deduce enough rewrite rules so that any equational proof can be transformed to a \normal-form proof," that is, a proof that two terms (containing variables) are equal by virtue of their both rewriting to the same term. The proof transformations induced by the inference rules can themselves be thought of as (conditional) rewrite rules on equational proofs. Discussing completion at this abstract level allows us to separate the logical, or proof theoretical, component of the method from issues pertaining to strategy and control.
+We develop techniques, based on well-founded orderings on proofs, for reasoning about completion and related rewrite methods. To establish the correctness of a completion procedure, for instance, one rst has to show that each sequence of proof transformations terminates and produces a minimal proof. We prove this property for arbitrary completion procedures by constructing an appropriate proof ordering. Secondly, in order to guarantee that every minimal proof is in the desired normal-form, a procedure must satisfy a certain \fairness" requirement which ensures that necessary inferences are eventually performed and transformation of non-normal proofs eventually becomes possible. We express fairness in general terms, so that our correctness results apply to a broad class of completion procedures. In particular, generating critical pairs, by overlapping left-hand sides of undeleted rules, satis es this requirement. Fairness forms the interface between logic and control, in that it speci es under which conditions a control strategy is correct.
+We outline our approach by applying it, in Section 3, to the original Knuth-Bendix completion method, and then formulate various re nements, variants, and extensions of standard completion within the same framework. In Section 4, we discuss the concept of \critical pair criterion" for weakening the conditions for fairness to require that only a subset of the critical deductions be
+4
+
+performed. In Section 5, we formalize Huet's 32] method for handling equations, such as commutativity, that can not be oriented.
+Then, in Section 6, we describe a method, called \ordered completion," that extends standard completion to a complete equational proof method. For example, the following system for Boolean rings de nes unique normal forms for ground (variable-free) terms:
+
+x+0 ! x x+x ! 0 x0 ! 0 x1 ! x xx ! x x+y $ y+x (x + y) + z ! x + (y + z) y + (x + z) $ x + (y + z) x (y + z) ! (x y) + (x z)
+
+0+x ! x x + (x + y) ! y
+0x ! 0 1x ! x x (x y) ! x y xy $ yx (x y) z ! x (y z) y (x z) $ x (y z) (y + z) x ! (y x) + (z x)
+
+The rules with double-headed arrows are used only in the direction that results in a decrease in a speci c ordering (in this case, the lexicographic path ordering with a total ordering of the operators and constants; see 17]). Ordered completion, starting with this system and (the Skolemized negation of) a theorem in rst-order predicate calculus with equality (taking + to be exclusive-or and to be conjunction), can be used (by Herbrand's Theorem) as the basis of a refutationally complete prover (cf. 30]).
+Finally, in Section 7, we present, within the same proof-transformation framework, a method for proving inductive theorems, due originally to Musser 49], based on the concept of \proof by consistency." With this method, it is easy to prove automatically from the de nition of multiplication
+given at the outset that 0 x 0. We end with a brief conclusion.
+
+2. Equational Proofs
+
+Theorem provers can often be viewed pro tably as proof normalization procedures. Such a proof
+
+procedure is said to be \correct" if enough consequences can be deduced so that any arbitrary proof
+
+can be transformed to a normal-form proof. We study rewrite-based equational reasoning methods
+
+from this point of view: the set of theorems corresponds to some congruence relation on terms;
+
+proofs are nite sequences of equational replacements; and normal-form proofs are proofs in which
+
+equations are used in a speci ed direction, as one-way rewrite rules.
+
+Accordingly, we will be concerned with binary relations on ( rst-order) terms (over some set
+
+of operator symbols F and some set of variables V), and on (annotated) nite sequences of terms
+
+(representing proofs). We assume that there is at least one constant; thus, the set of ground terms,
+
+that is, terms containing no variables, is non-empty. For example, if + is a binary operator, ? is a
+
+unary operator, and 0 and 1 are constants, then (?x + y) + 0 is non-ground, while 1 + 0 is ground.
+
+The symbols s, t, and u will be used to denote terms. In our examples, we will use x, y, and z
+
+for be for
+
+variables. The represented in
+
+expression tjp denotes the
+Dewey decimal notation.
+
+subterm
+So, if p0
+
+the top-most position (tj = t). A subterm of a
+
+of t at = pq0, term t
+
+position
+then tjp0
+is called
+
+p. Positions may, for instance, is a subterm of tjp. We use proper if it is distinct from t.
+
+A term t with a distinguished position p will be called a context, denoted t ]p. By t s]p we indicate
+
+5
+
+the term obtained from that context by placing term s at position p, or|equivalently|the result
+
+of
+
+reBpylatcinwgetdheensoutbettehrme rtejspuoltf
+
+t by s.
+of applying
+
+the
+
+substitution
+
+to the term t, and call t an instance
+
+of t. An instance s of t is proper if t is not an instance of s. For example, if is the substitution
+
+fx 7! yg, then f(x; y) = f(y; y) is a proper instance of f(y; x). Two terms are said to be literally
+
+similar if they are instances of each other. For instance, f(x; y), f(y; x), and f(y; z) are all literally
+
+similar.
+
+2.1. Rewrite Rules
+
+A binary relation ! is called The symbols !+, ! and $
+
+terminating if there exists no in nite sequence denote the transitive, transitive-re exive, and
+
+t1 ! t2 !
+symmetric
+
+t3 !
+closure
+
+. of
+
+!, respectively. The inverse of ! is denoted by . A binary relation ! on terms is called a rewrite
+
+relation if s ! t implies u s ]p ! u t ]p, for all contexts u ]p, terms s and t, and substitutions .
+
+An equation is an ordered pair of terms, written s t; when we wish to refer to either of s t
+
+and t s, we will write s ' t. If E is a set of equations, we use E?1 for the set ft s j s t 2 Eg.
+
+Given a set of equations E, we denote by !E the smallest rewrite relation containing the set of
+
+sercueqlolbuassatutitroiiteonunot$sfio!EEn ..wF,Tilolahrbnaeedtxraieesmq,feupvralrete!,idoiEnftoEswaissiftthhtaeeninedaqsEusooan.ctliyiBoantyiifav$lvittyhEiseaowxuriyeosmod]fe,pnEtoah;tneiendt
+some applications it will be useful to attach labels to equations.
+
+w is u t ]p, for some
+the symmetric closure
+
+context
+of !E.
+
+u ]p,
+The
+
+is the re exive-symmetric-transitive
+
+(x1
+We
+
+m(xa2yyw))ritze$s E
+
+n(xt1tox2d)en(oytez)s.ucInh
+
+labelled equations, but usually we use di erent relation symbols for di erent types of equations.
+
+We identify literally similar equations.
+
+A set of equations R will be called a rewrite system if we are primarily interested in the
+
+asymmetric rewrite
+in R are also called
+
+relation !R
+rewrite rules
+
+rather than the and are written
+
+equational
+s ! t. We
+
+tahlseoorsyay$tRha. tInu
+
+that case, the equations
+rewrites to v if u !R v.
+
+A term that can not be rewritten is said to be irreducible by R. A normal form of t (with respect
+
+ltoonRgAe)rripsewoasrnsiyitbeliers,ryegsdtiuveecmsibaRlentioserrmsmaaidluftofoorrmbweohfCicth.huWrtce!h-wRRroiusts;eeitrn!(oot!Rrheucroinwf uoureidsns,at)rneiopf,remafotareldaflolylrmrteewromfristt.isngant dunttiwl intho
+
+Ttseer$rmmRiinnata,tteitnhifgetrCheeheurxerilcsahtts-iRoanost!seerRrmsisyvst,teersmmucsihnaarttehinacgta,lsltehd!atcRoisn,vviefar!gned+Rnttis(!oarRwceovlml.-fpoAluenterde)ewdarn(idtsetdrsiecyts)nteepmaurntRiiqaulisoernsdaoeirrdmintgao.l
+
+forms for all terms. A terminating rewrite system R will be called ground convergent if, for all
+
+ground By
+
+terms s and t such
+a rewrite ordering
+
+wtheamt sea$nRant,
+
+we have s
+irre exive
+
+!anRd
+
+vtranRsitt.ive
+
+rewrite
+
+relation
+
+on
+
+terms.
+
+Ter-
+
+minating orderings are well-founded; well-founded rewrite orderings are called reduction orderings.
+
+EInviadnenutnltyy, paerdewterrimteinrealtaitnigonsy!stRemteramll ivnaartieasbliefsanadppoenalryinifgRonistchoenrtiagihnte-dhainndsosmideeroedf uacrtuiolenmorudsetrainlsgo.
+
+appear on the corresponding left-hand side. Lexicographic and multiset orderings are particularly
+
+useful in proving termination of rewrite relations:
+
+If 1
+(s; t)
+
+alenxd(s0;2t0)arife
+
+orderings,
+either s 1
+
+then their
+s0 or s = s0
+
+lexicographic combination is de ned on pairs by:
+and t 2 t0. The lexicographic combination of more
+
+6
+
+than two orderings can be de ned in a similar way. A lexicographic ordering is well-founded if and only if its component orderings are well-founded.
+
+A multiset over a set S is a mapping M from S to the natural numbers. Informally, M(x)
+
+speci es the number of occurrences of x in M. A multiset M is nite if M(x) > 0 for a nite
+
+number of x 2 S. For simplicity, we use a set-like notation to describe ( nite) multisets. For
+
+example, fx; x; xg denotes the multiset M for which M(x) = 3 and M(y) = 0, for y 6= x.
+
+Any
+S as
+
+ordering follows:
+
+M
+
+on a set
+mul N
+
+S
+if
+
+can be extended to an ordering
+and only if (i) M 6= N and (ii)
+
+mul on ( whenever
+
+nite)
+N (x)
+
+multisets
+> M(x)
+
+over then
+
+M(y) > N(y), for some y such that y x. In other words, according to the multiset
+
+ordering, any element of a multiset can be replaced by any nite number of elements that are
+
+smaller with respect to . The multiset ordering mul is well-founded (on nite multisets) if
+
+and only if the ordering is well-founded 20].
+
+See 17] for a survey of termination.
+
+2.2. Rewrite Proofs
+Aasaonp.mdp(WeAlepiqctueiai(msaetstqiaaeiouosynpanoottaoismholfi)atnieittpoaqrtnlsu)ohaio$epntfripospuoson,otesfsvipeut.(ticoiohsBinfstaythfna0rdaoeptemxrsotpnnao=ri)tfepiswoissrstnioeoua,opnnftyhi]ssnpet$eranepEnipeditaseitnft,ads=eweipjqthurwhueoseertovrnefwcusse]rtpiae,otnpeffodvpssrrts$o$ooaromrupufveesvvttceeottrp.unmisntWseis,xEeetasiwniafsyaea]qntpnuhdaaaenotqtdinuoslasny$utiibiofnesnsttEiut$fuo. rtEWioavtnne., t0 pe?!11 t1; t1 pe?!22 t2; : : :; tn?1 ep?!nn tn;
+usually written in abbreviated form as
+t0 pe?!11 t1 pe?!22 t2 pe?!33 tn?1 pe?!nn tn: The empty sequence, abbreviated as a single term t, serves as a proof of an identity t t.
+We will use the letters P and Q to denote proofs. We say that P is a proof in E if each proof srisantere!pbEpliFatE;roocaefritfrmPsyoviemrpnisrptsoliiiunoscfiscEtiEsyoi.,nmttwhNpEweeole.hteotieqIefcftu,htePahtnuhtaisaidtosetenasnainsoionp,tnereEqeEouboej,a=yfqtwuissoea!ntwiosErtni,ttfeionatrinnieyassittppsheerraetoodrvooafdsfbiserltqeeecupEitanistotiE;no$.bniypusfWEasven,$tda,iflEwosaonhntleydwwrreioefitnuesdlye$snifo$vEtseiEts$.aatEEnptqroetuo.qaodutfeainosttnoioetanpel
+t0 u?1?p1?v!1 t1 u?2?p2?v!2 t2 $ $ tn?1 u?n?pn?v!n tn; we denote by P?1 the inverted proof:
+tn v?n?pn?u!n tn?1 $ $ t2 v?2?p2?u!2 t1 v?1?p1?u!1 t0;
+
+7
+
+by P we denote the instantiated proof:
+
+t0 u?1?p1?v!1 t1 u?2?p2?v!2 t2 $ $ tn?1 u?n?pn?v!n tn ;
+
+and by u P]q, where q is a position in u, the same proof applied to the subterm of u at q:
+
+u t0]q u?1q?p?1v!1 u t1]q u?2q?p?2v!2 u t2]q $ $ u tn?1]q u?nq?p?nv!n u tn]q:
+
+If P is a proof (in E), then P?1, P , and u P]p are also proofs (in E). By a subproof of P we
+
+mean any proof
+
+ti u?i?+p?1i?+v1?i?+!1 ti+1 $ $ tj?1 u?j?pj?v!j tj;
+
+where 0 i j n. We write P Q] to indicate that P contains Q as a subproof, and denote by
+
+P Q0] the proof obtained from P by replacing Q by Q0.
+
+Let E R be a given set of equations, some of which (those in R) are designated rules and are
+
+written as an equality
+
+s ! t, while
+step; a step
+
+non-rules
+s !R t or
+
+(those in
+s R t is
+
+E) are
+called
+
+written s t.
+a rewrite step;
+
+A proof step
+a (sub)proof s
+
+s
+
+$R Eu
+
+t is called !R t is a
+
+peak. We usually abbreviate a proof
+
+t0
+
+!ARptrkoof
+
+R tn a rewrite proof.
+transformation relation
+
+is
+
+of the form t0 !R
+any binary relation
+
+)
+
+!R tn by t0 !R tn, and call on proofs such that (i) P ) Q
+
+a proof implies
+
+u P ]q
+implies
+
+) P
+
+Qu ]Q)]qP,
+
+for all proofs P and Q, substitutions Q0], for all proofs P Q], Q, and Q0;
+
+, terms and (iii)
+
+u, P
+
+and positions q ) Q only if P
+
+in u; (ii) Q ) Q0 and Q are proofs
+
+of the same equation. A proof (reduction) ordering is a well-founded ordering on proofs that
+
+satis es (i) and (ii). Terminating proof transformation relations will be called proof normalization relations; any such is contained in some proof ordering.
+
+We will be looking in subsequent sections at proof normalization relations that take arbitrary equational proofs to rewrite proofs.
+
+2.3. Critical Pairs
+
+When there is no rewrite proof for a given peak, it will be necessary to deduce new equations to facilitate construction of a rewrite proof. Certain equational consequences called \critical pairs" are of central importance in this regard.
+Let s t and u v be equations in E (they may be the same equation) with no variables
+in common (the variables of one equation are renamed if necessary) and suppose that, for some
+ptTThohheseeintppioortsnohitoepifo,sntuthppee,rtptpsehorsetmitscirsoijntp!icioaspuflnuvpoatsiravvpvoaos]rnipitaiisobsnlec.aalFtlneoddartiaespxcuoarsnmiiittipicoalaenbl,leoptvhwdeereitlrtahueprluem; ,txihneebsxte?eairnm!cgritstehice,caatmlnhpoeabsoitervgeseturnlpaeeprrapplesodusnetvedirmeo]rpn.;. (x y)? ! y? x? to yield a critical pair x?? x? e?. The corresponding critical overlap is x?? x? R (x x?)? !R e?. By CP(E) we denote the set of all critical pairs between equations in E, formed from overlapping left-hand sides. The set of critical pairs CP(E) is nite whenever E is nite.
+
+Lemma 2.1 (Critical Pair Lemma 42]). Let E be a set
+
+u u
+
+!e0
+]p,
+
+t, then either
+substitution ,
+
+there and
+
+cerxiitsictsalaorveewrlraipteQpr(oboeftws e!enEtvhe
+
+of equations fe; e0g. If P is
+
+eqEutatoiorneslsienPE=),
+
+uQ
+and
+
+s]p$, fCorP
+
+a proof s e
+some context
+(E) t.
+
+8
+
+Sketch
+peak s
+is a pre
+
+xopefoufpp!r0oep=o00 ftp.qa0rI,featdnhidse,jotfiwunrtot,hptehorsemitpoioerena,ksqpi0siasanadnoppno0-soiatvtieorwnlahipinc.huHtaohtweewevhqeiurc,ahtifiaopnvaiaslriasatbbeolpevseotcpac0k,uertshpaolatrciqes0,
+
+in if is
+
+a
+p
+a
+
+position not in u above which a variable occurs, then the peak is called nested. In the case of a
+
+non-overlap or nested peak, critical, and can be written
+this case, s $pc t, where c is
+
+aatshcuerritQeiceax]lpis,ptwasihraeortefereQmainvsd,tsheu0e.cchFroittrhicadateltsoavi!lesr,Elsaepve
+
+(asEsutm. iAngnyp
+42, 32].
+
+other overlap
+is above p0).
+
+is In
+
+3. Equational Inference
+
+Knuth and Bendix 42] presented a procedure that attempts to construct a convergent rewrite system for a given equational theory. This completion procedure has been reformulated as an equational inference system in which new equations and new rewrite rules are derived, while old ones are simpli ed and/or deleted. The application of completion to a set of equations is viewed as a process of proof simpli cation, the goal of which is the derivation of rewrite proofs. A detailed exposition of this approach is contained in the rst author's dissertation 2]; see also 3].
+What distinguishes completion from ordinary logical inference is the incorporation of rules for removing redundant items from the set of inferred equations. In this context, an inference rule is a binary relation on sets of equations. A rule that adds a consequence to the set is called an expansion rule; one that deletes a redundant equation is called a contraction rule.
+In its most general form, expansion for equations is expressed in the following inference rule:
+
+Expansion:
+
+E E fs tg
+
+if s $E t
+
+Were a prover omniscient, then one step with this inference rule would su ce to prove any theorem. Realistic provers limit expansion to smaller steps, requiring a sequence of expansions to prove most theorems. We must ensure, however, that the expansion rules used are powerful enough to prove any theorem.
+Before formulating contraction rules, we need a notion of redundancy. To this end, we use a
+proof transformation relation ) that captures what it means for one proof to be \better" than
+another. In its most general form, contraction is expressed in the following inference rule:
+
+Contraction:
+
+E fs tg E
+
+if s $s t t ) s $E t
+
+Since we only delete an equation when any proof step using it can be replaced by a proof that is no
+worse, vis-a-vis the proof relation ), contraction preserves completeness of the inference system,
+
+and we say the system is \sound."
+
+The goal of an inference sequence is to produce the formulae necessary for a normal-form proof
+
+either of a given theorem or of all theorems in a given theory. In our case, rewrite proofs are in
+normal form, and we need to design the proof normalization relation ) so that non-rewrite proofs can be transformed into rewrite proofs. We also insist that ) be terminating, so that (among other
+
+considerations) contracting a nite set of equations takes only a nite number of steps.
+
+For example, if equations are used to rewrite only in a direction that decreases the term in some
+
+reduction ordering, then we could use a transformation of the form
+
+s E? u ?E! t ) s ?E! v E? t
+
+9
+
+which replaces peaks by \valleys."
+
+We write E ` E0 to indicate that the set of equations E0 can be obtained from E by one
+
+daaepllrpeilvqicauataitotioinonnfsrooftmhaanEt i0pn.efreTsriehsntecfe(rloormwuelesr.o)mlAiemp(itpoioSnstsiiTibnljytihiEne jsneoqitfueae)nssceeeqquouenenn,ccaeendoEfi0seq`dueanEto1ioten`ds
+
+EE20;`E1; by E1.
+
+:
+
+:
+
+is
+:,
+
+called a contains
+
+The following is straightforward:
+
+Lemma 3.1 (Re ection). If P is a proof in E and E ` E0 is an application of an expansion or contraction inference rule, then there exists a proof Q in E0 such that P ) Q.
+
+Since ) is terminating, we also have:
+
+Ca oprrooolf lianrSyi
+
+3.2
+Ei,
+
+(Persistence). Let then there exists a
+
+E0 `
+proof
+
+E1 Q
+
+` E2 ` in E1
+
+be a ( nite
+such that P )
+
+or in
+Q.
+
+nite)
+
+derivation.
+
+If
+
+P
+
+is
+
+In particular, every identity in E0 eventually has a persisting proof.
+
+Proof. By re ection and the properties of proof normalization relations, for every derivation
+
+E0 ` E1 ` sequence Pi
+terminating,
+
+and proof
+
+)
+we
+
+Pi+1
+have
+
+) Pn
+
+or subproof Pi in Ei, there
+
+=
+
+, where
+Pn+1 =
+
+Pj
+,
+
+is a proof
+for some n
+
+in
+
+exists a corresponding proof transformation
+Ej, for all j i. Since the relation ) is i, so that Pn is a proof in E1.
+
+To show that an inference system is complete and all theorems are provable, we need to establish a lemma of the form:
+
+Lemma 3.3 (Existence). If a proof P in E is not in normal form, then there exists an expansion inference E ` E0 and a proof Q in E0 such that P )+ Q.
+
+If, for example, we would require that for a proof of an equation e to be deemed \normal form" it
+
+be a direct application of the axiom e, then the Existence Lemma would trivially hold, since one
+
+expansion is all that is needed to generate e from E.
+
+It follows from Existence and the well-foundedness of )+ that for any
+
+tthheerleimisitsosmeteEd1er.ivOatfiocnouErs0e,`nEot1
+
+`
+all
+
+E2 ` giving a normal-form proof
+derivations give normal-form proofs,
+
+equation provable in E0,
+of the same equation in since a derivation could
+
+completely ignore some equations. To characterize those derivations that do enough expansions for
+
+normal-form proofs to eventually become available, we introduce a notion of \fairness":
+
+Drtfoehredamfutic,Pntaiiotn)ndio+rfneoPlra30t,.wi4othnh(iecF)rhaeitraahnnlesedorsesae)i.xssieAsattnsodfaeexerpxipvrpaaoantonsifoisonQionnEiinnr0ufSel`reiesEnEEci1)esui`Efcfh1oErt2`haan`Ety10Ppr()oinios+fEPfQa)i.iarnn(dEw1aithpthrroaeotsfpisPecn0toitntoinEa1n0 oprsrmuocoahfl
+
+This does not mean that fair derivations contain only expansions; rather, it requires that derivations do not forever ignore those expansions that are needed to derive normal-form proofs.
+Combining fairness with existence and persistence, we have:
+
+Theorem
+provable in
+
+3.5
+E0,
+
+(Normalization). Let E0 `
+then it has a normal-form
+
+E1 `
+proof
+
+inE2E`1.
+
+be a fair derivation. If an equation is
+
+10
+
+In the remainder of this paper, we look at various normal forms for proofs, and at restrictions of expansion and combinations of speci c expansions and contractions that guarantee that those proofs can be found. To establish a Re ection Lemma, we will need only show that the inference rules are special cases of expansion and contraction. To show persistence, we will need to prove that the transformation relation is terminating. For each speci c notion of normal form and transformation relation, we will have to prove an Existence Lemma. Finally, we will endeavor to give su cient, practical conditions for fairness.
+
+3.1. Standard Completion
+Let be a reduction ordering on terms. The inference system C, which was introduced in 2, 3]
+and which we call standard completion because it is inspired by Knuth and Bendix 42], contains
+six rules operating on mixed sets E R of rules R and equations E, where R is contained in . Normal-form proofs are rewrite proofs that use rules in R only. Hence, a non-normal proof either uses an equation from E or has a peak formed from applications of rules in R.
+The rst inference rule in C is used to expand the set of equations with critical pairs obtained
+by rewriting an instance of a left-hand side of a rule in two di erent ways:
+
+Deduction:
+
+ER E fs tg R
+
+if s t 2 CP(R)
+
+Such new equations serve to eliminate critical peaks that do not have an alternative rewrite proof.
+
+For example, the two rules
+so that the critical pair y
+
+e z
+
+x
+
+! e
+
+x and (x y) (y z) can
+
+z ! x (y z)
+be deduced.
+
+de ne a peak y z
+Deduction is re
+
+R (e y) z !R e (y z),
+ected on the proof level
+
+by transformations of the form
+
+s R? u ?!R t ) s C?P?(?R!) t
+To show that that this expansion rule is su cient, we add a proof transformation for non-critical peaks:
+
+s R? u ?!R t ) s ?!R v R? t
+
+and apply the Critical Pair Lemma, which asserts that all peaks can be replaced with a valley or with a critical-pair step. This is not quite enough to establish the requisite Existence Lemma,
+however, since we have no way of eliminating proof steps involving E.
+Standard completion makes a strong distinction between equations and rules. Equations may be eliminated from non-normal proofs by turning them into one-way rewrite rules. Equations are oriented according to the given reduction ordering to ensure that rewrite systems derived by completion are terminating:
+
+Orientation:
+
+E fs ' tg R E R fs ! tg
+
+if s t
+
+(Recall that s ' t denotes either s t or t s.) For instance, the equation e? e can be oriented (with respect to any ordering that includes the proper subterm relation) into a rule e? ! e. Orientation should be viewed as an expansion followed by a contraction: the rule s ! t is added,
+
+11
+
+making the equation s ' t redundant. Rules are preferred over equations, since they are used in
+
+rewrite proofs:
+
+s s?!t t ) s ?! s!t t where s t
+
+These two inference rules provide an Existence Lemma for some, but not all, proofs, since not
+
+all equations can be oriented. For example, there is no way to make a rule out of commutativity,
+
+x + y y + x, and preserve termination. some equation persists, that is if E1 6= ;.
+
+We say that a derivation E0 ` E1 ` E2 `
+Thus, the Normalization Theorem only holds
+
+fails if for fair,
+
+unfailing derivations. Two ways of circumventing such failures will be described in Sections 5 and
+
+6.
+
+A simple contraction rule deletes trivial equations:
+
+Deletion:
+
+E fs sg R ER
+
+For this to t the contraction scheme, we need a proof transformation of the form:
+
+s s?!s s ) s
+
+Since proof means that
+
+tarnaynssfuopremratuioounsrestlaetpiouns$apsresculosceadn
+
+under instantiation and application be deleted from a proof.
+
+in
+
+context,
+
+this
+
+Another contraction rule, uses rules to simplify deduced equations:
+
+Simplification:
+
+E fs ' tg R E fu tg R
+
+if s !R u
+
+This inference is also a combination of expansion (adding u t), followed by contraction (removal of the now redundant s ' t). For this contraction to be valid, we need to be able to replace any
+proof step using the removed equation by a simpler proof:
+
+s s?!t t ) s ?! r u ?! u t t
+
+where r is any rewrite rule. For e ciency reasons, implementations of completion procedures usually
+
+include further simpli cation mechanisms which can be described by the following two inference
+
+rules:
+
+Composition:
+
+E R fs ! tg E R fs ! ug
+
+if t !R u
+
+Collapse:
+
+E R fs ! tg E fu tg R
+
+if there is a
+in R, where
+
+proof s s >v
+
+!pv!w
+
+u
+
+The symbol > denotes the encompassment ordering (called \containment" in 33]): s > v if some subterm of s is an instance of v, but not vice versa. Composition allows simpli cation of right-hand
+sides of rewrite rules; collapsing simpli es left-hand sides. While composition produces another rewrite rule, the equation obtained by collapsing a rule need not necessarily be orientable.
+
+12
+
+The composition and collapse rules are re ected by proof transformations of the form:
+
+s ??s!?!t t ) s ?! s!u u ? r t
+
+s ?! s!t t ) s ?! qv!w u ?! u t t
+
+where s > v and r is any rewrite rule.
+
+As before, we write E ` E0 to indicate that the set of equations E0 can be inferred from E by an
+
+application of one of the inference rules in C. Completion is sound in that the congruence relations
+
+a$nEd
+
+tRheanreddu$ctEio0 nRo0 radreeritnhge
+
+same, whenever E contains R, then
+
+is terminating for any derivation for which the
+
+R ` E0 R0. Furthermore, if E also contains R0. Consequently, initial rewrite system R0 (which is
+
+R ` E0 R0 the system R1
+usually empty)
+
+is contained in the reduction ordering . The above inference rules never decrease the strength of
+
+rewriting, that is, if E R ` E0 R0, then any term t that is reducible by R is also reducible by R0.
+
+By a (standard) completion procedure, we mean a program that accepts as input a set of equa-
+
+tions E0
+inference
+
+R0
+rules
+
+and
+of C
+
+succeeds for a given
+
+iatnopruegdteunifcetnriaootneunaoorrddieeerrniitvneagdtieoqnucafortnoitomaninEpien0rgsisRRts00,.foarWnedveeursas(yeEs1thsoa=mt ;ea)scatonrmadtpetlgheyetiostenot
+
+apply the procedure of persist-
+
+ing rules (R1) is convergent. A procedure fails for an input if E1 6= ;. Similarly, we distinguish
+
+between failing and non-failing tion procedure is called correct
+
+derivations depending on whether
+if R1 is convergent, whenever E1
+
+=or;n.oItnEo1theisr
+
+empty. words,
+
+A complecorrectness
+
+asserts that all non-failing derivations result in a convergent system.
+
+The procedure given in Section 1 can be viewed as an exemplar of standard completion. Step
+
+2 represents an application of orientation; step 3, repeated application of composition; step 4,
+
+repeated deduction; step 6, repeated simpli cation and deletion. Step 4, in combination with step
+
+5, implicitly uses collapse, for whenever a rule s ! t can be collapsed to u t, then u t is a
+
+critical pair in CP(R). In the above procedure, the equation u t is rst deduced in step 4, but
+
+may be deleted in step 5. Fairness of the procedure, that is, fairness of all its derivations, depends
+
+on the order in which, in step 1, equations are removed from E.
+
+Observe that equations in E are kept in fully simpli ed form (step 6). Consequently, whenever
+
+an equation s t is selected in step 1, both s and t are irreducible with respect to the current rewrite
+
+system R. This guarantees that R will never contain two rules with literally similar left-hand sides
+
+and also that the restrictions imposed on collapse inferences are satis ed.
+
+3.2. Proof Transformation
+By a (proof) transformation system we mean a binary relation R on equational proofs. Elements of R are called proof transformation rules and are written P ) Q. As far as proof transformation is concerned we do not distinguish a proof P from the inverse proof P?1. We associate with R, a proof transformation relation ) which is the smallest proof transformation relation that contains R and for which P?1 ) Q?1, whenever P ) Q. We also say that a proof P can be transformed to Q, whenever P ) Q.
+Let R denote the set of all the above proof transformation rules, and let ) be the corresponding
+proof transformation relation. Since each inference rule is a combination of basic expansions and
+contractions, the Re ection Lemma asserts that every application of an inference rule in C is re ected on the proof level by transformations in R.
+
+13
+
+We take a \two-dimensional" view of proofs (larger terms above smaller ones), and illustrate the proof normalization process with the axioms of group theory:
+
+ex x? x (x y) z
+
+x e x (y z):
+
+The equation z?? e z is provable:
+
+z??
+
+e
+
+$$$$EEEE
+
+z?? (z? z) (z?? z?) z ez z:
+
+Let be the recursive path ordering (see 17]) corresponding to a precedence ordering in which
+is greater than ?, which is greater than e. By repeated application of orientation we obtain the following rewrite system R1 from the above equations:
+
+ex ! x x? x ! e (x y) z ! x (y z):
+
+These inference the above proof
+
+steps are re
+and P1 is
+
+ected
+
+by
+
+a
+
+sequence
+
+of
+
+proof
+
+transformations
+
+P0
+
+)+
+
+P1,
+
+where
+
+P0
+
+is
+
+(z?? z?) z
+
+z?? (z? z) .R1
+
+&R1 e z
+
+z?? e .R1
+
+&R1 z:
+
+The middle two steps of this proof form a peak which is an instance of a peak
+
+x? (x y) R1 (x? x) y !R1 e y
+
+between the second and third rule of R1. We can deduce the critical pair x? (x y) obtain a new proof P2:
+
+z?? e .R2
+
+z?? (z? z)
+
+$E2
+
+ez &R2
+
+z;
+
+e y and
+
+where R2 = R1 and
+can be simpli ed to
+
+Ex?2
+
+contains
+(x y)
+
+the
+y,
+
+crreiptilcaaclinpgaiorn. eAsgtaepin,ofPP1 2)w+itPh2t.wTohseteepqsuaintioPn3:x?
+
+(x
+
+y)
+
+ey
+
+ez
+
+z?? e .R3 z?? (z? z) $E3 z .R3
+
+&R3 z
+
+14
+
+Orienting
+where P4
+
+the is
+
+new
+
+equation
+
+and
+
+moving it from
+z?? (z? z)
+
+E3
+
+to
+
+R4,
+
+induces
+ez
+
+a
+
+transformation
+
+P3
+
+)+
+
+P4,
+
+z?? e .R4
+
+&R4 z .R4
+
+&R4 z:
+
+The trivial peak z R4 e z !R4 z can be transformed away, so that we end up with a proof
+
+z?? (z? z)
+
+z?? e .R4
+
+&R4 z:
+
+We deduce the critical pair x?? e x and turn that into a rule x?? e ! x. The initial equation z?? e z can now be deduced immediately, via a one-step rewrite proof. However, the set of
+derived rules
+
+ex ! x x? x ! e (x y) z ! x (y z) x? (x y) ! y x?? e ! x
+
+is not yet convergent. For instance, the equation e? y y is provable, but not by a rewrite proof.
+If we continue the completion process, we eventually obtain the ten-rule convergent system shown in Section 1.
+
+3.3. Proof Normalization The proof transformations re ecting completion are simplifying, so that any arbitrary sequence of proof transformations (applied to a nite proof) has to be nite:
+Lemma 3.6. The proof transformation relation ) is terminating.
+
+Siccseokrmtethapteilcnethxrciipotoyslfeto(tpfforasoe;patogrcfoh;.ousf;Witni)sge.tledTheehpermnoecuooflaststismteoetepfa.oasfuTrtrehheweeorcicftooetsshttpesroocofoofamfintspstelepeqpxruoiastoyt!fioosnputfa!eaplvnsp.treoqoourfastsitoenppua!sl vp!rtopuiosfv(bftysogar;suss;igt)n.puinTgvhaet
+
+Proof steps are compared with each other according to their cost, using the lexicographic com-
+
+bspineacitaiolinzaotifotnheormdeurlitnigset>exintetnhseiosneconmdulcoomf tphoenernetd,uacntidonthoerdreedriuncgtion
+
+in the rst ordering
+
+component, the in the last com-
+
+ponent. Proofs are compared according to their complexity, using the extension of the above
+
+lexicographic ordering to multisets. This ordering, which is a proof reduction ordering, contains
+
+the proof transformation relation ). For details of a similar proof, see 2, 3].
+
+It remains to be shown that every identity eventually has a (persisting) rewrite proof. If no unoriented equations persist, that is, if the procedure does not fail, this is the same as saying that
+the result R1 is Church-Rosser. For this, it su ces to show that for each proof Pi in Ei Ri there
+
+15
+
+Ris1a.sIunitsahbolertp, rwoeofinttrearnpsrfeotrmcoamtipolnetsioenquaesncaepfroorcewsshiocfhptrhoeofmnionrimmaallizpartoioonf ,Ptnheisgoaarleowfrwitheicphroisofthine
+derivation of rewrite proofs. Computation of critical pairs is a su cient condition for fairness:
+
+Proposition 3.7. A derivation in C is
+pairs between persisting rules is a subset
+
+fair (with of the set
+
+SrekspEekctotfoa)ll )deidfutcheed
+
+set CP(R1)
+equations.
+
+of
+
+all
+
+critical
+
+Theorem 3.8 (Correctness). The limit R1 of a non-failing fair derivation is convergent.
+
+Proof.
+the limit
+
+As all
+R1 is
+
+rewrite systems terminating. To
+
+Rpri oinveatdheartivRa1tioins
+
+are contained in Church-Rosser,
+
+the given reduction ordering , we need to show that whenever
+
+isarpsnenrwoReorttq1iftuiieon.nafptTSEisrohoi1n(iosEfs.ctioRTinnRht1treRia,ni)sd1,s,uispcbcutwryhscoihvtettahxhhtbiehasrltateeaetsPsnipsnPc0ueecm)R)t(1pit+nto,PioPttt0nhh0h0.e.eetnShBn(iaonwuittncte-ePiltfsla-hEfpiieols1irnunomngv(=dbiancyeb;iadml,sep)eaet)bphrl.ysriaisosnHaotPdeefrnn0e0foccawrweeidr,r)oniePtutreehlisdnesmpg,rbreuto)eshaotealfsr.b.oeseLtSeeriexxiuntciipstsnPtlptyossorbsasamemeppaPaarrlololfmoeioosrffrinmPnpPiorm.000otaoooalfff
+
+It is tempting to strengthen the collapse rule, so that one can reduce the left-hand side of a rule by another rule with the same left side. This, however, can not always be done without losing correctness. Consider the following initial system of oriented equations:
+
+c!a g(x) ! x f(x; b) ! x f(x; g(y)) ! f(g(x); y) f(b; z) ! c
+
+along with a lexicographic path ordering (see 17]) in which the function symbols in order of
+decreasing precedence are f, c, g, b, a, and in which the rst argument of f is more signi cant than the second. Deduction generates the rules c ! b and f(g(b); z) ! c. The latter (unreduced) produces c ! g(b) and f(g(g(b)); z) ! c. Now, c ! g(b) can be used to collapse c ! b away (with the proposed lax inference rule) and g(x) ! x simpli es the other one away. So their critical pairs do not persist. The new ones, however, generate c ! g(g(b)) and f(g(g(g(b))); z) ! c, and so on,
+never reaching a convergent system. This, despite the fact that there is a nite one:
+
+f(x; a) ! x f(a; z) ! a
+b!a
+
+On the proof level, the proof of b a gets stretched out, more and more.
+It is all right to use older rules to collapse newer ones with the same left-hand side. To allow
+for this, we should compare left-hand sides using a relation >0 that includes encompassment and
+makes newer rules bigger, instead of just encompassment. This change should be made in the inference rule, transformation rule, and proof ordering; see also Section 6.
+Correctness, in our sense, of a speci c completion procedure was rst proved in 33]. By formulating completion as an equational inference system and deriving corresponding completeness
+
+16
+
+results, we obtain correctness of a wide class of di erent completion procedures. The proof ordering approach is comparatively simple and intuitive, especially for dealing with simpli cation inferences. The intrinsic di culty of applying our approach consists in nding a suitable ordering for proving normalization. Once an appropriate proof ordering has been found, the remaining veri cation steps are straightforward. We use multisets of the individual costs of steps, since that allows one proof step to be replaced by any number of smaller ones. In particular, proof transformations that delete steps will always result in a decrease in a multiset ordering. For standard completion, steps are
+ordered by triples, (fs; tg; u; t) or (fsg; u; t), each component of which is designed to handle some of
+the transformations. Were we to only have the rst four inference rules, the rst component alone
+would su ce: The cost fsg; fsg of the two steps in a peak u s ! v would be replaced by the cost fu; vg of an application of a critical pair; orienting reduces the cost of a step from fu; vg to just fug or fvg; and simplifying equations reduces the cost of a step from fs; tg to fs; ug, for some u smaller than t. But once we include composition and collapsing, this ordering must be re ned:
+the second component was designed to handle the two steps that replace a collapsed step, while the third component makes using a composed rule smaller than using the original. Kuchlin 45] has also discussed completion from the point of view of simpli cation.
+
+3.4. Completeness of Completion
+
+We can show the following:
+
+Theorem 3.9. Suppose there exists some nite convergent rewrite system that is contained in a
+
+reduction derivation
+
+order from
+
+and which has the
+E0, using , will reach
+
+same equational theory as E0. Then, any fair, unfailing
+a convergent system (not necessarily the same one) after a
+
+nite number of steps.
+
+Proof. Let S be the system in the supposition and let S0 be a system with the same left-hand
+
+sides for each rule, but with right-hand sides replaced by their normal-form in S. The system S0 is
+
+taahllsleorwecaoiysnsvaoelfsrogreeanwtpr:irtIoitnoigfs smte$urmsStintle.aatSdinintgco,estiShneciessa!cmoSne0vneor!grmeSn.atl,ItftohirsemrCehviu;sriacnhls-poRaaortspisceruorl,oasfri,nswc!ee f!Scoarvnanayp!Spptlry.oMoruf olserse$oinvSe0 Srt,
+
+Etrptheoe2warms`tWriisibtmteeoiniktpc,ghnreSooraSwo0uc.0fhlsetHashrmneuandnulteecseeRetwda,ibceislhdeal!rrohfeuofaSrlcvte0ohervnseeawt!afproiSinrett0mreesditni.pssritSno!in0otgRfihssireaoetwf,staashrmiilentloeecrreupeirlmrterosecoianifennxaESnfivt0o0ee..trHobareednrencereidit,neugincnibualmn.eybLwefeairttihroRofdusebttreeivvpiastot.hliaeoItnninnfEgaitc0teth`, setEehfta1esoc`etf
+
+is
+s
+
+!aWSp0revosohfosSw0$. tWhSa0etthRianvieSs !0C(hSsiu0nrcc!eh-tRRh.oesTrseheires.reofLnoeertei,nsthEe0rR)e
+
+u !R t be
+and by con
+
+a peak in R. By uence of S0 there
+
+is also a proof s !R v R.
+
+soundness, is a valley
+
+there proof
+
+A rewrite system R is reduced if, for each rule l ! r in R, the right-hand side r is irreducible by R and no term s less than l in the encompassment ordering is reducible 19]. It has been
+shown 14, 48] that there is exactly one ( nite or in nite) reduced convergent rewrite system (up to renaming of variables) contained in any given reduction ordering. The contraction rules we have su ce for reducing rules in this way. We can accordingly modify our notion of \normal-form proof"
+
+17
+
+to insist that all rules used in valley proofs be reduced. It would then follow that whenever a nite
+rewrite system R exists for a given ordering , any fair unfailing derivation will discover it.
+The extensive use of simpli cation, composition, and collapse is typical of completion procedures. The procedure of Section 1 keeps rules and equations reduced. That procedure may generate critical pairs from non-persisting rules that are not necessary. On the other hand, not all critical pairs between persisting rules are generated either. For, if the right-hand side of an old rewrite rule is simpli ed in step 3, no critical pairs are computed with the newly simpli ed rule. This optimization can be viewed as an application of a \critical pair criterion." The fairness of the procedure can be proved using the techniques described in the next section.
+
+4. Critical Pair Criteria
+
+The e ciency of the completion process depends primarily on the number of critical pairs generated.
+
+Simpli cation can be a very e ective mechanism for eliminating super uous equations. For instance,
+
+a critical pair is redundant if it can be reduced to an existing critical pair. Redundancy of a critical
+
+pair can often be determined by examining the structure of the associated critical overlap.
+
+A terminating rewrite system R will be called convergent for a set of equations E if for every
+
+equation s
+from sets of
+
+t in E we
+equations
+
+have s
+to sets
+
+!ofRevquatRiotn.s,Bwy haerceritCicPalCp(aEir)
+
+criterion CPC we mean a mapping
+is meant to indicate which critical
+
+pairs are deemed redundant. A criterion CPC is sound with respect to a reduction ordering
+
+if, whenever a rewrite system R is contained in and is convergent for CP(R) n CPC(R), R is
+
+Church-Rosser. In other words, a sound criterion provides a characterization of the Church-Rosser
+
+property. To be of use in practice, a criterion also has to be compatible with the simpli cation
+
+mechanism employed by completion.
+
+cpdrreiortioiAvcfaaQtdlieooirvnnieviSrasltaifi(poaEnirPi EwaR0hsesi)no,Rcesivau0etcr`ehdiEtthwi1saittfhaPRiar1)wc`ri+ittEhiQc2ra.elsWppRaee2icrst`astyotChtaiPsitnCcaaC.cllrPCeidt(leeRrfaai1roilrny),nwCiSfiPtahiCCnreoPissnCpc-efo(acrEtirleiitncogtRCidfiPe)arnCtivyhaeintfrioeofnoner-xfiaeissivltfeisanrigyar
+
+with respect to a correct criterion CPC, then its limit R1 is convergent.
+
+Every correct criterion is sound 3] but not vice versa. For instance, Zhang and Kapur 59]
+
+suggest a criterion PCP, where PCP(R) consists of all critical pairs of a rule u ! v on another
+
+rule s ! t at a position pq, such that p; q 6= and the overlapped term s is reducible at position p.
+
+This criterion can be proved to be sound without much di culty, but is not correct in this sense.1
+
+For instance, the derivation
+
+f?0
+
+! 0; ` `
+
+p?x + x f?0 ! 0; f?0 ! 0;
+
+!pp??0;xx
+
+?0 + 0 +x! +x!
+
+! 0;
+0;
+
+0g
+0+ 0+
+
+0 0
+
+0g ! 0g
+
+ips ?fa0ir+w0ithharsetswpeocdtitoertehnet
+
+criterion, but normal forms
+
+tph0e
+
+nal rewrite system and 0. The problem
+
+is not Church-Rosser, as with the criterion is that
+
+the term a critical
+
+pair may be redundant at some stage during stage. (Note, in particular, that the critical
+
+the pair
+
+c0ompple0ti+on0porboctaesins,edbubtynsounp-reerdpuosnidnagn?t 0at!a
+
+later 0 on
+
+1Zhang and Kapur 59] attribute the criterion to Winkler and Buchberger 58], but the latters' actual, more subtle criterion is a speci c instance of the composite criterion described below and is correct.
+
+18
+
+p?x + x ! 0 is in PCP(E0 R0) and therefore is super uous according to the criterion.) All
+
+of the correct criteria that have been suggested in the literature can be viewed as applications
+
+of compositeness, a concept that is the analogue, on the proof level, of the term-based notion of
+
+\connectedness" 12].
+
+A there
+
+peak exist
+
+aPseoqfutehnecefoorfmprsoofsEQu1;!: :E:
+
+t is ; Qn
+
+called composite
+in E, where Qi is
+
+with respect to
+a proof of ui?1
+
+a
+
+proof ordering
+ui, such that u0
+
+=
+
+if
+s,
+
+un+1
+that
+
+= t, u ui, and P
+it is possible that the
+
+comQpio.siWtioenaQlso1
+
+calQl nQo1;f
+
+: : :; Qn a
+all proofs
+
+decomposition of the peak P. Note Qi is bigger than P with respect to
+
+a proof ordering . A critical pair is called composite if its corresponding critical overlap is.
+
+c(sftoesmp;Lpstgeoat;nrseejnpc;toubtm;oetp)ta,ahraepencrddooosaftfsoroobfraedafoerserrtiween,prgui:tsletiikhnpeegroctthoohsefetsopotnerfepoapnusesre!eqdsupuua!fbottvireortnsmta(alonorpdrrsdaoreodrfinpusc!tgoemvpfoptsr)le!tithsiopuennonv,weetwx((cfoseserpgcsto; sntjdhppu;acutov;mwtt))ep. oiasPndnredonoowta.f
+
+By CCP(E) we denote the set of all critical pairs in CP(E) that are composite with respect to .
+
+Theorem 4.1. The composite criterion CCP is correct.
+
+sctsaEPoiro1rrimtneoiIBweRc=fooay1rtfpflih;trP.ppu.eeoe0aoWcp!riaLfrrsrnieeiQoRtsidtniotu1cefEcwsaCneoitl0incntPpciehnsaaR,(edniRRPqr1iufbu01cs.ee)tP0`)niw.ot+Enlriysti1Qt0otanin.eslosnRcOotoa1naans`ttdvtoapheEiPrcenso2ohe0oomodft]w,phiRinweont2rshhsio`Rathemirtao1enenePvdsoPe,be0rr1tiieysf;cC:aaPpo:Cnrcf:oatr;iPsaoiiPtrif(iannEcdPsaopeklfrraioinovvvRoanSePftokriii)0lno(na,-Enp]pt,Rhirwawoe1nipnhtdR,heetrsrtih)ehr0eeoecPrsvnaepenterea0clxnbtatihyepsPtet,tposicr,rtaoaCohfnropedrCsrneeefPrasocpoltr,olhmomviweneeprwdhrdeoileinasttriiphgoes-
+
+1 i n. We may use the
+
+a rewrite all terms
+
+proof
+in Q0
+
+Qi
+are
+
+in R1.
+strictly
+
+LsinmedtaulQclet0riobtnehahtnyhpeuoc,tohwmeespihsoastivoteioinPnfeQr 1thQat0QeaanncdohfhpaerlnolcotefhPmesiaecyraenawpbrpieltyetrtpahrneosofionfsrd.muScetidnioctneo
+
+hypothesis again, to conclude that there is a rewrite proof of s a proof Q with P )+ Q.
+
+t in R1. Therefore there exists
+
+If exists
+
+the critical pair s0 t0 is a proof Q with P )+ Q.
+
+not
+
+contained
+
+in
+
+any
+
+set
+
+CCP
+
+(Ek
+
+Rk), then by fairness there
+
+In sum, any proof P that is not a rewrite proof in R1 can be transformed to a simpler proof Q.
+
+By the induction hypothesis, the proof Q (and hence P) can be transformed to a rewrite proof.
+
+Various techniques have been used in practice to check for compositeness. The basic idea is
+
+to check whether, in a
+overlapped term s u Suppose s can be
+
+critical overlap P = t R s u ]p !R s v ]p (of u ! v on s
+
+]p can be rewritten
+
+reduced in other ways than indicated
+to a term w by applying a rule s0 !
+
+by the overlap.
+t0 at a position p0.
+
+! t), the If p0 = pq
+
+for some position q, such that either q 6= or else both s >s0 and u >s0, then P can be decomposed
+
+itrnhetqaout itrPwe oonpleyPakq1s6=aPn1d
+
+=
+P
+in
+
+t
+
+PR2.)s
+
+!R w and P2
+Since the rule
+
+=
+s
+
+w !
+
+t
+
+Rs
+can
+
+!R s v ]p.
+be collapsed if
+
+(It can easily be
+s > s0, it is su
+
+checked cient to
+
+completion procedures that construct reduced rewrite systems. This special
+
+case of compositeness was introduced by Kapur, Musser, and Narendran 40]. For example, if R
+
+19
+
+contains rewrite rules (x? y)? ! y? x??, x x? ! e, and x?? ! x, then the critical overlap
+
+x??? x?? R (x? x??)? !R e?
+
+(between the rst two rules) is composite, because the subterm x?? in x? x?? is reducible.
+
+If the position p0 is not below p, additional information is required to ensure compositeness.
+
+Suppose p0 6= the peak w
+
+and there exists
+R s !R s v ],
+
+a proof P1 of t w, such that P
+we obtain a (binary) decomposition
+
+P1.
+of the
+
+By taking P2 to be
+original peak. The
+
+existence of a pair between
+
+rsuulietsabsle!prtoaonfdP1s0is!dit0
+
+cult has
+
+to determine, in general, already been computed.
+
+but is guaranteed if the critical Techniques for keeping track of
+
+previously computed critical pairs have been described by Kuchlin 43], for instance.
+
+We conclude this section by using compositeness to establish a new Church-Rosser result. Sup-
+
+pose u ! v and u0 ! v0 can both be superposed on the same rule s ! t, at positions p and p0,
+
+respectively. that the rst
+
+Let t
+critical
+
+s
+pair
+
+v
+is
+
+]p and t
+subsumed
+
+0
+by
+
+s0
+the
+
+v0 0]p0 be
+second if
+
+the corresponding critical
+p0 6= and there exists a
+
+pairs. We say substitution ,
+
+such that x = (x 0) , for all variables x in s. A set of critical pairs S, with S CP(R), is called
+
+complete if each critical pair in CP(R) is subsumed by some critical pair in S.
+
+Theorem 4.2. A terminating rewrite system R is Church-Rosser if and only if it is convergent for some complete subset of CP(R).
+
+Proof. The only-if direction is trivial. For the other direction, let be a reduction ordering
+
+containing R. We prove that whenever S is a complete subset of CP(R), then all critical pairs
+
+in CP(R) n S are composite with respect to . Let t s v ] be such a critical pair and
+
+P be the corresponding overlap t
+pair is subsumed by some critical pair
+
+Rt
+
+s
+0
+
+(s 0 v0 0]) = s v0 ], for some substitution
+
+u s
+
+]
+0
+.
+
+!v0 R0]ps0
+
+v
+in
+
+].
+S,
+
+Since where
+
+S p0
+
+is
+6=
+
+complete, this
+and (t 0) =
+
+Since R is convergent for S, there is a
+
+critical
+t and
+rewrite
+
+proof of t 0 the proof s v0 is simpler: f(fs
+
+s 0 v0
+
+]
+g;
+
+sR;
+
+0].
+s s; t
+
+Let
+!)gR
+
+P1 be a corresponding rewrite proof of t
+
+s
+
+v ]. f(fs
+
+gT; uh0e
+
+;pur0o; otf
+
+)Pg2(ndoi teertshafrtomsubPsuminptthioant
+
+s v0
+its rst implies
+
+] and P2 be
+rewrite step
+that u0 is a
+
+proper subterm of s ). Since we also have P of P. We conclude that all critical pairs are
+
+P1, the
+composite,
+
+two proofs which, by
+
+P1
+the
+
+and P2 form
+correctness
+
+a of
+
+decomposition the composite
+
+criterion, implies that R is Church-Rosser.
+
+This theorem has applications to rewrite systems R containing rules t s; s] ! u with multiple
+occurrences of the same subterm on the left-hand side. For each critical pair obtained by super-
+posing on one occurrence of s, there is a corresponding critical pair obtained by superposing on another occurrence of s. As all these critical pairs subsume each other, it is su cient to compute
+just one of them.
+
+5. Completion Modulo a Congruence Some equations induce non-terminating rewrite relations. For example, the commutativity axiom x + y y + x enables a rewrite t + t ! t + t. Standard completion fails for such problematic equations, but it is often possible to construct rewrite systems for which normal forms are unique up to a simple equivalence relation.
+
+20
+
+Let A be a set of equations, assumed to be symmetric for simplicity. A rewrite system R is
+
+called Church-Rosser modulo
+
+such that s
+modulo A.
+
+!R
+
+u
+
+$A
+
+v
+
+R
+
+A t.
+
+if, for all terms s and A proof of the form s
+
+t with !R u
+
+$s $A Av
+
+R
+
+t,
+R
+
+there are
+t is called
+
+terms u and v,
+a rewrite proof
+
+the
+
+The rewrite system R=A
+rewrite relation induced
+
+consists
+by R on
+
+of all rules s
+equivalence
+
+! t, for which s classes of A. We
+
+$sayA
+
+u !R
+that a
+
+vre$duActti.onItorredperreinsegnts
+
+is compatible with A if s system R=A is terminating
+
+t
+if
+
+implies u
+and only if
+
+v, for all terms s, R is contained in a
+
+tr,eduu, catniodnvowrdiethrinug$Athsaatnisdcto$mpAavti.bAle
+
+with A.
+
+Consider, for example the set A of associativity and commutativity axioms
+
+x+y y+x
+
+xy yx
+
+x + (y + z) (x + y) + z x (y z) (x y) z
+
+and the set R 32] of rules
+
+x+0 ! x x 1 ! x 0+x ! x 1 x ! x f(0) ! 1 f(x + y) ! f(x) f(y)
+
+The system R=A is terminating, for if ground terms are evaluated by
+
+(0) = 2 (1) = 2
+(s + t) = (s) + (t) (s t) = (s) + (t) (f(s)) = (s)2
+
+then any application of a rule decreases the value of a ground term, while equivalent terms with
+
+respect to A have the same value. The rewrite system R is also Church-Rosser modulo A; a test
+
+for this property is described below.
+
+Following the techniques outlined in previous sections, we rst describe Huet's method for
+
+constructing convergent rewrite systems modulo A from the perspective of proof normalization. In
+
+this context, a normal-form proof is a rewrite proof modulo A by R. As before, by a peak we mean
+
+a proof s system R
+
+is
+
+R u !R t. By a cli
+Church-Rosser modulo
+
+we
+A if
+
+mean a proof s $A
+and only if there is a
+
+u !R t
+rewrite
+
+or s
+proof
+
+moRduulo$AAint.RAforreewvreirtye
+
+equation provable in A R. A proof in A R, on the other hand, is a rewrite proof modulo A if
+
+and only if it contains no peak or cli .
+
+The Critical Pair Lemma indicates that every peak can be replaced by a rewrite proof unless
+
+it is a proper overlap. Let
+modulo A can be obtained
+
+P be a cli s $A u !R t. If
+by commuting the two proof
+
+P is a
+steps.
+
+non-overlap, then a rewrite proof
+If P is a proper overlap, then by
+
+the Critical Pair Lemma s $CP(A R) t. Nested cli s can be problematic. For example, in
+
+a b $A a a !R a
+
+the application of an equation a b is nested within the rule x x ! x. The cli can be replaced
+by a proof
+a b $A b b !R b $A a
+
+21
+
+(which contains a similar nested cli !) but not by a rewrite proof modulo A. This example involves a non-left-linear rewrite rule. A cli in which the application of an equation of A is nested within the application of a left-linear rule can always be replaced by a rewrite proof modulo A. Therefore the Critical Pair Lemma also provides an Existence Lemma for rewrite proofs modulo A, provided
+rewrite rules are left-linear.
+Let be a reduction ordering that is compatible with A. The inference system L contains all inference rules of C, but restricted so that all sets of equations are of the form A E R, with A being xed. In addition, L contains two new inference rules:
+
+Extension:
+
+AER A E fs tg R
+
+if s t 2 CP(A R) n C P (A)
+
+Deletion:
+
+A E fs tg R AER
+
+if s $A t
+
+which are re ected by proof transformation rules
+
+s
+
+sA?!
+
+u ?!
+
+?R!
+E
+
+t t
+
+) )
+
+s s
+
+?! E ?! A
+
+t t
+
+(The rst kind of transformation covers not only extension, but also elimination of non-overlaps
+and certain nested overlaps between A and R.)
+
+Lemma 5.1. The proof transformation relation ) for L is terminating.
+
+Proof. We de ne a well-founded ordering using a suitable measure of the complexity of a proof.
+
+(Tfhseg;cuo;sfttogf),aifperoiosfastreuplesu$!pe
+
+t is de v; and
+
+ned to
+(ftg; v;
+
+be the
+fsg) if
+
+triple
+e is a
+
+(fs;
+rule
+
+?g; u
+
+?; ?), v. If
+
+if
+e
+
+e
+is
+
+is an equation in A;
+neither an equation
+
+in A nor a rule, the cost of the proof step is (fsg; >; ftg), if s t; (ftg; >; fsg) if t s; and
+
+(fs; tg; ?; ?), otherwise. The complexity of a proof is the multiset of all costs of its proof steps.
+
+Proof steps are compared using the multiset extension of the reduction ordering in the rst
+
+component, the encompassment ordering > in the second component, and the reduction ordering
+
+in the last component. The symbols > and ? are assumed to be maximum and minimum
+
+elements, respectively, in any of these orderings. We denote this ordering on triples by lex. Proofs
+
+are compared using the multiset extension of this ordering. This proof ordering is well-founded
+
+and contains the transformation relation ) based on the old and new transformation rules. We
+
+show some representative cases in detail:
+
+((fNsogSDOEt;eixevrmtilt;eeehputnnali)istot,ainofctso.inaor$t.(niasoW.Ann$(ye.tsEthIi$mefartsvpmE)elite(v)ss.t,s$t(6 hAse(tn$usa(!!AnsdRRt$)t,ttE)6)b, etbs)c.ea)cua(suses$(fess(E;!ftstg)Rg,;
+
+b>me;uctla)ufsuel;e?x(fg(sf,;s?fgo;gru;e?;vt;e)r?,yf)otreralemnxy(ufteswrgmi;t>hu;.st)$. A u $E t), because s u and (fsg; >; t)
+
+u.
+lex
+
+If t (ftg; >; s)
+
+s,
+lex
+
+then
+(ftg;
+
+(s >;
+
+$E u).
+
+t)
+
+If neither s t nor t
+
+(fs; tg; ?; ?) lex (fsg; v; u).
+
+s,
+
+(s !R u then (s $E
+
+$E t)
+
+t),
+
+because (ftg; >; s) lex (fsg; v; u) (s !R u $E t), because s u
+
+and and
+
+22
+
+Using induction on )+ we can prove:
+
+Theorem 5.2 ( 32]). Let R be a rewrite system and A be a set of equations, such that R=A terminates. The system R is Church-Rosser modulo A if and only if, for all terms s and t with s R u !A R t, there are terms v and w, such that s !R v $A w R t.
+
+Again, computation of critical pairs su ces for fairness:
+
+Proposition 5.3. A derivation A persisting critical pairs CP(A R1)
+
+nEC0P
+
+(AR)0
+
+`
+is
+
+A E1
+a subset
+
+ofRS1k
+
+` Ek.
+
+in L is fair if the set of all
+
+We obtain the following proof normalization result:
+
+Theorem
+compatible left-linear,
+
+5.4.
+with then
+
+RALe.1tIRfis0Ec0boenvaRerr0geew`nrEtitm1e osdyRsutl1eom`Aa.ndis
+
+a
+
+be a fair
+
+reduction unfailing
+
+ordering that derivation in
+
+Lco, nstuacihnsthRa0t
+
+and
+R1
+
+is is
+
+Proof.
+whenever
+
+Let A
+a proof
+
+PEi0n
+
+AR0
+
+or
+P
+
+a cli s )+ Q.
+
+ByRt1he
+
+u $A t,
+Critical
+
+`A E1
+
+RE11
+
+R1 `
+contains
+
+be a fair
+a peak s
+
+then there is a proof Q in A
+
+Pair Lemma, any peak or cli
+
+derivation as indicated. We
+
+RE1j
+
+u
+
+!RjR,1fotr,
+
+a cli some
+
+s j
+
+$Ai,
+
+in P which is a non-overlap
+
+show that
+u !R1 t,
+such that or nested
+
+can be replaced by a rewrite proof modulo A. (Left-linearity of R1 guarantees that there are no
+
+problematic nested cli s.) By fairness, every proper overlap can also be replaced by a simpler proof.
+
+Since the derivation is unfailing, E1 = ;, and we may conclude that any non-normal persisting
+
+proof can be transformed to a simpler proof. The assertion follows by persistence.
+
+The above completion method has been suggested by Huet 32]. Its main drawback is the restriction of left-linearity. (Note that a non-left linear rule can be inferred from left-linear ones.)
+rtARneheAgawdatiirspdiserCerodbehbnaualetsrsemcdaahp-osoRpfinnrohogsAaalsecne-hrmdrelmaitwnotogrcdihrtemuienwloogsrrtieeAtapinn.gdgesTn!imehnrioRaswdlAehuoltiilvm.coehTiranlheaavcpeteonesrnsyiagntrvhrpueoerewlonvpbricrinleteogembelstmaeyhtmspeitcleorwmneyiwestshRrtaietnhdesetasrrcsteolelitnadogtiecbsorleni$rcseRo,AwnAbrs.uiuttrteS!uuicrncRtethelradottodisvcouoeancrntelahRsbpaAaest can be e ectively dealt with if a nite, complete A-uni cation algorithm is given. An associative-
+commutative completion procedure based on this approach has been described by Peterson and Stickel 53]; for a formulation within the inference rule cum proof normalization approach, see 7]
+
+6. Ordered Completion Standard completion fails whenever an equation s t between persistently irreducible, yet incomparable terms s and t is generated. Commutativity, x y y x, is an example of such an unorientable equation, as the two terms x y and y x are incomparable with respect to any reduction ordering. The strategy used by a completion procedure to construct a derivation may determine whether or not an unorientable equation is generated 21]. To avoid failure a procedure may have to systematically enumerate all possible derivations (for example, via backtracking). In some cases, standard completion is bound to fail even with backtracking. In fact, the method may fail even when it is supplied with a reduction ordering suitable for a convergent system that does exist.
+
+23
+
+For example, if the initial set of equations E0 is 1 (?x + x) 1 (x + ?x) ?x + x
+
+0
+x + ?x y + ?y
+
+then standard completion fails, regardless of which reduction ordering is supplied as input! The only inference rule that can possibly be applied to the above set of equations is orientation, which may result in two rules:
+
+1 (?x + x) ! 0 1 (x + ?x) ! x + ?x
+
+(no other orientation is possible). These two rules do not overlap and constitute a convergent rewrite system. The third equation is unorientable and both its sides are irreducible by the above two rules. As a consequence, no inference rules are applicable. Nonetheless, there exists a convergent system
+
+?x + x ! 0 x + ?x ! 0
+1 0!0
+
+for the given equational theory. Unorientable equations, in which one side contains a variable not occurring in the other side,
+can sometimes be dealt with by introducing new function symbols, a technique suggested in 42].
+For instance, if the equation ?x + x y + ?y is replaced by two rules ?x + x ! c and y + ?y ! c, where c is a new (minimal) constant, then completion succeeds in constructing a convergent system
+of four rules:
+
+?x + x ! c x + ?x ! c
+1 c!c 0!c
+
+which represents a conservative extension of the original equational theory (and, hence, also provides a decision procedure). The preceding example indicates an inherent inadequacy of standard completion, however, and very often this technique just leads to the introduction of ever more new function symbols.
+We pursue a di erent approach for dealing with unorientable equations, called ordered completion, which is a refutationally complete theorem prover for equational theories. The method requires neither backtracking, nor introduction of new function symbols. As an equational theorem prover, it has the advantage over paramodulation 57] that equations can always be kept in fully simpli ed form and fewer equational consequences need to be considered, since the ordering supplied to the procedure gives some measure of direction to the prover.
+A convergent rewrite system de nes unique normal forms for all terms. In applications such as (refutational) theorem proving uniqueness of ground normal forms is su cient. In this section,
+
+24
+
+we present an inference system, called \ordered completion," for the construction of systems of
+
+equations that de ne unique ground normal forms.
+
+Let E be a set of equations E and be a reduction assyn$sdteEtmwt daitnehdnsse$s uEtn.tiq,WutheeesgraeryoeutxnhidsattsnEoarmigsraoglruofnoudrnmdtescr.monvve,rsguecnht
+
+ordering. We (with respect
+that s !E v
+
+write to )
+E
+
+s
+if
+
+!E
+for
+
+t
+all
+
+(or t
+ground
+
+E s)
+terms
+
+if
+s
+
+t. A ground convergent
+
+of
+
+By a rewrite proof (with respect
+equations E is ground convergent
+
+to if
+
+) we mean a proof of and only if there exists
+
+tahegrfoourmndsre!wEritevproEof
+
+t.
+for
+
+A set every
+
+equation between ground terms that is provable in E. A ground proof is either a rewrite proof or
+
+else nor
+
+tcontsa)i.nsIfathpeearkedsuctiEon
+
+u !E t
+ordering
+
+or is
+
+an unorientable total on ground
+
+equality step s $E
+terms, unorientable
+
+t (where
+equality
+
+neither s t
+steps cannot
+
+occur, though.
+
+A reduction ordering is said to be complete (with respect to E) if, whenever s and t are
+
+distinct ground with respect to
+
+terms (and a complete
+
+rsed$ucEtiotn),
+
+then either ordering
+
+s
+is
+
+t or
+simply
+
+else t s. A ground rewrite
+a (ground) proof containing no
+
+proof peak
+
+s E u !E t. Proof normalization corresponds to elimination of these peaks which can be
+
+achieved by computation of suitable critical pairs.
+
+Let s t and u v be equations with no variables in common, and suppose that some non-
+
+variable subterm sjp of s is uni able with u, being their most general uni er. We say that the
+
+superposition of u
+(with respect to the
+and (s ) (s v CP (E) we denote
+
+]toph)rved.eosrneAintssgobf ea)ftlolirfaoettr,hdpteehorreeseidtepixeocianrskittspitcaadle(gtperatroimurssninsd(ew)sis!tuahbpu(srotevristdpuseetrcieotvdn)to]cp,riisst)uicacbahelcttrpwhiataeiicteran(ltseoqv)uearltsaiop(n.tvsB)i]nyp
+
+E E?1.
+
+For example, the two equations (x y) (z w) (x z) (y w) and (x y) x x overlap
+
+in ((u v) u) ((u v) u) (v0
+
+(v0 v)
+
+v) $E ((u v) v0) (u v) $E u v and de ne an ordered critical pair u v with respect to the lexicographic path ordering.
+
+An ordered critical pair of an equation on itself at the top need not be trivial. For instance,
+
+superposing the equation a? x a on itself at the top may yield a non-trivial equation x a y a.
+
+The computation of ordered critical pairs with respect to a reduction ordering requires that
+
+one be able to decide, given terms s, t, u, and v, whether there exists a ground substitution , such
+
+that s t and u v . This question is decidable, for instance, if is a path ordering based
+
+on a total precedence 15, 37]. If inequations can not be solved in general for the given ordering ,
+
+or if the decision procedure is prohibitively expensive, then completion may have to deduce more
+
+equations than are actually necessary to ensure fairness. However, the computation of standard
+
+critical pairs always su ces for fairness, as CP(E E?1) is a superset of the set of ordered critical
+
+pairs CP (E).
+
+The Critical Pair Lemma can be adapted to ordered critical pairs without much di culty:
+
+Lemma 6.1 (Ordered Critical Pair Lemma 46]). Let be a complete reduction ordering with re-
+
+spect term
+
+to
+v,
+
+E. For all such that s
+
+ground
+!E v
+
+terms s, t, and E t, or else s
+
+u with s $CP (E)
+
+t.E
+
+u !E
+
+t, there either exists a ground
+
+Proof. The proof is similar to that of the Critical Pair Lemma. Non-overlaps and proper
+
+overlaps, in be replaced
+
+particular, by a proof
+
+can be of the
+
+dealt with
+form s !E
+
+in the same
+v $E w
+
+way. Any nested
+E t, which is a
+
+overlap ground
+
+rsewrEite
+
+pur!ooEf,
+
+t
+as
+
+can the
+
+25
+
+completeness of implies that the proof step v $E w is either of the form v !E w or v E w.
+
+For the purpose of normalizing ground proofs, the following expansion rule is su cient:
+
+Deduction:
+
+E E fs n tg
+
+if s t 2 CP (E)
+
+where we also assume that a label n (typically a non-negative number) is assigned to each newly
+
+deduced equation. We also assume that a well-founded ordering on labels is supplied. These labels
+
+will be used in formulating suitable contraction rules, as discussed next.
+
+We shall not design speci c combinations of expansion and contraction for ordered completion,
+
+but only specify the proof transformation relation with respect to which contraction may be applied.
+
+Wosthe$erpuwrsintsver.etPbnreoeottfhhseetepqpursoaaodrfreuocprodlemerp(ifnasgrged;fouar;snsb;tate)fn,odriaefr(dsseceoLmte;pml(emftitaogn;3.u.6; )nL,;eusts)i,tnhigef
+
+cost of a single proof step
+t s; and (fs; tg; u; n; s),
+the given ordering on labels
+
+for the new third component. The corresponding proof ordering is denoted by . By ) we denote
+
+the proof transformation relation induced by this proof ordering: P ) Q if and only if P and Q are
+
+proofs of the same equation for which P Q. Observe that whenever P is a proof
+
+and Q
+By
+
+is a an
+
+corresponding rewrite proof ordered completion system
+
+wse!mEeanv
+
+anEy
+
+t, then P ) Q.
+inference system
+
+consisting
+
+s
+of
+
+E
+a
+
+u !E
+version
+
+t
+of
+
+expansion that includes at least the above deduction rule, and any version of contraction based on
+
+the above proof transformation relation. Ordered completion systems are sound: whenever E ` E0,
+
+the Vtwaroiocuosngsirmuepnlicecaretliaotniotnesch$niEquaensdca$nEb0eacroevtehreedsawmiteh. the above version of contraction. For in-
+
+stance, the inference rules of standard completion are derived inference rules of ordered completion.
+
+The strong distinction between equations and rules that is essential in standard completion, can
+
+be viewed as a speci c way of assigning labels: all equations get the same label, say 1, while rules
+
+get a di erent label, say 0. We may re ne this scheme by assigning to all equations a maximum
+
+label, say >, and assigning to rules the index of the set Ri in which it is included as a result of
+
+orientation. Orientation thus corresponds to decreasing the label of an equation. Note that this
+
+re ned labelling scheme allows for collapse of a rule by an older rule with a literally similar left-hand
+
+side. Formally, the inference rules, orientation, simpli cation, collapse, and composition, can be
+
+represented as suitable applications of expansion followed by contraction.
+
+Computation of ordered critical pairs between persisting equations ensures fairness.
+
+Theorem
+CP (E1)
+
+6.2.
+is a
+
+A derivation in ordered completion is subset of the set of all derived equations
+
+SfkaiEr ki.f
+
+the
+
+set
+
+of
+
+ordered
+
+critical
+
+pairs
+
+Fair derivations, on the other hand, always succeed:
+
+Theorem 6.3. Let of a fair derivation
+
+be from
+
+a complete reduction ordering with respect to E, and E. Then E1 is ground convergent with respect to .
+
+let
+
+E1
+
+be
+
+the
+
+limit
+
+Proof. Let E0 ` E1 ` be a derivation as indicated, and let be a complete reduction
+
+ordering it has to
+
+cwointtharinesapepcetatkosE0.EB1yuc!omEp1lett.enIef stsheofpea, kifisPaisnoann-oovne-rnloarpmoarl
+
+ground proof in E1, then
+nested overlap, then it can
+
+26
+
+be transformed into a ground rewrite proof. In the case of a
+some i. Thus, the derivation is fair, and we conclude that P
+
+proper overlap, we can be transformed
+
+have to a
+
+nso$rmEail-tf,orfomr
+
+proof. This indicates that E1 is ground convergent.
+
+The theorem applies to reduction orderings that are total on equivalent ground terms. All general-purpose term orderings used in practice can be extended to complete orderings. For instance, any ordering based on polynomial interpretations 46, 47] can be extended to a complete ordering by combining it with a well-founded ordering to distinguish ground terms having the same interpretations.
+As an example of ordered completion consider the equational theory of the entropic groupoid de ned by the two axioms
+
+(x y) (z w) (x z) (y w) (x y) x x:
+
+The rst equation is permutative and cannot be oriented in any reduction ordering. Standard completion will fail for this set of equations, whereas with ordered completion we can obtain a set of equations
+
+(x y) z (x w) z (x y) x ! x x (y z) ! x z ((x y) z) w ! x w
+
+31], which is ground convergent with respect to the lexicographic path ordering, and therefore provides a decision procedure for the word problem in the above theory.
+It can be shown that, under certain reasonable assumptions, ordered completion actually succeeds in constructing a convergent rewrite system, if such a system exists. For details see 8].
+bELeevtiadLOEeeSrntdktbeolneyrloe,eawmdwsciezEeoetam0dlosp`ofvleeehEtrqaisou1ivonaen`tisibsooa$nf srsEeabfunbte.tdtaatsn(ityohnafaattlilriybse,dcoeaarmlnlivpvaelaqterituoieaantbtihlioenensoroaperrrmdeoevrpraeerbpdollveacicnoiengmdmEpble,eyttthiuhoonandit,qfuiowser,hesSeqrku$eoalEetimotmn.caaolLyntehstbteeasobnratienss)ybt.. cBcrtehooywmme rstppiowtllueeeotntipetdoernnrroeemodpsfssur,osbcsbvstb!iaiodanneEndsdiobtarbtvcdsaceeanrminnEbig-ieod.nrebtleScy,diisnfuboicocerenesdrEoepdtm1rouoeccaieseicddgourmtroo0eum,anfoosdcunrocctnmhohonemtrvhmvoeaanratlglinedvfnooititrrysmmwipraibrrtloeyhfdbosrulroeecmmmsipbeielifecnstsebbett$yqoEuEEiat1,,bti.ow.tnhIhIanenelrnestoeuhvtimseheore,arrsobigewr$srd.ooeurErdnesbtdd.,
+Ordered completion is in essence a restricted version of paramodulation, enriched by contraction rules (including simpli cation by rewriting). Computation of equational consequences from unorientable equations already appears in the work of Brown 11] and Lankford 46] on integrating resolution and simpli cation by rewriting. Peterson 52] proved the refutation completeness of an inference system combining resolution, paramodulation, and simpli cation with respect to orderings on ground terms that are order-isomorphic to the natural numbers. (This class of orderings excludes many important orderings, though, such as most path orderings.) Fribourg 23] proved
+
+27
+
+the completeness of a restricted version of paramodulation with locking resolution. Hsiang and Rusinowitch 31] used their trans nite semantic tree method to prove the refutation completeness of a restricted version of ordered completion, albeit with weaker simpli cation than even standard completion, as with semantic trees it is di cult to account for simpli cation rules depending on the
+encompassment ordering. For example, in their inference system the equation (x y) (y? z) x z can not be simpli ed by x (y z) ! (x y) z.
+Implementations of ordered completion procedures have been reported in 50, 51]. Experiments with a procedure that combines ordered completion with associative-commutative completion are described in 1].
+
+7. Proof by Consistency In many applications, such as algebraic data type speci cations and equational programming, equations are intended to de ne a certain standard model, called the \initial model." Reasoning about algebraic data types and equational programs thus requires proof methods that re ect this initial algebra semantics. Such proof methods typically employ some induction scheme, such as induction on the structure of terms. We shall discuss an alternative approach|proof by consistency|that can be applied to equational theories that are presented as ground convergent rewrite systems.
+
+7.1. Ground Reducibility
+
+An
+s
+
+equation s t is said to be an inductive theorem of t . For example, let R0 be the rules given at the
+
+bEegiifnsning$oEf
+
+t for all
+Section 1
+
+ground equations de ning addition
+
+and multiplication in terms of zero and successor. Associativity and commutativity of + and are
+
+inductive theorems of R0, but not equational theorems, as there are non-standard models in which
+
+the functions denoted by + and are not associative and commutative.
+
+Dershowitz 16] has pointed out that an equation s t is an inductive theorem of a (ground)
+
+convergent rewrite system R if and only if no equation u v between distinct ground terms
+
+irreducible by R, is provable by R fs tg. Thus, if s t is an inductive theorem of R, then any
+
+ground convergent rewrite system for R fs tg de nes the same ground normal forms as R.2
+
+This observation is the basis for the proof by consistency method.
+
+For the remainder of this section, let R be a ground convergent rewrite system. Furthermore,
+
+let be a reduction ordering containing R. (The results below can also be adapted to reduction
+
+orderings for which the transitive closure of the union with R is well-founded.)
+
+The fact that two sets of equations R and R fs tg de ne the same initial algebra can
+
+be expressed in proof-theoretic terms. An equation s t is called consistent with R if, for every
+
+ground equation s t , the two terms s and t can be reduced to identical normal forms by
+
+R. Otherwise, s t is said to be inconsistent with R (since it equates two distinct elements of the
+
+initial algebra of R). A set of equations C is said to be consistent with R if all its equations are
+
+consistent with R; and inconsistent, otherwise.
+
+Theorem 7.1 ( 16]). A set of equations C is consistent with a ground convergent rewrite system R if and only if all equations in C are inductive theorems of R.
+
+R
+
+2If R is ground convergent,
+28]. It is isomorphic to the
+
+then the quotient
+
+aolfgtehberasedteofnegdroounndthteersmetsobfygrtohuencdonngorrumeanlc-efo$rmRt.erms
+
+is
+
+an initial
+
+model of
+
+28
+
+Consistency in this sense is not decidable (not even semi-decidable). However, we will show that any inconsistent set of equations can be transformed so that its inconsistency can be veri ed.
+First observe that an inconsistency is indicated by a ground proof of the form
+s0 R!? s s?!t t ?!R! t0 where s ' t is an equation in C and s0 and t0 are distinct irreducible terms. We call such a ground proof an inconsistency proof for s t. An inconsistency proof is said to be in normal form if (i) s0 = s and t0 = t , or (ii) s t and s0 = s , or (iii) t s and t0 = t . In other words, a normal-form proof is one in which rewrite steps can be applied only to the smaller term of s and t . An equation s t is said to be veri ably inconsistent if there is a normal inconsistency proof
+for it. This case of inconsistency is indeed decidable. The key here is the notion of \ground reducibil-
+ity." A term t is called ground reducible by R if all its ground instances are reducible by R (see
+36]). For example, every term in which the function symbol + or occurs is ground reducible by
+the system R0, since in any ground term the subterm rooted at the rightmost occurrence of + or
+can be rewritten by one of the four rules.
+Lemma 7.2. An equation s t is veri ably inconsistent with R if and only if (i) s t and s is not ground reducible by R, or (ii) t s and t is not ground reducible by R, or (iii) s#t is not ground reducible by R fx#x ! >g, where # and > are new function symbols. For example, the equation x00 x0 is veri ably inconsistent, as there is a ground instance 000 00,
+in which both terms are irreducible, yet distinct; and hence 000#00 is not ground reducible by
+R fx#x ! >g.
+Ground reducibility is decidable for nite rewrite systems 54, 39], but, according to 38] is in exponential time even for left-linear rewrite systems. Algorithms for deciding ground-reducibility with respect to left-linear rewrite systems have been described in 41, 36]. In theories with free constructors ground reducibility is trivially decidable: a term is ground reducible if and only if it contains a non-constructor symbol (cf. the discussion of constructors in 34, 36, 24]). In the example above, the function symbols 0 and 0 are constructors: all ground normal-form terms are built from these two symbols only. The constructors are also free: no two ground terms built solely from these two symbols are equivalent.
+To sum up, we have the following result:
+Theorem 7.3. It is decidable whether an equation s t is veri ably inconsistent with a given ground convergent rewrite system R.
+
+7.2. Proofs of Inconsistency
+
+The design of inference rules for normalizing inconsistency proofs can be approached as usual. Since
+
+a non-normal inconsistency proof contains a subproof u s 6 t, proof transformations of the form
+
+R s $C t or u
+
+R t $C s , where
+
+u R? s C?! t ) u C?! t
+
+29
+
+provide a suitable basis for such proof normalization. Moreover, we know that in inconsistency
+
+proofs the equation in C is applied at the top, so that we need to consider only proper overlaps
+
+and nested peaks. Proper overlaps can be eliminated via computation of suitable critical pairs. We
+
+denote
+t 6 s.
+
+by
+
+CPR(C)
+
+the
+
+set
+
+of
+
+all
+
+critical
+
+pairs
+
+of
+
+rules
+
+in
+
+R
+
+on
+
+an
+
+equation
+
+s
+
+t in C
+
+C?1, where
+
+These considerations lead to the following expansion rule:
+
+Deduction:
+
+C C fs tg
+
+if s t 2 CPR(C)
+
+The equations in C will also be called conjectures. Deduction already su ces to derive a veri ably
+inconsistent equation from any inconsistent set of initial conjectures. In addition, we shall use the following contraction rules:
+
+Deletion:
+
+C ft tg C
+
+Simplification:
+
+C C
+
+fs ' tg fu ' tg
+
+if s $+R L u and s u
+
+where L may be any set of inductive theorems (\lemmas") of R. Deletion is the same as in standard completion, but simpli cation is more general: a term s can
+be simpli ed to any smaller equivalent term u, where equivalence is to be established with respect to R L. The ground theory of L is, by assumption, contained in the ground theory of R; but the equational theory presented by L need not be contained in the equational theory presented by R. Rewriting with respect to R L is thus more powerful, in general, than rewriting by R. For instance, if associativity and commutativity are known to be inductive theorems of R, then conjectures can
+be simpli ed by associative-commutative rewriting (that is, rewriting with associative-commutative matching), while there is no need to employ associativity and commutativity for deduction. Moreover, simpli cation does not require every associative-commutative rewrite step to be reducing, but only that the nal term in the rewrite sequence be smaller than the initial term.
+This possibility of incorporating associativity and commutativity is in marked contrast with the approach, advocated by Jouannaud and Kounalis 36], of extending associative-commutative completion by a suitable inconsistency test. The latter approach mandates the use of associativecommutative uni cation for deduction, but allows only for weaker simpli cation in which every single rewrite step is reducing. The notion of ground reducibility needs to be generalized and reduction ordering are limited to associative-commutative orderings. The approach is failure-prone as it has to abort if an equation can not be oriented with respect to the given associative-commutative ordering. Proof by consistency is thus the preferable method, in particular because in applications to abstract data types, associativity and commutativity are usually not part of a data type specication, but rather arise as inductive theorems.
+Simpli cation of conjectures is similar to standard completion:
+
+Simplification:
+
+C C
+
+fs ' tg fu ' tg
+
+aisfn$tdhpvesrew>iusv
+
+a proof
+where v
+
+w
+
+30
+
+The conditions can be slightly relaxed in various ways. For instance, it is su cient to require s u whenever s is not an instance of v. Further improvements may be gained from labelling conjectures,
+as we outlined for ordered completion.
+By P we denote the inference system consisting of the above inference rules. This inference
+system is sound in the following sense:
+
+Theorem 7.4 (Soundness). Let R be a ground convergent system. If C ` C0, then C is consistent with R if and only if C0 is.
+
+f(ofutanLngdde;ettds;n,usocbwhu) tittfhhntaeottctosnsm;e]capenlsedssxua(birtfiyssl,yof;foatrargaep;lwlr?orti;oet?rfemu)r,seoltathtRaienorsndw.3ips$reLo.speLteterttsub!sbutebeRrbtmhveestbhsleeexotsifhcmeto.agtlrTrlaeiphsptleheoiocr(rdfdcseoerrmiginnb;ggsint;hat atsitu)obcnifoisnostfwateihnltles-;
+
+multiset extension of sub in component, and the ordering
+to inconsistency proofs: P )
+
+the
+sub
+Q if
+
+rst component, the encompassment ordering
+in the last component. By ) we denote the and only if P and Q are inconsistency proofs
+
+> in the second
+restriction of
+with P Q. We
+
+emphasize that ) is not a proof transformation relation in our original sense, as P ) Q does not
+
+imply that P and Q are proofs of the same equation. The ordering is well-founded, but is not a
+
+proof ordering in our sense, since, for instance, it is not closed under context application. However,
+
+not all properties of a proof ordering are required, since we consider only inconsistency proofs. The
+
+relation ) re ects all of the above inference rules:
+
+Lemma 7.5 (Re ection). If C ` C0 and P is an inconsistency proof for an equation in C, then there exists an inconsistency proof P0 for an equation in C0, such that P ) P0.
+
+Proof. Suppose C ` C0 and let P be an inconsistency proof s0 s ' t is an equation in C.
+
+!R s $s t t !!R t0, where
+
+If s t is an equation in C0, let P0 be P. On the other hand, suppose C0 is (Cnfs tg) fu tg,
+
+swfpLorehr>otmeoTrvfsehbPoaissefn0 dcvaeaxsvsuiuestbaasosnnntwiddiflty.utew0itaLt6=irhoeitnesu,er,u0sr.ss0euiLsbf$cpeehset+Rctt$uthhisLeavpvtetnuhlwsyo,ej.rrpoumeNr=ffaooeolrltvrseefeosatorashsmmnsa$udetomupvsfee0qjupw6=ut=ha.uutaiwt0Sowiinunmh,0cevpae=rlneisedtvs0,wlev$at0inn6=swvd0Cthwaise,tn0n.dsacunewcheu0qb0utuhe6=aattt$shio0e.snu(>gitnrotvCua,n,ndasd)uscnvuhoitrtamhbwaalet.l
+
+is
+
+Let
+(fv
+
+P0 g;
+
+be
+v; w
+
+the proof ). The
+
+vc0ompRlexvity
+
+o$f vP
+
+wis
+
+w (fs
+
+g!; sR;
+
+w0. t ),
+
+Since
+if s
+
+v t;
+
+w, the (ft g; t;
+
+complexity of P0 ), if t s; and
+
+(fs ; t g; ?; ?), otherwise. Considering the di erent cases and using the fact that v is a subterm
+
+of s and s > v, we conclude that P P0.
+
+If a derivation from an initial inconsistent set of conjectures is \fair" (in a sense to be made
+
+precise), then eventually a veri ably inconsistent equation is generated. In this sense the inference
+
+sitnyhseSteiinmCitiiPaal mrceoaniynjdebcuetcuctraivellsee.dthreeofuretamtisonofalRly.
+
+complete. If Thus if the
+
+the inital set derivation is
+
+is
+
+consistent, all derived equations nite one has successfully proved
+
+x?
+
+3The
++ y.
+
+subterm
+
+relation
+
+is
+
+not
+
+a
+
+rewrite
+
+relation.
+
+For
+
+example,
+
+x
+
+is
+
+a
+
+subterm
+
+of
+
+x?,
+
+but
+
+x+y
+
+is
+
+not
+
+a
+
+subterm
+
+of
+
+31
+
+For example, from the above rewrite system R and initial conjecture x+y y +x we can derive new equations 0 + x x and x0 + y (x + y)0. The set of all derived equations can be shown to be consistent (as we shall describe below). Thus all equations are inductive theorems of R.
+We say that C0 is a cover set for C (or C0 covers C) with respect to R and if for every non-normal inconsistency proof P for an equation in C there exists an inconsistency proof P0 for an equation in C C0, such that P P0. (In other words, C0 covers C if for every minimal nonnormal inconsistency proof for C there is a simpler inconsistency proof for C0.) By this de nition: the empty set covers any consistent set C; if C0 covers C, then any superset of C0 covers any subset of C; and if C10 covers C1 and C20 covers C2, then C10 C20 covers C1 C2.
+
+Titnhheconenossroismetmeens7te.at6n.CdiItfhiseCvs0ee`rtiSCai1bCl`yi
+
+is a ( nite or in nite) derivation, such
+of all deduced equations covers the set C1 of
+inconsistent.
+
+that the initial set C0 is
+all persisting conjectures,
+
+Fair derivations always exist:
+
+Proposition 7.7. The set CPR(C) covers C.
+
+Proof.
+ws hi$chCist
+
+A or also
+
+minimal non-normal inconsistency proof P for C has to contain a subproof u
+
+u
+an
+
+inRcotnsi$steCncsy
+
+. Thus there exists
+proof for CPR(C).
+
+an We
+
+inconsistency proof Q for u t or u s have P Q, which completes the proof.
+
+R,
+
+Covering sets need not be based on critical pairs, though. In general, s t covers any equation
+
+wiufsoirsts]hapnfyreueetqctu,]opaan,tnsiwotdrnhumecfrtoe(orsrep1so;6=v:te:hr:e;.ussneFt)osrofw]pfehq($etun1ua;et:vsi]:eo:rnu;suttn]f)uss1fort]pw]tp1h;iuc:h:P:ft;ssin]sp$aissctaontnngtsictnra.cunoIcnntbsoeiarstsssehiynmomtwiblganorroltuvo(necbifdn.e,i3nain4stc])aot.hnveecForeo,rrsiseeiotsf
+
+f is
+and
+
+a free constructor, then a ground
+only if one of the equations si
+
+tini stiasnicnecofn(ssi1ste;n: :t.:
+
+; sn ) f(t1
+Moreover, in
+
+;:::;
+such
+
+tn ) is inconsistent if
+theories any equation
+
+f(s1; : : :; sm) g(t1; : : :; tn), where f and g are di erent constructors, is inconsistent.
+
+Another useful technique for constructing cover sets is based on the following notion: We say
+
+that p
+ground
+
+is an term
+
+inductive position
+t jp for which is
+
+in a term t (with respect to R)
+irreducible, is an instance of some
+
+if tjp is not a
+left-hand side
+
+variable and each
+of R 24]. In other
+
+words, if p is an inductive position in t, then each ground instance t can be rewritten either within
+
+the variable part of t or at position p. If p is an inductive position in a term s, then the set of all
+
+critical pairs obtained by superposing rules in R on the equation s t at position p in s covers
+
+s t (whenever t 6 s). The notion of inductive positions can obviously be generalized to sets of
+
+positions. A set fp1; : : :; png of non-variable positions in a term t is said to be inductive if every
+
+ground For
+
+instance example,
+
+t
+in
+
+is
+x
+
+reducible
++ (y + z)
+
+by the
+
+R at some subterm y
+
++pozsiitsiornooptie,dwahtenaenvienrducitsivirerepdouscitiibolne
+
+(cf. (the
+
+44, 13]). rightmost
+
+occurrence of + or is reducible by R, as we have pointed out above). Suppose now that we
+
+wish to prove that x + (y + z) (x + y) + z is an inductive theorem. We obtain a cover set for
+
+x + (y + z) (x + y) + z by superposing at the inductive position in the left-hand side, obtaining
+
+two critical pairs, x + y (x + y) + 0 and x + (y + (z)0) (x + y) + (z)0, the rst of which
+
+can be simpli ed to a trivial equation x + y x + y, while the second can be simpli ed to the
+
+equation (x + (y + z))0 ((x + y) + z)0, which is covered by x + (y + z) (x + y) + z. That is,
+
+32
+
+there is a nite fair derivation where no veri ably inconsistent equation has been derived; hence
+
+all derived equations are inductive theorems. The proof in this example in essence corresponds to
+
+an \induction on the variable z." As Fribourg 24] points out, choosing an inductive position in a
+
+term essentially corresponds to selecting an \induction schema" for a proof by induction.
+
+Let R0 be the rewrite
+ordering for the operators
+
+system , +, 0,
+
+for addition and 0 (listed
+
+and multiplication, and in decreasing precedence).
+
+be the recursive path
+Furthermore let L0 be
+
+the set of lemmas
+
+x+y y+x
+
+x + (y + z) (x + y) + z
+
+We prove that the set of conjectures
+
+x (y + z) xy
+x (y z)
+
+x y+x z yx (x y) z
+
+is consistent with R0.
+
+First observe that x (y + z) x y + x z. Hence, we obtain a cover set for distributivity
+
+by superposing on the inductive position in its left-hand side. There are two critical pairs, x
+
+y + x 0 x y and x y + x z0 x (y + z)0, the rst of which can be simpli ed to a
+
+trivial equation x axnd(dye+letze)d0 .!R0 x
+
+y (y
+
+x + z)
+
+y and deleted. Since x + x !C (x y + x z) +
+
+y x,
+
+t+hexsecozn0 d!eRq0u=aLt0io(nx
+
+y
+can
+
++x
+also
+
+z) + x and
+be simpli ed
+
+Superposition on (either side of) the commutativity axiom x y y x yields two critical
+
+pairs, 0 x 0 and y0 x x y + x, both of can be used as rewrite rules. Computation of
+
+cover sets for these two rules results in four new equations, three of which can be simpli ed to
+
+trivial
+(x y
+
+equations.
++ (x + y))0
+
+The remaining equation, y0 x + (y x + (x + y))0, an equation
+
+y0 x0
+which is
+
+ayl+reaxd0,yccaonvbereedsimbypltiheedcobmy m!u+Rt0a=tLiv0ittyo
+
+axiom.
+
+Finally, to deal with the associativity axiom x (y z) (x y) z, we superpose at the
+
+inductive position in its right-hand side and obtain a cover set of two equations, x y x (y 0)
+
+and (x y) z + (x y) x (y z0). The rst equation can be simpli ed to a trivial equation
+
+x y x y; the second, to (x y) z + (x y) x (y z) + (x y). The latter equation is
+
+covered by the associativity axiom.
+
+In conclusion, we have obtained a fair derivation without any veri ably inconsistent equation.
+
+Therefore all deduced equations, including the initial conjectures, are inductive theorems.
+
+A characteristic of the proof by consistency method presented above is that new equations are
+
+deduced by superposing rules from the initial ( xed) rewrite system R on conjectures. Critical pairs
+
+between conjectures need not be considered. This also distinguishes the inference system P from
+
+inductive completion procedures, which are essentially standard completion procedures augmented
+
+by some inconsistency test and compute all critical pairs in CP(R C).
+
+Musser 49] was the rst to describe an inductive completion procedure. His procedure applies
+
+to abstract data type speci cations, where an equality predicate eq is associated with each data
+
+type and the speci cation is \su ciently complete," so that each ground expression eq(s; t) can be
+
+reduced to the Boolean constant true or false. The equation true false indicates an inconsis-
+
+tency. Various improvements of the basic scheme have been suggested. The various approaches
+
+mainly di er in the respective notions of consistency they employ.
+
+33
+
+Huet and Hullot 34] studied the case of theories with (free) constructors, in which case an inconsistency is signi ed by an equation between two distinct ground terms built solely from constructor symbols. In contrast with Musser's method, an explicit axiomatization of equality is not required in this context.
+Dershowitz 16] and Jouannaud and Kounalis 36] designed inductive completion procedures
+based on ground reducibility of terms. An inconsistency is signi ed by a rewrite rule u ! v the
+left-hand side of which is not ground reducible. In a similar procedure 41], \test sets" are used to check for consistency.
+It can be argued that inductive completion attempts to solve all possible induction schemes|
+and fails to terminate if one induction schema diverges, while the inference rules of P can be directed
+at one speci c induction schema via the use of inductive positions. As a consequence, there are nite derivations from consistent sets of conjectures for which inductive completion fails, see 24]. On the other hand, it is also possible that inductive completion deduces equations that are useful
+for simpli cation but can not be obtained by the more restrictive deduction rule of P. Consider the following example 44]: Let R be the ground convergent rewrite system app(nil; x) ! x app(cons(x; y); z) ! cons(x; app(y; z)) rev(nil) ! nil rev(cons(x; y)) ! app(rev(y); cons(x; nil))
+and rev(rev(x)) x be a conjectured inductive theorem of R. The last rule in R can be superposed
+on the given conjecture, resulting in a critical pair
+rev(app(rev(y); cons(x; nil))) cons(x; y): If we superpose the initial conjecture rev(rev(x)) x on this new conjecture, we obtain a critical
+pair
+rev(app(y; cons(x; nil))) cons(x; rev(y))
+which can be oriented into a rule
+rev(app(y; cons(x; nil))) ! cons(x; rev(y))
+(with respect to a suitable lexicographic path ordering). The rst critical pair can now be simpli ed and deleted. The remaining set of rewrite rules is ground convergent, which implies that
+rev(rev(x)) x is an inductive theorem of R.
+On the other hand, with a linear deduction strategy the above rewrite rule cannot be deduced and an in nite derivation
+rev(app(rev(y); cons(x; nil))) cons(x; y) rev(app(app(rev(z); cons(y; nil)); cons(x; nil)) cons(x; cons(y; z))
+may be produced. The main problem with inductive completion is that, like standard completion, it must be
+supplied with an ordering on terms which is used to orient equations into rewrite rules and may
+34
+
+fail if an equation is generated that cannot be oriented in the given ordering. An important advantage of our approach is the capability of handling unorientable equations and the exibility
+in the choice of a reduction ordering. The inference system P also provides a complete method
+for disproving inductive theorems, and thus solves a problem posed by Jouannaud in 35]. Finally,
+let us point out that the ground convergence of the given theory R is only needed for the purpose
+of refutation completeness. The same techniques can also be applied to non-convergent sets of equations. Gramlich 29] describes a more re ned proof by consistency system along lines similar to ordered completion. The relation of completion-based approaches to well-founded induction has been studied in 56]. 8. Conclusion We have represented completion and related rewrite methods as equational inference systems and have described techniques, based on proof reduction orderings, for reasoning about such proof systems. We have outlined the application of this approach to standard completion and re nements based on critical pair criteria, extended completion, ordered completion, and proof by consistency. An important class of procedures we have not discussed are completion procedures based on semantic uni cation. For a formalization of such procedures within the proof ordering framework, see 7].
+The inference system cum proof complexity approach is by no means limited to purely equational theories. In 27, 9, 18], completion procedures for conditional equations (Horn clauses) have been described in this framework. Applications to rst-order theorem proving (with or without equality) are described in 6].
+The techniques underlying ordered completion have also been applied to other forms of uni cation of importance in theorem provers based on equational matings; see 26, 25]. For another interesting application, to uni cation in Boolean rings and Abelian groups, see 10]. Our approach was found to be of advantage in describing rewrite techniques for program synthesis 55]. Many of the rewrite techniques, which we have discussed in the context of equational theories, can also be applied in the more general setting of rst-order clausal theorem proving, as described in 4, 5]. Acknowledgements We thank Jieh Hsiang for thinking with us about these issues and Jean-Pierre Jouannaud for his enthusiasm and clarifying comments. References
+1] S. Anantharaman and J. Hsiang. Automated proofs of the Moufang identities in alternative rings. J. Automated Reasoning, 6:79{109, 1990.
+2] L. Bachmair. Proof methods for equational theories. PhD thesis, University of Illinois, UrbanaChampaign, 1987.
+3] L. Bachmair and N. Dershowitz. Critical pair criteria for completion. J. Symbolic Computation, 6:1{18, 1988.
+35
+
+4] L. Bachmair and H. Ganzinger. On restrictions of ordered paramodulation with simpli cation. In Proc. 10th Int. Conf. on Automated Deduction, Lect. Notes in Comput. Sci., pages 427{441, Berlin, 1990. Springer-Verlag.
+5] L. Bachmair and H. Ganzinger. Rewrite-based equational theorem proving with selection and simpli cation. Technical Report MPI-I-91-208, Max-Planck-Institut fur Informatik, Saarbrucken, Germany, 1991. To appear in Journal of Logic and Computation.
+6] Leo Bachmair and Nachum Dershowitz. Inference rules for rewrite-based rst-order theorem proving. In Proceedings of the Second IEEE Symposium on Logic in Computer Science, pages 331{337, Ithaca, NY, June 1987.
+7] Leo Bachmair and Nachum Dershowitz. Completion for rewriting modulo a congruence. Theoretical Computer Science, 67(2 & 3), October 1989.
+8] Leo Bachmair, Nachum Dershowitz, and David A. Plaisted. Completion without failure. In H. A t-Kaci and M. Nivat, editors, Resolution of Equations in Algebraic Structures 2: Rewriting Techniques, chapter 1, pages 1{30. Academic Press, New York, 1989.
+9] H. Bertling and H. Ganzinger. Completion-time optimization of rewrite-time goal solving. In Proc. 3rd Int Conf. Rewriting Techniques and Applications, Lect. Notes in Comput. Sci., Berlin, 1989. Springer-Verlag.
+10] A. Boudet, J. P. Jouannaud, and M. Schmidt-Schau . Uni cation in free extensions of Boolean rings and Abelian groups. In Proc. Third Annual Symp. on Logic in Computer Science, pages 121{130, Edinburgh, Scotland, 1988.
+11] T. Brown. A structured design-method for specialized proof procedures. PhD thesis, California Institute of Technology, Pasadena, 1975.
+12] B. Buchberger. A critical-pair/completion algorithm for nitely generated ideals in rings. In Logic and Machines: Decision Problems and Complexity, Lect. Notes in Comput. Sci., pages 137{161, Berlin, 1984. Springer-Verlag.
+13] R. Bundgen and Wolfgang Kuchlin. Computing ground reducibility and inductively complete positions. In Proc. 3rd Int Conf. Rewriting Techniques and Applications, Lect. Notes in Comput. Sci., pages 59{75, Berlin, 1989. Springer-Verlag.
+14] George Butler and Dallas S. Lankford. Experiments with computer implementations of procedures which often derive decision algorithms for the word problem in abstract algebras. Memo MTP-7, Department of Mathematics, Louisiana Tech. University, Ruston, LA, August 1980.
+15] H. Comon. Solving inequations in term algebras. In Proc. Fifth Annual Symp. on Logic in Computer Science, pages 62{69, Philadelphia, Pennsylvania, 1990.
+16] Nachum Dershowitz. Applications of the Knuth-Bendix completion procedure. In Proceedings of the Seminaire d'Informatique Theorique, pages 95{111, Paris, France, December 1982.
+17] Nachum Dershowitz. Termination of rewriting. J. of Symbolic Computation, 3(1&2):69{115, February/April 1987. Corrigendum: 4, 3 (December 1987), 409{410.
+36
+
+18] Nachum Dershowitz. Ordering-based strategies for Horn clauses. In Proceedings of the Twelfth International Joint Conference on Arti cial Intelligence, pages 118{124, Sydney, Australia, August 1991.
+19] Nachum Dershowitz and Jean-Pierre Jouannaud. Rewrite systems. In J. van Leeuwen, editor, Handbook of Theoretical Computer Science B: Formal Methods and Semantics, chapter 6, pages 243{320. North-Holland, Amsterdam, 1990.
+20] Nachum Dershowitz and Zohar Manna. Proving termination with multiset orderings. Communications of the ACM, 22(8):465{476, August 1979.
+21] Nachum Dershowitz, Leo Marcus, and Andrzej Tarlecki. Existence, uniqueness, and construction of rewrite systems. SIAM J. on Computing, 17(4):629{639, August 1988.
+22] T. Evans. On multiplicative systems de ned by generators and relations, I. Proceedings of the Cambridge Philosophical Society, 47:637{649, 1951.
+23] L. Fribourg. A superposition oriented theorem prover. Theoretical Computer Science, 35:129{ 164, 1985.
+24] L. Fribourg. A strong restriction of the inductive completion procedure. J. Symbolic Computation, 8:253{276, 1989.
+25] J. Gallier, W. Snyder, P. Narendran, and D. Plaisted. Rigid E-uni cation is NP-complete. In
+Proc. Third Annual Symp. Logic in Computer Science, pages 218{227, Edinburgh, Scotland, 1988.
+26] J. Gallier, W. Snyder, and S. Raatz. Rigid E-uni cation and its application to equational
+matings. In H. Ait-Kaci and M. Nivat, editors, Resolution of Equations in Algebraic Structures (Vol. 1: Algebraic techniques), pages 151{216. Boston, Academic Press, 1989. 27] H. Ganzinger. A completion procedure for conditional equations. J. Symbolic Computation, 1988. To appear. 28] J. A. Goguen. How to prove algebraic inductive hypotheses without induction. In W. Bibel and R. Kowalski, editors, Proc. 5th Conf. Automated Deduction, Lect. Notes in Comput. Sci., pages 356{373, Berlin, 1980. Springer-Verlag. 29] B. Gramlich. Completion based inductive theorem proving: An abstract framework and its applications. In Proc. ECAI-90, pages 314{319, Stockholm, Sweden, 1990. 30] Jieh Hsiang and Nachum Dershowitz. Rewrite methods for clausal and non-clausal theorem proving. In Proceedings of the Tenth International Colloquium on Automata, Languages and Programming, pages 331{346, Barcelona, Spain, July 1983. European Association of Theoretical Computer Science. Vol. 154 of Lecture Notes in Computer Science, Springer, Berlin. 31] Jieh Hsiang and Michael Rusinowitch. On word problems in equational theories. In T. Ottmann, editor, Proceedings of the Fourteenth EATCS International Conference on Automata, Languages and Programming, pages 54{71, Karlsruhe, West Germany, July 1987. Vol. 267 of Lecture Notes in Computer Science, Springer, Berlin.
+37
+
+32] G. Huet. Con uent reductions: Abstract properties and applications to term rewriting systems. J. of the Association for Computing Machinery, 27:797{821, 1980.
+33] G. Huet. A complete proof of correctness of the Knuth and Bendix completion algorithm. J. Computer and System Sciences, 23:11{21, 1981.
+34] G. Huet and J.-M. Hullot. Proofs by induction in equational theories with constructors. J. Computer and System Sciences, 25:239{266, 1982.
+35] Jean-Pierre Jouannaud. A set of eleven important open problems in term rewriting based theorem proving. Bulletin of the European Association for Theoretical Computer Science, (31):272{273, February 1987.
+36] Jean-Pierre Jouannaud and Emmanuel Kounalis. Automatic proofs by induction in equational theories without constructors. Information and Computation, 81(1):1{33, 1989.
+37] Jean-Pierre Jouannaud and Mitsuhiro Okada. Satis ability of systems of ordinal notations with the subterm property is decidable. In Proceedings of the Eighteenth EATCS Colloquium on Automata, Languages and Programming, pages 455{468, Madrid, Spain, July 1991. Vol. 510 in Lecture Notes in Computer Science, Springer, Berlin.
+38] D. Kapur, P. Narendran, D. J. Rosenkrantz, and H. Zhang. Su cient-completeness, quasireducibility and their complexity. Tech. Rep., Dept. of Computer Science, SUNY at Albany, 1987.
+39] D. Kapur, P. Narendran, and H. Zhang. On su cient-completeness and related properties of term rewriting systems. Acta Informatica, 24:395{415, 1987.
+40] Deepak Kapur, D. R. Musser, and P. Narendran. Only prime superpositions need be considered for the Knuth-Bendix procedure. J. Symbolic Computation, 4:19{36, August 1988.
+41] Deepak Kapur, Paliath Narendran, and Hantao Zhang. Automating inductionless induction using test sets. J. Symbolic Computation, 11:83{112, 1991.
+42] Donald E. Knuth and P. B. Bendix. Simple word problems in universal algebras. In J. Leech, editor, Computational Problems in Abstract Algebra, pages 263{297. Pergamon Press, Oxford, U. K., 1970. Reprinted in Automation of Reasoning 2, Springer, Berlin, pp. 342{376 (1983).
+43] W. Kuchlin. A con uence criterion based on the generalised Newman lemma. In B. Caviness, editor, Proc. Eurocal '85, Lect. Notes in Comput. Sci., pages 390{399, Berlin, 1985. SpringerVerlag.
+44] W. Kuchlin. Inductive completion by ground proof transformation. In H. Ait-Kaci and M. Nivat, editors, Resolution of Equations in Algebraic Structures (Vol. 2: Rewriting Techniques), pages 211{244. Boston, Academic Press, 1989.
+45] Wolfgang Kuchlin. Equational completion by proof transformation. PhD thesis, Department of Mathematics, Swiss Federal Institute of Technology, Zurich, Switzerland, June 1986.
+46] D. Lankford. Canonical inference. Technical Report ATP-32, Dept. of Mathematics and Computer Science, University of Texas, Austin, 1975.
+38
+
+47] D. Lankford. On proving term rewriting systems are Noetherian. Technical Report MTP-3, Mathematics Department, Louisiana Tech. Univ., Ruston, 1979.
+48] Yves Metivier. About the rewriting systems produced by the Knuth-Bendix completion algorithm. Information Processing Letters, 16(1):31{34, January 1983.
+49] D. R. Musser. On proving inductive properties of abstract data types. In Proc. 7th ACM Symp. on Principles of Programming Languages, pages 154{162, Las Vegas, Nevada, 1980.
+50] J. Mzali. Methodes de ltrage equationnel et de preuve automatique de theoremes. PhD thesis, Universite de Nancy, 1986.
+51] A. Ohsuga and K. Sakai. Metis: A term rewriting system generator. Technical report, ICOT Research Center, Tokyo, Japan, 1986.
+52] G. E. Peterson. A technique for establishing completeness results in theorem proving with equality. SIAM J. Comput., 12:82{100, 1983.
+53] Gerald E. Peterson and Mark E. Stickel. Complete sets of reductions for some equational theories. J. of the Association for Computing Machinery, 28(2):233{264, April 1981.
+54] D. A. Plaisted. Semantic con uence tests and completion methods. Information and Computation, 65:182{215, 1985.
+55] U. Reddy. Rewriting techniques for program synthesis. In Proc. 3rd Int Conf. on Rewriting Techniques and Applications, Lect. Notes in Comput. Sci., pages 388{403, Berlin, 1989. Springer-Verlag.
+56] U. Reddy. Term rewriting induction. In Proc. 10th Int. Conf. on Automated Deduction, Lect. Notes in Comput. Sci., pages 162{177, Berlin, 1990. Springer-Verlag.
+57] G. Robinson and L. Wos. Paramodulation and theorem-proving in rst order theories with equality. In B. Meltzer and D. Michie, editors, Machine Intelligence 4, pages 135{150. Edinburgh University Press, Edinburgh, Scotland, 1969.
+58] F. Winkler and B. Buchberger. A criterion for eliminating unnecesssary reductions in the Knuth-Bendix algorithm. In Proc. Coll. on Algebra, Combinatorics and Logic in Computer Science, Gyor, Hungary, 1983.
+59] H. Zhang and D. Kapur. Consider only general superpositions in completion procedures. In Proc. 3rd Int Conf. on Rewriting Techniques and Applications, Lect. Notes in Comput. Sci., pages 513{527, Berlin, 1989. Springer-Verlag.
+39
+
+
