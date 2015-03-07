@@ -1,0 +1,2048 @@
+An Efﬁcient Cryptographic Protocol Veriﬁer Based on Prolog Rules
+Bruno Blanchet INRIA Rocquencourt Domaine de Voluceau B.P. 105 78153 Le Chesnay Cedex, France Bruno.Blanchet@inria.fr
+
+Abstract
+We present a new automatic cryptographic protocol veriﬁer based on a simple representation of the protocol by Prolog rules, and on a new efﬁcient algorithm that determines whether a fact can be proved from these rules or not. This veriﬁer proves secrecy properties of the protocols. Thanks to its use of uniﬁcation, it avoids the problem of the state space explosion. Another advantage is that we do not need to limit the number of runs of the protocol to analyze it. We have proved the correctness of our algorithm, and have implemented it. The experimental results show that many examples of protocols of the literature, including Skeme [24], can be analyzed by our tool with very small resources: the analysis takes from less than 0.1 s for simple protocols to 23 s for the main mode of Skeme. It uses less than 2 Mb of memory in our tests.
+1. Introduction
+The design of cryptographic protocols is difﬁcult and error-prone. This can be illustrated by ﬂaws found in existing protocols [1, 6, 11, 25]. It is therefore important to have tools to verify the properties of cryptographic protocols. Several techniques can be used to build such tools: logics, such as the BAN logic [11] used in [23], theorem proving, used in Isabelle [33], rank functions [21], typing [2, 12, 22], abstract interpretation [7, 8, 20, 29], model checking, rewriting, and related techniques, used in Elan [13], Brutus [14], Maude [16], FDR [25], NRL [26],
+the Interrogator [27], Mur' [28], Athena [35]. Most exist-
+ing protocol veriﬁers based on model checking suffer from the problem of the state space explosion, and they need very large resources to verify even relatively simple protocols. Moreover, in general, they limit the number of runs of the
+This work was partly done while the author was at Bell Labs Research, Lucent Technologies.
+
+protocol to guarantee the termination of the veriﬁcation process. If there exists an attack that only appears with more runs of the protocol, it will not be discovered. Our solution to these problems relies on two ideas:
+a simple intermediate representation of the protocols;
+a new efﬁcient solving algorithm.
+We use Prolog rules to represent the protocol and the attacker. Messages and channels are represented by terms; the
+fact attacker(M ) means that the attacker has the message M ; rules give implications between such facts. This can be
+considered as an abstraction of the multiset rewriting [16] or of the linear logic representation [19]. We perform two interesting abstractions:
+Fresh values considered as functions other messages in the protocol. To give an intuition, when the attacker does not modify messages, different values are used for each pair of participants of the protocol, instead of per session.
+We forget the number of times a message appears to remember only that it has appeared. A step of the protocol can be executed several times instead of only once in each session.
+These are keys to avoid limiting the number of runs of protocols: the number of repetitions is simply forgotten. Our approximations are safe, in the sense that if the veriﬁer does not ﬁnd a ﬂaw in the protocol, then there is no ﬂaw. The veriﬁer therefore provides real security guarantees. In contrast, it may give a false attack against the protocol. However, false attacks are rare, and we have been able to prove the secrecy properties of all the protocols that we have considered. Therefore, we believe that our abstractions could also be useful in other protocol tools. Various protocol representations can be translated into our simple representation. We have built an automatic translator from a restricted version of the applied pi calculus [5], that only handles certain
+
+equational theories, including the theories used to represent shared- and public-key cryptography (encryption and signatures), hash functions, the Difﬁe-Hellman key agreement. It is also possible for the user to enter directly the rules representing the protocol, since the representation is simple enough.
+Using this representation, we have built a tool to prove secrecy properties of protocols. Indeed, the attacker may
+have a given message m only if the fact attacker(m) can
+be proved from the rules representing the protocol and the abilities of the attacker. However, the usual Prolog solving algorithm loops, due to rules that appear in the description of the attacker. Therefore, we have designed a solving algorithm. This algorithm is novel as far as we know, and it appears to be very efﬁcient in practice. We have applied it to prove secrecy properties of several protocols of the literature, including Skeme [24], or to ﬁnd attacks against them.
+Related work Prolog rules and similar formalisms have already been used in a number of works on cryptographic protocols, for example [16, 26, 27]. We propose a more abstract representation of the protocols, that enables us to design a simpler and faster analysis, and to avoid limiting the number of runs of the protocol, thus improving over most model checkers. Of course, the additional approximations imply that our analysis may not be able to prove that certain protocols are secure (it may give false attacks), but in our experiments our analysis was precise enough to prove secrecy properties of the protocols we have considered. A key problem of previous tools using Prolog rules is termination. Our solving algorithm is a big step towards a solution of this problem.
+Two works have already tackled the problems met by classical model checkers. Broadfoot, Lowe and Roscoe [10, 34] do not limit the number of runs of protocols. They recycle nonces, to use only a ﬁnite number of them in an inﬁnite number of runs. We achieve the same result by directly reusing the same values for nonces. However, they limit the number of parallel runs of protocols. We avoid this limitation. They also allow the attacker to simulate honest agents, but use this technique only for servers. We generalize it to all agents involved in the protocols. In their work as well as in ours, the deduction rules for the attacker must have only equalities in their hypotheses, no inequalities (that is, they are positive deduction systems). Song [35] avoids the state space explosion problem by using the strand space model to verify protocols. This model captures the causal information of messages, in a way similar to our deduction rules. However, our model is more abstract than Song’s. She sometimes limits the number of runs of the protocol to guarantee termination, whereas we avoid this limitation.
+Automatic protocol veriﬁers have already been built by using abstract interpretation [7, 8, 20, 29]. The analysis of
+
+M N ::=
+
+x
+
+a f
+
+(MM11
+
+::: :::
+
+Mn] Mn)
+
+F ::= p(M1 : : : Mn)
+
+R ::= F1 ^ : : : ^ Fn ! F
+
+terms variable name function application
+fact predicate application
+rule implication
+
+Figure 1. Syntax of our protocol representation
+
+Bodei et al. [7, 8] is not relational: when a variable appears several times in a message, each occurrence can take different values (in the set of values of the variable). All nonces generated by the same restriction are also considered as equal. These are causes of imprecision that our analysis solves. Moreover, Bodei’s analysis only handles sharedkey cryptography. The main difference between Monniaux’ analysis [29] and ours is that Monniaux represents sets of messages by tree automata, whereas we represent rules that generate these sets. This enables us to gain in efﬁciency. Goubault [20] extends and improves the efﬁciency of [29], also using ideas of Bolignano [9]. However, [20] does not allow any term to be used in place of a key. We do not have this limitation. In our experimental results, we obtain an even faster analysis with a simpler framework.
+Theorem provers are not fully automatic tools: the user has to intervene to provide information on the proof. Previous works using typing are also better suited for human use than for automatic veriﬁers: type inference is sometimes difﬁcult [4] and types are in general human-readable. Types provide constraints that can help the designers of new protocols ensure the desired security properties, but existing protocols may not satisfy these constraints even if they are correct. In contrast, our analysis yields a fully automatic protocol veriﬁer.
+Overview Section 2 details our protocol representation. Section 3 describes our solving algorithm, and sketches its proof of correctness. Several extensions and optimizations to this algorithm are detailed in Section 5. Section 6 gives experimental results and Section 7 concludes.
+2. Protocol representation
+A protocol is represented by a set of Prolog rules (clauses), whose syntax is given in Figure 1. The terms represent messages that are exchanged between participants of
+
+the protocol. A variable can represent any term. Names are
+
+used to represent atomic values, such as keys and nonces.
+
+Each principal has the ability of creating new names. Here,
+
+the created names are considered as functions of the mes-
+
+sages previously received by the principal that creates the
+
+name. Thus, a different name is created when the preced-
+
+ing messages are different. This is slightly weaker than the
+
+fact that a new name is created at each run of the proto-
+
+col. As noticed by M. Abadi (personal communication),
+
+this approximation is in fact similar to the approximation
+
+done in some type systems (such as [4]): the type of the
+
+new name depends on the types in the environment. It is
+
+enough to handle many protocols, and can be enriched by
+
+adding other parameters to the name. The function appli-
+
+cation is used to build terms: examples of functions are the
+
+encryption, or hash functions. Predicates are used to repre-
+
+sent facts about these messages. Several predicates can be
+
+used, but for a ﬁrst example, we are going to use only one
+
+predicate attacker(M ), meaning “the attacker may have the
+
+message M ”. facts F1 : : :
+no hypothesis
+
+A
+Fn
+!
+
+rule are
+
+F1 ^
+true,
+
+: : : ^ Fn then F is
+
+! F means
+also true. A
+
+F is written simply F .
+
+that rule
+
+if all with
+
+We can illustrate the coding of a protocol on the follow-
+
+ing simple example (this is a simpliﬁcation of the Denning-
+
+Sacco key distribution protocol [17], omitting certiﬁcates
+
+and timestamps):
+
+Message 1. Message 2.
+
+A B
+
+! !
+
+B A
+
+: :
+
+fffsgkkgskA
+
+gpk
+
+B
+
+There are two principals A and B. sk A is the secret key of
+
+A, pk key k
+
+A its
+is a
+
+npeuwblkiceykecyr.eaStiemdiblayrlAy,.skABseannddsptkhBis
+
+for B. The
+key signed
+
+with its private key sk A and encrypted under its public key
+
+pk B.
+sage,
+
+When B receives this messages, it
+and assumes, seeing the signature,
+
+decrypts the mes-
+that the key k has
+
+been generated by A. Then it sends a secret s encrypted
+
+under k (this is a shared-key encryption). Only A should
+
+be able to decrypt the message and get the secret s. (The
+
+second message is not really part of the protocol, we use it
+to check if the key k can really be used to exchange secrets between A and B. In fact, there is an attack against this protocol [11], so s will not remain secret.)
+
+2.1. Representation of primitives
+
+Cryptographic primitives are represented by functions. For instance, we represent the public-key encryption by a
+function pencrypt(m pk ) which takes two arguments: the message m to encrypt and the public key pk . There is a
+function pk that builds the public key from the secret key. (We could also have two functions pk and sk to build respec-
+tively the public and secret keys from a secret.) The secret key is represented by a name which has no arguments (that
+
+is, there exists only one copy of this name) sk A ] for A and skB ] for B. Then pk A = pk(sk A ]) and pk B = pk(skB ]).
+More generally, we consider two kinds of functions: constructors and destructors. The constructors are the functions that explicitly appear in the terms that repre-
+sent messages. For instance, pencrypt and pk are con-
+structors. Destructors manipulate terms. A destructor g
+can be deﬁned by one or several equations of the form
+g(M1 : : : Mn) = M where M1 : : : Mn M are terms
+that contain only variables and constructors. For in-
+stance, the decryption pdecrypt is a destructor, deﬁned by
+pdecrypt(pencrypt(m pk(sk)) sk) = m. Other functions
+are deﬁned similarly:
+For signatures, there is a constructor sign(m sk ) that is used to represent the message m signed un-
+der the secret key sk . A destructor getmess de-
+ﬁned by getmess(sign(m sk)) = m returns the message without its signature, and checksign(sign(m sk) pk(sk )) = m only returns the message if the signature
+is valid.
+For shared-key encryption, we have a construc-
+tor sencrypt and a destructor sdecrypt, deﬁned by
+sdecrypt(sencrypt(m k) k) = m.
+A hash function is represented by a constructor h (and
+no destructor).
+Tuples of arity n are represented by a constructor ( : : : ) and n destructors ith deﬁned by ith((x1 : : : xn)) = xi, i 2 f1 : : : ng.
+2.2. Representation of the abilities of the attacker
+We assume that the protocol is executed in the presence of an attacker that can intercept all messages, compute new messages from the messages it has received, and send any message it can build. We ﬁrst present the encoding of the computation abilities of the attacker. The encoding of the protocol will be detailed below.
+During its computations, the attacker can apply all con-
+structors and destructors. If f is a constructor of arity n,
+this leads to the rule:
+attacker(x1) ^ : : : ^ attacker(xn) ! attacker(f(x1 : : : xn)):
+If g is a destructor deﬁned by g(M1 : : : Mn) = M, this
+leads to the rule:
+attacker(M1) ^ : : : ^ attacker(Mn) ! attacker(M):
+If g is deﬁned by several equations, there are several rules,
+one for each equation. The destructors never appear in the
+
+rules, they are coded by pattern-matching on their param-
+eters (here M1 : : : Mn) in the hypothesis of the rule and
+generating their result in the conclusion. In the particular
+case of the public-key encryption, this yields:
+
+attacker(m) ^ attacker(pk) ! attacker(pencrypt(m pk))
+attacker(sk) ! attacker(pk(sk))
+attacker(pencrypt(m pk(sk)) ^ attacker(sk) ! attacker(m)
+
+(1)
+
+where the ﬁrst two rules correspond to the constructors
+pencrypt and pk, the last rule corresponds to the destructor pdecrypt. When the attacker has an encrypted message
+pencrypt(m pk ) and the decryption key sk , then it also has the plaintext m. (We assume that the cryptography is per-
+fect, hence the attacker can only obtain the plaintext from the encrypted message if it has the key.)
+For signatures, we obtain the rules:
+attacker(m) ^ attacker(sk) ! attacker(sign(m sk)) attacker(sign(m sk)) ! attacker(m)
+where the ﬁrst rule corresponds to the constructor sign and the second one to the destructor getmess. (The rule for checksign is removed, since it is implied by the rule for getmess.)
+The rules above describe the abilities of the attacker. Moreover, the attacker has the public keys. Therefore, we
+add the rules attacker(pk(skA ])) and attacker(pk(sk B ])). We also give a name a to the attacker, that will represent all the names it can generate: attacker(a ]).
+
+2.3. Representation of the protocol itself
+
+Now, we describe how the protocol itself is represented.
+We consider that A and B are willing to talk to any principal, A, B but also malicious principals that are represented by the attacker. Therefore, the ﬁrst message sent by A can be pencrypt(sign(k skA ]) pk(x)) for any x. We leave to
+the attacker the task to start the protocol with the principal
+it wants, that is the attacker will send a ﬁrst message to A, mentioning the public key of principal with which A should talk. This principal can be B, or another principal repre-
+sented by the attacker. (The attacker can create public keys,
+by the rule for constructor pk.) Moreover, the attacker can
+intercept the message sent by A. This yields a rule of the
+form
+attacker(pk(x)) ! attacker(pencrypt(sign(k skA ]) pk(x))):
+Moreover, a new key k is created each time the protocol is run. Hence, if two different keys pk(x) are received by A,
+
+the generated keys k are certainly different: k depends on pk(x). The rule becomes:
+
+attacker(pk(x)) ! attacker(pencrypt(sign(k pk(x)] skA ]) pk(x))):
+(2)
+
+Remark. It would also be possible for A to initiate the
+protocol itself, by choosing randomly the other principal to which it talks, instead of letting the attacker initiate the pro-
+tocol. In this case, the rule above would be
+
+attacker(pencrypt(sign(k pk(x)] skA ]) pk(x))):
+
+where x is a variable that represents the secret key of the principal talking with A. However, if we want to represent
+the protocol by a closed process in the applied pi calculus,
+the variable x must come from an input. That is, A cannot
+choose randomly the principal to which it talks. If the pro-
+cess is modeled in the applied pi calculus, the attacker sends
+a message that indicates with which principal A should talk.
+This yields the rule (2) given above.
+
+B expects a message of the form pencrypt(sign(k0 sk)
+
+pk(sk B ])). When such a message is received, it tests
+
+whether A has signed the message (that is, B evaluates
+
+checksign(sign(k0 sk = sk A ]). If so,
+
+sk ) pk A),
+it assumes
+
+and that
+
+this only
+the key k
+
+succeeds when 0 is only known
+
+by A, and sends a secret s encrypted under k0. We assume
+
+that the attacker relays the message coming from A, and
+
+intercepts the message sent by B. Hence the rule:
+
+attacker(pencrypt(sign(k0 skA ]) pk(skB ]))) ! attacker(sencrypt(s ] k0)):
+
+With these rules, A cannot play the role of B and vice-versa.
+If we want that, we can simply add the corresponding rules,
+that are obtained by swapping A and B in the above rules:
+
+attacker(pk(x)) ! attacker(pencrypt(sign(kB pk(x)] skB ]) pk(x)))
+attacker(pencrypt(sign(k0 skB ]) pk(skA ]))) ! attacker(sencrypt(sA ] k0)):
+More generally, a protocol that contains n messages is encoded by n sets of rules. If a principal X sends the ith message, the ith set of rules contains rules that have as hy-
+potheses the patterns of the messages previously received
+by X in the protocol, and as conclusion the pattern of the ith message. There may be several possible patterns for the
+previous messages as well as for the sent message, in partic-
+ular when the principal X uses a destructor which is deﬁned
+by several equalities. In this case, a rule must be generated
+for each combination of possible patterns. Moreover, notice
+
+that the hypotheses of the rules describe all the messages previously received, not only the last one. This is important since in some protocols the ﬁfth message for instance can contain elements received in the ﬁrst message. The hypotheses summarize the history of the exchanged messages.
+Remark. When the protocol makes some communications on private channels, on which the attacker cannot a priori listen or send messages, a second predicate can be used:
+mess(C M ) meaning “the message M can appear on channel C”. In this case, if the attacker manages to get the name of the channel C, it will be able to listen and send messages
+on this channel. Thus, two new rules have to be added to describe the behavior of the attacker. The attacker can listen on all the channels it has:
+mess(x y) ^ attacker(x) ! attacker(y):
+It can send all the messages it has on all the channels it has:
+attacker(x) ^ attacker(y) ! mess(x y):
+2.4. Summary
+To sum up, a protocol can be represented by three sets of Prolog rules:
+Rules representing the computation abilities of the
+aacagottt(tttMnaaasccct1krkkeuee:rcrr.:((t:oMxrnTMn)fh),en!r)ae!n=disaMtoatotnantdecaeekcﬁerkrurnue(lierlfne((gMaxaat1tt)dtaa:ecf:csko:tkerrerur(xec(Matnxoc)11rh)))gf.e^^oqru::ae::ta::ioc^^nh
+Facts corresponding to the initial knowledge of the at-
+tacker. There is a fact attacker(a ]) giving a name to
+the attacker. In general, there are also facts giving the public keys of the participants and/or their names to the attacker.
+Rules representing the protocol itself. There is one set of rule for each message in the protocol. In the
+set corresponding to the ith message, sent by prin:cMb:iep:fj^aonlraeaXtrtseae,cnttkhdheeiern(pgrMauttlhtjeenesr)niats!hreomfaoettfthsastehcaekgmeeefr,os(asMrnmadgi)eaMswttrihaeecicsrkeeeitvhMr(eeMdjp1ba,j1ty:t):eX:r^n, of the ith message.
+The rules representing the Denning-Sacco protocol are summarized in Figure 2.
+2.5. Approximations
+The reader can notice that our representation of protocols is approximate:
+
+Freshness is modeled by letting new names be functions of messages previously received by the creator of the name in the run of the protocol. When the attacker does not alter messages, this means that different values are used per pair of principals running the protocol instead of per session. When the attacker does alter messages, different values are used when different messages are received.
+
+A step of the protocol can be completed several times,
+
+as long as the previous steps have been completed at
+
+least once between the same principals. For instance,
+
+in a session between the attacker and a principal A,
+
+the
+M2
+
+attacker sends the ﬁrst , the attacker can then
+
+message M1, A replies with
+send two messages in place
+
+of the third message, as long as they correspond to the
+pgtahnaeettdtsiegtMrhents4s0etexfMprpo,e4mecvtfereAodn.mbifTyAfhuAe,rt.tahhtTeetarhncsakttteheiperss,cahtathtanaevcaeakltsaetolarrcespkaeeednrrfydossbremeMnedna3s0 gpMaaenirnd3-
+
+formed. Therefore, the actions of the principals are not
+
+organized into runs.
+
+But the important point is that the approximations are always performed in the safe direction: if an attack exists in a more precise model, such as multiset rewriting [16], or the applied pi calculus [5], then it also exists in our representation. (We are currently proving that our translation from the applied pi calculus to this representation has this correctness property.) Performing approximations enables us to build a much more efﬁcient veriﬁer, which will be able to handle larger and more complex protocols. Another advantage is that the veriﬁer does not have to limit the number of runs of the protocol. The price to pay for this is that false attacks may be found by the veriﬁer: sequences of rule applications that do not correspond to a protocol run. When a false attack is found, we cannot know whether the protocol is secure or not: a real attack may also exist. A more precise analysis is required in this case. But our representation is precise enough so that false attacks are rare. (This is demonstrated by our experiments, see Section 6.)
+
+2.6. Secrecy
+
+Our goal is to determine secrecy properties: for instance,
+can the attacker get the secret s ? That is, can the fact attacker(s ]) be inferred from the rules ? If attacker(s ])
+can be inferred, the sequence of rules applied to derive
+attacker(s ]) will lead to the description of an attack.
+Our notion of secrecy is similar to that of [4, 7, 12]: a
+term M is secret if the attacker cannot get it by listening
+and sending messages, and performing computations. This
+notion of secrecy is weaker than non-interference, but it is
+
+Computation abilities of the attacker:
+
+pencrypt
+
+attacker(m) ^ attacker(pk) ! attacker(pencrypt(m pk))
+
+pk attacker(sk) ! attacker(pk(sk))
+
+pdecrypt
+
+attacker(pencrypt(m pk(sk)) ^ attacker(sk) ! attacker(m)
+
+sign attacker(m) ^ attacker(sk) ! attacker(sign(m sk))
+
+getmess
+
+attacker(sign(m sk)) ! attacker(m)
+
+checksign
+
+removed since implied by getmess
+
+sencrypt
+
+attacker(m) ^ attacker(k) ! attacker(sencrypt(m k))
+
+sdecrypt
+
+attacker(sencrypt(m k)) ^ attacker(k) ! attacker(m)
+
+Initial knowledge of the attacker:
+attacker(pk(skA ])) attacker(pk(skB ])) attacker(a ])
+
+Protocol:
+First message: attacker(pk(x)) ! attacker(pencrypt(sign(k pk(x)] skA ]) pk(x))) Second message: attacker(pencrypt(sign(k0 skA ]) pk(skB ]))) ! attacker(sencrypt(s ] k0))
+
+Figure 2. Summary of our representation of the Denning-Sacco protocol
+
+adequate to deal with the secrecy of fresh names. Non-
+
+interference is better at excluding implicit information ﬂows
+
+or ﬂows of parts of compound values. (See [3, Section 6]
+
+for further discussion and references.)
+Technically, the hypotheses F1 : : : Fn of a rule are
+considered as a multiset. This means that the order of the
+
+hypotheses is irrelevant, but the number of times an hypoth-
+
+esis is repeated is important. (This is not related to the ideas
+
+of multiset rewriting: the semantics of a rule does not de-
+
+pend on the number of repetitions of its hypotheses, but
+
+considering multisets is useful to make explicit the elimi-
+
+nation of duplicate hypotheses in our veriﬁer. It will also
+
+be useful in the proof of the algorithm.) Formally, a mul-
+tiset of facts S is a function from facts to integers, such that S(F ) is the number of repetitions of F in S. The in-
+
+clusion on multisets is the point-wise order on functions:
+S S0 , 8F S(F ) S0(F ). If f is a function from
+
+Pfacts to facts, we can extend it to multisets of facts by
+
+(f (S ))(F
+particular
+
+)=
+when
+
+f
+
+F0
+is
+
+such that f (F 0)=F
+a substitution.
+
+S(F
+
+0).
+
+This applies in
+
+We determine whether a given formula can be implied
+
+by a given set of rules. This is more precisely deﬁned as
+
+follows.
+
+Deﬁnition 1 We deﬁne rule implication by:
+
+(H1 ! C1) ) (H2 ! C2) if and only if 9 C1 = C2 H1 H2
+
+where H1 and H2 are multisets of hypotheses, is a substi-
+tution.
+
+We write R1
+hypotheses to a
+facts that can be
+
+)pdaerrRtiivc2eudwlabhryeinnRsRt2a2cnaccneanaolbfseoRob1be.tadIiennreitvhdeisbdycbaaysdeRd,i1na.lgl
+
+Deﬁnition 2 (Derivability) Let F be a closed fact, that is, a fact without variable. Let B be a set of rules. F is derivable from B if and only if there exists a ﬁnite tree deﬁned as
+follows:
+1. Its nodes (except the root) are labelled by rules R 2 B;
+
+2. Its edges are labelled by closed facts;
+
+3. If the tree contains a node labelled by R with one in-
+
+coming edge
+belled by F1
+
+labelled
+: : : Fn,
+
+bthyeFn 0Ra)nd
+
+n outgoing edges fF1 : : : Fng !
+
+la-
+F0.
+
+4. The root has one outgoing edge, labelled by F .
+
+Such a tree is a derivation of F from B.
+
+In a derivation, if there is a node labelled by R with one bFBiny1ciFof:m1a: n:i:nd:gFo:enndl.FygTnei,fhlateFhbreeecnflaloetnrhdeeb,bertyhuieFlnerf0eeRarernxcedaidsnntfsrbooaeumudtgseroeuriidlvneatgsotieiiondnngfBeeors.fFlFa0bfefrrloolemmd
+
+3. Solving algorithm
+
+Our representation is a set of Prolog rules, and our goal is simply to determine whether a given fact can be inferred from these rules or not. This is exactly the problem that is solved by usual Prolog systems. However, we cannot use these systems here, because they would not terminate. For instance, the rule:
+attacker(pencrypt(m pk(sk)) ^ attacker(sk) ! attacker(m)
+leads to considering more and more complex terms, with an unbounded number of encryptions. We could of course limit arbitrarily the depth of terms to solve the problem, but
+
+we can do much better than that. Indeed, even when limiting
+the depth of terms, the complexity of the depth-ﬁrst search
+will be very large. There are many rules with conclusion
+attacker(x) that can always be applied, when we search a fact of the form attacker(M ). We can get better results with
+a more guided search.
+The main idea to guide the search is to combine pairs
+of rules by uniﬁcation, when the uniﬁed facts are not of
+the form attacker(x). When the consequence of a rule R
+uniﬁes with one hypothesis of another (or the same) rule
+R0, we can infer a new rule, that corresponds to applying R and R0 one after the other. Formally, this is deﬁned as
+follows:
+
+Deﬁnition 3 Let R and R0 be two rules, R = H ! C,
+
+R0 =
+that:
+
+H0 ! C and
+
+C0. Assume that F0 are uniﬁable,
+
+there and
+
+exists F0 2 H0 such
+is the most general
+
+uniﬁer of C and F0.
+
+In this case, we deﬁne
+
+R F0 R0 = (H (H0 ; F0)) ! C0:
+
+For example, if R is the rule (2), and R0 is the rule (1), the
+
+fact F0 is F0 = attacker(pencrypt(m pk(sk))), R
+
+RF 0 0
+
+is
+
+attacker(pk(x)) ^ attacker(x) ! attacker(sign(k pk(x)] skA ]))
+
+with the substitution = fsk 7! x m 7! sign(k pk(x)]
+
+skA ])g.
+result of
+
+In terms resolving
+
+of
+R0
+
+wloigthicRpuropgornamF0m. iOngf,cRoursFe0,
+
+R0 is
+if this
+
+the op-
+
+eration is applied without limitations, it does not terminate
+
+(consider the same rule as above). We specify conditions to
+
+limit it. As far as we know, these conditions are new.
+Let S be a ﬁnite set of facts. We deﬁne F 2r S by:
+
+there exists a substitution mapping variables to variables
+such that F 2 S. By default, S = fattacker(x)g, but the algorithm is also correct with other values of S. The idea is to only unify facts F such that F 62r S. The precise formal
+
+condition is slightly more complex (see below).
+
+The solving algorithm works in two phases, which are
+
+described in Figures 3 and 4 respectively. The ﬁrst phase
+
+transforms the rule base into a new one, that implies the
+
+same facts. The second one uses a depth-ﬁrst search to de-
+
+termine whether a fact can be inferred or not from the rules.
+
+The ﬁrst phase (Figure 3) contains 3 steps. The ﬁrst step
+
+inserts in B the initial rules representing the protocol and
+
+the attacker (rules that are in ﬁed by eliminating duplicate
+
+B0). These
+hypotheses,
+
+rules and
+
+are if a
+
+simpli-
+rule R
+
+implies a rule R0, R0 is removed (deﬁnition of add). The
+
+second step is a ﬁxed point iteration, that adds rules created
+by resolution. The composition of rules R and R0 is only
+
+added if
+
+Let B be the rule base, B0 be the set of rules representing
+the attacker and the protocol.
+We deﬁne
+
+add((R B) =
+B
+
+if 9R0 2 B R0 ) R,
+
+fRg fR0 2 BjR 6) R0g otherwise.
+
+We also deﬁne elimdup(H ! C) = (H \ 1) ! C,
+where 1 is the multiset which contains one copy of each
+fact: 8F 1(F ) = 1. The function elimdup eliminates the
+duplicate hypotheses from a rule.
+
+1. For each R 2 B0, B add(elimdup(R) B).
+2. Let R 2 B, R = H ! C and R0 2 B, R0 = H0 ! C0. Assume that there exists F0 2 H0 such that:
+(a) R F0 R0 is deﬁned; (b) 8F 2 H F 2r S; (c) F0 62r S.
+
+In this case, we execute
+
+B add(elimdup(R F0 R0) B):
+
+This procedure is executed until a ﬁxed point is reached.
+3. Let B0 = f(H ! C) 2 Bj8F 2 H F 2r Sg.
+
+Figure 3. First phase: completion of the rule base
+
+the hypotheses of R contain only facts F which sataistftyacFker2(xr))S, (i.e. by default they are of the form and the hypothesis F0 of R0 that we unify does not saatttiascfykeFr(0x)2)r. S (i.e. by default F0 is not of the form
+
+When a rule is created by this composition, it is added to the
+
+rule base B, after simpliﬁcation (duplicate hypotheses are
+
+removed and if a rule R implies a rule R0, R0 is removed).
+
+At last, the third step is to extract from B the new rule base
+
+B0, by taking only the rules whose all hypotheses F sat-
+
+iastftyacFke2r(rx)S).
+
+(by default, this The following
+
+means that remarks can
+
+F is
+help
+
+of the form understand
+
+the algorithm:
+
+This algorithm corresponds to a kind of forward search. In a forward search, a fact is uniﬁed with an
+
+hypothesis of a rule, and a new rule is created that con-
+
+tains one hypothesis less. This is performed until no
+
+new fact can be inferred.
+
+Here, assume S = . Hypothesis (b) means that R has no hypothesis, that is, R is a fact. Hypothesis (c) is always true. Then a fact R = C is uniﬁed with an hypothesis of the rule R0. In this case, we have exactly
+
+a forward search.
+
+When S 6= , the algorithm resembles a forward
+
+search for a modiﬁed notion of facts. Let S-facts be the
+
+rtahuneleSrsu-Hflaecs!tH. N0C!o,tiwcFehSetrhweaht8eaFrlel2r8uFHles2FaHre20rSFS-r.u62LleresSt, Ssai-mnrduplFleysSbbiyes
+
+writing ﬁrst pothesis (b)
+
+the hypotheses
+means that R is
+
+tahnatSs-aftaicstf.yHFyp62orthSes.isH(yc)-
+
+means
+S-fact
+
+that and
+
+SF-0ruilseaanrehcyopmotbhienseisd,otfoagnivSe-arunleewR
+
+0.
+S
+
+The -rule
+
+(that can be an S-fact). When all combinations have
+
+been performed, only S-facts are kept in B0.
+
+This algorithm is similar to an unfolding of the logic
+
+program [37], but there is one important difference: In
+the unfolding, a rule R0 and an hypothesis F0 of R0 are
+
+chosen, and the resolution is performed with all rules
+
+R whose consequence is
+resolution is only applied
+
+wunitihﬁarublleeswRithwhFo0s.eHhyepreo,ththee-
+
+ses F satisfy F 2r S.
+
+The speed of the algorithm comes essentially from the
+
+fact that there are not many rules H ! C such that
+
+8F 2 H gorithm, S
+
+fCg F
+is always
+
+2r S.
+a very
+
+(In our uses of this alsmall set.) For the other
+
+rules, (b) deﬁnition
+
+iomfpSli,esCCis62nroSt
+
+, therefore, using the default
+of the form attacker(x): C
+
+cannot be uniﬁed with any hypothesis of any rule, only
+fisewnohtyopfoththeefsoersmofatrutalecskewri(lxl )c,osroreosnploynfde.wScimonilcalrulsyi,oFn0s of rules can be uniﬁed with F0. Therefore, in general,
+
+few uniﬁcations are performed, and the algorithm is
+
+very fast.
+
+We prove that the rules in B0 imply exactly the same facts as the rules in B0.
+
+Lemma 1 (Correctness of phase 1) Let F be a closed fact. F is derivable from the rules in B0 if and only if F is derivable from the rules in B0.
+
+Proof sketch We only give a proof sketch here, a detailed
+
+proof can be found in Appendix A.
+
+Assume that
+derivation of F
+
+frFomisBd0e.riTvahbelekefyroimdeaBo0f
+
+and consider a the proof is the
+
+following. Assume that the rules R and R0 are applied one
+
+after the other in the derivation of F . Also assume that these
+
+We deﬁne derivablerec(R B )00 by
+
+1. derivablerec(R B )00 = if 9R0 B2 00 R0 ) R;
+
+2. derivablerec( ! C B )00 = fCg otherwise;
+
+3. derivablerec(R B )00 =
+
+fderivablerec(elimdup(R0 B0 F0 such that R0 F0 R is
+
+F0 R) fRg B R)j00 0
+deﬁned g otherwise.
+
+2
+
+derivable(F ) = derivablerec(fF g ! F ).
+
+Figure 4. Second phase: backward depth-ﬁrst search
+
+trhuilsescahsaev,ewbeeerenpcloacmebRinaenddbRy R0 byFR0 R00 i0n, ythieelddienrgivrautlieonRo00f.
+
+In
+F.
+
+When no more replacement can be done, we show that all
+
+the hypotheses F0 of the
+Then all these rules are in
+
+remaining rules
+B0, and we have
+
+satisfy built a
+
+F0 2r S.
+derivation
+
+of F from B0. The converse is easy to prove.
+
+2
+
+The second phase (Figure 4) searches the facts that
+can be inferred from B0. This is simply a backward
+
+depth-ﬁrst search. The search is performed by calling
+derivablerec(R B )00 with two parameters: a rule R and a set of rules B .00 The hypotheses of R are the facts that we
+
+currently want to prove. Its conclusion is an instance of the
+fact F that we initially wanted to prove. Moreover, the rule R is always a consequence of the rules in B0: the conclusion of R can be proved by rules of B0 from the hypotheses of R. The set B00 is the set of rules that we have already seen during the search. derivablerec(fF g ! F B )00 returns the set of instances of F that can be proved.
+If R is implied by a rule in B ,00 the current branch of the
+
+search fails: this is a cycle, we are looking for instances of
+
+facts that we have already looked for (ﬁrst point in the deﬁ-
+
+nition of derivablerec). We backtrack to try ﬁnding another
+
+derivation of the goal. If R has no hypothesis, the search
+
+succeeds: the conclusion of R is proved (second point of
+
+the deﬁnition of derivablerec). Otherwise, we have to go
+
+on searching. We try to use rule R0 2 B0 to prove one of
+
+the hypotheses of R, F0. That is, we call derivablerec with
+
+the rule R0
+hypotheses
+
+ofF0RR0,
+
+(in
+R0
+
+which
+and R
+
+F0 has been replaced by
+being instantiated so that
+
+the the
+
+conclusion of R0 and F0 are uniﬁed).
+
+The following theorem gives the correctness of the whole
+
+algorithm. It shows that we can use our algorithm to de-
+
+termine whether a fact is derivable or not from the initial
+
+rules. The ﬁrst part of the theorem shows that when calling
+derivable with a not necessarily closed fact F 0, the instances of F 0 that can be derived from the rules are the instances of the facts returned by derivable(F 0). The second part deals
+
+with the particular case of closed facts.
+
+Theorem 2 (Correctness) Let F be a closed fact. Let F 0
+
+such that there exists a substitution such that F 0 = F .
+
+F is derivable from the rules in B0 if and only if F9 00 2
+
+derivable(F 0) 9 F = F .00
+
+In particular, F derivable(F ).
+
+is
+
+derivable from B0
+
+if
+
+and only if F
+
+2
+
+Proof sketch Using Lemma 1, we only have to prove
+that F is derivable from B0 if and only if F9 00 2 derivable(F 0) 9 F = F .00
+Essentially, derivablerec performs a classical depth-ﬁrst
+search of the rule base B0 to ﬁnd the desired fact. This search is stopped in case of cycle. F is derivable if and only
+
+if it is found by the depth-ﬁrst search. The detailed proof
+
+can be found in Appendix A.
+
+2
+
+4. Termination
+
+4.1. Termination of the basic algorithm
+
+The ﬁxed point iteration of the ﬁrst phase does not always terminate, even if it terminates in most examples of protocols. We will see below several ways to force its termination.
+The following proposition shows that the depth-ﬁrst
+search of the second phase terminates on the rule base B0
+built by the ﬁrst phase.
+
+Proposition 3 If F is closed and S = fattacker(x)g, then derivable(F ) terminates. (Otherwise, the termination of derivable(F ) is not guaranteed.)
+
+Proof sketch The hypotheses of the rules in B0 are
+
+smaller than the conclusion. Hence the depth-ﬁrst search
+
+considers smaller and smaller terms, and thus terminates.
+
+The proof can be found in Appendix B.
+
+2
+
+4.2. Detecting (and solving) some non-termination cases
+
+Cwh=AersesfuFvm0(,Mewt)hheaisrtetaheruissleestuoRcfhv=tahraifat Fb9l0xegs(ix!n t2hCefvte(isrmxin)Mf^er.xreAd6=s,swuxmit)he,
+
+tFh0at(mF0or62e rprSe,ciasnedlyt,htehreeveexriisﬁtesragdeenreirvaatteisona
+
+of an instance of
+H Frule 0 ! 0 0,
+
+whose hypotheses F 2 H0 satisfy F 2r S).
+
+Then, in general, the completion process (phase 1) does
+
+not terminate. Indeed, the rule R can be combined with the
+
+rule then
+
+H0 !
+this rule
+
+F0 0,
+can
+
+yielding H0 !
+combined again
+
+C0
+with
+
+= R,
+
+H0 !
+yielding
+
+0
+H
+
+0
+
+F0,
+!
+
+0
+for
+
+C = H0 ! 0 all integers n:
+
+H2F0 0!. We0cannFg0o,
+
+on this and in
+
+way, and obtain general none of
+
+these rules implies another, therefore all these rules will be
+
+generated by the solving algorithm.
+
+An example of such an exploding rule is:
+attacker(f(x)) ! attacker(f(g(x))):
+
+A solution to this non-termination case is of course to add
+
+F0
+of
+
+to the
+
+the set
+rule R.
+
+S, thus forbidding the
+Another solution is to
+
+above add a
+
+combinations new rule, that
+
+implies all the previous rules, for n large enough. For ex-
+
+ample, let be a renaming of variables that has an image
+disjoint from the variables appearing in H 0. Then the rule H0 ! n0 C implies all the previous rules for n n0.
+
+When such a rule is present, the previous rules are automat-
+
+ically removed, and the non-termination is avoided. From
+
+the point of view of abstract interpretation, adding a new
+
+rule in this way can be considered as a widening [15], that
+
+we use to force the convergence of the ﬁxed point iteration.
+
+This non-termination case can be detected automatically
+
+by the veriﬁer.
+
+4.3. Enforcing termination
+
+Termination can be enforced by limiting the depth of terms. Each term that starts at a depth greater than a limit ﬁxed by the user is replaced by a new variable.
+This way, if a fact can be generated by the system without depth limitation, it can also be generated by the system with depth limitation. The converse is of course wrong. The system remains correct (if it says that a protocol does not leak certain secrets, then the protocol deﬁnitely does not leak these secrets), but some precision is lost.
+In practice, the algorithm terminates for many protocols without limiting the depth of terms. That is why, by default, the depth of terms is not limited in our tool. Moreover, limiting the depth of terms that appear in the rules does not limit the depth of terms that can be built by the attacker, since even with rules of bounded depth, the attacker can create terms of unbounded depth. Therefore, even if limiting the depth of terms in the rules leads to approximations, it is more precise than limiting the depth of terms in the usual depth-ﬁrst search algorithm of Prolog.
+
+5. Optimizations and extensions
+
+5.1. Tuples
+The tuples are denoted by (M1 : : : Mn). Tuples of dif-
+ferent arity are considered as different functions. But the user does not have to deﬁne each of these functions: they are all built-in.
+The attacker rules:
+attacker(M1) ^ : : : ^ attacker(Mn) ! attacker((M1 : : : Mn))
+attacker((M1 : : : Mn)) ! attacker(Mi)
+
+are also built-in, and treated in a specially optimized way.
+
+Indeed, these is derivable
+
+rifuleasndmeaonnlythatifatt8aicker2((M1f1: :
+
+: :
+
+:
+
+Mn)) : ng,
+
+attacker(Mi) is derivable. When a fact of the
+
+fboyrmatatattcakcekr(eMr((1M) 1^:
+
+:: :
+
+:
+
+:M^n))attiasckmere(tM, nit).
+
+is
+
+replaced If this
+
+replacement is done in the conclusion of a rule
+
+H H
+
+! !
+
+aattttaacckkeerr((M(Mi)1
+
+:::
+for
+
+Mn)), each i
+
+n
+2
+
+rules are created:
+f1 : : : ng. This
+
+replacement is of course done recursively: if Mi itself is a
+
+tuple, it is replaced again.
+Notice that (x y z), (x (y z)) and ((x y) z) are differ-
+
+ent terms. Tuples are different from the concatenation. This
+
+can have important consequences. For instance, the Otway-
+
+Rees protocol [32] is ﬂawed when using concatenation, not
+
+when using tuples. Similarly, the simpliﬁed version of the
+
+Yahalom protocol of [11] is correct from the point of view
+
+of secrecy when using tuples, whereas it is ﬂawed when us-
+
+ing concatenation [36, Attack 1]. (The second attack of [36]
+
+exposes an authentication ﬂaw, not a secrecy problem.) Of
+
+course, the implementation of the protocol must correspond
+
+to the model of the veriﬁer.
+
+5.2. Removing useless rules and useless hypotheses
+
+If a rule has a conclusion which is already in the hy-
+potheses, this rule does not generate new facts. Such rules
+are therefore removed as soon as they are encountered by
+our veriﬁer.
+If a rule H ! C contains in its hypotheses attacker(x), where x is a variable that does not appear elsewhere in the rule, the hypothesis attacker(x) can be removed. In-
+deed, the attacker always has at least a message. Therefore
+attacker(x) is always satisﬁed.
+
+5.3. Secrecy assumptions
+
+When the user knows that a fact will not be derivable, he can tell it to the veriﬁer. (When this fact is of the form
+attacker(M), the user tells that M remains secret.) The tool
+then removes all rules which have this fact in their hypotheses. At the end of the computation, the program checks that the fact is indeed underivable from the obtained rules. If the user has given erroneous information, an error message is displayed. Even in this case, the veriﬁer never wrongly claims that a protocol is secure.
+Mentioning such underivable facts prunes the search space, by removing useless rules. This speeds up the search process. In most cases, the secret keys of the principals cannot be known by the attacker. So, examples of underivable
+facts are attacker(skA ]), attacker(sk B ]), : : :
+
+5.4. Difﬁe-Hellman key agreement
+
+The Difﬁe-Hellman key agreement [18] enables two principals to build a shared secret. It is used as an elementary step in more complex protocols, such as Skeme [24].
+Formally, the Difﬁe-Hellman key agreement can be mod-
+eled by using two functions f and g that satisfy the equation
+
+f(y g(x)) = f(x g(y)):
+
+(3)
+
+mIgZn(pox.pd)rTapc=htei=ceeq,fxut(haxwteihogfen(urynef)c()tpyioisingsss(axpat)riri)semﬁ=feed(.xa(nIdynx))oy=uirms vyoaexdrigﬁpmeenro=e, drfaot(pollroaywn)oxdf-
+ing the ideas used in the applied pi calculus [5], we do not
+consider the underlying number theory; we work abstractly
+with the equation (3). The Difﬁe-Hellman key agreement
+involves two principals A and B. A chooses a random rnpaaunmtdeesomxf0(nx, a0amngde(xsxe11n),)dasanngdd(xsBe0n)dctsoomgB(px.u1t)Sesitmofi(lAaxr.1ly,gT(Bhxe0nc)h)A.oocsBeoosmtha-
+values are equal by (3), and they are secret: assuming that
+fth(ex0attga(cxk1e)r)cnaonrnoft(xh1avge(xx00)o).r x1, it can compute neither
+The equation (3) cannot be written directly in our frame-
+work that uses only constructors and destructors. Neverthe-
+less, it can be encoded as follows: the constructors are g, h0, and h1, and f is a destructor deﬁned by
+
+f(y g(x)) = h1(x y) f(x g(y)) = h1(x y) f(x y) = h0(x y):
+
+Notice that this deﬁnition of f is non-deterministic: a term
+
+shinu0gc(hatoagsth(fbe)(e)a.quWga(thbi)eo)nnct(wa3n)obttheeerrnmedtshuMecree1deatxnoidshtMs1(a2acaobre)m,emhq1ou(nabltaeacr)mc,oarMndd-
+
+steoutechrh1o(tfhxafty,b)aonwtdhheMton1htha0en(rxde
+
+M2 reduce to
+is at least one
+
+M . (Both sides reduce g in the second param-
+
+y) otherwise.) The equation is then
+
+modeled correctly.
+
+5.5. Key compromise
+
+The weakness of some protocols is that when an attacker manages to get some session keys, then it can also get the secrets of other sessions. Such a problem appears for example in the Needham-Schroeder shared-key protocol. It can be detected by our protocol veriﬁer.
+The strategy to model the compromise of some session keys is as follows. We say that a name is a session name if it is created at each session of the protocol. (In general, all names except long-term secret keys are session names.) We
+add a parameter (session identiﬁer) to each session name a.
+
+The session identiﬁer of a is a given constant s0 when a has
+been created during a session compromised by the attacker.
+The session identiﬁer is s1 when a has been created in a ses-
+sion that has not been compromised. We deﬁne a predicate
+comp such that comp(M) is true when all session names in M have session identiﬁer s0. This can be deﬁned by the
+following rules:
+
+For each constructor f , comp(x1) ^ : : : ^ comp(xk) ! comp(f(x1 : : : xk)) For each session name a, comp(x1) ^ : : : ^ comp(xk) ! comp(a s0 x1 : : : xk]) For each non-session name a, comp(x1) ^ : : : ^ comp(xk) ! comp(a x1 : : : xk])
+
+We deﬁne to encode
+
+a predicate attacker0 by the
+the protocol, with session
+
+rules normally used
+identiﬁer s0, and a
+
+pﬁreerdsi1c.atTehaetntawcekeard1dbryultehse same rules with session identi-
+
+comp(x1) ^ : : : ^ comp(xk) ! attacker0(a s0 x1 : : : xk])
+
+for each session name a. These rules express that the attacker attacker0 has the names of session identiﬁer s0.
+Moreover, we add the rule
+
+attacker0(x) ! attacker1(x):
+
+The intuitive meaning of the predicates is the following:
+taahttettaaacctkktaeecrr01k((eMMr b))yiiscsottrmruueperifoifMmainscdiannognbtlheyeoibsfetMasisnioecndasnbyobftehideoebanttattaiiﬁnceekrdersbi0yn;
+
+a non-compromised session, using the knowledge obtained
+
+in the compromised sessions. We can then use our tool to
+query the fact attacker1(s s1]), where s is a session secret.
+
+If this fact is underivable, then the protocol does not have
+
+the weakness mentioned above: the attacker cannot have the
+
+secret s of a session that it has not compromised. In con-
+
+trast, it is normal has compromised
+
+tthheatseaststiaocnkseor1f (isdesn0t]i)ﬁ,esrisn0c.e
+
+the
+
+attacker
+
+Our translation from the applied pi calculus can auto-
+
+matically add the rules described above to model the com-
+
+promise of session keys. Also notice that our solving algo-
+rithm uses S = fcomp(x) attacker0(x) attacker1(x)g in
+
+this case.
+
+Remark. We could also use a single predicate attacker instead of attacker0 and attacker1. However, this would yield
+a less precise model, leading to more false attacks. For example, we could not prove that the corrected version of the Needham-Schroeder shared key protocol [31] is secure with this model.
+
+6. Experimental results
+We have implemented our veriﬁer in Ocaml, and have performed tests on a Pentium MMX 233 MHz, under Linux 2.0.32 (RedHat 5.0). The results are summarized in Figure 5, with references to the papers that describe the protocols and the attacks. In these tests, the protocols are fully modeled, including interaction with the server for all versions of the Needham-Schroeder, Denning-Sacco, OtwayRees, and Yahalom protocols. We use secrecy assumptions to speed up the search. These assumptions say that the secret keys of the principals, and the random values of the Difﬁe-Hellman key agreement and the session keys in the Skeme protocol, remain secret. Thanks to these secrecy assumptions, the analysis time of Skeme is 23 s instead of 70 s. The column “#Rules” indicates the number of Prolog rules in our representation of each protocol. The large number of rules for the Needham-Schroeder shared-key protocol comes from the encoding of the compromise of session keys. In the Needham-Schroeder shared key protocol, the last messages are
+Message 4: B ! A : fNBgK Message 5: A ! B : fNB ; 1gK where NB is a nonce. Representing this with a function minusone(x) = x;1, this yields a loop in our veriﬁer, since
+it believes that 1 can be subtracted any number of times
+from NB. Moreover, the techniques mentioned previously
+to force termination lead to a false attack. The purpose of
+the subtraction is to distinguish the reply of A from B’s
+message. As mentioned in [6], it would be clearer to have:
+Message 4: B ! A : fMessage 4 : NBgK Message 5: A ! B : fMessage 5 : NBgK
+We use this encoding. Our tool then terminates, and the analysis is precise. There was no other termination problem in the tests of Figure 5.
+These results show that our analysis can be used to verify secrecy properties of standard cryptographic protocols, in a small amount of time. It takes only a very small amount of memory (less than 2 Mb in all these tests).
+7. Conclusion
+We believe that our protocol veriﬁer can provide new possibilities to verify cryptographic protocols: it is very efﬁcient, and thus can handle complex protocols; it also avoids limiting the number of runs of the protocol. This is achieved by using a simple representation of the protocol, and a new solving algorithm.
+Directions for further work include generalizing the tool to be able to handle general equational theories. A more
+
+Protocol Needham-Schroeder public key [30] Needham-Schroeder public key corrected [25] Needham-Schroeder shared key [30, 11] Needham-Schroeder shared key corrected [31] Denning-Sacco [17] Denning-Sacco corrected [11] Otway-Rees [32] Otway-Rees, variant of [33] Yahalom [11] Simpler Yahalom [11] Main mode of Skeme [24]
+
+Result Attack [25] Secure Attack [17] Secure Attack [11] Secure Secure Attack [33] Secure Secure Secure
+
+#Rules 14 14 47 51 15 15 9 9 10 10 23
+
+Time (ms) 70 60 760
+1190 40 40 270 260 110 310
+23070
+
+Figure 5. Experimental results
+
+general study of the termination of the algorithm would also be interesting, to ﬁnd conditions that guarantee the termination of the basic algorithm, and new ways of forcing termination when these conditions are not satisﬁed.
+Acknowledgments
+This work owes much to discussions with Mart´ın Abadi. I am very grateful to him for what he taught me. I would like to thank the anonymous reviewers for their helpful comments and suggestions.
+References
+[1] M. Abadi. Explicit Communication Revisited: Two New Attacks on Authentication Protocols. IEEE Transactions on Software Engineering, 23(3):185–186, Mar. 1997.
+[2] M. Abadi. Secrecy by Typing in Security Protocols. Journal of the ACM, 46(5):749–786, Sept. 1999.
+[3] M. Abadi. Security Protocols and their Properties. In F. Bauer and R. Steinbrueggen, editors, Foundations of Secure Computation, NATO Science Series, pages 39–60. IOS Press, 2000. Volume for the 20th International Summer School on Foundations of Secure Computation, held in Marktoberdorf, Germany (1999).
+[4] M. Abadi and B. Blanchet. Secrecy Types for Asymmetric Communication. In F. Honsell and M. Miculan, editors, Foundations of Software Science and Computation Structures (FoSSaCS 2001), volume 2030 of Lecture Notes on Computer Science, pages 25–41, Genova, Italy, Apr. 2001. Springer Verlag.
+[5] M. Abadi and C. Fournet. Mobile Values, News Names, and Secure Communication. In 28th Annual ACM SIGPLANSIGACT Symposium on Principles of Programming Languages (POPL’01), pages 104–115, London, United Kingdom, Jan. 2001. ACM Press.
+[6] M. Abadi and R. Needham. Prudent engineering practice for cryptographic protocols. IEEE Transactions on Software Engineering, 22(1):6–15, Jan. 1996.
+
+[7] C. Bodei. Security Issues in Process Calculi. PhD thesis, Universita` di Pisa, Jan. 2000.
+[8] C. Bodei, P. Degano, F. Nielson, and H. R. Nielson. Control Flow Analysis for the -calculus. In International Conference on Concurrency Theory (Concur’98), volume 1466 of Lecture Notes on Computer Science, pages 84–98. Springer Verlag, Sept. 1998.
+[9] D. Bolignano. Towards a Mechanization of Cryptographic Protocol Veriﬁcation. In O. Grumberg, editor, 9th International Conference on Computer Aided Veriﬁcation (CAV’97), volume 1254 of Lecture Notes on Computer Science, pages 131–142. Springer Verlag, 1997.
+[10] P. Broadfoot, G. Lowe, and B. Roscoe. Automating Data Independence. In 6th European Symposium on Research in Computer Security (ESORICS 2000), volume 1895 of Lecture Notes on Computer Science, pages 175–190, Toulouse, France, Oct. 2000. Springer Verlag.
+[11] M. Burrows, M. Abadi, and R. Needham. A Logic of Authentication. Proceedings of the Royal Society of London A, 426:233–271, 1989. A preliminary version appeared as Digital Equipment Corporation Systems Research Center report No. 39, February 1989.
+[12] L. Cardelli, G. Ghelli, and A. D. Gordon. Secrecy and Group Creation. In C. Palamidessi, editor, CONCUR 2000: Concurrency Theory, volume 1877 of Lecture Notes on Computer Science, pages 365–379. Springer Verlag, Aug. 2000.
+[13] H. Cirstea. Specifying Authentication Protocols Using Rewriting and Strategies. In I. Ramakrishnan, editor, Practical Aspects of Declarative Languages (PADL’01), volume 1990 of Lecture Notes on Computer Science, pages 138– 152, Las Vegas, Nevada, Mar. 2001. Springer Verlag.
+[14] E. M. Clarke, S. Jha, and W. Marrero. Using State Space Exploration and a Natural Deduction Style Message Derivation Engine to Verify Security Protocols. In Proceedings of the IFIP Working Conference on Programming Concepts and Methods (PROCOMET), June 1998.
+[15] P. Cousot and R. Cousot. Comparing the Galois Connection and Widening/Narrowing Approaches to Abstract Interpretation. In M. Bruynooghe and M. Wirsing, editors, Proceedings of the fourth international symposium PLILP’92 (Programming Language Implementation and Logic Program-
+
+ming), Lecture Notes on Computer Science, pages 269–295. Springer Verlag, Aug. 1992. [16] G. Denker, J. Meseguer, and C. Talcott. Protocol Speciﬁcation and Analysis in Maude. In N. Heintze and J. Wing, editors, Proc. of Workshop on Formal Methods and Security Protocols, Indianapolis, Indiana, 25 June 1998. [17] D. E. Denning and G. M. Sacco. Timestamps in Key Distribution Protocols. Commun. ACM, 24(8):533–536, Aug. 1981. [18] W. Difﬁe and M. Hellman. New Directions in Cryptography. IEEE Transactions on Information Theory, IT-22(6):644– 654, Nov. 1976. [19] N. A. Durgin, P. D. Lincoln, J. C. Mitchell, and A. Scedrov. Undecidability of bounded security protocols. In Workshop on Formal Methods and Security Protocols (FMSP’99), Trento, Italy, 5 July 1999. [20] J. Goubault-Larrecq. A Method for Automatic Cryptographic Protocol Veriﬁcation (Extended Abstract), invited paper. In Fifth International Workshop on Formal Methods for Parallel Programming: Theory and Applications (FMPPTA’2000), Cancu´n, Mexique, May 2000. SpringerVerlag. [21] J. Heather and S. Schneider. Towards automatic veriﬁcation of authentication protocols on an unbounded network. In 13th IEEE Computer Security Foundations Workshop (CSFW-13), pages 132–143, Cambridge, England, July 2000. [22] M. Hennessy and J. Riely. Information Flow vs. Resource Access in the Asynchronous Pi-Calculus. In Proceedings of the 27th International Colloquium on Automata, Languages and Programming, Lecture Notes on Computer Science, pages 415–427. Springer Verlag, 2000. [23] D. Kindred and J. M. Wing. Fast, Automatic Checking of Security Protocols. In USENIX 2nd Workshop on Electronic Commerce, pages 41–52, Nov. 1996. [24] H. Krawczyk. SKEME: A Versatile Secure Key Exchange Mechanism for Internet. In Proceedings of the Internet Society Symposium on Network and Distributed Systems Security, Feb. 1996. Available at http://bilbo.isu.edu/ sndss/sndss96.html. [25] G. Lowe. Breaking and Fixing the Needham-Schroeder Public-Key Protocol using FDR. In Tools and Algorithms for the Construction and Analysis of Systems, volume 1055 of Lecture Notes on Computer Science, pages 147–166. Springer Verlag, 1996. [26] C. Meadows. A Model of Computation for the NRL Protocol Analyzer. In Proceedings of 1994 Computer Security Foundations Workshop (CSFW-7), Franconia, New Hampshire, June 1994. IEEE Computer Society. [27] J. K. Millen, S. C. Clark, and S. B. Freedman. The Interrogator: Protocol Security Analysis. IEEE Transactions on Software Engineering, SE-13(2):274–288, Feb. 1987. [28] J. C. Mitchell, M. Mitchell, and U. Stern. Automated Analy-
+sis of Cryptographic Protocols Using Mur'. In Proceedings
+of the 1997 IEEE Symposium on Security and Privacy, pages 141–151, 1997. [29] D. Monniaux. Abstracting Cryptographic Protocols with Tree Automata. In Static Analysis Symposium (SAS’99), volume 1694 of Lecture Notes on Computer Science, pages 149–163. Springer Verlag, Sept. 1999.
+
+[30] R. M. Needham and M. D. Schroeder. Using Encryption for Authentication in Large Networks of Computers. Commun.
+ACM, 21(12):993–999, Dec. 1978. [31] R. M. Needham and M. D. Schroeder. Authentication Re-
+visited. Operating Systems Review, 21(1):7, 1987. [32] D. Otway and O. Rees. Efﬁcient and Timely Mutual Au-
+thentication. Operating Systems Review, 21(1):8–10, 1987. [33] L. C. Paulson. The Inductive Approach to Verifying Cryp-
+tographic Protocols. Journal of Computer Security, 6(1– 2):85–128, 1998. [34] A. W. Roscoe and P. J. Broadfoot. Proving Security Pro-
+tocols with Model Checkers by Data Independence Techniques. Journal of Computer Security, 7(2, 3):147–190, 1999. [35] D. X. Song. Athena: a New Efﬁcient Automatic Checker for Security Protocol Analysis. In Proc. of 12th IEEE Computer Security Foundation Workshop (CSFW-12), Mordano, Italy,
+June 1999. [36] P. Syverson. A Taxonomy of Replay Attacks. In Proceed-
+ings of the 7th IEEE Computer Security Foundations Work-
+shop (CSFW-94), pages 131–136, 1994. [37] H. Tamaki and T. Sato. Unfold/Fold Transformation of
+Logic Programs. In S. A˚ ke Ta¨rnlund, editor, Proceedings
+of the Second International Logic Programming Conference (ICLP’84), pages 127–138, Uppsala, Sweden, July 1984.
+
+A. Proof of correctness of our algorithm
+
+Lemma 4 At the end of the ﬁrst phase, B satisﬁes the fol-
+
+lowing properties:
+
+1. 8R 2 B0 9R0 2 B R0 ) R;
+
+2. Let R 2 B, R = H ! C and R0 2 B, R0 = H0 ! C0. Assume that there exists F0 2 H0 such that:
+
+(a) R F0 R0 is deﬁned; (b) 8F 2 H F 2r S; (c) F0 62r S.
+
+In this case, there exists R00 2 B, R00 ) R RF0 0.
+
+Proof To prove the ﬁrst property, let R
+that during the whole execution of phase 1,
+
+2B 9R0
+
+0. 2
+
+We
+B
+
+show
+R0 )
+
+R.
+
+At the beginning, we execute the instruction B
+
+add(elimdup(R) B). If there exists no R0 2 B such that
+
+R0 ) elimdup(R), elimdup(R) is added to B. We have
+
+elimdup(R) ) R (with the identity). Therefore, after the
+
+execution of this instruction 9R0 2 B R0 ) R.
+
+Assume that we execute B add(R00 B), and before
+
+this execution 9R0 2 B R0 ) R. Either R0 is kept in B,
+
+then this property is true after the execution of add. Or R0
+
+is removed, and R00 ) R0. Then R00 ) R () is transitive)
+
+and the property is still satisﬁed.
+
+The second property simply means that the ﬁxed point is
+
+reached at the end of phase 1 (using elimdup(R R RF0 0).
+
+F0
+
+R0)
+
+)
+2
+
+LtahneedmnRmei1tah5eFr1ItRfhRe10 re)Fe0xRiRsts0Fi0Fs 1Rdes0 ,uﬁocnrhedRt,h10Ra)t1R)R1
+
+R and RF 0
+11
+RF0 0.
+
+R R0 1
+
+)
+
+0
+
+is deﬁned
+
+Proof Let R = H ! C, R0 = H0 ! C0, R1 = H1 !
+
+Cctian1nc,ta.RrTr10ahne=gnethsHeur1c0ehe!txhiasttCst10ha.esuvBbasyrtiiatrbueltneiaosmnoifngRsu1tchhaenthvdaatRria10Cbal1eres=, dwCise-,
+
+H1
+We
+
+H,
+have
+
+RC10
+
+=
+F0
+
+C0, R0 =
+
+H010(H
+
+H0. (H 0
+
+;
+
+F0))
+
+!
+
+C0 0. We
+
+have two cases.
+
+First deﬁned, uniﬁer.
+
+case: 9F1
+
+F0
+0
+
+and
+F1
+
+C =
+
+2 are
+0
+
+H0 1
+
+F1 = F0. Since R RF0 0 is
+
+uniﬁable, let 0 be the most general
+
+C1, then F1 and C1 are uniﬁable,
+
+F(RtuhHn1001ei)S1rﬁ0)e1e;eFfCacro1.noF10rdnRe1T=d)R10h)cCe1=a=r100seeF=C:e110x10C(RiHsH(=t010Hs.110iT1s0h10Cde(He(srH0Hﬁeu.0fnc1T0;1o0heh;r;dFeet.hn0FRFLa.1R1t10eT))t1)))h0e!1nFR1b=eR0H(1FtH10h1C00e10)10R,m10((.Ro.HH10sWt0 1;Fge(0(eHFHnRhe01a00r)v.;2a)el,
+
+Lemma 1 (Correctness of phase 1) Let F be a closed
+
+fact. F is from B0.
+
+derivable
+
+from
+
+B0
+
+if
+
+and
+
+only
+
+if
+
+F
+
+is
+
+derivable
+
+Proof Assume
+a derivation of F exists a rule R0 in
+
+BtfhraostmuFchBits0h.daetFrRiov0ra)belaecRhfro(rLumleemBRm0 aainn4d,BPc0or,onptsheidertreyer
+
+1).
+
+Assume that R is the label of a node with an incoming
+
+edge labelled
+We have R
+
+F and n outgoing ) fF1 : : : Fn
+
+edges g!
+
+laFbe.lledTFhe1n
+
+:
+
+:: R0
+
+Fn.
+)
+
+fF1 : : : Fng ! F () transitive).
+
+Therefore, we can replace the node labelled R by a node
+
+labelled R0. This way, we obtain a derivation of F from B.
+
+Assume that there are two nodes n and n0 in this deriva-
+
+tion of F ,
+sume that
+
+linked by an edge from n0 n is labelled R and n0 is
+
+to n labelled labelled R0.
+
+CL1.etAHs-
+
+be the set of labels of outgoing edges of n, H 0 the same
+
+for n0, C0 the label of the incoming edge of n0. Then
+
+(H
+tion
+
+! C1)
+being
+
+C1
+the
+
+(H0 ! C0) is deﬁned (with a
+identity). By Lemma 5, there
+
+substitu-
+exists F
+
+such that R F R0 is deﬁned, and two cases may arise:
+
+either R F R0 ) (H ! C1) R0 ) (H ! C1) C1 (H0 ! C0).
+
+C1 (H0
+
+!
+
+C0), or
+
+In the ﬁrst case, assume that the hypotheses (b) and
+
+(c) of Lemma 4, Property 2 are satisﬁed. Then there
+
+exists R00 2 B such that R00 ) R R RF 0. Then )00
+
+(H C0
+
+! ()
+
+C1) C1 (H0 !
+transitive). Then
+
+C0) =
+the two
+
+H (H nodes n
+
+0a;ndCn10)
+
+! can
+
+n Rbe replaced by a node 00 labelled .00 Indeed, the
+
+outgoing edges of n and n0 (excluding the edge from
+
+n0 to n) are labelled by elements of H and H 0 ; C1. And the incoming edge of n0 is labelled by C0.
+
+In the second case, we remove n, and link directly its
+
+incoming and outgoing edges to n0. We have R0 )
+
+(H
+and
+
+!outCgo1i)ngCe1dg(Hes0o!f nC0 a0r)e=noHw
+
+(H0 ; C1) ! C0,
+labelled by elements
+
+of H (H0 ; C1), its incoming edge by C0.
+
+We perform this replacement process as long as there exist nodes on which it can be applied. Once the replacement process is done, we show that the remaining rules are all in
+B0.
+
+The rules labelling leaves of the tree are all in B0 since
+they have no hypotheses.
+
+Let n0 be a node such that all sons of n0 are labelled by a rule in B0. Therefore, the hypothesis (b) is satisﬁed for all sons n of n0 (the hypotheses F of the rule R labelling n satisfy F 2r S). Since n and n0 cannot have
+
+been merged with another node by the above replace-
+
+ment process, hypothesis (c) is not satisﬁed for all sons
+
+n of n0. Then all hypotheses F0 of the rule labelling n0
+
+satisfy
+B0.
+
+F0
+
+2r
+
+S.
+
+That
+
+is,
+
+n0
+
+is
+
+also
+
+labelled
+
+by
+
+a
+
+rule
+
+of
+
+By induction, this proof shows that all nodes are labelled by
+a rule of B0, which is the expected result.
+
+For the converse implication, notice that if a fact is deriv-
+
+able from B0 then it is derivable from B, and that all rules
+
+added to B do not create new derivable terms: when com-
+
+posing two rules R and R0, the created rule can derive terms
+
+that could also by derived by R and R0.
+
+2
+
+Theorem 2 Let F be a closed fact. Let F 0 such that
+
+there exists a substitution such that F 0 = F . F
+
+is derivable from
+derivable(F 0) 9
+
+the rules in
+F = F .00
+
+B0
+
+Fif and only if 9 00
+
+2
+
+In particular, F is derivable from B0 if and only if F 2
+
+derivable(F ).
+
+Proof Using Lemma 1, we only have to prove
+that F is derivable from B0 if and only if F9 00 2 derivable(F 0) 9 F = F .00
+
+Let us prove the direct implication. We consider a deriva-
+tion of F from B0. We cut this derivation on certain edges,
+
+and remove the branches that start from these edges. We call
+
+the remaining part a be the labels of the
+
+partial derivation of F .
+cut edges. We prove
+
+Let that
+
+F91R
+
+:
+0
+
+:: R0
+
+Fn
+)
+
+fF1
+and
+
+::: R8 00
+
+Fng ! F
+
+B R2 00
+
+00
+
+derivablerec(R0 6) R0. The proof
+
+B )00
+is by
+
+derivable(F 0)
+induction on the
+
+number of nodes in the partial derivation.
+
+If there are no nodes in the partial derivation, that is
+we have cut the edge starting from the root, let R0 =
+
+F F B =f 0g ! 0, 00 . We have derivablerec(R0 B )00 = derivable(F 0) hence the result.
+
+For the induction step, consider a partial derivation with
+k + 1 nodes. Let n be a node of this derivation whose
+
+all outgoing edges have been cut (a leaf of the partial
+
+derivation). Assume that n is labelled by R, that its in-
+
+coming edge is labelled by F1, its outgoing edges by
+
+F0 1
+the
+
+:::
+
+Fn .0 0
+
+The other edges that
+
+partial derivation are labelled
+
+have been cut
+by F2 : : : Fn.
+
+to build By in-
+
+duction hypothesis on the partial derivation without node
+
+n, there exists R0 such that R0 ) fF1 : : : Fng ! F , derivablerec(R0 B )00 derivable(F 0) and R8 00 2
+
+B R R6)00 00
+
+0.
+
+We show that there exists Rf
+
+such that Rf derivablerec(Rf
+
+B F))
+
+f
+
+0
+1
+
+00
+
+:
+
+:
+
+:derFivn0a0 bFle2(F:
+
+:: )0
+
+Fng ! Rand 8 00
+
+F,
+2
+
+B R Rf6)00 00
+
+.
+
+By deﬁnition of a derivation, R )
+
+FF(f
+
+0
+1
+
+f
+
+0
+1
+
+Ff
+
+0
+1
+
+: :
+
+: : :
+
+: : :
+
+Fn g0 0
+
+: Fn g0 0
+
+F Fn0 0
+
+2
+
+! !
+:::
+
+FFFn11).g
+
+Notice that the composition
+
+F1
+!
+
+(FfFis1
+
+: : : Fng ! F ) =
+deﬁned (the uniﬁer
+
+being the identity). Then by Lemma 5, two cases may
+
+arise. First case: R0 F , and the expected
+
+)
+
+Ff
+
+0
+1
+
+:
+
+:
+
+:
+
+Fn0 0
+
+F2
+
+result is obvious
+
+:::
+with
+
+Fng Rf
+
+!
+=
+
+R F R0. Second case: there exists 00 such that
+
+F 00
+
+eRli0md)up(RfF10F:00: :RF0n)0.0
+
+F2 : : : Fng ! F . Let
+Then, by transitivity of ),
+
+RR00
+
+=
+)
+
+Ff
+
+0
+1
+
+:
+
+:
+
+:
+
+Fn0 0
+
+deﬁnition of
+
+derivable(F 0
+
+F2 : : : Fng
+derivablerec,
+
+! F . By the derivablerec(R0
+
+step (c) of
+
+R Bf 0g
+
+00
+
+). If 8R1 2 fR0g B R00 1 6) R0,
+
+the
+)
+we
+
+have
+9R1
+
+the expected result
+
+R B R2 f 0g
+
+00 1
+
+with Rf ) R0.
+
+=
+By
+
+R0. Otherwise,
+transitivity of ),
+
+R1
+call
+that
+
+)
+
+Ff
+
+0
+1
+
+:
+
+:
+
+:
+
+Fn0 0
+
+F2
+
+::
+
+to derivablerec, of the
+
+derivablerec(R1 B1)
+
+: Fng ! F . There is an older form derivablerec(R1 B1), such
+derivable(F 0). If B1 satisﬁes
+
+8R2 2 B1 R2 6) R1, we have the result with Rf = R1.
+
+Otherwise, we go on taking a previous call to derivablerec
+
+as above. The process terminates, since B00 is ﬁnite.
+
+We can apply the result we have just proved to the par-
+
+ticular case when the partial derivation is in fact the whole
+
+derivation of F . We obtain 9R0 R0 ) ! F and
+
+derivablerec(R0 B )00 derivable(F 0), R8 00 2 B00 R00 6)
+
+R0. Therefore R0 =
+
+F F F! ,00 with
+
+= .00
+
+derivablerec(R0 B )00 = Ff 00g. (The case (a) of the deﬁ-
+
+nition of derivablerec cannot be applied because of the con-
+
+Rdition 8 00 2 B00 R00 6) R0.) FThen 00 2 derivable(F 0).
+
+We have the expected result.
+
+The proof of the converse inclusion is left to the reader.
+
+(essentially, the rule R F R0 does not generate facts that
+
+cannot be generated by applying R and R0).
+
+2
+
+B. Termination
+Lemma 3 If F is closed and S = fattacker(x)g, then derivable(F ) terminates.
+
+Proof derivablerec(R B )00 is only called with R =
+
+fF g ! F where M1
+
+or R :::
+
+=Manttaareckcelro(sMed1t)e^rm: :s:,^oartatavcakreiar(bMlenth)a!t apF-
+
+pears only once. This is proved by induction in the fol-
+
+lowing. Moreover, we prove that the pair p = (total
+
+size
+M1
+
+:o:f:thMe Mn 1tha:t:
+
+: Mn that are closed are variables) ordered
+
+terms, number of lexicographically
+
+strictly decreases. This decrease proves the termination.
+
+At the beginning, the rule is indeed R = fF g ! F . For
+
+recursive calls to derivablerec, the rule is R0 R0 = attacker(x1) ^ : : : ^ attacker(xk) ! F
+
+F0
+0.
+
+R,
+
+where
+
+clo1Ase.fdFteitrresrutmnciaNﬁsceia:itFfio0xniisoafappcFeloa0 srasendidnfaFFc0t0.., Oxithiesrwsuisbes,tixtuiteredmbayinas unchanged, and we deﬁne Ni = xi.
+
+If R = fF g ! F , the resulting rule R0 attacker(N1) ^ : : : ^ attacker(Nk) ! F .
+
+F0 R is
+
+Otherwise, R = attacker(M1)^: : :^attacker(Mn) !
+
+F , F0 = attacker(Mi). Assume that Mi is a closed
+
+aatettrttmaacc.kkeerrT((NMheki+)r^e1s)aut^lttai:nc:gk:e^rru(Mlaett1ai)sc^ka:e:trt:(a^Mcakntet)ra(c!Nke1r)F(M^. Mi:;:o1:r)e^^-
+
+over, the N1 : : : Nk that are closed terms are dis-
+
+joint subterms of Mi, therefore the total size of the
+
+N1 : : :
+than the
+
+Nk
+size
+
+that are closed terms
+of Mi (except when R0
+
+is
+=
+
+strictly smaller
+attacker(x) !
+
+acapattoetlillanycdtkbeoerefircv(taahxube)sl,eedbreReuﬁct0n(iiRntFi0o0thnRiFso0=fcRadsReefr,iR2vRagfb0 RleFrgBe0c0R0)).BsT=t00oh,peRbsrye,ifmtaohnmredeﬁettdrhhsiee-t
+
+total size of the closed terms in the hypotheses strictly
+decreases. Hence the pair p ordered lexicographically
+
+strictly decreases.
+
+2. Second case: R = attacker(M1) ^ : : : ^
+
+attacker(Mn) If R0 has
+
+! F , F0 = attacker(Mi), Mi = xi
+some hypotheses, the resulting
+
+.
+
+rule
+
+is
+
+Ra:Tia:m::tth0tt::meIaa^^frcceeRFkkaadfee0toti0trratr((ahaetRMMecactlkskhy11eeen))rbr=o((ce^^MMachl::aylnn::upda)::)sotee^^!t!trhaiRaavecttaF0sFkttbieaas,.lrF,ccea(W0kktrnxheeeRde1ecrr)(((tcrMMhR)el^ees0aiiut;;Rrol:ltF11tyi:a)0)an:lhng^^Rsad^rivaazuRefttelttaReRaao2ticcgtf0sakkfcRceeRlFkorrB00((egsMMerR0(0Fd)xii0++)tBkseR11t)r0o))m0R.p=^^^ss.
+
+in the hypotheses is constant, whereas the number of vari-
+
+ables strictly decreases. Hence the pair p ordered lexico-
+
+graphically strictly decreases.
+
+2
+
+Remark. The cases R0 = attacker(x) ! attacker(x) and F0 = attacker(xi) are removed by the optimizations of
+Section 5.2.
+
+
