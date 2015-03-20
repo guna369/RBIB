@@ -1,0 +1,671 @@
+On Shostak's Decision Procedure for Combinations of Theories?
+To be presented at CADE '96
+David Cyrluk, Patrick Lincoln, and Natarajan Shankar Computer Science Laboratory SRI International Menlo Park CA 94025 USA
+fcyrluk, lincoln, shankarg@csl.sri.com Phone: +1 (415) 859-f2560, 5454, 5272g Fax: +1 (415) 859-2844
+Abstract. Decision procedures are increasingly being employed for de-
+ciding or simplifying propositional combinations of ground equalities involving uninterpreted function symbols, linear arithmetic, arrays, and other theories. Two approaches for constructing decision procedures for combinations of ground theories were pioneered in the late seventies. In the approach of Nelson and Oppen, decision procedures for two disjoint theories are combined by introducing variables to name subterms and iteratively propagating any deduced equalities between variables from one theory to another. Shostak employs a di erent approach that works far more e ciently in practice. He uses an optimized implementation of the congruence closure procedure for ground equality over uninterpreted function symbols to combine theories that are canonizable and algebraically solvable. Many useful theories have these properties. Shostak's algorithm is subtle and complex and his description of this procedure is lacking in rigor. We present, for the rst time, a careful development and clari cation of Shostak's procedure that corrects several mistakes in Shostak's original presentation. Our analysis serves as a useful basis for the implementation, extension, and further optimization of Shostak's decision procedure.
+1 Motivation
+Consider the valid ground formula:
+x = y ^ f(f(f(x))) = f(x) f(f(f(f(f(y))))) = f(x)
+where the variables are assumed to be implicitly universally quanti ed and f is an uninterpreted function symbol. Formulas of this sort often arise as subgoals ? Supported by by NSF Grant CCR-930044, ONR Contract No. N00014-95-C-0168,
+NSF Grant CCR-9224858, and ARPA contract A721. We are indebted to Rob Shostak for the original ideas studied in this paper. We thank John Rushby, Sam Owre, Deepak Kapur, Harald Ruess, Oliver Moller, and Tomas Uribe, and the anonymous referees for valuable feedback and comments.
+
+in theorem proving applied to program veri cation, particularly in systems such as Ehdm 2], Eves 4], Nqthm 1], Ontic 9], PVS 14], SDVS 3], and the Stanford Pascal Veri er 8]. In the mid-to-late seventies, Downey, Sethi, and Tarjan 6], Kozen 7], Nelson and Oppen 11], and Shostak 17] gave e cient algorithms for deciding such formulas by computing the congruence closure relation on the graph representing the terms in the formula.
+Although necessary, it is not su cient to have decision procedures for uninterpreted equality, since many subgoal formulas in typical proofs involve both uninterpreted function symbols (like f above) and interpreted function symbols such as addition, multiplication, recursive datatype operations, array operations, etc. As an example, consider the formula:
+f(f(i ? j)) = j ^ i = 2 j f(f(f(f(select(update(a; 2 j; j); i))))) = j;
+where update(a; j; 0) updates array a at index j to have the value 0, and select(a; i) selects the array element from a at index i. Given decision procedures for the component theories (such as linear arithmetic and arrays), Nelson and Oppen 10] gave a technique for combining such decision procedures to decide the combination of these theories by simply propagating equalities between the di erent decision procedures. The Nelson-Oppen procedure is used in Eves 4], the Stanford Pascal Veri er 8], and SDVS 3].
+Shostak 18] used a di erent approach that merges the simpli ers for individual theories into a single procedure based on congruence closure. Shostak's decision procedure is at the core of systems such as Ehdm 2] and PVS 13]. In practice, Shostak's procedure is more e cient than that of Nelson and Oppen (see Crocker 5]). Despite its signi cance, a rigorous analysis of Shostak's procedure has been lacking. Further, all published accounts of Shostak's method are awed: the most often-cited paper 18] contains two important aws in the description of the algorithm, while other sources, such as technical reports, contain the same as well as other aws. In no published work we are aware of has an accurate description been given of Shostak's algorithm, and no accurate account exists of the limitations of Shostak's approach. The complex reasoning supporting the correctness of Shostak's procedure has also never been published.
+This paper attempts to remedy the situation by providing the rst correct description of Shostak's algorithm, along with the key invariants, lemmas, and theorems that demonstrate the correctness of Shostak's approach. We also accurately describe the limitations of Shostak's method. We start with a naive congruence closure procedure and show how this can be systematically optimized and augmented to yield a corrected version of Shostak's procedure.
+The primary contribution of this paper is a rigorous understanding of Shostak's decision procedure where the aws in his original description have been eliminated. Additionally, we sketch correctness arguments that can be used to construct proof objects from successful runs of the decision procedure. We hope that our analysis will make it easier for others to implement, adapt, and extend Shostak's ideas.
+2
+
+2 Congruence Closure
+
+This section contains background material. The only new material here is the proof-theoretic justi cation for congruence closure based on a cut-elimination argument.
+
+The use of congruence closure for deciding quanti er-free or ground equational theories plays a central role in Shostak's combined decision procedure. As
+an example, consider the theory T given by the equations fw = g(f(a)); f(a) = ag. To show that w = g(a) follows in theory T , we can construct a congruence
+closure graph whose nodes correspond to the terms and subterms of the term
+set fw; g(f(a)); g(a); ag such that the node corresponding to g(f(a)) has label g
+and the successor node corresponding to f(a). The congruence closure relation relates (by merging into the same equivalence class) those nodes corresponding to the given equations so that w and g(f(a)) are merged, as are a and f(a). Furthermore, any two nodes with identical labels whose corresponding successor nodes are in the same equivalence class are merged. The merging of a and f(a) thus induces the merging of g(a) and g(f(a)). As a result, w and g(a) are in the same equivalence class.
+
+More formally, let T be a collection of equations between terms formed from
+vaamanodrddioaejmbfllinafeoijsnr2xTDiD,ainfnafd!omrnDea-aap.crphyLineafgtuinj=jfc:jintbi(oiafnri1no;sm:yT:m:,t;bjeaaronimlj)sjsf=atinboj.bbriADjev.msiauotcedhejlftihnMaj(tja=j1xjhi;jD: :;:=j;:jjianc(jox)n.i)sMis2tsisDoaf,
+
+A complete set of proof rules for equivalence can be given by the rules of
+
+re exivity, symmetry, and transitivity. A complete set of proof rules for ground
+
+equational logic can be obtained by adding the Leibniz rule or substitutivity:
+
+ddeerdiuvceefsina(a=1
+
+;: b
+
+::;
+or
+
+Tan`)
+
+=
+a
+
+=finb(bif1
+
+; : : : ; bn) there is
+
+from a1 = b1 a proof from
+
+,: : : the
+
+, an = bn. equations
+
+We say that T in T using the
+
+rules of re exivity, symmetry, transitivity, and substitutivity.
+
+Following the terminology of Nelson and Oppen 11], let G = (V; E) be
+
+a labelled directed graph where (v) and (v) give the label and out-degree,
+
+respectively, of vertex v in V . Let v i] (the i'th successor of v) be the vertex
+
+u such that (v; u) is the ith edge with source v. If is a set of vertices, let
+
+use( ) be the set fv 2 V j(9i: v i] 2 )g. Given a binary relation R on V , the
+
+equivalence closure transitive closure of
+
+oRf .RTh(reepcorensgernuteendcebycloRsu)reisR^thoef
+
+re exive, symmetric, a binary relation R is
+
+and the
+
+least extension for each i, 1
+
+of
+i
+
+R
+
+such (u), u
+
+it]hRa^t
+
+for any v i], we
+
+hua; vvewuhR^erve.
+
+(u) =
+
+(v),
+
+(u) =
+
+(v), and
+
+Now, let S be a set of terms that is closed under subterms. We can represent
+
+S by a graph G = (V; E) such that each term xi is a leaf node (i.e., has no
+
+successors), (v) = fi,
+
+(avn)d=enac,hantedrmthefinn(oad1e;s:
+
+:: v
+
+; an) 1]; : :
+
+is represented by a : ; v n] represent the
+
+node v such terms a1; : : :
+
+that ; an,
+
+respectively. If G is a graph representing S, and a is a term in S, let (a) be
+
+the vertex in G representing a. If T is a ground equational theory of the form
+
+3
+
+a1 = b1; : : : ; an = bn, such that each ai and each bi is in S, then let RT be the binary relation on S containing the pairs ( (ai); (bi)) and closed under re exivity, symmetry, and transitivity.
+
+Theorem 1. Let T be a ground equational theory, S be a set of terms closed
+
+under Then
+
+subterms for terms
+
+and a; b
+
+containing the terms
+in S, we have T j= a
+
+in T , =b i
+
+an(da)leRt^TG
+
+= (V; (b).
+
+E)
+
+represent
+
+S.
+
+Proof.
+given by For the
+
+`Ttifhh'eedei`qrouencilvtyia-olinef'n, cdiefirrTeeclta6j=itoinoanis=R^eTbasftyohrseminnscteahetmrheoedicseolslsloeamcttiesiofymninoogdf eeTlqusaanivtdiaslhfeyeninnccegecTala=sbsuebts.
+
+not a terms that
+
+(=ian)bS.R^,ETwqhu(iacblh)itayblysionmdtiohneiissmmnaoloittdyhelomlidnu.dstucceosntaaicnonR^gTru.eTncheu-sc,loitsemd ursetlabtieonthoenctahsee
+
+Since we are interested, at least in principle, in constructing proof objects
+
+corresponding to successful proofs, we would like to also give a proof-theoretic ar-
+
+gument for soundness and completeness. This proof-theoretic argument requires
+
+the following cut-elimination result which we state without proof.
+
+Theorem 2. If there is a proof of a = b from theory T using re exivity, symme-
+try, transitivity, and substitutivity, then there is a proof of a = b from T where all applications of transitivity are restricted to the case where the cut term is a left or right-hand side of an equality in T .
+
+Theorem 3 below is the proof-theoretic analogue of Theorem 1.
+
+Theorem 3. Let T be a ground equational theory, S be a set of terms closed
+
+under Then
+
+subterms for terms
+
+and a; b
+
+containing the terms in
+in S, we have T ` a = b
+
+T i
+
+,
+
+and (a)
+
+lRe^tTG
+
+= (V; (b).
+
+E)
+
+represent
+
+S.
+
+^Proof.
+a RT
+
+The `if' direction is an easy induction on the rules used to show that b, since these rule applications correspond directly to proof steps in the
+
+ground equational logic.
+
+The `only if' direction is somewhat harder since we need to show that no equality proof of terms in S need use cut terms in transitivity steps that fall outside of S. We can use the cut elimination result of Theorem 2 to restrict our attention to proofs where the all the cut terms appear as left or right-hand side equalities in T and hence in S. The result then follows by a straightforward induction on the given proof of a = b from T and the de nition of congruence closure.
+
+The pseudocode for a naive congruence closure procedure due to Nelson and Oppen is shown below. The Makuse operation is not de ned: it initializes the use table to re ect the terms in T . The main loop NO processes a list of equations T by applying the procedure Merge which uses Tarjan's union/ nd primitives to maintain equivalence classes so that union merges two equivalence classes and
+
+4
+
+nd returns the canonical representative of an equivalence class. The workhorse of the procedure is the Merge operation which merges two equivalence classes and propagates the merging to any parent nodes of these two equivalence classes that become congruent as a result.
+Merge (u, v) =
+SLET Pu = fuse (u0)jfind (u0) = find (u)g; SPv = fuse (v0)jfind (v0) = find (v)g
+IN union (u, v); FOR x IN Pu DO FOR y IN Pv DO
+IF find (x) 6= find (y) AND Congruent (x, y)
+THEN Merge (x, y) ENDIF
+
+Congruent (u, v) = ( delta(u) = delta(v)
+AND (FORALL i: 1 <= i <= delta(u): find (u i]) = find (v i])))
+
+NO (T) = Makeuse (T); CASES T OF nil : RETURN a = b : T'] : NO (T'); IF find (a) = find (b) THEN RETURN ELSE Merge (a, b) ENDIF; ENDCASES
+We state the theorem but omit the proof that NO constructs a congruence closed collection of equivalence classes of terms (see Nelson-Oppen 10]). Let findT represent the find operation following NO(T ).
+
+Theorem 4. (correctness of NO) Given a theory T , a term universe S that
+
+is closed
+a; b 2 S,
+
+under subterms and findT (a) = findT (b)
+
+contains i (a)
+
+R^aTll
+
+the terms (b).
+
+in
+
+T,
+
+then
+
+for
+
+any
+
+terms
+
+It is easy to see that the procedure terminates since the number of equivalence classes decreases with each call to Merge.
+
+3 Optimized Congruence Closure
+Shostak's version of the congruence closure algorithm optimizes the naive algorithm in three ways. The rst two optimizations shown below are not signi cant and are fairly standard.
+5
+
+1. The computation of the sets of the terms Pu and Pv in Merge is optimized by preserving the invariant use(u) use(find(u)). This is a somewhat trivial optimization but it has the useful consequence that any invocation of Merge(x; y) in the congruence closure procedure above can be replaced with Merge(find(x); find(y)). We assume that the above naive procedure has already been thus optimized.
+2. The computation of Congruent is optimized by maintaining a data-structure sig(u) for each term u that preserves the invariant that sig(f(u1; : : : ; un)) = f(find(u1); : : : ; find(un)). It is easy to check that the Shostak procedure shown below preserves this invariant.
+3. The last optimization is to eliminate the term universe S and the precomputation of the use structure. This means that the term universe is not predetermined and the algorithm can handle equalities in an \on-the- y" manner. This optimization is signi cant. Since the term universe is openended, it is not the case that findSh(u) = findNO(u) when both procedures are run in parallel. To compensate for this lack of foreknowledge regarding the term universe, Shostak introduced an operation called canon which returns a canonical form of a newly presented term using the canonical forms of the subterms given by nd.
+
+The pseudocode for Shostak's procedure is shown below. The procedure
+
+Sh(T ) processes each equality in the given theory T using Merge and builds
+
+up a congruence closure structure in terms of the data structures nd, use, and
+
+sig. The procedure applies canon to both sides of an equality to obtain their nor-
+
+mal forms based on the known equalities. In the case of a previously processed
+
+term t, canonsig ensures that its normal form is just find(t). This is because a
+
+previously processed term t given as argument to canonsig is either atomic, in
+
+which case find(t) is returned even if t is previously unprocessed, or t is of the
+
+fftooorrmmsoefrmg(ete1;tuh: :ei:ne; qtunus)ie,v(aatl1ne)dn.2ceeqMcuelaarlsgseteosistohftehthesniegt(iwnuv)oo(tkseeirndmceosn,eaatnchhde
+
+triehsualstibnegennonromrmalafloizremds) then successively merge
+
+equivalence classes of any congruent parent nodes where the sig table is used
+
+give a fast test for congruence.
+
+Sh (T) = CASES T OF nil : RETURN, a = b, T'] : Sh (T'); Merge ( canon (a), canon (b)) ENDCASES
+
+Merge (a, b) = UNLESS a = b DO union (a, b); FOR u IN use(a) DO replace a by b in the argument list of sig(u); FOR v IN use (b) WHEN sig (v) = sig (u) DO
+2 There is nothing sacred about t1 and any other ti would work equally well.
+
+6
+
+Merge (find (u), find (v));
+use (b) := use (b) fug
+
+canon (t) =
+CASES t OF
+f(t1; : : : ; tn): canonsig (f(canon (t1); : : : ; canon (tn)));
+ELSE: canonsig (t)
+ENDCASES
+
+canonsig (t) =
+CASES t OF
+f(t1; : : : ; tn): IF (FORSOME u IN use (t1): t = sig(u))
+THEN RETURN find (u)
+ELSE FOR i FROM 1 to n DO use (ti): = use(ti)
+sig (t) := t;
+use (t) := fg;
+RETURN t
+ENDIF
+ELSE: find (t);
+ENDCASES;
+
+ftg;
+
+To illustrate the di erence between the naive congruence closure procedure
+
+and that of Shostak, consider a term universe S of the form fx; y; z; f(x); f(y)g
+
+and a list of equations of the form x = y; z = f(x)]. In both variants, once the
+
+equality z = f(x) has been processed, we have findNO(z) = findSh(z) = f(x).
+
+In the naive version,
+
+f
+
+n(yd)NiOs
+
+(f(x)) = f(y), not explicitly
+
+after x whereas present
+
+= in in
+
+Sayhnoyhsatosafkb'tseheevneerspqiurooancl,ietfsiseiesnddp,Srho(ncfed(sNxse)Od)(x=t)hfu=(sxf)yasri.annIcnde
+
+Shostak's variant, the canon operation can cope with previously unobserved
+
+terms so that canon(f(x)) = f(y). This does not mean that canon(t) =
+
+fffcemavi(iannenxir)ddon,nNNttaw(hOOainhe(()tfe)=rct(ehazsaicse)nsae)cnsfe=atoihmwnnaf(hdetb(Nez)ne.fO)qot(rushziine)vtcaes=elreemcnffosc(n(ezydi))nc.eilqsCatushonsaeneolivstt,teyeirnsrsiosmetlpyhtr,heuocancgatieinvsvfesoereinnsnd(e,dftcNe(SarzOm,n)()oacnu=a)(nnzif=ov)n(e=frfs(aexfinn.)id)ndI,tNdwfSOishih(n(behzd)ro)Newai=Os-
+
+We assert the crucial invariants on the main loops of the procedures NO
+
+and Sh that relate these two procedures so that the correctness of Sh follows
+
+from that
+congruent canonsigT
+
+(obtf)u,tNcdOaen. onLneedTt(ttco)onursgeeprurfeeisnnetdnSSthh(tuihn;esvt)reeabsduelottfhfoefinsadnmNdeO(.ta)Ls, etuthseen(ntd)aTS,ihvc(eat)nv,oeurnsssieoiTgn((tto))f,,
+
+canon(t), the naive
+
+respectively, following Sh(T ), and similarly version of congruence closure procedure has
+
+for nd already
+
+TNbOee(nt)o. pRteimcailzletdhsaot
+
+that use(t) use(find(t)).
+
+Invariant 1 sig(f(t1; : : : ; tn)) = f(find(t1); : : : ; find(tn))
+
+Invariant 2 sig(a) = sig(b) CongruentSh(a; b).
+
+7
+
+( )use aInvariant 3 use(find(a)).
+Let canon be the same as canon but without the side-e ects of updating the sig and use data structures. Invariant 4 canon is idempotent: canon (canon (t)) = canon (t).
+Invariant 5 If f(a1; : : : ; an) 2 useT (t) for some t, then
+1. canon T (f(a1; : : : ; an)) = findTSh(f(a1; : : : ; an)) 2. there is a term f(b1; : : : ; bn) in T such that canon T (bi) = canon T (ai) for
+1 i n.
+
+Invariant 6
+canon T (f(t1; : : : ; tn)) = canon T (f(canon T (t1); : : : ; canon T (tn)))
+
+Invariant 7 For any terms a; b in the term universe S of NO, canon T (a) = canon T (b) i findTNO(a) = findTNO(b).
+
+Proof. The proof is by induction on the length of T . In the base case when T is empty, canon (a) = a = findNO(a) and canon (b) = b = findNO(b).
+
+If the induction hypothesis holds of T 0 then for any terms a; b in S,
+
+canon T0(a) = canon T0(b) i findTN0O(a) = findTN0O(b).
+
+We show that when the new equation u = v is processed, that any Merge in
+
+Sh corresponds to a Merge in NO. For the `if' direction, we can then show by
+
+induction on voked, canon
+
+the size T (a) =
+
+ocaf naotnhaTt(bw)h. eTnheivsecreMrtearignelyNhOo(ldnsdfNorOa(tao)m; incdaNsOin(cbe))thisisinis-
+
+only possible in the initial call to either this is the initial call to lows easily, or b must be of the by the induction hypothesis and
+
+MIMfnoevrermargrgeiafeNnN(ObtO1.6;,W:ai:nbh: o;ewbvnneha)ia.ciphsSpoinclfiacetsedheeCttofhoonaremgacrnofund(eacnbl1tu,;Ns:wiO:oe:n(;aha;afnobv))le-,,
+
+canon (a) = canon (b).
+
+we `if'
+
+nIcneaestdehetbou`otsnhilosywnifto'htadatirsfecisnttirdoaTNnig,Ohw(tafho)er=nweavfreidrndsMiTNnOecre(gbte)h.SehT(haceannaalorongguum(eae)on;fctaainsssosenirmt(iioblan))r(t6ho)oltdfhoser,
+
+fbeinidnN
+
+O
+S
+
+may but
+
+Invariant 5.2,
+
+not hold even for terms in the universe S since f(t1; : : : ; tn) can
+
+f (f we
+
+icnadnNrOes(tt1ri)c;t:
+
+::;f
+our
+
+ianttdeNnOti(otnn
+
+)) to
+
+might a and
+
+not be in S. b occurring in
+
+However, by T . The case
+
+of by
+
+the initial call the induction
+
+htoypMotehregseisShthiastdsiirneccet.
+
+For the other canon (ai) =
+
+(recursive) canon (bi)
+
+calls, for 1
+
+we
+i
+
+have n,
+
+that from
+
+CthoenginrvuaerniatNntOo(fa;Nb)Ohtohldast.
+
+The conclusion for a; b in S
+
+f
+
+indN
+
+O
+
+(a)
+
+=
+
+f
+
+indN
+
+O
+
+(b)
+
+follows
+
+CongruentTNO(a; b) findTNO(a) = findTNO(b):
+
+8
+
+4 Combinations of Theories
+
+The Nelson-Oppen approach to combining two decision procedures is to have each theory rename any uninterpreted subterms by variables, and to iteratively propagate any newly deduced equalities between variables across theories 10]. The main e ciency drawback to Nelson-Oppen's approach is that each theory has much of the same notion of equality resulting in duplicated e ort.
+
+Shostak 18] takes a di erent approach by restricting his attention to can-
+
+onizable and algebraically solvable theories. A theory is canonizable if there is
+
+a canonizer such that for any pure equality a = b is provable in the theory
+
+(i.e., ` a = b) if and only if (a) =
+equality a = b can be rewritten in each xi occurs in a = b but in none
+
+oaf(nbt)he.qeAutijvt.haSleehonortsytsaiosklvaselhgdoewbforsarimhcoawlVlyri exsaoill=vaanbtdlie,inwiftheageneryer
+
+linear arithmetic, the convex theory of lists, and monadic set theory are some
+
+examples of canonizable and algebraically solvable theories.
+
+Shostak 18] also shows how the canonizers and solvers for several pairwise disjoint theories can be combined into a single canonizer and solver for the combined theory. In contrast, the Nelson-Oppen procedure yields a method for combining arbitrary decision procedures for disjoint equational theories whereas Shostak's procedure can merely decide the combination of disjoint canonizable and algebraically solvable equational theories by combining solvers and canonizers. This paper does not discuss the details of this combination but with the decision procedure given that such canonizers and solvers can be constructed.
+
+Shostak's method centralizes equality reasoning in one procedure: the congruence closure algorithm described in Section 3. The interpreted theories communicate through a semantic canonizer and a solver. For the purpose of illustration, we will restrict our attention to the combination of the theories of equality over uninterpreted functions symbols and linear arithmetic equations over the reals.
+
+Shostak's procedure operates over -theories, namely those theories for which there is a computable canonizer function from terms to terms such that the following conditions hold3.
+
+1. An equation t = u in the theory is valid i (t) = (u) 2. If t is a term not in the theory then (t) = t 3. ( (t)) = (t) 4. If (t) = f(t1; : : : ; tn) for a term, t, in the theory then (ti) = ti for 1 i n 5. (t) does not contain any variables that are not already in t.
+
+The role that has in the interpreted procedure is as the semantic or interpreted analog to find in the uninterpreted congruence closure algorithm. That is, in the purely uninterpreted case find returns the canonical representative of a term given the uninterpreted equalites already processed. In the purely interpreted case returns the canonical representative of a term in the terms 3 Much of the theory and notation in this section comes from 18]
+
+9
+
+interpreted theory. Shostak's procedure is a method for combining these two canonical forms.
+For example, a canonizer for linear arithmetic could be constructed by transforming such expressions (using associativity, commutativity, distributivity) into the form a1x1 + : : : + anxn + c where each ai is a nonzero constant and the summands are arranged in some canonical order. In the presence of uninterpreted function symbols, each arithmetic term obtained by replacing uninterpreted subterms (i.e., subterms where the topmost function symbol is uninterpreted) by variables, must be in canonical form.
+To construct a decision procedure for equality in a -theory Shostak requires that a -theory have the additional property of algebraic solvability. A -theory is algebraically solvable if there exists a computable function solve, that takes an equation e and returns either ,true ,false or a conjunction of equations and has the following properties: (In the following let solve(e) = E.)
+
+1. E and e are equivalent, i.e., any -model satisfying E satis es e, and any
+
+-model of e can be extended to one satisfying E (since E can contain new
+
+2. 3. 4.
+
+(IIEvaffa)reE2iaxfc=boti rlnoeVutscaecini(,unxorfstiasnl=aisonpetpvgeiea),oartirrhainEbengle=sitnhtVeheie)f.onxlilEo=w2itnfi gtrhuoel,d:falseg.
+
+(b) (c)
+
+for for
+
+all all
+
+i; j,
+i 6=
+
+jx:ixdio6=esxnjoatnodccur
+
+in
+
+tj ,
+
+(d) (ti) = ti.
+
+For example, a solver for real linear arithmetic takes an equation of the
+
+f(o(brm2 ?aa12
+
+)=x(1a1+?:
+
+:: + b1))
+
+an x2
+
+xn + c +:::+
+
+(=(bnb1?
+
+x1 + : : an)=(a1
+
+?: bnb1))xn
+
++
+xn
+
+d and returns
++ (d ? c).
+
+x1
+
+=
+
+The purpose of solve is two-fold. First it detects unsatis ability in a -theory by returning .false Second, it makes it possible to propagate equalities by augmenting the canon operation in Section 3 so that is used on any interpreted subterms and (as before) a canonical (interpreted or uninterpreted) representative of the equivalence class is used for uninterpreted subterms. For example, if
+we want to deduce f(x ? y) = f(f(z)) from y = f(z) and x ? 2 y = 0, then the
+solver when invoked on the latter two equations returns y = f(z) and x = 2 y
+so that canon(x?y) = (2 f(z)?f(z)) = f(z), and canon(f(x?y)) = f(f(z)).
+
+The set of equations will have a model i solve never returns false for a processed equation. Thus whenever an equation is equivalent to false solve must report the contradiction.
+
+We now give pseudocode for Shostak's procedure for combining decision procedures 18] with the aws corrected. The main di erences with the procedure in Section 3 are that:
+
+10
+
+1. In Sh, Process1 is used to apply Merge to a list of pairs of terms returned by solve.
+2. In Process1, equalities are solved using solve before Merge is invoked. The extra canonsig applied to the arguments of Merge is in order to update the use/sig structures following the solve, and to apply nd to return the current canonical form. Indeed, canonsig(a) in Process1 could be replaced by find(a) since such an a is always either a variable or an already canonized uninterpreted term.
+3. In Merge(a; b), the uninterpreted case is the same as before except that solve is applied to find(u) = find(v) before Merge is recursively invoked (since find(u) for uninterpreted u can be interpreted). When u in use(a) is interpreted and find(u) = u (i.e., u was canonical prior to the current Merge), then it is merged with the new canonical term canonsig( (u0)). The main reason for merging representative interpreted terms with their canonical forms is to propagate the merging to any uninterpreted superterms (to preserve Invariant 5 for uninterpreted terms). The merging of interpreted terms also preserves the invariant that uninterpreted terms u in use(t) appear in use(find(t)). We can thus observe that congruence closure is preserved for uninterpreted terms so that for any two uninterpreted terms a; b occurring in the use structure that are equal from the equations processed so far, find(a) = find(b) holds. This fact is signi cant since canon uses find on terms in the use structure to return the canonical representative of uninterpreted terms. Note that interpreted terms u in use(a) are not added to the use(b) since it is su cient for use(b) to contain only the canonical term canonsig( (u0)) and this is ensured by canonsig.
+4. The de nition of canon is modi ed to apply to the input to canonsig. 5. The de nition of canonsig is modi ed to recursively apply canonsig to the
+arguments when an interpreted term is given as input. This is because such a term could have been newly created by and the sig and use data structures must be updated to re ect this new term. In the end, the combination of canon, signature, and canonsig returns the canonical representative of a given term where the largest uninterpreted subterms t have been replaced by find(t) and interpreted subterms t (in the original term or in replacement of uninterpreted s by find(s)) have been replaced by (t), and the sig and use structures have been properly initialized. The use of the solved form for interpreted equalities thus makes it possible to unambiguously apply find for interpreted terms and for interpreted terms.
+Sh (T) = CASES T OF nil : RETURN, a = b, T'] : Sh (T'); Process1 (solve (canon (a) = canon (b))) ENDCASES
+11
+
+Process1 (S) = FOR e in S DO CASES e OF false: RETURN unsatisfiable, a = b: Merge (canonsig (a), canonsig (b)) ENDCASES
+Merge (a, b) = UNLESS a = b DO union(a, b); FOR u IN use (a) DO IF u is uninterpreted THEN replace a with b in the argument list of sig (u); FOR v IN use (b) WHEN sig (v) = sig (u) DO Process1 (solve (find (u) = find (v)));
+use (b) := use (b) fug
+ELSIF find (u) = u THEN u' := u with b for a in its argument list ; Merge (u, canonsig ( (u')));
+ENDIF
+canon (t) = canonsig (signature (t))
+canonsig (w) = IF w is atomic
+THEN RETURN find(w);
+ELSE
+LET f(w1; : : : ; wn) = w IN ( )IF w is interpreted, replace each wiwith canonsig wi ; IF w = sig (u) for some u 2 use (w1)
+THEN RETURN find (u) ELSE
+FOR i FROM 1 TO n DO add w to use (wi);
+sig (w) := w;
+use (w) := fg;
+RETURN w ENDIF ENDIF
+signature (t) =
+IF t is a constant
+THEN RETURN t
+ELSE RETURN (f(canon (t1); : : : ; canon (tn))) where t = f(t1; : : : ; tn)
+ENDIF
+To illustrate how the procedure works, let us consider a list of equations:
+f(x) = 4; f(2 y ? x) = 3; x = f(2 x ? y); 4 x = 2 x + 2 y. We rst
+process 4 x = 2 x + 2 y, and since both sides are already in canonical
+12
+
+form, we solve to obtain x = y and these two terms are therefore merged. This merging is (needlessly) propagated to the terms 2 x and 4 x. We then process
+x = f(2 x?y), which following canonization is y = f(y). This is left unchanged
+by solve and hence y and f(y) are merged. (Note that it is okay for the variable y to occur as a proper subterm of an uninterpreted term such as f(y) on the
+right-hand side.) Now when f(2 y ? x) = 3 is processed, the canonical form
+on the left is f(f(y)) which is merged with 3. When f(x) = 4 is processed, the canonical form of the left-hand side is 3 because canon(x) is f(y), sig(f(f(y))) is f(f(y)) so canon(f(x)) is 3 so that solve(3 = 4) returns .false
+For soundness, we need to show the following invariant.
+Invariant 8 (soundness) canon T (a) = canon T (b) T ` a = b:
+Proof. The proof is by induction on the list of equations in T . The base case when T is empty is easy. Let T be of the form a = b; T 0]. First note that by the induction hypothesis, canon (and hence canon ) preserves equality in T 0. The initial invocation of Merge is on the solved form of the given equation a = b, and we have restricted solve to return equations that are conservative with respect to the input equation. Since Merge is the only operation that a ects canon , we show that the soundness property is preserved whenever Merge is recursively invoked. We note the invariant that for uninterpreted a; b, it is the case that sig(a) = sig(b) implies Congruent(a; b), and hence by the induction hypothesis,
+T ` a = b.
+When Merge is invoked on a; b where a is interpreted, b is simply a canonized
+form of a so that T ` a = b follows easily from the induction hypothesis. Invariant 9 (completeness) If T ` a = b, then either Sh(T ) = unsatisfiable
+or canon (a) = canon (b). Proof. Given a set of equations T , the algorithm simultaneously constructs the solve and congruence closure T of T by ensuring that if T contains u = v for interpreted u, then it also includes solve(u = v). Since canon returns a canonical representative of the equivalence class in T, thus for any equality u = v in T , it is the case that canon T (u) = canon T (v). If T does not contain
+,false then it can be shown that proofs of T ` a = b can be constructed from T
+using re exivity, symmetry, transitivity, substitutivity, and the axiom scheme:
+` (t) = t. The result then follows easily by induction on the derivation of T ` a = b. To establish the base case for the axiom scheme ` (t) = t, note that
+(f(t1; : : : ; tn)) = (f( (t1); : : : ; (tn))), and hence we have canon T ( (a)) = canon T (a).
+Discrepancies in Shostak's Original Procedure. There are two actual bugs in the pseudocode presented in the paper 18]. The most egregious is in the procedure
+Merge. The condition find(u) 6= u should actually be find(u) = u. Shostak's
+13
+
+earlier technical report 19] does not contain this bug but has other discrepancies. The second bug is that the output to solve needs to be canonized just in case solve creates new variables and new terms that need to be introduced into the use data structure.
+Shostak 18] states that the use data structure is maintained so that the sig's are unique. This is incorrect and such an \optimization" can result in an incompleteness. The solver for cons, car, and cdr given by Shostak is also buggy.
+Performance Comparisons. Crocker 5] has carried out an empirical comparison of Shostak's algorithm as implemented by Shostak himself against Nelson and Oppen's implementation of their procedure. Crocker's results indicate a considerable e ciency advantage for Shostak's approach.
+We have performed a preliminary study of the e ciency of Nelson-Oppen approach and the Shostak approach to cooperating decision procedures, and found the Shostak approach to be about an order of magnitude faster than Nelson-Oppen. This holds over a wide class of examples including propositional, arithmetic, and equality reasoning. These results match those obtained by Crocker 2,5,8].
+5 Conclusion
+The addition of decision procedures to automatic and semi-automatic theorem provers and proof checkers has clear advantages. Most of the major proof checking systems available today contain implementations of decision procedures for propositional logic, equality, and linear arithmetic. Although the e ciency of the individual procedures is important, the method of combination of procedures is more crucial to the overall e ciency of a system than the e ciency of any one component.
+Shostak's approach to the combination of decision procedures is dramatically (10x) more e cient than the earlier Nelson-Oppen method. The order of magnitude di erence stems from a tighter integration of the cooperating decision procedures and from improved algorithms which save work by considering smaller term universes. All comparisons we are aware of between Shostak's and other approaches have found a dramatic speed advantage for Shostak, but have been at a loss to explain them.
+In future work, we will explore the detailed implementation tradeo s for individual theories, and develop a combination of the Shostak and Nelson-Oppen procedures. The latter combination would use a Nelson-Oppen outermost loop with an entire Shostak-style combination of procedures as one element. The advantage of this combination of procedures is that some theories are not algebraically solvable, but are still of computational interest (e.g., the theory of potentially circular lists). Adding such theories to Nelson-Oppen is simple, but adding them to Shostak is impossible. Thus we intend to use the tighter Shostak
+14
+
+approach for all theories which can provide e cient solvers and canonizers, and use the Nelson-Oppen approach for any remaining theories. We have also developed a solver for the important case of linear arithmetic inequalities. Shostak's original implementation treated these as an external decision procedure (in the Nelson-Oppen style) and the integration of linear arithmetic inequalities was therefore not clean. In future work we also hope to describe in some detail the myriad uses made of our decision procedures in the implementation of the stateof-the-art proof checker PVS 13].
+References
+1. R. S. Boyer and J S. Moore. A Computational Logic Handbook. Academic Press, New York, NY, 1988.
+2. User Guide for the Ehdm Speci cation Language and Veri cation System, Version 6.1. Computer Science Laboratory, SRI International, Menlo Park, CA, February 1993. Three volumes.
+3. Je rey V. Cook, Ivan V. Filippenko, Beth H. Levy, Leo G. Marcus, and Telis K. Menas. Formal computer veri cation in the state delta veri cation system (SDVS). In AIAA Computing in Aerospace VIII, pages 77{87, Baltimore, MD, October 1991. AIAA paper 91-3715.
+4. Dan Craigen, Sentot Kromodimoeljo, Irwin Meisels, Bill Pase, and Mark Saaltink. EVES: An overview. In Prehn and Toetenel 15], pages 389{405.
+5. S. Crocker. Comparison of Shostak's and Oppen's solvers. Unpublished manuscript, 1988.
+6. P. J. Downey, R. Sethi, and R. E. Tarjan. Variations on the common subexpressions problem. Journal of the ACM, 27(4):758{771, October 1980.
+7. D. Kozen. Complexity of nitely represented algebras. In Proc. 9th ACM STOC, pages 164{177, 1988.
+8. D. C. Luckham, S. M. German, F. W. von Henke, R. A. Karp, P. W. Milne, D. C. Oppen, W. Polak, and W. L. Scherlis. Stanford Pascal Veri er user manual. CSD Report STAN-CS-79-731, Stanford University, Stanford, CA, March 1979.
+9. David A. McAllester. ONTIC: A Knowledge Representation System for Mathematics. MIT Press, Cambridge, MA, 1989.
+10. G. Nelson and D. C. Oppen. Simpli cation by cooperating decision procedures. ACM Transactions on Programming Languages and Systems, 1(2):245{257, 1979.
+11. G. Nelson and D. C. Oppen. Fast decision procedures based on congruence closure. Journal of the ACM, 27(2):356{364, 1980.
+12. Greg Nelson. Techniques for program veri cation. Technical Report csl-81-10, Xerox Palo Alto Research Center, Palo Alto, CA, June 1981.
+13. S. Owre, J. M. Rushby, and N. Shankar. PVS: A prototype veri cation system. In Deepak Kapur, editor, 11th International Conference on Automated Deduction (CADE), volume 607 of Lecture Notes in Arti cial Intelligence, pages 748{752, Saratoga, NY, June 1992. Springer-Verlag.
+14. Sam Owre, John Rushby, Natarajan Shankar, and Friedrich von Henke. Formal veri cation for fault-tolerant architectures: Prolegomena to the design of PVS. IEEE Transactions on Software Engineering, 21(2):107{125, February 1995. 15
+
+15. S. Prehn and W. J. Toetenel, editors. VDM '91: Formal Software Development Methods, volume 551 of Lecture Notes in Computer Science, Noordwijkerhout, The Netherlands, October 1991. Springer-Verlag. Volume 1: Conference Contributions.
+16. John Rushby and Friedrich von Henke. Formal veri cation of the Interactive Convergence clock synchronization algorithm using Ehdm. Technical Report SRICSL-89-3R, Computer Science Laboratory, SRI International, Menlo Park, CA, February 1989 (Revised August 1991). Original version also available as NASA Contractor Report 4239, June 1989.
+17. Robert E. Shostak. An algorithm for reasoning about equality. Communications of the ACM, 21(7):583{585, July 1978.
+18. Robert E. Shostak. Deciding combinations of theories. Journal of the ACM, 31(1):1{12, January 1984.
+19. Robert E. Shostak. Deciding combinations of theories. Technical Report 132, SRI-CSL, Menlo Park, CA, January 1984. 16
+
+

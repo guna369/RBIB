@@ -1,0 +1,875 @@
+Type Inference with Expansion Variables and Intersection Types in System E and an Exact Correspondence with β-Reduction∗
+
+Se´ bastien Carlier
+Heriot-Watt University
+http://www.macs.hw.ac.uk/~sebc/
+
+J. B. Wells
+Heriot-Watt University
+http://www.macs.hw.ac.uk/~jbw/
+
+ABSTRACT
+System E is a recently designed type system for the λcalculus with intersection types and expansion variables. During automatic type inference, expansion variables allow postponing decisions about which non-syntax-driven typing rules to use until the right information is available and allow implementing the choices via substitution.
+This paper uses expansion variables in a uniﬁcation-based automatic type inference algorithm for System E that succeeds for every β-normalizable λ-term. We have implemented and tested our algorithm and released our implementation publicly. Each step of our uniﬁcation algorithm corresponds to exactly one β-reduction step, and vice versa. This formally veriﬁes and makes precise a step-for-step correspondence between type inference and β-reduction. This also shows that type inference with intersection types and expansion variables can, in eﬀect, carry out an arbitrary amount of partial evaluation of the program being analyzed.
+Categories and Subject Descriptors
+D.3.1 [Programming Languages]: Formal Deﬁnitions and Theory; F.4.1 [Theory of Computation]: Mathematical Logic—Lambda calculus and related systems; F.3.2 [Logics and Meanings of Programs]: Semantics of Programming Languages—Program analysis.
+General Terms
+Algorithms, languages, theory.
+Keywords
+Lambda-calculus, type inference, intersection types, expansion variables.
+∗Partially supported by EC FP5/IST/FET grant IST-200133477 “DART”, NSF grant 0113193 (ITR), and Sun Microsystems equipment grant EDUD-7826-990410-US.
+Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for proﬁt or commercial advantage and that copies bear this notice and the full citation on the ﬁrst page. To copy otherwise, to republish, to post on servers or to redistribute to lists, requires prior speciﬁc permission and/or a fee. PPDP ’04, 2004-08-24/---26, Verona, Italy. Copyright 2004 ACM 1-58113-819-9/04/0008 ...$5.00.
+
+1. DISCUSSION
+1.1 Background and Motivation
+1.1.1 Types for Programs and Type Inference
+Types have been used extensively to analyze computer program properties without executing the programs, for purposes such as detecting programming errors, enforcing abstract inter-module interfaces, justifying compiler optimizations, and enforcing security properties.
+In the type assignment style, a type system associates each untyped (i.e., free of type annotations) term (e.g., computer program fragment) with 0 or more typings, where each typing is a pair of a result type and a type environment for free term variables. Type inference is ﬁnding a typing to assign to an untyped term, if possible. Type inference provides the beneﬁts of types while relieving programmers from having to manually supply the types.
+Type inference algorithms generally solve constraints, often by uniﬁcation, the process of computing a solution (if one exists) that assigns values to variables so that constraints become solved. Uniﬁcation-based type inference is usually understandable and often eﬃciently implementable. The most widely used type inference algorithm is Milner’s W for the well known Hindley/Milner (HM) system [27], used in languages such as SML, OCaml, and Haskell.
+The amount of polymorphism provided by HM is equivalent to unfolding all let-expressions (a form of partial evaluation) and then doing type inference with simple types. HM-style polymorphism is not implemented by unfolding let-expressions because (1) this is diﬃcult to combine with separate compilation and (2) it is very ineﬃcient as it reanalyzes let-expressions every time they are used. HM has simple and eﬃcient (for typical cases) type inference and supports separate compilation provided module interfaces are given. However, HM is somewhat inﬂexible and does not support compositional analysis, i.e., analyzing modules without knowledge about other modules.
+1.1.2 Intersection Types
+Intersection types were introduced for the λ-calculus by Coppo and Dezani [8] and independently by Pottinger [29]. In both cases, a major motivation was the connection between β-reduction and intersection types, which makes intersection types well suited for program analysis.
+Intersection type systems have been developed for many kinds of program analysis (e.g., ﬂow [1], strictness [18], deadcode [13, 10], and totality [7]) usable for justifying compiler
+
+optimizations to produce better machine code. Intersection types seem to have the potential to be a general, ﬂexible framework for many program analyses.
+In most intersection type systems, every typable term has a principal typing [37], one that is stronger than all other typings assignable to that term. Principal typings improve the possibilities of analyzing programs incrementally and minimizing reanalysis cost after program modiﬁcations.
+1.1.3 Type Inference for Full Intersection Types
+The ﬁrst type inference algorithms for intersection type systems were by Coppo, Dezani and Venneri [9], and Ronchi della Rocca and Venneri [32]. These algorithms give principal typings for β-normal forms, and it is separately proven that a principal typing for a term’s β-normal form is also principal for the term. One disadvantage of this approach is that terms must be reduced to β-normal form before types are found for them. Another disadvantage is that getting other typings from principal typings in this approach uses operations such as substitution, expansion, and lifting, and the older expansion deﬁnitions are hard to understand.
+Ronchi della Rocca [31] devised the ﬁrst uniﬁcation-based type inference algorithm for a non-rank-restricted intersection type system. This algorithm yields principal typings when it succeeds. Because typability for the full system is undecidable, the algorithm is of course sometimes nonterminating; to ensure termination, one can restrict type height. This algorithm uses the older, complicated deﬁnition of expansion, which has several disadvantages: (1) the uniﬁcation procedure requires global knowledge in addition to the two types to unify, which makes the technique delicate to extend; (2) expansion is only deﬁned on types and typings, but not on typing derivations (needed for use in compiler optimizations), which are thus not straightforward to obtain via type inference; (3) the older notion of expansion only allows intersection introduction in argument position, and is thus unsuitable for accurate resource tracking under call-by-need and call-by-value evaluation.
+Regnier [30] presented an inference algorithm for an intersection type system called De. System De is similar to that of [31], with the essential addition of labels in types to carry out expansion. Using nets, an untyped version of proof nets from Linear Logic [14], Regnier showed an exact correspondence between net reduction in Linear Logic and type inference in System De. Boudol and Zimmer [4] gave an inference algorithm that implements expansion by attaching a set of type variables to each typing constraint; this appears to be hard to generalize beyond pure λ-calculus. Both the approach of Regnier and that of Boudol and Zimmer are stated to be uniﬁcation-based, but neither approach produces uniﬁers (substitutions that solve uniﬁcation constraints); this makes them less practical.
+1.1.4 Rank-2 Intersection Types
+Leivant [23] introduced a rank-2 intersection type system and remarked that it is similar in typing power to Hindley/Milner. In fact, rank-2 intersection type systems type strictly more terms than Hindley/Milner, although the additional terms are not very signiﬁcant.
+Van Bakel [35] gave the ﬁrst uniﬁcation-based type inference algorithm for a rank-2 intersection type system. Jim [19] studied extensions of rank-2 intersection type systems with practical programming features and discussed the impor-
+
+tance of principal typings. Damiani [11] has extended support for conditionals and letrec (mutually recursive bindings) as well as support for a let-binding mechanism that eﬀectively adds some of the power of one more rank to obtain some of the expressiveness of rank-3 intersection types. Damiani [12] has also worked on rank-2 intersection types for symmetric linking of modules.
+Restricting intersection types to rank-2 does not use their full potential to analyze programs as precisely as needed, so we do not pursue this idea.
+1.1.5 Expansion Variables
+Kfoury and Wells [20, 22] gave a type inference algorithm for System I, a full, non-rank-restricted intersection type system. System I introduced expansion variables and a single operation integrating expansion and substitution; together, these features vastly simpliﬁed expansion.
+Unfortunately, System I has several technical limitations. The substitution operation (which contains expansion) has a built-in renaming (needed for complete type inference) of type and expansion variables that prevents substitutions from being composable. An awkward workaround for this problem called safe composition was developed, but safe composition is hard to understand and people have been error-prone when working with it. System I has other technical limitations such as non-associative and non-commutative intersections and no weakening; together, these limitations prevent it from having subject reduction.
+The recently developed System E [6] improves in many ways on System I. The full System E (only a fraction of its power is needed for this paper) is more ﬂexible than the extremely ﬂexible intersection type system of Barendregt, Coppo, and Dezani [2]. Contrary to Van Bakel’s advice to make intersection type systems as lean as possible [36], System E does not restrict where intersection type constructors (and thus also expansion variables) can be used. Flexible expansion variable placement allows expansion variables to establish namespaces. In turn, this allows a substantially simpler way of integrating expansion and substitution. In particular, System E does not need the automatic built-in fresh-renaming done during expansion in System I. As a result, substitution and expansion in System E are more robust than they are in System I and composition works for substitutions and expansions. These improvements make it much simpler to design type inference methods for System E, leading to the new results in this paper.
+1.2 Summary of Contributions
+1. We present a clear and precise uniﬁcation-based intersection type inference algorithm in System E and prove that it types any β-normalizing λ-term. We believe our presentation is easier to understand and implement than other presentations of intersection type inference. It is a strength of our algorithm that it needs only the !-free fragment of System E restricted to trivial subtyping. (Our algorithm works unchanged with these features present.)
+2. Our intersection type inference approach provides a simple and clean step-for-step β-reduction/uniﬁcation correspondence. In the main algorithm phase, each step of our unify-β rule on constraints corresponds to exactly one β-reduction step on λ-terms, and vice versa. Any β-reduction strategy can be simulated by a strategy of using unify-β, and vice versa. Our proof that our algo-
+
+rithm succeeds for all β-normalizing λ-terms takes advantage of this correspondence and uses the well known β-normalizing leftmost/outermost strategy. This correspondence is impossible for systems without the ﬂexibility of intersection types, because they can not type even all strongly β-normalizing terms [34]. Our correspondence improves over that of Regnier [30] both by being more formal and also by being direct instead of being the composition of two correspondences with untyped nets as an intermediate notion. The clear presentation of this correspondence helps to share the understanding that any intersection type inference approach will be equivalent to partial evaluation followed by a monovariant analysis. In eﬀect, intersection type inference can do an arbitrary amount of partial evaluation via type uniﬁcation, i.e., it can do the equivalent of any amount of β-reduction of the analyzed term. 3. Our intersection type inference approach is the only one to provide a notion of readback that allows extracting βreduced λ-terms from partially solved constraints during type inference. This makes it easy to prove the step-forstep β-reduction/uniﬁcation correspondence and makes the correspondence easier to understand. The use of readback makes our approach clearer than the approaches of Boudol and Zimmer [4] and also Regnier [30]. 4. Unlike early algorithms from before 1990, our inference algorithm can build and use expansions based solely on local matching of constraint solving rules without needing global knowledge of the typing inferred so far, because expansion in System E is guided by E-variables. 5. The statements and proofs of properties of our inference algorithm are made clearer and more precise by the use of skeletons, compact syntactic representations of typing derivations. Unlike System E, nearly all other intersection type systems do not have skeletons. 6. Our inference algorithm builds a solution that solves the input constraints, i.e., a substitution of types for type variables and expansions for E-variables that when applied to the input constraints yields satisﬁed constraints. This is only possible because the composition of expansions and substitutions is straightforward in System E, which is not true for other systems. 7. Our algorithm can easily be used to get diﬀerent forms of output such as a full typing derivation or just a typing (result type and type environment) because expansion is deﬁned on all of the mathematical entities in System E, including skeletons. Constructing typing derivations is vital for use in compilers with typed intermediate representations. In contrast, many presentations of other algorithms do not clearly document how to construct typing derivations; this knowledge is either buried deep inside proofs or simply omitted. 8. Our inference algorithm manages analysis polyvariance by a scheme of properly arranging the nesting of a ﬁnite number of E-variables. This is simpler than renaming schemes used in other approaches and greatly eases implementation. This is only possible because, unlike previous intersection type systems, System E has no restrictions on where expansion can occur. Expansion in System E can splice intersection constructors into type positions that are to the right of arrows and into typing derivation positions that are not function application arguments. 9. As explained below in sec. 1.3, our algorithm is more
+
+suitable to be extended to have ﬂexible analysis precision and to analyze call-by-need and call-by-value behavior. 10. We have implemented all of the algorithms described in this paper and made them available via a web interface [5] and for downloading (http://www.macs.hw.ac.uk/DART/ software/system-e/). Our implementation generated the example output found in appendix A. 11. A technical report with full proofs will be made available on the web pages of the authors by 2004-08.
+1.3 Ongoing Future Work
+The full System E (only part is presented in this paper) has the ! type constructor which allows non-exact analysis. The step-for-step β-reduction/uniﬁcation correspondence means that type inference can obtain polyvariance by doing the equivalent of any amount of partial evaluation of the analyzed program followed by a cruder, more traditional monovariant analysis that uses ! and subtyping to collapse the analysis. Because of the careful way ! is integrated into the full System E, the analysis results precisely indicate where the information is exact and where it is approximate. This ability for type inference to partially evaluate leads to the potential of analysis that simultaneously is compositional and has easily adjustable cost and precision. (The algorithm presented in this paper always has exact precision and the same cost as normalization.) In contrast, the widely used algorithm W for Hindley/Milner is non-compositional and does the equivalent of a ﬁxed amount of partial evaluation (unfolding all let-expressions) followed by the standard (monovariant) ﬁrst-order uniﬁcation of simple type inference [25]; all information in the results must be assumed to be approximate. Although we have left the full exploration of this promising possibility to future work, this motivation helps justify the signiﬁcance of this work. Investigating this is ongoing work with our colleague Makholm.
+Because in System E expansion can occur in non-functionargument positions, type inference will be able to do resourceaware analysis of call-by-need and call-by-value evaluation, rather than being applicable only to call-by-name evaluation (which is unused in practice).
+We believe the algorithm Infer (deﬁnition 4.22) ﬁnds solutions that yield principal typings [37]. Proving this is ongoing work with our colleagues Kfoury and Bakewell.
+1.4 Other Future Work
+Because types are often exposed to programmers, a major design goal for many type systems has been making types suitable for human comprehension. Unfortunately, this conﬂicts with making types suitable for accurate and ﬂexible program analysis. Intersection types are good for accurate analysis. However, inferred intersection types may be extremely detailed and thus are likely to be unsuitable for presenting to humans. Alternative type error reporting methods such as type error slicing [15, 16] can avoid presenting these types directly to programmers. Investigation is needed to combine type error slicing with System E.
+Module boundary interfaces are generally intended to abstract away from the actual software on either side of the interface, so that implementations can be switched. Also, module boundary interfaces must be compact and easily understandable by humans. For these reasons, ∀ and ∃ quantiﬁers are appropriate for use in module boundary types. An open problem is how to use very ﬂexible and accurate
+
+types such as intersection types for analysis and then check whether they imply types using ∀ and ∃ quantiﬁers.
+We (Carlier, Kfoury, and Wells) and also independently Mairson and Neergaard [28] have noticed a correspondence between solving of type inference constraints in System I and reduction of nets. Intersection types correspond to contraction nodes, ω (introduced in Iω by Carlier) to 0-ary contraction nodes (weakening), E-variables to boxes, T-variables to axiom links, and constraints to cut links. Each type inference constraint solving step in System I (using the precise version of the rules of [20]) corresponds to a net reduction step. Expansion describes net transformations, and our uniﬁcation algorithm does the equivalent of cut-elimination on nets via substitution for E-variables. In System E (but not in System I), the equalities imposed on types and constraints in sec. 3.2 correspond to the ﬂexibility of nets.
+This connection with nets has several possible implications. First, the expansion variables of System E oﬀer a syntactic alternative to nets that may be easier for precise reasoning. Second, System E could lead to a Linear Logic extension with intersection as a proof-functional connective [24] (unlike the usual truth-functional connectives). In this new system, Regnier’s nets could be annotated with formulas. (Although Mairson [26] earlier suggested that net edges can be annotated with Linear Logic formulas, a counter-example, due to Urzyczyn, is the net for 22K, with 2 = λf.λx.f (f x) and K = λy.λz.y.)
+1.5 Other Related Work
+Sayag and Mauny [33] characterize principal typings in intersection type systems and show they are isomorphic to β-normal forms. The correspondence is limited to normal forms and does not directly show the step-for-step correspondence between β-reduction and type inference.
+1.6 Acknowledgements
+This paper beneﬁted from detailed comments by Adam Bakewell, Assaf Kfoury, Henning Makholm, and Jeﬀ Polakow and from helpful discussions with Harry Mairson and Peter Neergaard on correspondences between proof nets and type inference with expansion variables.
+2. PRELIMINARY DEFINITIONS
+This section deﬁnes generic mathematical notions. Let i, j, m, n, p, and q range over {0, 1, 2, . . .} (the natural numbers). Let π1( a, b ) = a and π2( a, b ) = b. Given a function f , let f [a → b] = (f \ { (a, c) (a, c) ∈ f }) ∪ {(a, b)}. Let r range over binary relations. Let −−→r be alternate inﬁx notation for r. Let −−r be the transitive and reﬂexive (w.r.t. the intended carrier set) closure of r. Let r; r be the composition of r and r , i.e., r; r = { (a, c) ∃b.r(a, b) ∧ r (b, c) }. Given a context C, let C[U ] stand for C with the single occurrence of 2 replaced by U , e.g., (λx.2)[x] = λx.x.
+If S names a set and ϕ is deﬁned as a metavariable ranging over S, let S∗ be the set of sequences over S as per the following grammar, quotiented by the subsequent equalities, and let ϕ be a metavariable ranging over S∗:
+ϕ ∈ S∗ ::= | ϕ | ϕ1 · ϕ2
+· ϕ = ϕ, ϕ · = ϕ, (ϕ1 · ϕ2) · ϕ3 = ϕ1 · (ϕ2 · ϕ3)
+For example, n ranges over {0, 1, 2, . . .}∗ (sequences of natural numbers). Length 1 sequences are equal to their sole member; this requires taking some care.
+
+Given an order < on a set X, let the lexicographic-extension order <lex of < be the least relation s.t. for any x, z ∈ X∗ and y, y ∈ X where y < y both x <lex x · y · z and x · y · y <lex x · y · z hold.
+Diagrams illustrate formal statements. A diagram means that for all entities linked to solid lines satisfying the relations attached to the solid lines, the additional entities linked to dashed lines exist satisfying the relations attached to the dashed lines. For example, the following diagram means ∀m, n, q. (m < n) ∧ (n ≤ q) ⇒ ∃p. (m ≤ p) ∧ (p < q):
+
+m ≤
+p
+
+< <
+
+n ≤
+q
+
+3. SYSTEM E
+This section presents System E. See [6] for full details.
+
+3.1 Syntax
+Fig. 1 deﬁnes the syntactic entities used in this paper. Note the distinction between the metavariables x, α, and e and concrete variables like x0, a1, and e2. The main diﬀerence from the original System E deﬁnition [6] is that the ! operator is omitted in this paper.
+We use @ for application in terms and skeletons; this is non-standard, but we do so to have some syntactic marker for application nodes when terms and skeletons are prettyprinted or drawn as tree.
+We deﬁne operator precedence, including for ordinary function application (f (a)) and modiﬁcation (f [a → b]), and for later-deﬁned operations like expansion application ([E] X) and term-variable substitution (M1[x:=M2]). The precedence groups follow, from highest to lowest:
+
+group 1:
+group 2: group 3: group 4: group 5:
+
+Q:τ , f (a), f [a → b], M1[x := M2], v := Φ, C[M ], D[Q], ϕ1 · ϕ2 e X, [E] X, (φ, S) X1 ∩. X2, e/S τ1 → τ2, M @ N , Q1 @ Q2, S1; S2
+τ1 τ2, λx.M , λx.Q,
+
+As examples of binding conventions, e α1 ∩. α2 → α3 = ((e α1) ∩. α2) → α3, and (e α1 α2) = ((e α1) α2), and λx. x:α1 @ y:α2 = λx. (x:α1 @ y:α2 ). As is usual, application is left-associative so that M1 @ M2 @ M3 = (M1 @ M2) @ M3 (similarly for skeletons) and function types are rightassociative so that τ1 → τ2 → τ3 = τ1 → (τ2 → τ3). Let the expression τ1 ∩. · · · ∩. τn denote τ1 ∩. (τ2 ∩. (· · · ∩. τn)) when n ≥ 1 and ω when n = 0. Extending E-variable application to sequences, let X = X and (e · e) X = e (e X).
+
+3.2 Equalities
+Terms and skeletons are quotiented by α-conversion as usual [3], where λx.M and λx. Q bind the variable x.
+For types and constraints, the deﬁnitions of ﬁg. 1 are modiﬁed by imposing equalities for E-variable application, the ∩. operator, and the ω constant. The ∩. operator is associative and commutative with ω as its unit. E-variable application distributes over ∩. and ω. (The constant ω is a 0-ary version of ∩. .) Formally, these rules hold:
+
+T1 ∩. (T2 ∩. T3) = (T1 ∩. T2) ∩. T3
+
+T1 ∩. T2
+
+= T2 ∩. T1
+
+e (T1 ∩. T2) = e T1 ∩. e T2
+
+ω ∩. T = T eω = ω
+
+The sorts and their abstract syntax grammars and metavariables:
+
+x ∈ Term-Variable ::= xi α ∈ T-Variable ::= ai e ∈ E-Variable ::= ei φ ∈ ET-Assignment ::= α := τ | e := E
+S ∈ ET-Substitution ::= | φ, S
+
+M, N ∈
+
+Term ::= x | λx.M | M1 @ M2
+
+C ∈ Term-Context ::= 2 | λx.C | C @ M | M @ C
+
+τ∈ E∈ ∆∈
+
+Type ::= τ1 ∩. τ2 | e τ | ω Expansion ::= E1 ∩. E2 | e E | ω Constraint ::= ∆1 ∩. ∆2 | e ∆ | ω
+
+| α | τ1 → τ2 |S
+| τ1 τ2
+
+Q ∈ Skeleton ::= Q1 ∩. Q2 | e Q | ωM | x:τ | λx. Q | Q1 @ Q2 | Q:τ D ∈ Skel-Context ::= 2 | D ∩. Q | Q ∩. D | e D | λx. D | D @ Q | Q @ D | D:τ
+
+Metavariables ranging over subsets or multiple sorts: v ::= e | α Φ ::= E | τ T ::= τ | ∆ X ::= τ | E | ∆ | Q
+
+Y ::= τ | E | ∆
+
+∆˙ ::= e ∆˙ | ∆¯
+
+∆¯ ::= τ1 τ2
+
+Figure 1: Syntax grammars and metavariable conventions.
+
+[E1 ∩. E2] X [e E] X [ω] Y
+[ω] Q
+
+= [E1] X ∩. [E2] X = e [E] X
+=ω = ωterm(Q)
+
+[S] (X1 ∩. X2) = [S] X1 ∩. [S] X2 [S] (τ1 τ2) = [S] τ1 [S] τ2
+[S] (τ1 → τ2) = [S] τ1 → [S] τ2
+
+[ ]α
+
+=α
+
+[ ]e
+
+=e
+
+[v := Φ, S] v = [S] v if v = v
+
+[v := Φ, S] v = Φ
+
+[S] ω [S] ωM
+[S] Q:τ
+
+=ω = ωM = ([S] Q):[S] τ
+
+[S] e X
+
+= [[S] e] X
+
+[S] = S [S] (v := Φ, S ) = (v := [S] Φ, [S] S )
+
+[S] x:τ
+
+= x:[S] τ
+
+[S] λx. Q
+
+= λx. [S] Q
+
+[S] (Q1 @ Q2) = [S] Q1 @ [S] Q2
+
+Figure 2: Expansion application.
+
+Both α-conversion and the additional rules for types and constraints are imposed as equalities, where “=” is mathematical equality (as it should be). For example, ω ∩. α = α. After this modiﬁcation, the syntactic sorts no longer form an initial algebra, so care must be taken.
+
+3.3 Operations on Syntax
+Let T T iﬀ T = T ∩. T and let T T iﬀ T T . Let M [x := N ] and respectively M −−→β N denote the usual notions [3] for untyped λ-terms of term-variable substitution and respectively β-reduction. Let term be the least-deﬁned function such that:
+
+term(x:τ )
+
+=x
+
+term(λx. Q) = λx.term(Q)
+
+term(Q1 @ Q2) = term(Q1) @ term(Q2)
+
+term(Q:τ )
+
+= term(e Q) = term(Q)
+
+term(ωM )
+
+=M
+
+term(Q1 ∩. Q2) = term(Q1) if term(Q1) = term(Q2)
+
+A skeleton Q is well formed iﬀ term(Q) is deﬁned. E.g., Q = x:τ1 ∩. y:τ2 is ill-formed if x = y since term(Q) is undeﬁned.
+
+Convention 3.1. Henceforth, only well formed skeletons are considered.
+Deﬁnition 3.2. E-path If ∆˙ = e∆¯ , then E-path(∆˙ ) = e is the E-path of ∆˙ . If D is a skeleton context, we deﬁne E-path(D), the E-path of the context hole in D, by induction, as follows:
+E-path(2) = E-path(e D) = e · E-path(D) E-path(λx. D) = E-path(D:τ ) = E-path(D @ Q)
+= E-path(Q @ D) = E-path(D ∩. Q) = E-path(Q ∩. D) = E-path(D)
+
+3.4 Expansion Application
+The essential new notion of System E is the way it uses expansion variables (E-variables) to implement expansion.
+
+Expansion is an operation that calculates for a typing judgement the changed judgement that would result from inserting additional typing rule uses at nested positions in the judgement’s derivation. E-variables are a new technology that makes expansion simpler and easier to implement and reason about. E-variables are placeholders for unknown uses of other typing rules like ∩. -introduction. E-variables are propagated into the types and the type constraints used by type inference algorithms. In System E, expansion operations are described by syntactic terms. The use of Evariables and expansion terms allows deﬁning expansion application in a precise, uniform, and syntax-directed way.
+
+Deﬁnition 3.3 (Expansion application). Fig. 2 deﬁnes the application of substitutions to E-variables, and of expansions to types, expansions, constraints, and skeletons.
+
+Example 3.4. E-variables eﬀectively establish namespaces and substituting an expansion for an E-variable can merge namespaces. Deﬁne the following:
+
+τ1 = e1 a0 → a0 S1 = (e1 := , ) Then these facts hold:
+
+S2 = (a0 := τ2, )
+
+[S2] τ1
+
+= e1 a0 → τ2
+
+[S1] τ1 = a0 → a0
+
+[S2] [S1] τ1 = τ2 → τ2
+
+In [S2] τ1, the T-variable a0 inside the E-variable e1 is effectively distinct from the T-variable a0 outside e1, so the substitution only replaces the outer a0. The operation [S1] τ1 replaces e1 by the empty expansion (which is actually the identity substitution), and this eﬀectively lifts the inner a0 into the root namespace, so that [S2] [S1] τ1 replaces both occurrences of a0.
+
+Lemma 3.5 (Expansion application composition). Given any E1, E2, X, [[E1] E2] X = [E1] [E2] X.
+
+Let E1; E2 = [E2] E1 (composition of expansions). By lem. 3.5, the “;” operator is associative. Although E1; E2 is not much shorter than [E2] E1, it is easier to follow.
+
+(M Q) : A τ / ∆ (abstraction)
+(λx.M λx. Q) : A[x → ω] A(x) → τ / ∆
+
+(variable) (x x:τ ) : (x : τ ) τ / ω
+
+(application) (M1
+
+Q1) : A1 τ2 → τ1 / ∆1; (M2 (M1 @ M2 Q1 @ Q2) : A1 ∩. A2
+
+Q2) : A2 τ2 / ∆2 τ1 / ∆1 ∩. ∆2
+
+(omega) (M ωM ) : envω ω / ω
+
+(intersection)
+
+(M
+
+Q1) : A1 τ1 (M Q1 ∩. Q2) :
+
+/ ∆1; A1 ∩.
+
+(M Q2) : A2 τ1 ∩. τ2
+
+A2 / ∆1
+
+τ2 / ∩. ∆2
+
+∆2
+
+(M Q) : A τ / ∆ (E-variable)
+(M e Q) : e A e τ / e ∆
+
+(result
+
+(M Q) : A τ1 / ∆
+
+subtyping) (M Q:τ2 ) : A τ2 / ∆ ∩. (τ1 τ2)
+
+Note: When these rules derive judgements of the form (M Q) : A τ / ∆ such that solved(∆) holds, then these rules act as typing rules in the traditional sense. (See also remark 3.10.)
+
+Figure 3: Typing rules.
+
+An assignment φ may stand for a substitution (φ, ) and is to be interpreted that way if necessary. The higher precedence of (v := Φ) over (φ, S) also applies here. For example, as a substitution (e1 := e2 := S2, e3 := S3) stands for ((e1 := (e2 := S2)), e3 := S3) which can be written in full as ((e1 := ((e2 := S2), )), (e3 := S3), ).
+Let e/S stand for (e := e S). Thus, when necessary, e/S stands for ((e := e S), ). The “/” notation builds a substitution that aﬀects variables underneath an E-variable, because [e/S] e X = e [S] X. E.g., S = (e0/(a1 := τ1), a0 := τ0) stands for S = (e0 := e0 (a1 := τ1, ), a0 := τ0, ) and in this case it holds that [S] (e0 a1 → a0) = e0 τ1 → τ0.
+We extend this notation to E-variable sequences so that e · e/S stands for e/e/S and /S stands for S.
+
+3.5 Type Environments and Typing Rules
+Type environments, ranged over by A and B, are total functions from Term-Variable to Type that map only a ﬁnite number of variables to non-ω types.
+
+Deﬁnition 3.6 (Operations on type environments).
+
+[E] A = { (x, [E] A(x)) x ∈ Term-Variable } A ∩. B = { (x, A(x) ∩. B(x)) x ∈ Term-Variable }
+e A = { (x, e A(x)) x ∈ Term-Variable } envω = { (x, ω) x ∈ Term-Variable }
+
+Let (x1 : τ1, . . . , xn : τn) be envω[x1 → τ1] · · ·[xn → τn]. Observe, for every e, E1, E2, A, and x, that (1) [E1 ∩. E2] A = [E1] A∩. [E2] A, (2) [E] (A ∩. B) = [E] A∩. [E] B, (3) [e ] A = e A, (4) (e A)(x) = e A(x), (5) [ω] A = envω, and ﬁnally (6) [E] A[x → τ ] = ([E] A)[x → [E] τ ].
+
+Deﬁnition 3.7 (Typing judgements and typing rules).
+
+Fig. 3 gives the typing rules of System E used in this paper.
+
+The rules derive judgements of the following form with the
+
+indicated components:
+
+typing
+
+(M Q) : A τ / ∆
+
+untyped term skeleton
+
+constraint type environment result type
+
+A pair A τ of a type environment A and a result type τ is a typing.
+
+A skeleton Q is just a proof term, a compact notation representing an entire typing derivation. A skeleton Q syntacticly represents a tree of typing rule uses that derives
+
+a judgement for the untyped term term(Q). Using skeletons avoids needing gigantic judgement trees in formal statements. Many type systems use type-annotated λ-terms for this role, but this fails for typing rules like our intersection (∩. -introduction) rule. (See [38, 39] for a discussion.)
+The intended meaning of (M Q) : A τ / ∆ is that Q is a proof that the untyped term M has the typing A τ , provided the constraint ∆ is solved w.r.t. some subtyping relation. The typing rules do not check whether a constraint ∆ is solved to allow (1) using diﬀerent subtyping relations and (2) using the same rules to generate constraints to be solved by type inference. For a subtyping relation, this paper needs and will use only the weakest, namely equality on types, but other papers on System E use other relations (e.g., ≤nlin and ≤ﬂex from [6]). The results in this paper extend to all subtyping relations that include equality.
+Deﬁnition 3.8 (Valid skeleton). A skeleton Q is valid iﬀ there exist M , A, τ , and ∆ s.t. (M Q) : A τ / ∆.
+Convention 3.9. Only valid skeletons are considered.
+A skeleton Q uniquely determines all components in its judgement. Let typing, constraint, tenv, and rtype be functions s.t. (M Q) : A τ / ∆ implies typing(Q) = A τ , constraint(Q) = ∆, tenv(Q) = A, and rtype(Q) = τ .
+A constraint ∆ is solved, written solved(∆), iﬀ ∆ is of the form e1 (τ1 τ1) ∩. · · · ∩. en (τn τn). Given a judgement (M Q) : A τ / ∆, the entire judgement and its skeleton Q are solved iﬀ ∆ is solved. The unsolved part of a constraint ∆, written unsolved(∆), is the smallest constraint ∆1 such that ∆ = ∆1 ∩. ∆2 and solved(∆2) for some ∆2.
+Remark 3.10 (Relation to traditional typing rules). Solved judgements and skeletons correspond respectively to traditional typing judgements and derivations. Traditional typing rules are merely the special case of the typing rules in ﬁg. 3 where all constraints are solved. When constraints are solved, our use of “typing” for a pair A τ matches the deﬁnition in [37]. The rules in ﬁg. 3 can also be used to generate unsolved constraints to be solved by a type inference algorithm, as is done in sec. 4. Our presentation not only saves space by combining the two roles of the rules, but also guarantees in a simple way (stated formally in lem. 3.11) that type inference yields valid typing derivations.
+Lemma 3.11 (Admissibility of expansion). If (M Q) : A τ / ∆, then (M [E] Q) : [E] A [E] τ / [E] ∆.
+
+4. TYPE INFERENCE
+This section presents a type inference algorithm for System E. We show how to infer a typing for any normalizing untyped λ-term M , where each constraint-solving step exactly corresponds to one β-reduction step, starting from M . We also give an algorithm that reconstructs the β-reduced term from each intermediate stage of type inference.
+The approach to type inference is as follows. Given an untyped term M as input, (1) pick an initial skeleton Q such that term(Q) = M , (2) do uniﬁcation to ﬁnd a substitution S solving constraint(Q), and (3) use Q and S to calculate a solved skeleton (typing derivation) or a typing for M .
+If run on λ-terms which have no normal form, our inference algorithm is non-terminating. This also makes it in some sense incomplete because any term, even if it is non-normalizable, can be typed using the ω typing rule in System E.
+
+4.1 Initial Skeletons
+
+We pick an initial skeleton initial(M ) using three distinct E-variables e0, e1, and e2, and one T-variable a0, as follows:
+
+initial(x)
+
+= x:a0
+
+initial(λx.M ) = „let Q = e0 initial(M )«
+
+in λx. Q
+
+initial(M @ N ) = 0let Q1 = e1 initial(M ) 1
+
+@ Q2 = e2 initial(N ) A in Q1:rtype(Q2)→a0 @ Q2
+
+We extend this deﬁnition to contexts, taking initial(2) = 2.
+Example 4.1 (Initial skeleton). Let M = (λx.x @ x)@y, Q = initial(M ):
+
+Q = ( e1 (λx. e0 ((e1 (x:a0 ) : e2 a0 → a0) @ e2 (x:a0 ))) : e2 a0 → a0)
+@ e2 (y:a0 )
+
+We have (M Q) : A τ / ∆ where A = (y : e2 a0), τ = a0 and ∆ = (e1 (e0 e1 a0 ∩. e0 e2 a0 → e0 a0) e2 a0 → a0) ∩. (e1 e0 (e1 a0 e2 a0 → a0)).
+We now deﬁne pleasant skeletons, which syntacticly characterize skeletons produced by initial.
+
+Deﬁnition 4.2 (Pleasant skeleton). A skeleton Q is pleasant iﬀ Q = P for some P deﬁned as follows:
+P ::= x:a0 | λx. e0 P | (e1 P1):e2 τ→a0 @ e2 P2
+Note that by convention 3.9, if P = (e1 P1):e2 τ→a0 @ e2 P2, then τ = rtype(P2). Note that this deﬁnition uses 4 speciﬁc, ﬁxed concrete E- and T-variables (e0, e1, e2, and a0).
+
+All constraints of a pleasant skeleton are unsolved, and for all x, tenv(P )(x) = e1 a0 ∩. · · · ∩. en a0 for some n ≥ 0.
+
+Lemma 4.3 (Properties of initial).
+
+1. initial(M ) is a pleasant skeleton. 2. If P = initial(M ) then term(P ) = M . 3. If M = term(P ) then initial(M ) = P .
+
+4.2 Readback
+To show an exact correspondence with β-reduction, we deﬁne a readback function to reconstruct a pleasant skeleton from a typing and a constraint.
+
+Deﬁnition 4.4 (Readback). Let readback be the leastdeﬁned function where readback(A, τ, ∆) is given by case analysis on τ and subsequently on ∆ if τ = a0, such that:
+readback((x : a0), a0, ω) = x:a0 readback(e0 A, e0 τ1 → e0 τ2, e0 ∆) = λx. e0 Q
+if A(x) = ω and Q = readback(A[x → τ1], τ2, ∆) readback(e1 A1 ∩. e2 A2, a0,
+e1 ∆1 ∩. e2 ∆2 ∩. (e1 τ1 e2 τ2 → a0) = (e1 Q1):e2 τ2→a0 @ e2 Q2 if Q1 = readback(A1, τ1, ∆1) and Q2 = readback(A2, τ2, ∆2)
+For convenience, we let readback(Q) = readback(tenv(Q), rtype(Q), unsolved(constraint(Q))).
+Example 4.5 (Readback). Let A = (z : e2 a0), τ = a0 and:
+∆ = (e1 (e0 a0 → e0 a0) e2 a0 → a0) ∩. (e1 ( (e0 a0 → e0 a0) → e0 a0 → e0 a0 (e0 a0 → e0 a0) → e0 a0 → e0 a0))
+We have:
+readback(A, τ, ∆) = (e1 (λx. e0 (x:a0 )) : e2 a0 → a0) @ e2 (z:a0 )
+Lemma 4.6 (Readback builds pleasant skeletons). If readback(A, τ, ∆) = Q, then Q = P for some P .
+Lemma 4.7 (Readback is identity on pleasant skeletons). If readback(P ) = P , then P = P .
+Combining lemmas 4.3 and 4.7, we obtain this diagram: initial
+M P readback term
+Lemma 4.8 (Readback preserves typings). Suppose that readback(A, τ, ∆) = P and term(P ) = M . Then it holds that (M P ) : A τ / unsolved(∆).
+4.3 Uniﬁcation Rules
+From ﬁg. 1, the metavariable ∆˙ ranges over singular constraints, those that contain exactly one type inequality, and ∆¯ ranges over singular constraints that have an empty Epath. Each uniﬁcation step solves one singular constraint.
+Fig. 4 introduces rules unify-β and unify-@, which are used to produce substitutions that solve singular constraints. Observe that these rules mention 4 speciﬁc, ﬁxed concrete E- and T-variables (e0, e1, e2, a0), rather than arbitrary metavariables e and α. (Originally, we made the rules match arbitrary E-variables, but this generality was not actually used and the proof is simpler this way.) We now study each of these two rules in detail.
+4.3.1 Rule unify-β
+This section shows that rule unify-β solves constraints in a way that corresponds exactly with β-reduction on λ-terms.
+Rule unify-β matches on singular constraints of the form ∆¯ = e (e1 (e0 τ0 → e0 τ1) e2 τ2 → a0) corresponding to a βredex (λx.M ) @ N in the untyped λ-term. Informally, each portion of ∆¯ corresponds to a portion of the redex: τ0 to the type of x in M , τ1 to the result type of M , τ2 to the result type of N , and a0 to the result type of the whole redex.
+
+e (e1 (e0 τ0 → e0 τ1) e (e1 a0
+
+e2 τ2 → a0) e2 τ1 → a0)
+
+−−u−ni−fy−-β−→ −−u−ni−fy−-@−→
+
+e/((e2 := e1 e0 E, e1/e0/S); (a0 := [S] τ1, e1 := e0 := )) if τ0 −e−xt−ra−→ct E and τ0 −−:=−τ−→2 S e/(e1 := (a0 := e2 τ2 → a0, e1 := e1 e1 , e2 := e1 e2 ))
+
+α −e−xt−ra−→ct
+τ1 ∩. τ2 −e−xt−ra−→ct E1 ∩. E2 e τ −e−xt−ra−→ct e E
+ω −e−xt−ra−→ct ω
+
+if τ1 −e−xt−ra−→ct E1 and τ2 −e−xt−ra−→ct E2 if τ −e−xt−ra−→ct E
+
+α −−:=−τ−→2 (α := τ2) τ1 ∩. τ2 −−:=−τ−→2 S1; S2 e τ −−:=−τ−→2 e/S ω −−:=−τ−→2
+
+if τ1 −−:=−τ−→2 S1 and τ2 −−:=−τ−→2 S2 if τ −−:=−τ−→2 S
+
+Figure 4: Rules for solving constraints.
+
+Example 4.9 (Rule unify-β). Consider the following singular constraint ∆¯ which is part of ∆ from example 4.1 (for memory, M = (λx.x @ x) @ y):
+∆¯ = (e1 (e0 e1 a0 ∩. e0 e2 a0 → e0 a0) e2 a0 → a0)
+
+This constraint corresponds to the β-redex in M . We have ∆¯ −−u−ni−fy−-β−→ S, where S is the following substitution:
+e2 := e1 e0 (e1 ∩. e2 ) , e1 := e1 ( e0 := e0 ( e1 := e1 (a0 := a0 , ) ,
+; e2 := e2 (a0 := a0 , ) , ) ,) , ; a0 := a0 , e1 := e0 := , ,
+The ﬁrst part of S (line 1, e2 := e1 e0 (e1 ∩. e2 )) makes as many copies of argument y of the β-redex as there are occurrences of the bound variable x. Each copy is put underneath a distinct sequence of E-variables (here e1 and e2); each sequence of E-variables corresponds to one occurrence of x. The second part of the substitution S (lines 2-4) replaces the type variable associated with each occurrence of the bound variable x with the result type of the corresponding copy of the argument y (this has no eﬀect in this case, because y also has type a0). The last part of S (line 6) simultaneously replaces the type variable that holds the result type of the application with the result type of the body of the λ-abstraction (having no eﬀect in this case), and then erases E-variables e1 and e0. Only the E-variable e1 needs to be erased for the constraint to become solved; erasing e0 is needed to preserve deﬁnedness of readback.
+Lemma 4.10. If constraint(P ) = ∆¯ ∩. ∆ and ∆¯ −−u−ni−fy−-β−→ S, then solved([S] ∆¯ ).
+
+S unify-β
+∆¯
+
+π1 S, ∆¯ [·] ·; unsolved
+π2
+
+ω
+
+The previous lemmas show that unify-β, when it applies to some constraint ∆¯ of a pleasant skeleton, produces a substitution S that solves ∆¯ . ∆¯ −−u−ni−fy−-β−→ S implies the following:
+∆¯ = e1 (e0 τ0 → e0 τ1) e2 τ2 → a0 τ0 = e1 a0 ∩. · · · ∩. en a0 S = (e2 := e1 e0 E , e1/e0/S )
+; (a0 := [S ] τ1 , e1 := e0 := ) τ0 −e−x−tra−→ct E and τ0 −:−=−τ→2 S , for some E and S . Let E = e1 ∩. · · · ∩. en and
+S = e1/(a0 := τ2); · · ·; en/(a0 := τ2).
+With these particular E and S , it is easy to see that [E ] τ2 = e1 τ2 ∩. · · · ∩. en τ2 = [S ] τ0 holds, provided that
+
+no ei is a proper preﬁx of ej, with i, j ∈ {1, . . . , n}. This is guaranteed by the hypothesis constraint(P ) = ∆¯ ∩. ∆ , since for every i, ei is the E-path of some skeleton variable in P . Equalities of sec. 3.2 are imposed on types, but not on expansions and substitutions, so E = E and S = S do not necessarily hold. However, all possible E and S have the same eﬀect when they are applied to types. By deﬁnition 3.3, [S] ∆¯ = [S ] τ0 → [S] τ1 [E] τ2 → [S] τ1. Since [E] τ2 = [E ] τ2 = [S ] τ0 = [S ] τ0, solved([S] ∆¯ ) holds.
+The next lemma shows that, given a pleasant skeleton P whose term is a β-redex, any substitution generated by unify-β applied to the constraint ∆¯ of P generates a substitution S that, when applied to P , (1) solves ∆¯ and only ∆¯ , (2) preserves deﬁnedness of readback, and (3) changes the term of the readback by contracting the β-redex considered.
+
+Lemma 4.11. Let M = (λx.M1) @ M2, let P = initial(M ), let constraint(P ) = ∆¯ ∩. ∆ , and let ∆¯ −−u−ni−fy−-β−→ S. Then readback([S] P ) = P where constraint(P ) = [S] ∆ and term(P ) = M1[x := M2].
+
+The next two lemmas show the step-by-step equivalence between unify-β and β-reduction.
+
+Lemma 4.12 (One step of unify-β corresponds to one
+
+step of β-reduction). If readback(Q) = P = initial(M ), M = term(P ), constraint(Q) ∆˙ −−u−ni−fy−-β−→ S, and Q =
+
+[S] Q, then there exist M and P s.t. readback(Q ) = P =
+
+initial(M ), and M −−β−→ M = term(P ). ∆˙ unify-β S
+
+constraint;
+
+π1
+
+Q readback
+
+π2
+
+S, Q Q [·] · readback
+
+PP
+
+initial term M
+
+β initial term M
+
+Lemma 4.13 (One step of β-reduction corresponds
+
+to one step of unify-β). If readback(Q) = P = initial(M ),
+
+term(P ) = M −−β−→ M , initial(M ) = P , and term(P ) = M , then there exist ∆˙ , S and Q s.t. constraint(Q) ∆˙ −−u−ni−fy−-β−→ S, [S] Q = Q , and readback(Q ) = P .
+∆˙ unify-β S
+
+constraint;
+
+π1
+
+Q readback
+
+π2
+
+S, Q Q [·] · readback
+
+PP
+
+initial term M
+
+β initial term M
+
+4.3.2 Rule unify-@
+Rule unify-@ is designed to be used after rule unify-β has been used as much as possible and can not be used anymore. Because unify-β eﬀectively simulates β-reduction, this means when unify-β is done, the term resulting from readback is a β-normal form. Because a β-normal form may have applications in it, there may still be unsolved constraints. Rule unify-@ applies to singular constraints of the form ∆¯ = e1 a0 e2 τ2 → a0. Such constraints are generated by terms that are chains of applications whose head is a variable, i.e., terms of the form xM1 · · · Mn. For [S] ∆¯ to be solved, S must replace e1 a0 by an arrow type.
+The substitution S produced by unify-@ is simple, but has been carefully designed. Part of the substitution produced by unify-@ is S = e1 := (a0 := e2 τ2 → a0) which has the property that [S ] ∆¯ is solved. However, S erases e1, which eﬀectively merges the namespace inside e1 with the parent namespace. Without care, this has the danger that it could cause formerly distinct variables which should remain distinct to become the same.
+There are three variables that we have to be careful about that might live at the top level in the namespace of e1 just before rule unify-@ is applied. The strategy we use for applying rules unify-β and unify-@, discussed in the next section, guarantees that e0 does not occur at the top-level of the namespace inside e1. We do not need to worry about the single T-variable a0, because it is completely replaced by S. The rest of the substitution produced by unify-@ avoids confusing e1 and e2 (and also their nested namespaces) in the namespace of the outer e1 with the same names in the parent namespace by replacing them by e1e1 and respectively e1e2. This is done at the same time as the outer e1 is erased, thereby eﬀectively preserving the original namespaces.
+Note that if a constraint ∆˙ = e1 (e1 a0 e2 τ2 → a0) exists in the namespace of the outer e1 as it is erased, this constraint becomes [S] ∆˙ = e1 e1 a0 e1 e2 τ2 → e2 τ2 → a0, to which unify-@ would not apply, and constraint solving would get stuck at some point. This issue is easily solved by applying unify-@ with a strategy that always selects the singular constraints that have the longer E-path ﬁrst. Such a strategy is given in the next section.
+
+4.4 Inference Algorithm
+This section presents an inference algorithm producing a valid, solved skeleton for any β-normalizable term.
+Let M be an arbitrarily chosen λ-term. If M has a βnormal form, then the procedure described below will terminate, otherwise it will go forever. The results of previous sections are used to design a strategy for applying rules unify-β and unify-@ that exactly follows leftmost/outermost β-reduction. This reduction strategy is known to terminate for arbitrary normalizing terms, so by following it we are able to infer typings for any term that has a β-normal form.
+
+Deﬁnition 4.14 (Leftmost/outermost redex of an untyped term). Deﬁne metavariables and sets as follows:
+
+M nf ∈ NF-Term
+
+::= λx.M nf | M nf1
+
+M nf1 ∈ NF1-Term ::= x | M nf1 @ M nf
+
+Clo ∈ LO-Context ::= λx.Clo | Clo1
+
+Clo1 ∈ LO1-Context ::= 2 | Clo1 @ M | M nf1 @ Clo
+
+For every term M , exactly one of the following conditions holds. (1) M = M nf , meaning M is a β-normal form. (2)
+
+M = Clo[(λx.M1) @ M2], in which case the occurrence of the subterm (λx.M1) @ M2 in the hole of Clo is the leftmost/outermost redex of M .
+
+In order to precisely deﬁne the complete strategy for type inference, we now deﬁne the notions of leftmost/outermost constraint, which we use for unify-β, and rightmost/innermost constraint, which we use for unify-@.
+
+Deﬁnition 4.15 (Order on sequences of expansion variables). Let ei < ej iﬀ i < j. Thus, < is a strict total order on expansion variables, and so is its lexicographicextension order <lex on sequences of ﬁnite length.
+
+Deﬁnition 4.16 (Leftmost/outermost constraint). If ∆ = e1 ∆¯ 1 ∩. · · · ∩. en ∆¯ n, then the leftmost/outermost constraint of ∆, written LO(∆), if it exists, is the singular constraint that has the least E-path, i.e., LO(∆) = ei ∆¯ i iﬀ 1 ≤ i ≤ n and ei <lex ej for any j ∈ ({1, . . . , n} \ {i}).
+
+Deﬁnition 4.17 (Right/innermost constraint). If ∆ = e1 ∆¯ 1 ∩. · · · ∩. en ∆¯ n, then the rightmost/innermost constraint of ∆, written RI(∆), if it exists, is the singular constraint that has the greatest E-path, i.e., RI(∆) = ei ∆¯ i iﬀ 1 ≤ i ≤ n and ej <lex ei for any j ∈ ({1, . . . , n} \ {i}).
+
+Example 4.18. Consider the following skeleton:
+(e1 λx. e2 x:τ1 ):τ2 @ e3 (e4 y:τ5 :τ3 @ e5 z:τ4 )
+The leftmost/outermost constraint is e1 (e2 τ1 → e2 τ1) τ2, with E-path , and the rightmost/innermost constraint is e3 (e4 τ5 τ3), with E-path e3.
+By design, the leftmost/outermost constraint of a pleasant skeleton P , namely LO(constraint(P )), corresponds exactly to the leftmost/outermost application in term(P ). The leftmost/outermost constraint in constraint(P ) that also matches rule unify-β corresponds exactly to the leftmost/outermost β-redex in term(P ). Thus, the constraint solving strategy that always uses rule unify-β on the leftmost/outermost constraint matching unify-β corresponds exactly to leftmost/ outermost β-reduction.
+Let ﬁlter-β(∆) contain all the singular constraints of ∆ to which rule unify-β applies. That is, given ∆ = ∆˙ 1 ∩. · · · ∩. ∆˙ n, let ﬁlter-β(∆) = ∆˙ i1 ∩. · · · ∩. ∆˙ ip where j ∈ {i1, . . . , ip} ⊆ {1, . . . , n} iﬀ there exists S s.t. ∆˙ j −−u−ni−fy−-β−→ S.
+
+Lemma 4.19. If readback(Q) = P = initial(M ) and M =
+Clo[(λx.M1) @ M2], then ∆˙ = LO(ﬁlter-β(constraint(Q))) is deﬁned and E-path(∆˙ ) = E-path(initial(Clo)).
+
+M term initial
+
+·[(λx.M1) @ M2]
+
+C lo
+
+P initial; E-path
+
+readback Q
+
+constraint; ﬁlter-β; LO
+
+∆˙ E-path e
+
+Similarly, in constraint(P ), the rightmost/innermost constraint corresponds to the rightmost/innermost application in term(readback(Q)). This precise correspondence breaks down once we start using rule unify-@, because readback is no longer deﬁned after using unify-@. However, the intuition still explains how our strategy of using unify-@ works, because unify-@ does not rearrange namespaces. Appendix B presents a modiﬁed readback which is still deﬁned after uses
+
+of unify-@. We do not use it here because its correspondence with pleasant skeletons is not very tight, and this would complicate the proofs.
+
+Deﬁnition 4.20 (Uniﬁcation algorithm). Given a term M , the strategy (which succeeds iﬀ M has a β-normal form) for solving the constraint ∆ = constraint(initial(M )) is:
+(0) Initial call: Unify(∆) −→ Unify(∆, ) (1) Unify(∆, S) −→ Unify([S ] ∆, S; S )
+if LO(ﬁlter-β(∆)) −−u−ni−fy−-β−→ S (2) Unify(∆, S) −→ Unify([S ] ∆, S; S )
+if RI(unsolved(∆)) −−u−ni−fy−-@−→ S and case (1) does not apply (3) Final call: Unify(∆, S) −→ S if solved(∆)
+
+Lemma 4.21 (Unify succeeds for β-normalizing terms).
+If readback(Q) = P , term(P ) = M , M −−β− M nf and ∆ = constraint(Q), then Unify(∆) −− S and solved([S] ∆).
+M β M nf
+
+term initial
+
+PS
+
+readback
+
+Unify
+
+Q constraint ∆
+
+π1 π2
+
+S, ∆ [·] ·; unsolved
+ω
+
+Deﬁnition 4.22 (Type inference algorithm). The overall algorithm is:
+Infer(M ) −→ P, S if P = initial(M )
+and Unify(constraint(P )) −− S
+
+If Infer(M ) −→ P, S , a solved skeleton (traditional typing derivation) for M is obtained by computing [S] P . If only a typing (type environment, result type) is desired, it is obtained by computing [S] tenv(P ) [S] rtype(P ) .
+Theorem 4.23 (Infer succeeds for β-normalizing terms). If M −−β− M nf , then Infer(M ) −→ P, S where Q = [S] P is solved and term(Q) = M .
+
+5. REFERENCES
+[1] A. Banerjee. A modular, polyvariant, and type-based closure analysis. In Proc. 1997 Int’l Conf. Functional Programming. ACM Press, 1997.
+[2] H. Barendregt, M. Coppo, M. Dezani-Ciancaglini. A ﬁlter lambda model and the completeness of type assignment. J. Symbolic Logic, 48(4), 1983. [3] H. P. Barendregt. The Lambda Calculus: Its Syntax and Semantics. North-Holland, revised edition, 1984. [4] G. Boudol, P. Zimmer. On type inference in the intersection type discipline. Draft available from 1st author’s web page, 2004. [5] S. Carlier, J. Polakow. System E experimentation tool. http://www.macs.hw.ac.uk/ultra/compositional-analysis/system-E. [6] S. Carlier, J. Polakow, J. B. Wells, A. J. Kfoury. System E: Expansion variables for ﬂexible typing with linear and non-linear types and intersection types. In Programming Languages & Systems, 13th European Symp. Programming, vol. 2986 of LNCS. Springer-Verlag, 2004.
+[7] M. Coppo, F. Damiani, P. Giannini. Strictness, totality, and non-standard type inference. Theoret. Comput. Sci., 272(1-2), 2002.
+[8] M. Coppo, M. Dezani-Ciancaglini. An extension of the basic functionality theory for the λ-calculus. Notre Dame J. Formal Logic, 21(4), 1980. [9] M. Coppo, M. Dezani-Ciancaglini, B. Venneri. Principal type schemes and λ-calculus semantics. In Hindley and Seldin [17]. [10] F. Damiani. A conjunctive type system for useless-code elimination. Math. Structures Comput. Sci., 13, 2003.
+
+[11] F. Damiani. Rank 2 intersection types for local deﬁnitions and
+conditional expressions. ACM Trans. on Prog. Langs. & Systs., 25(4), 2003. [12] F. Damiani. Rank 2 intersection types for modules. In Proc. 5th
+Int’l Conf. Principles & Practice Declarative Programming, 2003. [13] F. Damiani, P. Giannini. Automatic useless-code detection and
+elimination for HOT functional programs. J. Funct. Programming, 2000. [14] J.-Y. Girard. Linear logic: its syntax and semantics. In J.-Y.
+Girard, Y. Lafont, L. Regnier, eds., Advances in Linear Logic, Proceedings of the 1993 Workshop on Linear Logic, London Mathematical Society Lecture Note Series. Cambridge University
+Press, 1995. [15] C. Haack, J. B. Wells. Type error slicing in implicitly typed,
+higher-order languages. In Programming Languages & Systems, 12th European Symp. Programming, vol. 2618 of LNCS. Springer-Verlag, 2003. Superseded by [16]. [16] C. Haack, J. B. Wells. Type error slicing in implicitly typed, higher-order languages. Sci. Comput. Programming, 50, 2004.
+Supersedes [15]. [17] J. R. Hindley, J. P. Seldin, eds. To H. B. Curry: Essays on Combinatory Logic, Lambda Calculus, and Formalism. Academic
+Press, 1980. [18] T. Jensen. Inference of polymorphic and conditional strictness properties. In Conf. Rec. POPL ’98: 25th ACM Symp. Princ. of
+Prog. Langs., 1998. [19] T. Jim. What are principal typings and what are they good for? In Conf. Rec. POPL ’96: 23rd ACM Symp. Princ. of Prog.
+Langs., 1996. [20] A. J. Kfoury, J. B. Wells. Principality and decidable type
+inference for ﬁnite-rank intersection types. In Conf. Rec. POPL ’99: 26th ACM Symp. Princ. of Prog. Langs., 1999. Superseded by [22]. [21] A. J. Kfoury, J. B. Wells. Principality and type inference for
+intersection types using expansion variables. Supersedes [20], 2003. [22] A. J. Kfoury, J. B. Wells. Principality and type inference for intersection types using expansion variables. Theoret. Comput. Sci.,
+311(1–3), 2004. Supersedes [20]. For omitted proofs, see the longer report [21]. [23] D. Leivant. Polymorphic type inference. In Conf. Rec. 10th
+Ann. ACM Symp. Princ. of Prog. Langs., 1983. [24] E. K. G. Lopez-Escobar. Proof-functional connectives. In
+C. Di Prisco, ed., Methods of Mathematical Logic, Proceedings of
+the 6th Latin-American Symposium on Mathematical Logic,
+Caracas 1983, vol. 1130 of Lecture Notes in Mathematics.
+Springer-Verlag, 1985. [25] H. G. Mairson. Deciding ML typability is complete for deterministic exponential time. In Conf. Rec. 17th Ann. ACM
+Symp. Princ. of Prog. Langs., 1990. [26] H. G. Mairson. From Hilbert spaces to Dilbert spaces: Context semantics made simple. In 22nd Conference on Foundations of Software Technology and Theoretical Computer Science, 2002. [27] R. Milner. A theory of type polymorphism in programming. J. Comput. System Sci., 17, 1978. [28] P. Møller Neergaard, H. G. Mairson. Types, potency, and
+impotency: Why nonlinearity and amnesia make a type system work. In Proc. 9th Int’l Conf. Functional Programming. ACM Press, 2004. [29] G. Pottinger. A type assignment for the strongly normalizable λ-terms. In Hindley and Seldin [17]. [30] L. Regnier. Lambda calcul et r´eseaux. PhD thesis, University
+Paris 7, 1992. [31] S. Ronchi Della Rocca. Principal type schemes and uniﬁcation
+for intersection type discipline. Theoret. Comput. Sci., 59(1–2), 1988. [32] S. Ronchi Della Rocca, B. Venneri. Principal type schemes for
+an extended type theory. Theoret. Comput. Sci., 28(1–2), 1984. [33] E´ . Sayag, M. Mauny. A new presentation of the intersection
+type discipline through principal typings of normal forms. Technical Report RR-2998, INRIA, 1996. [34] P. Urzyczyn. Type reconstruction in Fω . Math. Structures Comput. Sci., 7(4), 1997. [35] S. J. van Bakel. Intersection Type Disciplines in Lambda
+Calculus and Applicative Term Rewriting Systems. PhD thesis, Catholic University of Nijmegen, 1993. [36] S. J. van Bakel. Intersection type assignment systems. Theoret.
+Comput. Sci., 151(2), 1995. [37] J. B. Wells. The essence of principal typings. In Proc. 29th Int’l Coll. Automata, Languages, and Programming, vol. 2380 of
+LNCS. Springer-Verlag, 2002. [38] J. B. Wells, C. Haack. Branching types. In Programming Languages & Systems, 11th European Symp. Programming, vol.
+2305 of LNCS. Springer-Verlag, 2002. [39] J. B. Wells, C. Haack. Branching types. Inform. & Comput.,
+200X. Supersedes [38]. Accepted subject to revisions.
+
+APPENDIX
+A. FULL EXAMPLE OF TYPE INFERENCE
+This appendix shows an example of type inference, presenting output produced by our implementation, which has the option of writing bits of LATEX code suitable for inclusion in LATEX documents. We analyze the term M :
+M = (λx.x @ x) @ (λz.z @ y)
+
+For compactness, uses of result type subtyping which add a singular constraint that is solved have been omitted from skeletons in the rest of this section. However, these solved constraints are included in judgements.
+
+A.1 Initial Skeleton
+The inference process starts by picking an initial skeleton P0 = initial(M ):
+
+P0 = ( e1 (λx. e0 ((e1 (x:a0 ) : e2 a0 → a0) @ e2 (x:a0 ))) : e2 (e0 e1 a0 → e0 a0) → a0)
+@ e2 (λz. e0 ((e1 (z:a0 ) : e2 a0 → a0) @ e2 (y:a0 )))
+
+The judgement P0 derives is:
+
+(M P0) : A0 τ0 / ∆0, where
+
+A0(y) = e2 e0 e2 a0
+
+τ0 = a0 ∆0 =
+
+e1 (e0 e1 a0 ∩. e0 e2 a0 → e0 a0)
+
+e2 (e0 e1 a0 → e0 a0) → a0 ∩. e1 e0 (e1 a0 e2 a0 → a0) ∩. e2 e0 (e1 a0 e2 a0 → a0)
+
+The readback of the judgement derived by P0 is:
+
+readback(A0, τ0, ∆0) = ( e1 (λx. e0 ((e1 (x:a0 ) : e2 a0 → a0) @ e2 (x:a0 ))) : e2 (e0 e1 a0 → e0 a0) → a0)
+@ e2 (λx. e0 ((e1 (x:a0 ) : e2 a0 → a0) @ e2 (y:a0 )))
+
+Note that, since we have quotiented skeletons and terms by α-equivalence (renaming of bound variables), this skeleton is actually equal to P0. Of course, term(P0) = M .
+
+A.2 Step 1 (use of unify-β)
+The leftmost-outermost unsolved constraint of Q0 to which unify-β applies is:
+∆˙ 0 = e1 (e0 e1 a0 ∩. e0 e2 a0 → e0 a0) e2 (e0 e1 a0 → e0 a0) → a0
+We have ∆˙ 0 −−u−ni−fy−-β−→ S0 where:
+S0 = e2 := e1 e0 (e1 ∩. e2 ) , e1/e0/ e1/a0 := e0 e1 a0 → e0 a0 ; e2/a0 := e0 e1 a0 → e0 a0
+; a0 := a0 , e1 := e0 :=
+The skeleton Q1 = [S0] Q0 is:
+Q1 = (λx. ( e1 (x:e0 e1 a0→e0 a0 ) : e2 (e0 e1 a0 → e0 a0) → a0)
+@ e2 (x:e0 e1 a0→e0 a0 )) @ e1 (λz. e0 ((e1 (z:a0 ) : e2 a0 → a0) @ e2 (y:a0 )))
+∩. e2 (λz. e0 ((e1 (z:a0 ) : e2 a0 → a0) @ e2 (y:a0 )))
+
+The judgement Q1 derives is:
+(M Q1) : A1 τ1 / ∆1, where A1(y) = e1 e0 e2 a0 ∩. e2 e0 e2 a0 τ1 = a0 ∆1 = e1 (e0 e1 a0 → e0 a0) e2 (e0 e1 a0 → e0 a0) → a0 ∩. e1 (e0 e1 a0 → e0 a0) ∩. e2 (e0 e1 a0 → e0 a0) → a0 e1 (e0 e1 a0 → e0 a0) ∩. e2 (e0 e1 a0 → e0 a0) → a0 ∩. e1 e0 (e1 a0 e2 a0 → a0) ∩. e2 e0 (e1 a0 e2 a0 → a0)
+The readback P1 of the judgement derived by Q1 is:
+readback(A1, τ1, ∆1) = P1 = ( e1 (λx. e0 ((e1 (x:a0 ) : e2 a0 → a0) @ e2 (y:a0 ))) : e2 (e0 e1 a0 → e0 a0) → a0)
+@ e2 (λx. e0 ((e1 (x:a0 ) : e2 a0 → a0) @ e2 (y:a0 )))
+The untyped term associated with P1 is:
+term(P1) = (λx.x @ y) @ (λx.x @ y) Note that term(P0) −−β−-−LO−→ term(P1).
+A.3 Step 2 (use of unify-β)
+The leftmost-outermost unsolved constraint of Q1 to which unify-β applies is:
+∆˙ 1 = e1 (e0 e1 a0 → e0 a0) e2 (e0 e1 a0 → e0 a0) → a0 We have ∆˙ 1 −−u−ni−fy−-β−→ S1 where:
+S1 = e2 := e1 e0 e1 , e1/e0/e1/a0 := e0 e1 a0 → e0 a0 ; a0 := a0 , e1 := e0 :=
+The skeleton Q2 = [S1] Q1 is:
+Q2 = (λx. (x:e1 (e0 e1 a0→e0 a0)→a0 ) @ e1 (x:e0 e1 a0→e0 a0 ))
+@ (λz. (e1 (z:e0 e1 a0→e0 a0 ) : e2 a0 → a0) @ e2 (y:a0 ))
+∩. e1 (λz. e0 ((e1 (z:a0 ) : e2 a0 → a0) @ e2 (y:a0 )))
+
+The judgement Q2 derives is:
+
+(M Q2) : A2 τ2 / ∆2, where A2(y) = e2 a0 ∩. e1 e0 e2 a0
+
+τ2 = a0
+
+∆2 =
+
+e1 (e0 e1 a0 → e0 a0) → a0
+
+e1 (e0 e1 a0 → e0 a0) → a0 ∩. (e1 (e0 e1 a0 → e0 a0) → a0)
+∩. e1 (e0 e1 a0 → e0 a0)
+
+→ a0
+
+(e1 (e0 e1 a0 → e0 a0) → a0) ∩. e1 (e0 e1 a0 → e0 a0)
+
+→ a0 ∩. e1 (e0 e1 a0 → e0 a0) e2 a0 → a0 ∩. e1 e0 (e1 a0 e2 a0 → a0)
+
+The readback P2 of the judgement derived by Q2 is:
+
+readback(A2, τ2, ∆2) = P2 = ( e1 (λx. e0 ((e1 (x:a0 ) : e2 a0 → a0) @ e2 (y:a0 ))) : e2 a0 → a0)
+@ e2 (y:a0 )
+
+The untyped term associated with P2 is:
+
+term(P2) = (λx.x @ y) @ y Note that term(P1) −−β−-−LO−→ term(P2).
+
+The following diagram sums up the relations between the entities presented in appendix A. The path followed by type inference
+is drawn in solid lines, and the β-reduction sequence it implies is drawn in dashed lines. The relation β-LO is the least such that Clo[(λx.M1) @ M2] −−β−-−LO−→ Clo[M1[x := M2]], readback is given in appendix B, and X −[−S−]→· X means X = [S] X.
+
+initial input
+
+M β-LO M1 β-LO M2 β-LO Mnf
+
+initial term
+
+initial term
+
+initial term
+
+term
+
+initial term
+
+P1
+
+P2
+
+P3
+
+P4
+
+[S0] · readback
+
+readback P0
+
+Q1
+
+[S1] ·
+
+readback Q2
+
+[S2] ·
+
+readback Q3
+
+[S3] ·
+
+readback Q4
+
+constraint [S0] ·
+
+constraint
+
+∆0 ∆1
+
+ﬁlter-β;
+
+LO ∆˙ 0
+
+unify-β
+
+ﬁlter-β; S0
+
+LO ∆˙ 1
+
+unify-β
+
+[S1] ·
+
+constraint ∆2
+
+ﬁlter-β; LO S1 ∆˙ 2
+
+unify-β
+
+[S2] ·
+
+constraint ∆3
+
+unsolved; RI S2 ∆˙ 3
+
+unify-@
+
+[S3] · S3
+
+constraint ∆4 unsolved ω
+
+π1
+
+π2 S0, S1
+
+·; · S1
+
+π1
+
+π2 S1, S2
+
+·; · S2
+
+π1
+
+π2 S2, S3
+
+·; · S
+
+ﬁnal result
+
+Figure 5: Outline of example of type inference.
+
+A.4 Step 3 (use of unify-β)
+The leftmost-outermost unsolved constraint of Q2 to which unify-β applies is:
+
+∆˙ 2 = e1 (e0 e1 a0 → e0 a0) We have ∆˙ 2 −−u−ni−fy−-β−→ S2 where:
+
+e2 a0 → a0
+
+S2 = e2 := e1 e0 e1 , e1/e0/e1/a0 := a0 ; a0 := a0 , e1 := e0 :=
+
+The skeleton Q3 = [S2] Q2 is:
+
+Q3 = (λx. (x:(e1 a0→a0)→a0 ) @ (x:e1 a0→a0 )) @ (λz. (z:e1 a0→a0 ) @ e1 (y:a0 )) ∩. (λz. (e1 (z:a0 ) : e2 a0 → a0) @ e2 (y:a0 ))
+
+The judgement Q3 derives is:
+
+(M Q3) : A3 τ3 / ∆3, where A3(y) = e1 a0 ∩. e2 a0 τ3 = a0 ∆3 = (e1 a0 → a0) → a0 (e1 a0 → a0) → a0 ∩. ((e1 a0 → a0) → a0) ∩. (e1 a0 → a0) → a0 ((e1 a0 → a0) → a0) ∩. (e1 a0 → a0) → a0 ∩. e1 a0 → a0 e1 a0 → a0 ∩. e1 a0 e2 a0 → a0
+
+The readback P3 of the judgement derived by Q3 is: readback(A3, τ3, ∆3) = P3 = (e1 (y:a0 ) : e2 a0 → a0) @ e2 (y:a0 )
+
+The untyped term associated with P3 is:
+
+term(P3) = y @ y
+Note that term(P2) −−β−-−LO−→ term(P3), and term(P3) is a βnormal form.
+
+A.5 Step 4 (use of unify-@)
+At this step, Q3 has no singular constraint to which unify-@ applies, so we switch to using unify-@ in order to solve the remaining constraints. The rightmost-innermost unsolved constraint of Q3 is:
+∆˙ 3 = e1 a0 e2 a0 → a0
+
+We have ∆˙ 3 −−u−ni−fy−-@−→ S3 where:
+S3 = e1 := a0 := e2 a0 → a0 , e1 := e1 e1 , e2 := e1 e2
+The skeleton Q4 = [S3] Q3 is:
+Q4 = (λx. (x:((e2 a0→a0)→a0)→a0 ) @ (x:(e2 a0→a0)→a0 )) @ (λz. (z:(e2 a0→a0)→a0 ) @ (y:e2 a0→a0 )) ∩. (λz. (z:e2 a0→a0 ) @ e2 (y:a0 ))
+
+The judgement Q4 derives is:
+
+(M Q4) : A4 τ4 / ∆4, where A4(y) = (e2 a0 → a0) ∩. e2 a0
+
+τ4 = a0
+
+∆4 =
+
+((e2 a0 → a0) → a0) → a0
+
+((e2 a0 → a0) → a0) → a0 ∩. (((e2 a0 → a0) → a0) → a0)
+∩. ((e2 a0 → a0) → a0)
+
+→ a0
+
+(((e2 a0 → a0) → a0) → a0) ∩. ((e2 a0 → a0) → a0)
+
+→ a0 ∩. (e2 a0 → a0) → a0 (e2 a0 → a0) → a0 ∩. e2 a0 → a0 e2 a0 → a0
+
+Note that Q4 is solved. By lem. 3.5, the substitution S = S0; S1; S2; S3 solves the initial skeleton P0.
+
+B. IMPROVED READBACK
+A slight modiﬁcation to readback, which we have implemented, allows it to operate after unify-@ has been used. We present this variation because it may be of interest, and also because it is mentioned by the full example (appendix A). The ﬁrst case of the deﬁnition of readback is modiﬁed thus:
+readback(A, a0, ω) = x:τ @ Q1 @ · · · @ Qn if A = e1 e2 A1 ∩. · · · ∩. en e2 An ∩. (x : τ ) and τ = e1 e2 τ1 → · · · → en e2 τn → a0 and Q1 = e1 e2 readback(A1, τ1, ω) ··· Qn = en e2 readback(An, τn, ω)
+where en = and if 1 ≤ i < n then ei = e1 · ei+1.
+
+

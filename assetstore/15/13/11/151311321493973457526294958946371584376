@@ -1,0 +1,583 @@
+System E: Expansion Variables for Flexible Typing with Linear and Non-linear Types and Intersection Types
+S´ebastien Carlier1, Jeﬀ Polakow1, J. B. Wells1, and A. J. Kfoury2
+1 Heriot-Watt University, http://www.macs.hw.ac.uk/ultra/ 2 Boston University, http://www.cs.bu.edu/~kfoury/
+Abstract. Types are often used to control and analyze computer programs. Intersection types give great ﬂexibility, but have been diﬃcult to implement. The ! operator, used to distinguish between linear and non-linear types, has good potential for better resource-usage tracking, but has not been as ﬂexible as one might want and has been diﬃcult to use in compositional analysis. We introduce System E, a type system with expansion variables, linear intersection types, and the ! type constructor for creating non-linear types. System E is designed for maximum ﬂexibility in automatic type inference and for ease of automatic manipulation of type information. Expansion variables allow postponing the choice of which typing rules to use until later constraint solving gives enough information to allow making a good choice. System E removes many diﬃculties that expansion variables had in the earlier System I and extends expansion variables to work with ! in addition to the intersection type constructor. We present subject reduction for call-by-need evaluation and discuss program analysis in System E.
+1 Discussion
+1.1 Background and Motivation
+Many current forms of program analysis, including many type-based analyses, work best when given the entire program to be analyzed [21, 7]. However, by their very nature, large software systems are assembled from components that are designed separately and updated at diﬀerent times. Hence, for large software systems, a program analysis methodology will beneﬁt greatly from being compositional, and thereby usable in a modular and incremental fashion.
+Type systems for programming languages that are ﬂexible enough to allow safe code reuse and abstract datatypes must support some kind of polymorphic types. Theoretical models for type polymorphism in existing programming languages (starting in the 1980s through now) have generally obtained type polymorphism via ∀ (“for all”) [15, 6] and ∃ (“there exists”) quantiﬁers [13] or closely related methods. Type systems with ∀ and ∃ quantiﬁers alone tend to
+Supported by grants: EC FP5 IST-2001-33477, EPSRC GR/L 41545/01, NATO CRG 971607, NSF 0113193 (ITR), Sun Microsystems EDUD-7826-990410-US.
+
+Carlier, Polakow, Wells, Kfoury — System E — ESOP ’04
+
+2
+
+be inadequate for representing modular program analysis results, because such systems fail to have principal typings [22, 7] where each typable term has a best typing that logically implies all of its other typings. (Do not confuse this with the much weaker property often (mis)named “principal types” associated with the Hindley/Milner type system [12, 5] used by Haskell, OCaml, Standard ML, etc.) In contrast, intersection type systems often have principal typings (see [8] for a discussion), leading to our interest in them.
+Beyond basic type safety, type-based analyses can ﬁnd information useful for other purposes such as optimization or security analysis. Linear type systems, with a ! operator for distinguishing between linear and non-linear types, are good for more accurate tracking of resource usage, but have not been as ﬂexible as one might want [19, 20, 17, 16, 11]. Also, polymorphic linear type systems usually rely on quantiﬁers and thus are not suited for compositional analysis.
+Several years ago, we developed a polymorphic type system for the λ-calculus called System I [8]. System I uses intersection types together with the new technology of expansion variables and has principal typings. Although the resulting program analysis can be done in a fully modular manner, there are many drawbacks to System I. The types are nearly linear (actually aﬃne, i.e., used once or discarded) and multiple use of anything requires having intersection types with one branch for each use. An implication is that for any k there are simply-typable λ-terms that are not typable at rank k in System I. In contrast, rank 0 usually has the power of simple types and rank 2 usually contains the typing power of the Hindley/Milner system. System I does not have subject reduction, a basic property desired for any type system. And also, quite painfully, the substitutions used in type inference for System I do not support composition.
+Some of System I’s problems seemed solvable by allowing non-linear types. Also, we wanted analysis systems that can track resource usage. Toward these goals, we investigated combining the (nearly) linear intersection types of System I with the ! operator of linear type systems for controlled introduction of non-linear types. Because implementing intersection types has historically been hard, an additional goal was easier implementation. Our investigation led to System E.
+
+1.2 Expansion and Expansion Variables
+
+We solve the problems mentioned above with a new type system named System E that improves on previous work in the way it uses expansion variables (E-variables) to support expansion. This section gives a gentle, informal introduction to the need for expansion and how E-variables help.
+Consider two typing derivations structured as follows, where λ and @ represent uses of the appropriate typing rules:
+
+M : λf. @
+f λx. x
+
+N : λg. λy. @
+g@ gy
+
+Carlier, Polakow, Wells, Kfoury — System E — ESOP ’04
+
+3
+
+In a standard intersection type system, the derived result types could be these:
+
+M : ((α → α) → β) → β
+τ1
+
+N : (β → γ ) ∩. (α → β ) → α → γ
+τ2
+
+In order to type the application M @ N , we must somehow “unify” τ1 and τ2. We could ﬁrst unify the types (β → γ ) and (α → β ) to collapse the intersection type (β → γ ) ∩. (α → β ), but this would lose information and is not the approach we want to follow for full ﬂexibility. Historically, in intersection type systems the solution has been to do expansion [4] on the result type of M :
+
+M : ((α1 → α1) ∩. (α2 → α2) → β) → β
+
+(1)
+
+Then, the substitution (α1 := α , β := α , α2 := α , γ := α , β := α → α ) makes the application M @ N typable.
+What justiﬁed the expansion we did to the result type of M ? The expansion operation above eﬀectively altered the typing derivation for M by inserting a use of intersection introduction at a nested position in the previous derivation, transforming it into the following new derivation, where ∩. marks a use of the intersection-introduction typing rule:
+
+λf. @ f ∩. λx. λx. xx
+
+Expansion variables are a new technology for simplifying expansion and making it easier to implement and reason about. Expansion variables are placeholders for unknown uses of other typing rules, such as intersection introduction, which are propagated into the types and the type constraints used by type inference algorithms. The E-variable-introduction typing rule works like this (in traditional notation, not as stated later in the paper), where “e A” sticks the E-variable e on top of every type in the type environment A:
+
+(E-variable)
+
+e
+
+A A
+
+M :τ M : eτ
+
+Type-level substitutions in System E substitute types for type variables, and expansions for expansion variables. An expansion is a piece of syntax standing for some number of uses of typing rules that act uniformly on every type in a judgement. The most trivial expansion, , is the identity. Intersection types can also be introduced by expansion; for example, given M : (e (α → α) → β) → β, applying the substitution e:= ∩. to this typing yields M : ((α → α) ∩. (α → α) → β)→ β. Substitutions are also a form of expansion; if we apply the substitution e := (α := α1) ∩. (α := α2) to M , we get the expanded typing given for M in (1) above.
+
+Carlier, Polakow, Wells, Kfoury — System E — ESOP ’04
+
+4
+
+Including substitutions as a form of expansion makes expansion variables eﬀectively establish “namespaces” which can be manipulated separately. For example, applying the substitution (e1 := (α := α1), e2 := (α := α2)) to the type (e1 α) ∩. (e2 α) yields the type α1 ∩. α2.
+The syntactic expansion ω (introduced as expansion syntax in [3]) is also included, along with a typing rule that assigns the type ω (introduced in [4]) to any term. If we apply the substitution e := ω to the typing of M above, inside the typing derivation the result type for λx.x becomes ω. Operationally, a term which has type ω can only be passed around and must eventually be discarded.
+The types in System E are by default linear. For example, (α1 → α1) ∩. (α2 → α2) is the type of a function to be used exactly twice, once at type α1→α1, and once at α2 → α2. The ! operator creates a non-linear type allowing any number of uses, including 0. Subtyping rules for weakening (discarding), dereliction (using once), and contraction (duplicating) give this meaning to non-linear types. Introduction of ! is another possible case of expansion in System E.
+The structure of expansions pervades every part of the design of System E. The main sorts of syntactic entities are types, typing constraints, skeletons (System E’s proof terms), and expansions. Each of these sorts has cases for E-variable application, intersection, ω, and the ! operator. Other derived notions such as type environments also eﬀectively support each of these operations. This common shared structure is the key to why System E works.
+
+1.3 Summary of Contributions
+We introduce System E and present its important properties. The proofs are in a separate long paper. System E improves on previous work as follows:
+1. System E is the ﬁrst type system to combine expansion variables, intersection types, the ! operator, and subtyping. Although not formally proved, we are conﬁdent that nearly every type system from the intersection type literature (without ∀ quantiﬁers) can be embedded in System E by putting enough !s in the types. System E has the polyvariant analysis power of intersection types together with the resource tracking power of linear types.
+2. System E more cleanly integrates the notion of expansion from the intersection type literature (see [18] for an overview) with substitution. Unlike in System I, expansion is interleaved with substitution and, as a result, both expansions and substitutions are composable. Non-composable substitutions in System I made both proofs and implementations diﬃcult.
+3. System E cleanly supports associativity and commutativity of the intersection type constructor together with related laws that smoothly integrate intersection types with the ! type constructor.
+4. System E generalizes previous notions of expansion. In System E’s approach, expansion variables stand for any use of typing rules that operate uniformly on the result and environment types and do not change the untyped λ-term in the judgement. In System E, such rules include not only the intersection introduction rule but also rules for ! and type-level substitution. System E is the ﬁrst to support such ﬂexible expansion.
+
+Carlier, Polakow, Wells, Kfoury — System E — ESOP ’04
+
+5
+
+5. System E removes other diﬃculties of its predecessor System I. There are no restrictions on placement of expansion variables or intersection type constructors. System E has subject reduction for call-by-need evaluation. (It does not have subject reduction for call-by-name evaluation because the type system can track resource usage precisely enough to distinguish.)
+6. The uniform handling of expansion variables throughout System E makes implementation simple. Demonstrating this, we present output in this paper from our type inference implementation, which can be used at this URL: http://www.macs.hw.ac.uk/ultra/compositional-analysis/system-E/
+7. System E is parameterized on its subtyping relation. We present 3 diﬀerent subtyping relations relations with diﬀerent amounts of typing power.
+8. System E has additional features for ﬂexible use. Its typing judgements have separate subtyping constraints to support either eager or lazy constraint solving together with its suspended expansion rule. To help both proofs and implementations, System E’s judgements have two diﬀerent kind of proof terms, one for the analyzed program and one for the proof structure.
+
+2 Preliminary Deﬁnitions
+This section deﬁnes generic mathematical notions. Let h, i, j, m, n, p, and q range over {0, 1, 2, . . .} (the natural numbers). Given a function f , let f [a → b] = (f \ { (a, c) (a, c) ∈ f }) ∪ {(a, b)}. Given a relation −−→r , let −−r be its transitive, reﬂexive closure, w.r.t. the right carrier set. Given a context C, let C[U ] stand for C with the single occurrence of replaced by U . For example, (λx. )[x] = λx.x.
+If S names a set and ϕ is deﬁned as a metavariable ranging over S, let S∗ be the set of sequences over S as per the following grammar, quotiented by the subsequent equalities, and let ϕ be a metavariable ranging over S∗:
+ϕ ∈ S∗ ::= | ϕ | ϕ1 · ϕ2 · ϕ = ϕ ϕ · = ϕ (ϕ1 · ϕ2) · ϕ3 = ϕ1 · (ϕ2 · ϕ3)
+For example, n ranges over {0, 1, 2, . . .}∗ (sequences of natural numbers). Length 1 sequences are equal to their sole member.
+
+3 Syntax
+This section deﬁnes the syntactic entities by starting from the abstract syntax grammars and metavariable conventions in ﬁg. 1 and then modifying those deﬁnitions by the equalities and well-formedness conditions that follow.
+Operator precedence is deﬁned here, including for ordinary function application (f (a)) and modiﬁcation (f [a → b]), and for operations deﬁned later such as expansion application ([E] X) and term-variable substitution (M1[x:=M2]). The precedence groups are as follows, from highest to lowest:
+
+Carlier, Polakow, Wells, Kfoury — System E — ESOP ’04
+
+6
+
+The sorts and their abstract syntax grammars and metavariables:
+
+x, y, z ∈ Term-Variable ::= xi
+
+V ∈ Value ::= x | λx.M
+
+M, N, P ∈
+
+Term ::= V | M @ N
+
+Ct ∈ Term-Context ::= | λx.Ct | Ct @ M | M @ Ct
+
+e, f, g ∈
+
+E-Variable ::= ei
+
+α ∈ T-Variable ::= ai ν ∈ Env-Subtyping ::= x : τ
+
+φ ∈ ET-Assignment ::= α := τ | e := E
+
+S ∈ ET-Substitution ::= | φ, S τ ∈ Type ::= τ1 ∩. τ2 | e τ | ! τ | ω | α | τ1 → τ2 E ∈ Expansion ::= E1 ∩. E2 | e E | ! E | ω | S ∆ ∈ Constraint ::= ∆1 ∩. ∆2 | e ∆ | ! ∆ | ω | τ1 τ2 Q ∈ Skeleton ::= Q1 ∩. Q2 | e Q | ! Q | ωM | Q¯ Q¯ ∈ SimpleSkeleton ::= x:τ | λx. Q | Q1 @ Q2 | Q:τ | Qν | Q, E
+
+Metavariables ranging over multiple sorts:
+
+v ::= e | α T ::= τ | ∆
+
+W ::= M | E | Q
+
+Φ ::= E | τ Y ::= τ | E | ∆ X ::= τ | E | ∆ | Q
+
+U ::= M | τ | E | ∆ | Q
+
+Fig. 1. Syntax grammars and metavariable conventions.
+
+group 1: group 2: group 3: group 4: group 5:
+
+Q:τ , Qν , f (a), f [a → b], M1[x := M2], v := Φ e X, ! X, [E] X, (φ, S) X1 ∩. X2, e/S τ1 → τ2, M @ N , Q1 @ Q2 τ1 τ2, λx.M , λx.Q
+
+For example, e α1 ∩. α2 →α3 = ((e α1) ∩. α2)→α3, and (e α1 α2) = ((e α1) α2), and λx. x:α1 @ y:α2 = λx. (x:α1 @ y:α2 ). Application is left-associative so that
+M1 @ M2 @ M3 = (M1 @ M2) @ M3 (similarly for skeletons) and function types are right-associative so that τ1 → τ2 → τ3 = τ1 → (τ2 → τ3).
+
+3.1 Equalities
+
+Terms and skeletons are quotiented by α-conversion as usual, where λx.M and λx. Q bind the variable x.
+For types and constraints, the deﬁnition provided by ﬁg. 1 is modiﬁed by imposing several equalities for E-variable application, the ∩. and ! operators, and the ω constant. The ∩. operator is associative and commutative with ω as its unit. E-variable application and ! both distribute over ∩. and ω. (The constant ω can be viewed as a 0-ary version of ∩. .) The ! operator is idempotent and applications of E-variables and ! can be reordered. Formally, these rules hold:
+
+T1 ∩. T2
+
+= T2 ∩. T1
+
+T1 ∩. (T2 ∩. T3) = (T1 ∩. T2) ∩. T3
+
+ω ∩. T
+
+=T
+
+eω =ω !ω =ω !!T =!T
+
+e (T1 ∩. T2) = e T1 ∩. e T2 ! (T1 ∩. T2) = ! T1 ∩. ! T2 e!T = !eT
+
+Carlier, Polakow, Wells, Kfoury — System E — ESOP ’04
+
+7
+
+Both α-conversion and the additional rules for types and constraints are imposed as equalities, where “=” is mathematical equality (as it should be). For example, ω ∩. α = α. After this modiﬁcation, the syntactic sorts are not initial algebras. The underlying formalism to realize this could be, e.g., that types are equivalence classes closed under the rules. This level of detail is left unspeciﬁed.
+Because we have imposed equalities (α-conversion and the rules for ∩. , ω, !, and E-variable application in types and constraints), we can not use structural recursion and induction for deﬁnitions and proofs. To solve this, we deﬁne a size function and prove an induction principle. Details are in the long paper.
+
+3.2 Additional Notions
+
+Extending E-variable application to sequences, let X = X and (e · e) X = e (e X). Similarly, for environment subtyping, let Q = Q and Qν·ν = (Qν)ν .
+Let M [x := N ] denote the usual notion of term-variable substitution in untyped terms. Let FV(M ) denote the free term variables of M .
+Let term be the least-deﬁned function such that:
+
+term(x:τ )
+
+=x
+
+term(Q:τ ) = term(Q)
+
+term(λx. Q) = λx.term(Q)
+
+term(Qν ) = term(Q)
+
+term(Q1 @ Q2) = term(Q1) @ term(Q2) term( Q, E ) = term(Q)
+
+term(! Q) = term(Q) term(ωM ) = M
+
+term(e Q)
+
+= term(Q)
+
+term(Q1 ∩. Q2) = term(Q1) if term(Q1) = term(Q2)
+
+A skeleton Q is well formed iﬀ term(Q) is deﬁned. For example, Q = x:τ1 ∩. y:τ2 is not well formed if x = y, because term(Q) is not deﬁned.
+
+Convention 3.1 Henceforth, only well formed skeletons are considered.
+
+4 Expansion Application and Type-Level Substitution
+This section deﬁnes the fundamental operation of expansion application which is the basis of the key features of System E. Expansion is deﬁned, basic properties of expansion are presented, syntactic sugar for writing substitutions (a special case of expansions) is deﬁned, and then examples are presented.
+Deﬁnition 4.1 (Expansion Application). Figure 2 deﬁnes the application of an expansion to E-variables, types, expansions, constraints, and skeletons.
+
+Lemma 4.2 (Expansion Application Properties).
+1. X and [E] X have the same sort (τ , E, ∆, or Q). 2. Expansion application preserves untyped terms, i.e., term([E] Q) = term(Q). 3. The substitution constant acts as the identity on types, expansions, con-
+straints and skeletons, i.e., [ ] X = X.
+
+Carlier, Polakow, Wells, Kfoury — System E — ESOP ’04
+
+[ ]α [ ]e
+
+=α =e
+
+[S] (X1 ∩. X2) = [S] X1 ∩. [S] X2
+
+[S] e X
+
+= [[S] e] X
+
+[S] ! X
+
+= ! [S] X
+
+[S] ω
+
+=ω
+
+[S] ωM
+
+= ωM
+
+[S] (τ1 → τ2) = [S] τ1 → [S] τ2
+
+[S] x:τ
+
+= x:[S] τ
+
+[S] λx. Q = λx. [S] Q
+
+[S] (Q1 @ Q2) = [S] Q1 @ [S] Q2
+
+[S] Q, E = Q, [S] E
+
+[v := Φ, S] v [v := Φ, S] v
+[E1 ∩. E2] X [e E] X [! E] X [ω] Y [ω] Q
+
+=Φ = [S] v if v = v
+= [E1] X ∩. [E2] X = e [E] X = ! [E] X =ω = ωterm(Q)
+
+[S] (τ1 τ2) = [S] τ1 [S] τ2
+
+[S] = S
+
+[S] (v := Φ, S ) = (v := [S] Φ, [S] S )
+
+[S] Q:τ
+
+= ([S] Q):[S] τ
+
+[S] Qx:τ
+
+= ([S] Q)x:[S] τ
+
+Fig. 2. Expansion application.
+
+8
+
+Lemma 4.3 (Expansion Application Composition). Given any E1, E2, X, [[E1] E2] X = [E1] [E2] X.
+Let E1; E2 = [E2] E1 (composition of expansions). By lem. 4.3, the “;” operator is associative. Although E1; E2 is not much shorter than [E2] E1, it allows writing, e.g., S1; S2; S3; S4; S5, which is easier to follow than [S5] [S4] [S3] [S2] S1.
+An assignment φ may stand for S = (φ, ) and is to be interpreted that way if at all possible. The higher precedence of (v := Φ) over (φ, S) applies here. For example, e1 := e2 := S2, e3 := S3 stands for (e1 := (e2 := S2)), e3 := S3 which stands for (e1 := ((e2 := S2), )), (e3 := S3), .
+Let e/S stand for (e:=e S). Thus, e/S stands for ((e := e S), ) when possible. The “/” notation builds a substitution that aﬀects variables underneath an Evariable, because [e/S] e X = e [S] X and [e/S] X = X if X = e X . For example, S = (e0/(a1 := τ1), a0 := τ0) stands for S = (e0 := e0 (a1 := τ1, ), a0 := τ0, ) and in this case [S] (e0 a1 → a0) = e0 τ1 → τ0. We extend this notation to Evariable sequences so that e · e/S stands for e/e/S and /S stands for S.
+
+Example 4.4. E-variables eﬀectively establish namespaces and substituting an expansion for an E-variable can merge namespaces. Deﬁne the following:
+
+τ1 = e1 a0 → a0 Then these facts hold:
+
+S1 = (e1 := )
+
+S2 = (a0 := τ2)
+
+[S2] τ1 = e1 a0 → τ2 [S2] [S1] τ1 = τ2 → τ2
+
+[S1] τ1 = a0 → a0 S1; S2 = (e1 := (a0 := τ2), a0 := τ2)
+
+In [S2] τ1, the T-variable a0 inside the E-variable e1 is eﬀectively distinct from the T-variable a0 outside e1, so the substitution only replaces the outer a0. The operation [S1] τ1 replaces e1 by the empty expansion (which is actually
+
+Carlier, Polakow, Wells, Kfoury — System E — ESOP ’04
+
+9
+
+the identity substitution), and this eﬀectively lifts the inner a0 into the root namespace, so that [S2] [S1] τ1 replaces both occurrences of a0.
+Example 4.5. The composition S; S may take operations in one namespace in S and duplicate them to multiple namespaces in S; S . Deﬁne the following:
+
+τ1 = e1 a0 → a0 S3 = (e1 := e2 ) S4 = (e2/(a0 := τ1))
+
+Then these facts hold:
+
+[S4] [S3] τ1 = e2 τ1 → a0 S3; S4 = (e1 := e2 (a0 := τ1), e2/(a0 := τ1))
+
+Both S4 and its assignment (a0:=τ1) appear in S3; S4. In general, arbitrary pieces of S may appear in S; S copied to multiple places. Thus, an implementation should either compose lazily or share common substructures.
+
+Example 4.6. Substitutions can act diﬀerently on distinct namespaces and then merge the namespaces afterward. This is essential for composing substitutions. The key design choice making this work is making substitutions be the leaves of expansions. Deﬁne the following:
+
+τ = e1 a0 → a0 S5 = e1/(a0 := τ )
+These facts hold:
+[S5] τ = e1 τ → a0 [S6] τ = a0 → a0 S5; S6 = (e1 := (a0 := τ ), e1 := )
+
+S6 = (e1 := )
+[S6] [S5] τ = τ → a0 [S5; S6] τ = τ → a0
+
+A “ﬂat” substitution notion (as in System I [8]) which does not interleave ex-
+pansions and substitutions can not express the composition S5; S6. The substitution S5; S6 has an extra assignment (e1:= ) at the end which has
+no eﬀect (other than uglifying the example), because it follows the assignment
+(e1 := (a0 := τ )). The substitution S5; S6 is equivalent to the substitution S7 = (e1 := (a0 := τ )), in the sense that [S5; S6] X = [S7] X for any X other than a skeleton with suspended expansions. Expansion application could have been
+deﬁned to clean up redundant assignments, but at the cost of complexity.
+
+5 Type Environments and Typing Rules
+This section presents the type environments and typing rules of System E. Also, the role of skeletons is explained.
+A type environment is a total function from term variables to types which maps only a ﬁnite number of variables to types other than ω. Let A and B range over type environments. Make the following deﬁnitions:
+[E] A = { (x, [E] A(x)) x ∈ Term-Variable } A ∩. B = { (x, A(x) ∩. B(x)) x ∈ Term-Variable }
+e A = [e ] A = { (x, e A(x)) x ∈ Term-Variable } ! A = [! ] A = { (x, ! A(x)) x ∈ Term-Variable } envω = { (x, ω) x ∈ Term-Variable }
+
+Carlier, Polakow, Wells, Kfoury — System E — ESOP ’04
+
+10
+
+(M Q) : A τ / ∆ (abstraction)
+(λx.M λx. Q) : A[x → ω] A(x) → τ / ∆
+
+(application) (M1
+
+Q1) : A1 τ2 → τ1 / ∆1; (M2 (M1 @ M2 Q1 @ Q2) : A1 ∩. A2
+
+Q2) : A2 τ2 / ∆2 τ1 / ∆1 ∩. ∆2
+
+(variable)
+
+(x x:τ ) : (x : τ ) τ / ω (omega) (M ωM ) : envω ω / ω
+
+(intersection)
+
+(M
+
+Q1) : A1 τ1 (M Q1 ∩. Q2) :
+
+/ ∆1; A1 ∩.
+
+(M Q2) : A2 τ1 ∩. τ2
+
+A2 / ∆1
+
+τ2 / ∩. ∆2
+
+∆2
+
+(bang)
+
+(M Q) : A τ / ∆ (E-variable) (M Q) : A τ / ∆
+
+(M ! Q) : ! A ! τ / ! ∆
+
+(M e Q) : e A e τ / e ∆
+
+(suspended
+
+(M Q) : A τ / ∆
+
+expansion) (M Q, E ) : [E]A [E]τ / [E]∆
+
+(result
+
+(M Q) : A τ1 / ∆
+
+subtyping) (M Q:τ2 ) : A τ2 / ∆ ∩. (τ1 τ2)
+
+(environment
+
+(M Q) : A τ1 / ∆
+
+subtyping) (M Qx:τ2 ) : A[x → τ2] τ1 / ∆ ∩. (τ2 A(x))
+
+Fig. 3. Typing rules.
+
+Let (x1 : τ1, · · · , xn : τt) abbreviate envω[x1 → τ1] · · ·[xn → τn]. Observe, for every E1, E2, A, and x, that [E1 ∩. E2] A = [E1] A ∩. [E2] A, that (e A)(x) = e A(x), that (! A)(x) = ! A(x), that envω = [ω] A, that [E] A[x → τ ] = ([E] A)[x → [E] τ ], and that [E] (A ∩. B) = [E] A ∩. [E] B.
+The typing rules of System E are given in ﬁg. 3. The typing rules derive judgements of the form (M Q) : A τ / ∆. The pair A τ of a type environment A and a result type τ is called a typing. The intended meaning of (M Q) : A τ / ∆ is that Q is a proof that M has the typing A τ , provided that the constraint ∆ is solved w.r.t. some subtyping relation.
+The precise semantic meaning of a typing A τ depends on the subtyping relation that is used. The typing rules avoid specifying whether a constraint ∆ is solved to allow the use of diﬀerent subtyping relations, depending on the user’s needs. Subtyping relations for System E are discussed in sec. 6.
+A skeleton Q is a special kind of term that compactly represents a tree of typing rule uses that derives a judgement for the untyped term given by term(Q). Thus, a skeleton is basically a typing derivation.
+Deﬁnition 5.1 (Valid Skeleton). A skeleton Q is valid iﬀ there exist M , A, τ , and ∆ such that (M Q) : A τ / ∆.
+Lemma 5.2 (Valid Skeletons Isomorphic to Typing Derivations). If (M1 Q) : A1 τ1 / ∆1 and (M2 Q) : A2 τ2 / ∆2, then term(Q) = M1 = M2, A1 = A2, τ1 = τ2, and ∆1 = ∆2.
+
+Carlier, Polakow, Wells, Kfoury — System E — ESOP ’04
+
+11
+
+Subtyping rules for reﬂ, nlin, ﬂex:
+
+τ τ (reﬂ- )
+
+τ1 τ2 τ1
+
+τ3 τ1 τ1 → τ2
+
+τ2 τ4 τ3 → τ4
+
+(→-
+
+)
+
+τ2 τ3
+
+τ3 (trans- )
+
+τ1 e τ1
+
+τ1 τ3 τ1 ∩. τ2
+
+τ2 τ4 τ3 ∩. τ4
+
+(∩. -
+
+)
+
+τ2 e τ2
+
+(e-
+
+)
+
+τ1 ! τ1
+
+τ2 ! τ2
+
+(! -
+
+)
+
+Subtyping rules for nlin, ﬂex:
+
+! τ ω (weak- ) ! τ τ (derel- ) ! τ ! τ ∩. ! τ (contr- )
+
+Subtyping rules for ﬂex:
+
+(e-→- ) e (τ1 → τ2) e τ1 → e τ2
+
+(! -→- ) ! (τ1 → τ2) ! τ1 → ! τ2
+
+ω ω → ω (ω-→- ) (τ1 → τ3) ∩. (τ2 → τ4) (τ1 ∩. τ2) → (τ3 ∩. τ4) (∩. -→- )
+
+Fig. 4. Subtyping rules.
+
+Convention 5.3 Henceforth, only valid skeletons are considered.
+Let typing, constraint, tenv, and rtype be functions s.t. (M Q) : A τ / ∆ implies typing(Q) = A τ , constraint(Q) = ∆, tenv(Q) = A, and rtype(Q) = τ .
+
+6 Subtyping and Solvedness
+
+This section deﬁnes whether a constraint ∆ is solved w.r.t. a subtyping relation , and presents three interesting subtyping relations. Sec. 7 will show that if ∆
+is solved w.r.t. one of these relations, then the judgement (M Q) : A τ / ∆ is preserved by call-by-need evaluation of M (∆ may change to some solved ∆ ).
+Let be a metavariable ranging over subtyping relations on types. A constraint ∆ is solved w.r.t. iﬀ solved( , ∆) holds by this deﬁnition (where the double bar is meant as an equivalence):
+
+τ1 τ2 solved( , τ1 τ2)
+solved( , ∆)
+solved( , e ∆)
+
+solved( , ∆1) solved( , ∆2) solved( , ∆1 ∩. ∆2)
+solved( , ∆)
+solved( , ! ∆) solved( , ω)
+
+A skeleton Q is solved iﬀ constraint(Q) is. Solved skeletons correspond to typing derivations in traditional presentations.
+Fig. 4 presents subtyping relations reﬂ (“reﬂexive”), nlin (“non-linear”), and ﬂex (“ﬂexible”) for use with System E.
+
+Carlier, Polakow, Wells, Kfoury — System E — ESOP ’04
+
+12
+
+M0 initial
+Q0 = Q0
+readback
+
+β ββ M1 M2 Mn
+
+term initial term initial term initial
+
+reﬂ-1
+
+Q1 readback
+Q1 reﬂ-1
+
+Q2 readback
+Q2 reﬂ-1
+
+Qn readback
+Qn
+
+Fig. 5. Correspondence with β-reduction of a particular type inference process.
+
+The reﬂ subtyping relation only allows using subtyping in trivial ways that do not add typing power. When using reﬂ, System E is similar to System I [8], although it types more terms because it has ω. We have implemented type inference using reﬂ that always succeeds for any term M that has a β-normal form and that allows the β-normal form to be reconstructed from the typing.
+Fig. 5 illustrates the type inference process. The full details will appear in a later paper. First, we build an initial skeleton Q0 from the untyped term M0 by giving every term variable the type a0 and inserting E-variables under every abstraction (e0) and application (e1 for the function, e2 for the argument). Then, the rule reﬂ-1 is applied to constraint(Q0) to generate a substitution S0 which is used to calculate Q1 = [S0] Q0. This is repeated as long as possible.
+The dashed edges in the diagram in ﬁg. 5 show a correspondence with untyped β-reduction. The function invocation readback(Q) looks only at tenv(Q), rtype(Q), and constraint(Q) to produce an initial skeleton. In addition to βreduction following constraint solving, the converse also holds and constraint solving can follow any β-reduction sequence, e.g., the normalizing leftmostoutermost strategy. Thus, our algorithm types all β-normalizing terms. Once the β-normal form is reached, if it contains applications, an additional constraint solving rule reﬂ-2 solves the remaining easy constraints.
+Example 6.1. Consider M0 = (λz.z @ (λx.λy.x) @ ((λx.x @ x) @ z))@(λy.y @ y). The normal form of M0 is M5 = λx.λy.x. Note that M0 is not strongly normalizing. The initial and ﬁnal skeletons for M0 are
+Q0 = e1 (λz. e0 ( e1 (e1 z:a0 @ e2 (λx. e0 λy. e0 x:a0 )) @ e2 (e1 (λx. e0 (e1 x:a0 @ e2 x:a0 )) @ e2 z:a0)))
+@ e2 (λy. e0 (e1 y:a0 @ e2 y:a0 ))
+Q5 = (λz. (z:τ2) @ (λx. λy. x:τ1 ) ∩. (λx. e0 (λy. e0 (x:a0 ))) @ ω(λx.x@x)@z) @ (λy. (y:τ1→ω→τ1 ) @ (y:τ1 ))
+where τ1 = e0 e0 a0 → e0 (ω → e0 a0) and τ2 = (τ1 → ω → τ1) ∩. τ1 → ω → τ1. The ﬁnal judgement is that (M0 Q5) : envω τ1 / ∆ for some solved ∆.
+The nlin subtyping relation adds the power of idempotent intersections:
+! τ nlin (! τ ∩. ! τ ) nlin ! τ
+
+Carlier, Polakow, Wells, Kfoury — System E — ESOP ’04
+
+13
+
+This allows many interesting terms to be typed at lower ranks. In particular, the system of simple types, the Hindley/Milner system, and the rank-k restrictions of traditional intersection type systems can all be embedded into System E when using nlin by simply putting ! nearly everywhere in types.
+Example 6.2. Using the nlin subtyping relation, System E can encode arbitrarily imprecise usage information, unlike with reﬂ where it must be exact. For example, consider twice = λf.λx.f @ (f @ x), and some of its typings:
+(1) envω, ! (a1 → a1) → a1 → a1 (2) envω, (a2 → a3) ∩. (a1 → a2) → a1 → a3 (3) envω, (a1 → a1) ∩. (a1 → a1) → a1 → a1 (4) envω, (a1 → a2) ∩. ! (a1 → a1) → a1 → a2
+Typing (1) is like a typing with simple types; as in Linear Logic, the use of ! erases counting information, i.e., twice may use its ﬁrst argument any number of times. Typing (2) looks like a typing in a traditional intersection type system. However, because System E types are linear by default, the typing gives more information, e.g., this typing states that the ﬁrst argument is used exactly twice. Typing (3) is in a sense between typings (1) and (2): the ﬁrst argument is used exactly twice, at the same type. In System E, even when intersection types are not used for additional ﬂexibility, they can still encode precise usage information. (In an implementation, the linear part of types may of course be represented as a multiset.) Finally, typing (4) contains what we call a “must-use” type. The presence of ! on part of the argument’s type erases some counting information. However, there is still one linear use: the ﬁrst argument is used at least once.
+The ﬂex subtyping relation allows embedding all type derivations of the very ﬂexible BCD type system [2], again by putting ! operators in nearly every position in types. The BCD system’s subtyping rules are not satisﬁed by ﬂex, but every BCD rule can be transformed into one satisﬁed by ﬂex by putting ! at all positions mentioned by the rule. The ﬂex relation also allows skeletons to hold the information present in L´evy-labeled λ-terms, such that constraint solving simulates labeled reduction. Our experimentation tool implements this.
+Example 6.3. Consider the following variant L´evy-labeled reduction where each subterm is marked with an integer sequence. For an initial labeling, we use a distinct length-1 sequence for each subterm. The labeled reduction rule is this:
+(λx.M )m @ N −−β−→ M [x := N ]m
+L´evy-labels (which we model with E-variables) track reduction history, and allow information ﬂow for the original term to be extracted from the normal form (in System E, from the typing). Consider this labeled term and its normal form:
+M = ((λx.(x1 @ x2)3)4 @ (λz.(z5 @ y6)7)8)9 M −−β− (y6·5 @ y6)7·8·2·5·7·8·1·3·4·9
+
+Carlier, Polakow, Wells, Kfoury — System E — ESOP ’04
+
+14
+
+If we ask about the original term “what ﬂows to z5?”, we can tell, by collecting labels immediately preceding label 5, that the subterms annotated 6 and 2 both ﬂow to z5. We can also tell which subterms inﬂuence the result. Similar to the way reﬂ-1 corresponds to ordinary β-reduction, we have a rule ﬂex-1 that solves constraints in a way corresponding to labeled reduction. Again, the full details will appear in a later paper. By using distinct E-variables throughout the initial skeleton, applying rule ﬂex-1 until it no longer applies, and doing readback on the typing and constraint at that point, we get this skeleton from our implementation:
+e9 e4 e3 e1 e8 e7 e5 e2 e8 e7 ((e5 e6 (y:a0 ):e6 a0→a0 ) @ e6 (y:a0 ))
+This skeleton has exactly the information in the reduced labeled term.
+
+7 Subject Reduction
+
+This section presents subject reduction results for call-by-need reduction for the three subtyping relations presented in sec. 6.
+
+Remark 7.1. In general, subject reduction does not hold for call-by-name reduction in System E. Consider the following example:
+
+M = term(Q) = (λy.x1 @ y @ y) @ (x2 @ z)
+
+Q1 Q2
+
+= =
+
+x1 x2
+
+:a1 :a2
+
+→a1 →a3
+→(a1∩. a1
+
+@ y:a1 @ ) @ z:a2
+
+y:a1
+
+Q = (λy. Q1) @ Q2
+
+typing(Q1) = (x1 : a1 → a1 → a3, y : a1 ∩. a1) a3 typing(Q2) = (x2 : a2 → (a1 ∩. a1), z : a2) a1 ∩. a1 typing(Q) = (x1 : a1 → a1 → a3, x2 : a2 → (a1 ∩. a1), z : a2)
+
+a3
+
+M −−→β N = term(Q1)[x := term(Q2)] = x1 @ (x2 @ z) @ (x2 @ z)
+
+The skeleton Q is valid since rtype(Q2) = tenv(Q1)(y), and it is solved w.r.t. any subtyping relation since its constraint is ω. If subject reduction holds, we expect that there exists some Q such that term(Q ) = N , and that has the same typing as Q. In particular, we expect that tenv(Q)(z) = tenv(Q )(z) = a2. However, the sub-skeletons of Q corresponding to z must both have type a2. This makes it impossible to construct Q since, in general, τ τ ∩. τ (i.e., solved( , τ τ ∩. τ ) does not hold for any we use). Note that if we use nlin, or ﬂex, and replace a1 by ! a1 and a2 by ! a2, then we could construct the needed skeleton Q .
+Call-by-need reduction on untyped terms is performed by these rules:
+
+(λx.M ) @ V −c−→bn M [x := V ]
+((λx.M ) @ (N1 @ N2)) @ P −c−→bn (λx.M @ P ) @ (N1 @ N2) M @ ((λx.P ) @ (N1 @ N2)) −c−→bn (λx.M @ P ) @ (N1 @ N2)
+
+if x ∈ FV(P ) if x ∈ FV(M )
+
+Let −[c−b→n] be the smallest relation such that M −c−→bn N implies Ct[M ] −[c−b→n] Ct[N ]. Call-by-need evaluation is then a speciﬁc strategy of using these rules [1]. We
+
+Carlier, Polakow, Wells, Kfoury — System E — ESOP ’04
+
+15
+
+do not include any rule for garbage collection, because it does not aﬀect subject reduction.
+Theorem 7.2 (Subject Reduction). Given ∈ { reﬂ, nlin, ﬂex} and a skeleton Q1 such that (M1 Q1) : A τ / ∆1, solved( , ∆1), and M1 −[c−b→n] M2, there exists Q2 s.t. (M2 Q2) : A τ / ∆2 and solved( , ∆2).
+Proof. The theorem is proved by induction on Q1. The proof uses inversion properties for variant subtyping deﬁnitions without explicit transitivity.
+
+References
+[1] Z. M. Ariola, M. Felleisen, J. Maraist, M. Odersky, P. Wadler. The call-by-need lambda calculus. In Conf. Rec. 22nd Ann. ACM Symp. Princ. of Prog. Langs., 1995. [2] H. Barendregt, M. Coppo, M. Dezani-Ciancaglini. A ﬁlter lambda model and the completeness of type assignment. J. Symbolic Logic, 48(4), 1983. [3] S. Carlier. Polar type inference with intersection types and ω. In Proceedings of the 2nd Workshop on Intersection Types and Related Systems, 2002. The ITRS ’02 proceedings appears as vol. 70, issue 1 of Elec. Notes in Theoret. Comp. Sci. [4] M. Coppo, M. Dezani-Ciancaglini, B. Venneri. Principal type schemes and λ-calculus semantics. In J. R. Hindley, J. P. Seldin, eds., To H. B. Curry: Essays on Combinatory Logic, Lambda Calculus, and Formalism. Academic Press, 1980. [5] L. Damas, R. Milner. Principal type schemes for functional programs. In Conf. Rec. 9th Ann. ACM Symp. Princ. of Prog. Langs., 1982. [6] J.-Y. Girard. Interpr´etation Fonctionnelle et Elimination des Coupures de l’Arithm´etique d’Ordre Sup´erieur. Th`ese d’Etat, Universit´e de Paris VII, 1972. [7] T. Jim. What are principal typings and what are they good for? In Conf. Rec. POPL ’96: 23rd ACM Symp. Princ. of Prog. Langs., 1996. [8] A. J. Kfoury, J. B. Wells. Principality and decidable type inference for ﬁnite-rank intersection types. In POPL ’99 [14]. Superseded by [10]. [9] A. J. Kfoury, J. B. Wells. Principality and type inference for intersection types using expansion variables. Supersedes [8], 2003. [10] A. J. Kfoury, J. B. Wells. Principality and type inference for intersection types using expansion variables. Theoret. Comput. Sci., 200X. To appear. Supersedes [8]. For omitted proofs, see the longer report [9]. [11] N. Kobayashi. Quasi-linear types. In POPL ’99 [14]. [12] R. Milner. A theory of type polymorphism in programming. J. Comput. System Sci., 17, 1978. [13] J. C. Mitchell, G. D. Plotkin. Abstract types have existential type. ACM Trans. on Prog. Langs. & Systs., 10(3), 1988. [14] Conf. Rec. POPL ’99: 26th ACM Symp. Princ. of Prog. Langs., 1999. [15] J. C. Reynolds. Towards a theory of type structure. In Colloque sur la Programmation, vol. 19 of LNCS, Paris, France, 1974. Springer-Verlag. [16] D. N. Turner, P. Wadler. Operational interpretations of linear logic. Theoret. Comput. Sci., 227(1–2), 1999. [17] D. N. Turner, P. Wadler, C. Mossin. Once upon a type. In 7th International Conference on Functional Programming and Computer Architecture, San Diego, California, 1995. [18] S. J. van Bakel. Intersection type assignment systems. Theoret. Comput. Sci., 151(2), 1995. [19] P. Wadler. Linear types can change the world. In M. Broy, C. B. Jones, eds., IFIP TC 2 Working Conference on Programming Concepts and Methods, 1990. [20] P. Wadler. Is there a use for linear logic? In Partial Evaluation and Semantics-Based Program Manipulation (PEPM). ACM Press, 1991. [21] K. Wansbrough, S. P. Jones. Once upon a polymorphic type. In POPL ’99 [14]. [22] J. B. Wells. The essence of principal typings. In Proc. 29th Int’l Coll. Automata, Languages, and Programming, vol. 2380 of LNCS. Springer-Verlag, 2002.
+
+

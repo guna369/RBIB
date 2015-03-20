@@ -1,0 +1,403 @@
+Computing Large-Scale Alignments on a Multi-Cluster
+Chunxi Chen and Bertil Schmidt
+
+Contents
+• Motivation • Smith-Waterman Algorithm • Multi-Cluster Platform • Parallelization • Performance Evaluation • Conclusions
+
+Base Pairs of DNA (in billions)
+
+Motivation
+Growth of GeneBank
+30 25 20 15 10
+5 0
+1993 1994 1995 1996 1997 1998 1999 2000 2001 2002 Ye ar
+• Genetic sequence databases are growing exponentially • Growth rate will continue, since multiple concurrent
+genome projects have begun with more to come
+
+Motivation
+• Discovered sequences are analyzed by comparison with sequence databases
+• Complexity of sequence comparison is proportional to the product of query size times database size
+• ⇒ Analysis too slow on sequential computers • There are two approaches:
+– Heuristics, e.g. BLAST, but the more efficient the heuristics, the worse the quality of the results
+– Parallel Processing, get high quality results in reasonable time
+
+Motivation
+• Number of completely sequenced genomes:
+– 105 microbial, 10 Eukaryotic
+– ~ 10 nearly completed eukaryotic genomes – > 300 genome projects planned or underway (http://www.nslij-
+genetics.org/seq/)
+• Closely related genomes
+– Eukaryotic example: C. elegans and C. briggsae
+– Prokaryotic example: E. coli K12 and O157:H7
+• What’s Common and What’s Unique
+– Identify unique & important proteins in pathogens as targets – Identify Genes and Predict Function based on Synteny
+– Susceptibility to disease (SNPs)
+
+Sequence Alignment
+
+• Several algorithms: BLAST, FastA, Smith-Waterman
+
+Slower
+Search Speed
+Faster
+
+SmithWaterman FastA
+BLAST
+
+Lower
+
+Data Quality
+
+Higher
+
+Smith-Waterman Algorithm
+• Optimal local alignment of two sequences • Performs an exhaustive search for the optimal local
+alignment
+– Complexity O(n×m) for sequence lengths n and m
+• Based on the 'dynamic programming' (DP) algorithm
+– Fill the DP matrix using a substitution (mutation) matrix – Find the maximal value (score) in the matrix – Trace back from the score until a 0 value is reached
+
+Smith-Waterman Algorithm
+
+• Aligning S1 and S2 of length l1 and l2 using Recurrences:
+
+⎧0
+
+H
+
+(i,
+
+j)
+
+=
+
+max⎪⎪⎪⎨FE((ii,,
+
+j) j)
+
+,1 ≤ i ≤ l1,1 ≤ j ≤ l2
+
+⎪⎩H (i −1, j −1) + Sbt(S1i , S 2 j )
+
+H (i,0) = E(i,0) = 0 H (0, j) = F (0, j) = 0
+
+E
+
+(i,
+
+j)
+
+=
+
+max
+
+⎧H (i, ⎩⎨ E (i,
+
+j −1) −α j −1) − β
+
+,
+
+F (i,
+
+j)
+
+=
+
+max
+
+⎧H (i −1, ⎩⎨F (i −1,
+
+j) − j) −
+
+α β
+
+• Calculate three possible ways to extend the alignment
+– by one AminoAcid (AA) in each sequence – by one AA in the first sequence and align it with a gap in the second – by one AA in the second sequence and align it with a gap in the first
+
+Smith-Waterman Algorithm
+
+Align S1=ATCTCGTATGATG S2=GTCTATCAC
+
+∅A T C T CGT A TGA TG
+
+Sbt(
+
+x,
+
+y)
+
+=
+
+⎧2 if (x = ⎩⎨−1else
+
+y)
+
+∅ 00000000000000 G 0 0 0 00 0 0 2 1 0 0 2 1 0 2
+T 00212114321132
+
+α=1, β=1
+
+C 00143433321022 T 00236545454321
+
+A 02225544765654
+
+T 01434446598787
+
+C 00365655588777
+
+A 0 2 2 5 5 5 5 4 7 7 7 1100 9 8
+
+⎧0 C 0 1 1
+
+H
+
+(i,
+
+j)
+
+=
+
+max⎪⎪⎪⎨HH
+
+(i −1, j) (i, j −1)
+
+−1 −1
+
+⎪⎩H (i −1, j −1) + Sbt(S1i , S 2 j )
+
+44765666998
+ATCTCGTATGATG GTC −TATCAC
+
+Smith-Waterman Algorithm
+• Aligning two sequences of length N and M
+– Time Complexity: O(N×M) – Memory Complexity: O(N×M)
+• Example
+– aligning m. pneumoniae (816,394 nucleotides) and m. genitalium (580,074 nucleotides)
+– around 500-G Cells in the Similarity Matrix
+
+Computing Maximal Score in Linear Space
+Idea: Store only one row in Similarity Matrix
+Similarity Matrix
+• Compute maximal score in similarity matrix • Computing the path (traceback) requires additional computation
+
+Traceback in Linear Space
+start point max point Optimal midpoint
+
+N/8 N/4 3N/8
+
+i*=N/2
+5N/8 3N/4
+7N/8
+
+Similarity Matrix
+
+Finding Near-Optimal NonOverlapping Alignments
+C=0 C=1 C=2 C=3 C=4 C=5 C=6 C=7 C=8 C=9 C=10 C=11 C=12 C=13
+∅A T C T CG T A TGA T G R=0 ∅ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 R=1 G 0 0 0 0 0 0 2 1 0 0 2 1 0 2 R=2 T 0 0 2 1 2 1 1 4 3 2 1 1 3 2 R=3 C 0 0 1 4 3 4 3 3 3 2 1 0 2 2 R=4 T 0 0 2 3 6 5 4 5 4 5 4 3 2 1 R=5 A 0 2 2 2 5 5 4 4 7 6 5 6 5 4 R=6 T 0 1 4 3 4 4 4 6 5 9 8 7 8 7 R=7 C 0 0 3 6 5 6 5 5 5 8 8 7 7 7 R=8 A 0 2 2 5 5 5 5 4 7 7 7 10 9 8 R=9 C 0 1 1 4 4 7 6 5 6 6 6 9 9 8
+• Aligning Determine k highest scores with different alignment start points. • Use divide-conquer algorithm k times to determine the actual
+alignments.
+
+Multi-Cluster Platform
+
+Parallel and Distributed Processing Lab in NTU
+(PDP)
+
+1Gbps Myrinet
+
+01
+
+Head node
+
+30Mbps bandwidth
+
+1Gbps Myrinet BioInformatics Research Center in NTU (BIRC)
+
+Head node
+
+10
+
+• High performance at low cost • Geographically distributed • Different Bandwidths
+
+Multi-Cluster Programming Environment
+
+node n
+
+node n-1
+
+MPICH process
+
+MPICH process
+
+control node of cluster1
+
+MPICH-GLOBUS2
+
+control node of cluster2
+
+MPICH-G2 process
+
+MPICH-G2 process
+
+sharing memory
+MPICH process
+
+sharing memory
+MPICH process
+
+node n-1
+MPICH process
+
+MPICH-G2 Layer
+
+node n
+MPICH process
+
+MPICH Layer
+
+MPICH Cluster1
+
+internet
+
+MPICH
+Cluster2
+
+Parallelization on Multi-Cluster
+• Wavefront Computation of DP matrix
+P0 P1 P2 Sequence X
+
+Sequence Y
+
+Parallelization on Multi-Cluster
+
+• Divide-and-Conquer traceback computation
+• Define special columns (SC’s) as the last columns of the parts of the similarity matrix allocated to each processor, except the last processor
+• Identify the intersection of an optimal path with the special columns
+
+SC11
+
+SC22
+
+SC33
+
+P0 P1 P2 P3
+
+Optimal Path
+
+Performance Evaluation
+• Using MPICH in PDP and BIRC to check the performance of every cluster
+8
+7
+Ideal Speedup PDP 6 BIRC
+5
+4
+3
+2
+1
+0 012345678
+Number of processors
+
+Speedup
+
+Performance Evaluation
+
+• Speedups on two the clusters in PDP for aligning two sequences of length 100,000
+
+Speedup
+
+10 Ideal Speedup Two Clusters in PDP
+8
+6
+4
+2
+0 02468
+Number of Processors
+
+10
+
+Performance Evaluation
+• Speedups on the PDP and BIRC clusters for aligning two sequences of length 100,000
+
+Speedup
+
+20 18 16 14 12 10
+8 6 4 2 0
+0
+
+Ideal Speedup PDP+BIRC
+2 4 6 8 10 12 14 16 18 20
+Number of Processors
+
+Performance Evaluation
+
+• Quality of Alignment Results
+• Comparison to results of MUMmer
+– Assumes two sequences are closely-related (highly similar)
+– Can align two bacterial genomes under 1 minute
+– Uses Suffix Tree to find Maximal Unique Matches
+– Maximal Unique Match (MUM) Definition:
+• A subsequence that occurs in two exactly matching copies, once in each input sequence, and that can not be extended in either direction
+– Key idea: significant long MUM is certainly to be part of the global alignment
+
+Can you find the MUM?
+
+Performance Evaluation
+
+• Quality of Alignment Results
+• Align mitochondrial genomes of Human and Drosophila (not very related)
+
+20000 16000
+
+Our System
+
+20000 16000
+
+MUMmer
+
+Drosophila mitochondrial Drosophila mitochondrial
+
+12000
+
+12000
+
+8000
+
+8000
+
+4000
+
+4000
+
+0
+
+0
+
+4000
+
+8000
+
+12000
+
+16000
+
+Human mitochondrial
+
+0
+
+0
+
+4000
+
+8000
+
+12000
+
+16000
+
+Human mitochondrial
+
+Conclusion and Future Work
+• Presented how alignment of long DNA sequences based Dynamic Programming and Divide-andConquer can be efficiently parallelized on a MultiCluster Architecture
+• Investigating which other applications can benefit from this type of computing power
+• Investigating different bandwidths levels
+
+
