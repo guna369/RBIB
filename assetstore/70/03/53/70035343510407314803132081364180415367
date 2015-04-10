@@ -1,0 +1,324 @@
+Curry-Style Types for Nominal Terms
+
+Maribel Fern´andez and Murdoch J. Gabbay
+
+King’s College London
+
+Heriot-Watt University
+
+Dept. Computer Science Dept. Mathematics and Computer Science
+
+Strand, London WC2R 2LS, UK Riccarton, Edinburgh EH14 4AS, UK
+
+maribel.fernandez@kcl.ac.uk
+
+murdoch.gabbay@gmail.com
+
+Abstract. We deﬁne a rank 1 polymorphic type system for nominal terms, where typing environments type atoms, variables and function symbols. The interaction between type assumptions for atoms and substitution for variables is subtle: substitution does not avoid capture and so can move an atom into multiple diﬀerent typing contexts. We give typing rules such that principal types exist and are decidable for a ﬁxed typing environment. α-equivalent nominal terms have the same types; a non-trivial result because nominal terms include explicit constructs for renaming atoms. We investigate rule formats to guarantee subject reduction. Our system is in a convenient Curry-style, so the user has no need to explicitly type abstracted atoms. Keywords: binding, polymorphism, type inference, rewriting.
+1 Introduction
+Nominal terms are used to specify and reason about formal languages with binding, such as logics or programming languages. Consider denumerable sets of atoms a, b, c, . . ., variables X, Y, Z, . . ., and term-formers or function symbols f, g, . . .. Following previous work [10, 21], nominal terms t are deﬁned by:
+s, t ::= a | [a]t | f t | (t1, . . . , tn) | π·X π ::= Id | (a b) ◦ π
+and called respectively atoms, abstractions, function applications, tuples, and moderated variables (or just variables). We call π a permutation and read (a b)·X as ‘swap a and b in X’. We say that permutations suspend on variables. X is not a term but Id·X is and we usually write it just as X. Similarly we omit the ﬁnal Id in π, writing (a c)·X instead of ((a c) ◦ Id)·X.
+For example, suppose term-formers lam and app. Then the nominal terms lam[a]a and app(lam[a]a, a) represent λ-terms λx.x and (λx.x)x, and lam[a]X and app(lam[a]X, X) represent λ-term ‘contexts’ λx.- and (λx.-)-. Note how X occurs under diﬀerent abstractions. Substitution for X is grafting of syntax trees, it does not avoid capture of atoms by abstractions; we may call it instantiation.
+Nominal terms diﬀer from other treatments of syntax-with-binding because they support a capturing substitution, and the notation, although formal, is
+Research partially supported by the EPSRC (EP/D501016/1 “CANS”).
+
+close to standard informal practice; for example β-reduction may be represented simply but explicitly as app(lam[a]X, Y ) → sub([a]X, Y ) where sub([a]X, Y ) is a term which may be given the behaviour of ‘non-capturing substitution’ (once we instantiate X and Y ) by rewrite rules [10, 12].
+Now consider static semantics, i.e. types like τ ::= N | τ → τ where we read N as numbers and τ → τ as function types. Assigning types to terms partitions the language into ‘numbers’, or ‘functions between numbers’, and so on. Java [16], ML [9], and System F [15] demonstrate how this is commercially useful and theoretically interesting.
+Existing static semantics for nominal terms type atoms with a special type of atoms A [21, 20]. But when we write lam[a]X or lam[a]a, our intention is λx.or λx.x and we do not expect a to be forbidden from having any type other than A. We can use explicit casting function symbols to inject A into other types; however the a in lam[a]X still has type A, so we cannot infer more about a until X is instantiated. This notion of typing can only usefully type terms without variables and in the presence of polymorphism such strategies break down entirely.
+We now present a Curry-style system with rank 1 polymorphism (ML-style polymorphism or Hindley-Milner types [9]). Atoms can inhabit any type. We can write lam[a]X, or f ix[f ]X, or f orall[a]X, or app(lam[a]X, lam[b]X), and so on, and expect the type system to make sense of these terms, even though these terms explicitly feature context holes representing unknown terms and abstractions over those holes. Diﬀerent occurrences of X may be under diﬀerent numbers of abstractions, and for diﬀerent atoms. This means that, when we instantiate X with t, the atoms in t may move into diﬀerent type contexts and so receive diﬀerent types. At the same time, the entire type system is consistent with a functional intuition, so X of type N manages to simultaneously behave like an ‘unknown number’ and an ‘unknown term’.
+We give syntax-directed typing rules and show that every typable term has a principal type (one which subsumes all others in a suitable sense) in a given environment. Type inference is decidable and types are compatible with αequivalence on nominal terms. We give a notion of typable rewrite rule such that rewriting preserves types. In future, we plan to extend the system with intersection types, to derive a system with principal typings (a type and a type environment which subsume all others). With this system we will study normalisation of nominal terms.
+2 Background
+We continue the notation from the Introduction. Write V (t) for the variables in t and A(t) for the atoms in t (e.g., a, b, c ∈ A([a][b](a c)·X), X ∈ V ([a][b](a c)·X)). We deﬁne π·t, the permutation action of π on t, inductively by:
+2
+
+Id·t ≡ t and ((a b) ◦ π)·t ≡ (a b)·(π·t), where
+(a b)·a ≡ b (a b)·b ≡ a (a b)·c ≡ c (c ≡ a, b) (a b)·(π·X) ≡ ((a b) ◦ π)·X (a b)·f t ≡ f (a b)·t (a b)·[n]t ≡ [(a b)·n](a b)·t (a b)·(t1, . . . , tn) ≡ ((a b)·t1, . . . , (a b)·tn)
+For example (a b)·lam[a](a, b, X) ≡ lam[b](b, a, (a b)·X). Deﬁne t[X→s], the (term-)substitution of X for s in t, by:
+(f t)[X→s] ≡ f (t[X→s]) ([a]t)[X→s] ≡ [a](t[X→s]) (π·X)[X→s] ≡ π·s a[X→s] ≡ a (t1, . . .)[X→s] ≡ (t1[X→s], . . .) (π·Y )[X→s] ≡ π·Y (X ≡ Y )
+Term-substitutions are deﬁned by θ ::= Id | [X→s]θ and have an action given by tId ≡ t and t([X→s]θ) ≡ (t[X→s])θ. We write substitutions postﬁx, and write ◦ for composition of substitutions: t(θ ◦ θ ) ≡ (tθ)θ .
+Nominal syntax represents systems with binding, closely following informal notation. See [21, 10, 11] for examples and discussions of nominal terms and nominal rewriting. It has the same applications as higher-order systems such as Klop’s CRSs, Khasidashvili’s ERSs, and Nipkow’s HRSs [18, 17, 19]. Intuitively, the distinctive features of nominal syntax are:
+– X is an ‘unknown term’; the substitution action t[X→s] which does not avoid capture, makes this formal. Therefore X behaves diﬀerently from ‘free variables’ of systems such as HRSs [19] or meta-variables of CRSs [18].
+– [a]X denotes ‘X with a abstracted in X’. We do not work modulo αequivalence and [a]X and [b]X are not equal in any sense; for example ([a]X)[X→a] ≡ [a]a and ([b]X)[X→a] ≡ [b]a, and we certainly expect from the intuition ‘λx.x’ and ‘λx.y’ that [a]a and [b]a should not be equal. Therefore atoms in nominal terms also behave diﬀerently from ‘bound variables’ of systems such as HRSs, ERSs and CRSs. We call occurrences of a abstracted when they are in the scope of [a]-, and otherwise we may call them unabstracted.
+– (a b)·X represents ‘X with a and b swapped’. So π·[a]s ≡ [π·a]π·s, and (a b)·[a][b]X ≡ [b][a](a b)·X. Therefore this permutation action is distinct from De Bruijn’s transformers and other explicit substitutions, which avoid capture as they distribute under abstractions, and which do not satisfy the same simple algebraic laws [7]. We now come to some of the more technical machinery which gives nominal
+terms their power. We call a#t a freshness constraint, and s ≈α t an equality constraint.
+We will use letters P, Q to range over constraints. We introduce a notion of derivation as follows (below a, b denote two diﬀerent atoms):
+3
+
+a#s a#si (1 ≤ i ≤ n)
+
+a#s π-1(a)#X s≈αt
+
+a#b a#f s a#(s1, . . . , sn) a#[a]s a#[b]s a#π·X f s≈αf t
+
+s≈αt s≈α(a b)·t a#t ds(π, π )#X si≈αti (1 ≤ i ≤ n)
+
+a≈αa [a]s≈α[a]t
+
+[a]s≈α[b]t
+
+π·X≈απ ·X (s1, . . . , sn)≈α(t1, . . . , tn)
+
+Here we write π-1 (the inverse of π) for the permutation obtained by reversing the order of the list of swappings; for example ((a b) ◦ (c d))-1 = (c d) ◦
+
+(a b). Here ds(π, π ) ≡ n π(n) = π (n) is the diﬀerence set. For exam-
+
+ple ds((a b), Id) = {a, b} so (a b)·X ≈α X follows from a#X and b#X. Also [a]a ≈α [b]b and [a]c ≈α [b]c but not [a]c ≈α [a]a; this is what we would expect.
+Write ∆, ∇ for sets of freshness constraints of the form a#X and call these
+
+freshness contexts. We write P r for an arbitrary set of freshness and equality
+
+constraints; we may call P r a problem. Substitutions act on constraints and
+
+problems in the natural way. Write ∆ P when a derivation of P exists using
+
+elements of ∆ as assumptions, and extend this notation elementwise to ∆ P r
+
+for deducibility of all P ∈ P r (see [21, 11] for algorithms to check constraints).
+
+For example, ∆ ∇θ means that the constraints obtained by applying the
+
+substitution θ to each term in ∇ can be derived from ∆. We will use this notation
+
+in the deﬁnition of matching in Section 4.1.
+
+The following result is one of the main technical correctness properties of
+
+nominal terms, and we should compare it with Theorem 8.
+
+Theorem 1 If ∆ a#s and ∆ s ≈α t then ∆ a#t.
+
+Proofs, and further properties of nominal terms, are in [21, 12].
+
+3 Typing
+3.1 Types and type schemes
+We consider denumerable sets of – base data types (write a typical element δ), e.g. N is a base data type for numbers; – type variables (write a typical variable α); – type-formers (write a typical element C), e.g. List is a type-former.
+Deﬁnition 1. Types τ , type-schemes σ, and type-declarations (or arities) ρ are deﬁned by:
+τ ::= δ | α | τ1 × . . . × τn | C τ | [τ ]τ σ ::= ∀α.τ ρ ::= (τ )τ
+α denotes any ﬁnite set of type variables (if empty we omit the ∀ entirely); we call them bound in σ and call free any type variables mentioned in σ and not in α. We write T V (τ ) for the set of type variables in τ , and ≡ for equality modulo α-equivalence for bound variables.1
+1 We could express types too using nominal syntax. We use the standard informal treatment because we focus on the term language in this paper.
+
+4
+
+We call τ1 × . . . × τn a product and [τ ]τ an abstraction type. We say that C τ is a constructed type, and we associate a type declaration to each term-former. For example, we can have succ : (N)N and 0 : ()N (we may write just 0 : N in this case).
+Basic type substitution τ [α→τ ] is the usual inductive replacement of τ for every α in τ ; base cases are α[α→τ ] ≡ τ and α[β→τ ] ≡ α. We extend the action elementwise to arities ρ, for example ((τ )τ )[α→τ ] ≡ τ [α→τ ] (τ [α→τ ]), and to type-schemes σ in the usual capture-avoiding manner. For example:
+([α]α)[α→τ ]≡[τ ]τ (∀β.[β]α)[α→β]≡∀β .[β ]β ((α×β)α)[α→β]≡(β×β)β
+Type substitutions S, T , U are deﬁned by S ::= Id | S[α→τ ] where Id is the identity substitution: τ Id ≡ τ by deﬁnition (we also use Id for the identity substitution on terms, but the context will always indicate which one we need). S has an action on types τ , schemes σ, and arities ρ, given by the action of Id and by extending the basic action of the last paragraph. We write application on the right as τ S, and write composition of substitutions just as SS , meaning apply S then apply S . The domain of a substitution S, denoted dom(S), is the set of type variables α such that αS = α.
+Substitutions are partially ordered by instantiation. Write mgu(τ, τ ) (most general uniﬁer) for a least element S such that τ S ≡ τ S (if one exists). We refer the reader to [1] for detailed deﬁnitions and algorithms for calculating mgu.
+Write σ τ when σ ≡ ∀α.τ and τ S ≡ τ for some S which instantiates only type variables in α. τ may contain other type variables; only bound type variables in σ may be instantiated, for example ∀α.(α×β) (β ×β) but (α×β) (β ×β).
+Also write ρ ρ when ρS ≡ ρ for some S. In eﬀect all variables in arities are bound, but since they are all bound we do not write the ∀. For example (α × α)α (β × β)β (N × N)N.
+The following useful technical result follows by an easy induction:
+Lemma 2 If σ τ then σ[α→τ ] τ [α→τ ]. Also if ρ ρ then ρ ρ [α→τ ].
+3.2 Typing judgements
+A typing context Γ is a set of pairs (a : σ) or (X : σ) subject to the condition that if (a : σ), (a : σ ) ∈ Γ then σ ≡ σ , similarly for X.
+We write Γ, a : σ for Γ updated with (a : σ), where this means either Γ ∪ {(a : σ)} or (Γ \ {(a : σ )}) ∪ {(a : σ)} as well-formedness demands. Similarly we write Γ, X : σ. For example, if Γ = a : α then Γ, a : β denotes the context a : β. We say that a (or rather its association with a type) is overwritten in Γ . We write Γ S for the typing context obtained by applying S to the types in Γ . Similarly, π·Γ denotes the context obtained by applying π to the atoms in Γ . T V (Γ ) denotes the set of type variables occurring free in Γ .
+Deﬁnition 2. A typing judgement is a tuple Γ ; ∆ s : τ where Γ is a typing context, ∆ a freshness context, s a term and τ a type (when ∆ is empty we omit the separating ; ).
+5
+
+We inductively deﬁne derivable typing judgements as follows:
+
+στ
+
+σ τ Γ ; ∆ π·X :
+
+Γ, a : τ; ∆ t : τ
+
+Γ, a : σ; ∆ a : τ Γ, X : σ; ∆ Γ ; ∆ ti : τi (1 ≤ i ≤ n)
+Γ ; ∆ (t1, . . . , tn) : τ1 × . . . × τn
+
+π·X : τ Γ;∆
+
+Γ ; ∆ [a]t : [τ ]τ t : τ f : ρ (τ )τ Γ;∆ ft : τ
+
+Here Γ ; ∆ π·X : holds if, for any a such that π·a = a, ∆ a#X or
+
+a : σ, π·a : σ ∈ Γ for some σ. The condition f : ρ (τ )τ is shorthand for
+
+f : ρ and ρ (τ )τ . The way we set things up, the arity of f is ﬁxed and is
+
+independent of Γ . In the rule for abstractions the type environment is updated.
+
+We may write ‘Γ ; ∆ s : τ ’ for ‘Γ ; ∆ s : τ is derivable’.
+
+To understand the condition in the second rule, note that π·X represents an
+
+unknown term in which π permutes atoms. Unlike non-nominal α-equivalence,
+
+α-equivalence on nominal terms exists in the presence of unknowns X for which
+
+substitution does not avoid capture, as ([a]X)[X→s] = [a]s demonstrates and as
+
+s ≈α (a b)·t a#t
+
+ds(π, π )#X
+
+the rules
+
+and show. Our typing system is designed
+
+[a]s ≈α [b]t
+
+π·X ≈α π ·X
+
+to be compatible with this relation and so must be sophisticated in its treatment
+
+of permutations acting on unknowns. For concreteness take π = (a b) and any
+
+term t. If Γ t : τ then Γ (a b)·t : τ should hold when at least one of the
+
+following conditions is satisﬁed:
+
+1. (a b)Γ = Γ so that Γ cannot ‘tell the diﬀerence between a and b in t’.
+
+2. If a and b occur in t then they are abstracted, so that what Γ says about a
+
+and b gets overwritten.
+
+Given Γ , ∆ and s, if there exists τ such that Γ ; ∆ s:τ is derivable, then
+
+we say Γ ; ∆ s is typable. Otherwise say Γ ; ∆ s is untypable.
+
+The following are examples of derivable typing judgements:
+
+a : ∀α.α, X : β (a, X) : α × β a : ∀α.α, X : β (a, X) : β × β
+
+[a]a : [α]α a : β [a]a : [α]α
+
+[a]a : [ζ]ζ
+
+a : α, b : α, X : τ (a b)·X : τ X : τ ; a#X, b#X (a b)·X : τ
+
+X : τ, a : α, b : α [a]((a b)·X, b) : [α](τ × α)
+
+a : α, b : β ( [a](a, b), [a][b](a, b), a, b, [a][a](a, b)) : [α](α × β)× [α][β](α × β)× α× β× [α][α](α × β).
+
+a : α, b : β ( [a](a, b),
+
+[a][b](a, b), a, b, [a]([a](a, b), a)) :
+
+[α1](α1 × β)× [α2][β2](α2 × β2)× α× β× [α3]([α4](α4 × β), α3).
+
+The ﬁrst line of examples just illustrates some basic typings, and the use of . The second line illustrates typing abstractions and how this overwrites in Γ . The third line illustrates how permutations are typed. The last three illustrate interactions between typing and (multiple) abstractions and free occurrences of atoms. Note that a : α, X : τ (a b)·X : τ and a : α, X : τ ; b#X (a b)·X : τ .
+
+Lemma 3 If Γ ; ∆ t : τ then Γ [α→τ ]; ∆ t : τ [α→τ ].
+
+6
+
+Proof. By induction on the derivation, using Lemma 2 for the side-conditions.
+Lemma 4 If Γ ;∆ t:τ and a,b:σ ∈ Γ for some σ, then (a b)·Γ ;∆ (a b)·t:τ .
+Proof. By induction on the type derivation: The case for atoms is trivial. In the case of a variable, the side condition holds since a and b have the same type in Γ . The other cases follow directly by induction.
+3.3 Principal types
+Deﬁnition 3. A typing problem is a triple (Γ, ∆, s), written: Γ ; ∆ s:?. A solution to Γ ; ∆ s :? is a pair (S, τ ) of a type-substitution S and a type τ such that Γ S; ∆ s:τ . We write S|Γ for the restriction of S to T V (Γ ).
+For example, solutions to X:α, a:β, b:β (a b)·X:? are (Id, α) and ([α→N], N). Note that a solution may instantiate type-variables in Γ .
+Solutions have a natural ordering given by instantiation of substitutions:
+(S, τ ) ≤ (S , τ ) when ∃S .S ≡ SS ∧ τ ≡ τ S ;
+we call (S , τ ) an instance of (S, τ ) using S . A minimal element in a set of solutions is called a principal solution. By our deﬁnitions there may be many principal solutions; (Id, α) and (Id, β) are both principal for X : ∀α.α X :?. As in the case of most general uniﬁers, principal solutions for a typable Γ ; ∆ s are unique modulo renamings of type-variables. In a moment we show that the following algorithm calculates principal solutions:
+Deﬁnition 4. The partial function pt(Γ ; ∆ s) is deﬁned inductively by: – pt(Γ, a:∀α.τ ; ∆ a) = (Id, τ ), where α ∈ α are assumed fresh (not in Γ ) without loss of generality. – pt(Γ, X:∀α.τ ; ∆ π·X) = (S, τ S) (again α ∈ α are assumed fresh) provided that for each a in π such that a = π·a, we have ∆ a#X, or otherwise a : σ, π·a : σ ∈ Γ for some σ, σ that are uniﬁable. The substitution S is the mgu of those pairs, or Id if all such a are fresh for X. – pt(Γ ; ∆ (t1, . . . , tn)) = (S1 . . . Sn, φ1S2 . . . Sn × . . . × φn−1Sn × φn) where pt(Γ ; ∆ t1) = (S1, φ1), pt(Γ S1; ∆ t2) = (S2, φ2), . . . , pt(Γ S1 . . . Sn−1; ∆ tn) = (Sn, φn). – pt(Γ ; ∆ f t) = (SS , φS ) where pt(Γ ; ∆ t) = (S, τ ), f : ρ ≡ (φ )φ where the type variables in ρ are chosen distinct from those in Γ and τ , and S = mgu(τ, φ ). – pt(Γ ; ∆ [a]s) = (S|Γ , [τ ]τ ) where pt(Γ, a:α; ∆ s) = (S, τ ), α is chosen fresh, αS = τ . Here Γ, a:α denotes Γ with any type information about a overwritten to a:α, as discussed in Subsection 3.2.
+pt(Γ ; ∆ s) may be undeﬁned; Theorem 5 proves that s is untypable in the environment Γ ; ∆.
+7
+
+The deﬁnition above generalises the Hindley-Milner system [9] for the λcalculus with arbitrary function symbols f , as is standard in typing algorithms for rewrite systems [2], and with atoms and variables (representing ‘unknown terms’) with suspended atoms-permutations.
+The treatment of typing for atoms, abstraction and moderated variables is new; for example if Γ = X : τ, a : α, b : α, then Γ [a](a b)·X : [α]τ but not Γ [a](a b)·X : [β]τ . However, Γ [a]X : [β]τ as expected.
+pt(Γ ; ∆ s) gives a static semantics in the form of a most general type to s, given a typing of atoms and variables mentioned in s, and information about what atoms may be forbidden from occurring in some variables.
+Theorem 5 1. If pt(Γ ; ∆ s) is deﬁned and equal to (S, τ ) then Γ S; ∆ s : τ is derivable.
+2. Let U be a substitution such that dom(U ) ⊆ T V (Γ ). If Γ U ; ∆ s : µ is derivable then pt(Γ ; ∆ s) is deﬁned and (U, µ) is one of its instances.
+That is: (1) “pt(Γ ; ∆ s) solves (Γ ; ∆ s:?)”, and (2) “any solution to (Γ ; ∆ s:?) is an instance of pt(Γ ; ∆ s)”.
+Proof. The ﬁrst part is by a routine induction on the derivation of pt(Γ ; ∆ s) = (S, τ ) (using Lemma 3), which we omit. The second part is by induction on the syntax of s:
+– Suppose Γ U ; ∆ π·X : µ. Examining the typing rules, we see that X : ∀α.τ ∈ Γ and X : ∀α.τ U ∈ Γ U , that Γ U ; ∆ π·X : , and that µ = τ U S for some S acting only on α (U acts trivially on α because we assume α was chosen fresh). Hence, for each a such that a = π·a, we have ∆ a#X, or, for some σ, a : σ, π·a : σ ∈ Γ U , that is, a : σ1, π·a : σ2 ∈ Γ . Let V be the mgu of all such pairs σ1, σ2, so U = V S (we take V = Id if there are no pairs to consider). Thus, pt(Γ ; ∆ π·X) = (V, τ V ). Therefore, (U, µ) = (V S S, τ V S S).
+– Suppose Γ U ; ∆ a : µ. Clearly a is typable in the context Γ ; ∆ so (examining the typing rules) a : ∀α.τ must occur in Γ and pt(Γ ; ∆ a) = (Id, τ ). It is now not hard to satisfy ourselves that (Id, τ ) is principal.
+– Suppose Γ U ; ∆ [a]t:µ. This may happen if and only if µ ≡ [µ ]µ and (U [α → µ ], µ ) solves Γ, a : α; ∆ t:?, where α is fresh for Γ . By inductive hypothesis (U [α → µ ], µ ) is an instance of (S, τ ) = pt(Γ, a : α; ∆ t), that is, there is a substitution Ua such that U [α → µ ] = SUa, µ = τ Ua. By deﬁnition, pt(Γ ; ∆ [a]t) = (S|Γ , [τ ]τ ) where τ = αS. So (SUa)|Γ = U and αSUa = µ . Therefore (U, [µ ]µ ) is an instance of (S|Γ , [αS]τ ).
+– The cases for (t1, . . . , tn) and f t are long, but routine.
+Corollary 6 Γ ; ∆ s is typable if and only if pt(Γ ; ∆ s)=(Id, τ ) for some τ .
+3.4 α-equivalence and types
+We now prove that α-equivalence respects types; so our static semantics correctly handles swappings and variables X whose substitution can move atoms into new abstracted (typing) contexts. We need some deﬁnitions: Given two type contexts
+8
+
+Γ and Γ , write Γ, Γ for that context obtained by updating Γ with typings in Γ , overwriting the typings in Γ if necessary. For example if Γ = a : α and Γ = a : β, b : β then Γ, Γ = a : β, b : β. If Γ and Γ mention disjoint sets of atoms and variables (we say they are disjoint) then Γ, Γ is just a set union.
+Lemma 7 1. If Γ ; ∆ s : τ then Γ, Γ ; ∆ s : τ , provided that Γ and Γ are disjoint. Call this type weakening.
+2. If Γ, a : τ ; ∆ s : τ then Γ ; ∆ s : τ provided that ∆ a#s. Call this type strengthening (for atoms).
+3. If Γ, X : τ ; ∆ s : τ then Γ ; ∆ s : τ provided X does not occur in s. Call this type strengthening (for variables).
+Proof. By induction on the derivation. For the second part, if a occurs in s under an abstraction, then a : τ is overwritten whenever a is used.
+Theorem 8 ∆ s ≈α t and Γ ; ∆ s : τ imply Γ ; ∆ t : τ .
+Proof. By induction on the size of (s, t). The form of t is rather restricted by our assumption that ∆ s ≈α t — for example if s ≡ π·X then t ≡ π ·X for some π . We use this information without commment in the proof.
+– Suppose ∆ a ≈α a and Γ ; ∆ a : τ . There is nothing to prove. – Suppose ∆ [a]s ≈α [a]t and Γ ; ∆ [a]s : τ . Then ∆ s ≈α t, and
+τ ≡ [τ ]τ , and Γ, a : τ ; ∆ s : τ . We use the inductive hypothesis to deduce that Γ, a : τ ; ∆ t : τ and concluce that Γ ; ∆ [a]t : [τ ]τ . – Suppose ∆ [a]s ≈α [b]t and Γ ; ∆ [a]s : τ . Then by properties of ≈α [21, Theorem 2.11] we know ∆ s ≈α (a b)·t, a#t, (a b)·s ≈α t, b#s. Also τ ≡ [τ ]τ and Γ, a : τ ; ∆ s : τ . By Lemma 7 (Weakening) also Γ, a : τ , b : τ ; ∆ s : τ . By equivariance (Lemma 4) (a b)·Γ, b : τ , a : τ ; ∆ (a b)·s : τ . Since ∆ (a b)·s ≈α t, by inductive hypothesis (a b)·Γ, b : τ ,a : τ ;∆ t : τ . Now note that (a b)·Γ, b : τ , a : τ = Γ, b : τ , a : τ (because any data Γ has on a and b is overwritten). So Γ, b : τ , a : τ ; ∆ t : τ . We conclude that Γ, b : τ , a : τ ; ∆ [b]t : [τ ]τ . Since ∆ a#[b]t and ∆ b#[b]t by Lemma 7 (strengthening for atoms) we have Γ ; ∆ [b]t : [τ ]τ . – Suppose ∆ π·X ≈α π ·X and suppose Γ ; ∆ π·X : τ . Then ∆ ds(π, π )#X, and X : σ ∈ Γ , and σ τ , and Γ ; ∆ π·X : . ∆ ds(π, π )#X so Γ ; ∆ π ·X : and Γ ; ∆ π ·X : τ follows. – The cases of f t and (t1, . . . , tn) follow easily.
+Corollary 9 ∆ s ≈α t implies pt(Γ ; ∆ s) = pt(Γ ; ∆ t) modulo renamings of type variables, for all Γ, ∆ such that either side of the equality is deﬁned.
+4 Rewriting
+We now consider how to make a notion of nominal rewriting (i.e., a theory of general directed equalities on nominal terms [12]) interact correctly with our type system. We start with some deﬁnitions taken from [12].
+9
+
+A nominal rewrite rule R ≡ ∇ l → r is a tuple of a freshness context ∇, and terms l and r such that V (r, ∇) ⊆ V (l). Write R(a b) for that rule obtained by swapping a and b in R throughout. For example, if R ≡ b#X [a]X → (b a)·X then R(a b) ≡ a#X [b]X → (a b)·X. Let RId ≡ R and R(a b)◦π = (R(a b))π. Let R range over (possibly inﬁnite) sets of rewrite rules. Call R equivariant when if R ∈ R then R(a b) ∈ R for all distinct atoms a, b. A nominal rewrite system is an equivariant set of nominal rewrite rules.
+Say a term s has a position at X when it mentions X once, with the permutation Id. We may call X a hole. Write s[s ] for s[X→s ].2 We would usually call s a ‘context’ but we have already used this word so we will avoid it. For example, X and [a]X have positions at X, but (X, X) and (a b)·X do not. We may make X nameless and write it just -.
+Deﬁnition 5. Suppose pt(Φ; ∇ l) = (Id, τ ) and suppose that Φ mentions no type-schemes. All the recursive calls involved in calculating pt(Φ; ∇ l) have the form pt(Φ, Φ ; ∇ l ) where l is a subterm of l and Φ contains only type assumptions for atoms. We will call recursive calls of the form pt(Φ, Φ ; ∇ π·X) = (S, τ ) variable typings of Φ; ∇ l : τ .
+Note that there is one variable typing for each occurrence of a variable in l, and they are uniquely deﬁned modulo renaming of type variables. Also, S may aﬀect Φ but not Φ since we assume that pt(Φ; ∇ l) = (Id, τ ).
+Deﬁnition 6. Let pt(Φ, Φ ; ∇ π·X) = (S, τ ) be a variable typing of Φ; ∇ l : τ , and let Φ be the subset of Φ such that ∇ A(Φ \Φ )#π·X. We call Φ, Φ S; ∇ π·X : τ an essential typing of Φ; ∇ l : τ .
+So the essential typings of a : α, b : α, X : τ ((a b)·X, [a]X) : τ × [α ]τ are:
+a : α, b : α, X : τ (a b)·X : τ and b : α, a : α , X : τ X : τ .
+The essential typings of a : α, b : α, X : τ ; a#X ((a b)·X, [a]X) : τ × [α ]τ are:
+b : α, X : τ (a b)·X : τ and b : α, X : τ X : τ .
+We will talk about the typing at a position in a term; for example the typing at Z in (Z, [a]X)[Z → (a b)·X] in the ﬁrst example above (with hole named Z) is a : α, b : α, X : τ (a b)·X : τ .
+4.1 Matching problems
+Deﬁnition 7. A (typed) matching problem (Φ; ∇ l) ?≈ (Γ ; ∆ s) is a pair of tuples (Φ and Γ are typing contexts, ∇ and ∆ are freshness contexts, l and s are terms) such that the variables and type-variables mentioned on the lefthand side are disjoint from those mentioned in Γ, ∆, s, and such that Φ mentions no atoms or type-schemes.
+2 Here ‘positions’ are based on substitution and not paths in the abstract syntax tree as in [10]. The equivalence is immediate since substitution is grafting.
+10
+
+Below, l will be the left-hand side of a rule and s will be a term to reduce. The condition that Φ mentions no atoms or type-schemes may seem strong, but is all we need: we give applications in Section 4.3.
+Intuitively, we want to make the term on the left-hand side of the matching problem α-equivalent to the term on the right-hand side. Formally, a solution to this matching problem, if it exists, is the least pair (S, θ) of a type- and termsubstitution (the ordering on substitutions extends to pairs component-wise) such that: 1. Xθ ≡ X for X ∈ V (Φ,∇,l), αS ≡ α for α∈T V (Φ)3, ∆ lθ≈αs and ∆ ∇θ. 2. pt(Φ; ∇ l) = (Id, τ ), pt(Γ ; ∆ s) = (Id, τ S), and for each Φ, Φ ; ∇
+π·X : φ an essential typing in Φ; ∇ l : τ , we have Γ, (Φ S); ∆ (π·X)θ : φ S. The ﬁrst condition deﬁnes a matching solution for untyped nominal terms (see [21, 12] for more details on untyped nominal matching algorithms). The last condition enforces type consistency: the terms should have compatible types, and the solution should instantiate the variables in a way that is compatible with the typing assumptions. When the latter holds, we say that (S, θ) respects the essential typings of Φ; ∇ l : τ in the context Γ ; ∆. For example, (X:α X) ?≈ (a:B a) has solution ([α→B], [X→a]), whereas (X:B X) ?≈ (a:α a) has no solution — α on the right is too general. To see why we need to check θ in the second condition, consider the term g(f T rue) where g : (α)N and f : (β)N, that is both functions are polymorphic, and produce a result of type N. Then the untyped matching problem g(f X)) ?≈ g(f T rue) has a solution (Id, {X → T rue}), but the typed matching problem (X : N g(f X)) ?≈ ( g(f T rue)) has none: {X → T rue} fails the last condition since X is required to have type N but it is instantiated with a boolean.
+4.2 Typed rewriting
+Deﬁnition 8. A (typed) rewrite rule R ≡ Φ; ∇ l → r : τ is a tuple of a type context Φ which only types the variables in l and has no type-schemes (in particular, Φ mentions no atoms), a freshness context ∇, and terms l and r such that 1. V (r, ∇, Φ) ⊆ V (l), 2. pt(Φ; ∇ l) = (Id, τ ) and Φ; ∇ r : τ . 3. Essential typings of Φ; ∇ r : τ are also essential typings of Φ; ∇ l : τ .
+The ﬁrst condition is standard. The second condition says that l is typable using Φ and ∇, and r is typable with a type at least as general. The third condition ensures a consistency best explained by violating it: Let f : ([α]N)N, then X : N f ([a]X) → X : N passes the ﬁrst two conditions, but fails the third because in the right-hand side we have an essential typing X : N X : N whereas in the left-hand side we have X : N, a : α X : N. For comparison, X : N g([a]X) → [a]X : [α]N with g : ([α]N)[α]N passes all three conditions and is a valid rewrite rule, as well as X : N; a#X f ([a]X) → X.
+3 So in particular, by the side-conditions on variables being disjoint between left and right of the problem, Xθ ≡ X for X∈V (Γ, ∆, s) and αS ≡ α for α ∈ T V (Γ ).
+11
+
+The rewrite relation is deﬁned on terms-in-context: Take Γ ; ∆ s and Γ ; ∆ t, and a rule R ≡ Φ; ∇ l → r : τ , such that V (R) ∩ V (Γ, ∆, s, t) = ∅, and T V (R) ∩ T V (Γ ) = ∅ (renaming variables in R if necessary). Assume Γ ; ∆ s is typable: pt(Γ ; ∆ s) = (Id, µ), s ≡ s [s ] and Γ ; ∆ s : µ is the typing of s at the corresponding position. We say that s rewrites with R to t in the context Γ ; ∆ and write Γ ; ∆ s →R t when: 1. (Φ; ∇ l) ?≈ (Γ ; ∆ s ) has solution (S, θ). 2. ∆ s [rθ] ≈α t.
+These conditions are inherited from nominal rewriting [10, 12] and extended with types. Instantiation of X does not avoid capture, so an atom a introduced by a substitution may appear under diﬀerent abstractions in diﬀerent parts of a term. We must pay attention to the typing at the position of the variable in the rewrite; essential typings do just this. For example if f : (τ1)τ , g : (τ )[α]τ and R ≡ X : τ gX → [a]X : [α]τ then pt(X : τ gX) = (Id, [α]τ ) and X : τ [a]X : [α]τ . R satisﬁes the ﬁrst two conditions in the deﬁnition of typed rule but fails the third: the only essential typing in the left-hand side is X : τ X : τ , whereas in the right-hand side we have X : τ, a : α X : τ . Notice that a : τ1 g(f a) : [α]τ and the typed matching problem (X : τ gX) ?≈ (a : τ1 g(f a)) has a solution (Id, {X → f a}). So, if we ignore the third condition in the deﬁnition of typed rule, we have a rewriting step a : τ1 g(f a) → [a](f a) which does not preserve types: a : τ1 g(f a) : [α]τ but a : τ1 [a](f a) : [α]τ .
+We need a lemma to prove Subject Reduction (Theorem 11):
+Lemma 10 Suppose that Φ; ∇ r : τ , where Φ types only variables in r (it mentions no atoms) and has no type schemes. Let θ be a substitution instantiating all variables in r, and such that (S, θ) respects the essential typings of Φ; ∇ r : τ in the context Γ, ∆, that is, for each essential typing Φ, Φ ; ∇ π·X : τ of Φ; ∇ r : τ , it is the case that Γ, Φ S; ∆ (π·X)θ : τ S. Then Γ ; ∆ rθ : τ S.
+Theorem 11 (Subject Reduction) Let R ≡ Φ; ∇ l → r : τ . If Γ ; ∆ s : µ and Γ ; ∆ s →R t then Γ ; ∆ t : µ.
+Proof. It suﬃces to prove that if pt(Γ ; ∆ s) = (Id, ν) and Γ ; ∆ s →R t then Γ ; ∆ t : ν. Suppose Γ ; ∆ s →R t. Then (using the notation in the deﬁnition of matching and rewriting above) we know that: 1. s ≡ s [s ], ∆ lθ ≈α s , and ∆ ∇θ. 2. θ acts nontrivially only on the variables in R, not those in Γ, ∆, s. 3. Assuming Γ ; ∆ s : ν is the typing of s , then Γ , Φ S; ∆ (π·X)θ : φ S
+for each essential typing Φ, Φ ; ∇ π·X : φ in Φ; ∇ l : τ (therefore also for each essential typing in Φ; ∇ r : τ since they are a subset). 4. pt(Φ; ∇ l) = (Id, τ ) and pt(Γ , ∆ s ) = (Id, τ S) so there is some S such that Γ S = Γ and τ SS = ν . 5. ∆ s [rθ] ≈α t. By Theorem 8, from 3, 4 and 1 we deduce Γ ; ∆ lθ : τ SS . Since pt(Φ; ∇ l) = (Id, τ ), by our assumptions on rewrite rules also Φ; ∇ r : τ , and by Lemma 3
+12
+
+also ΦSS ; ∇ r : τ SS . By Lemma 10, Γ ; ∆ rθ : τ S. Since Γ S = Γ , by Lemma 3 also Γ ; ∆ rθ : τ SS . Hence Γ ; ∆ s [rθ] : ν as required.
+4.3 Examples
+Untyped λ-calculus. Suppose a type Λ and term-formers lam : ([Λ]Λ)Λ, app : (Λ × Λ)Λ, and sub : ([Λ]Λ × Λ)Λ, sugared to λ[a]s, s t, and s[a→t]. Rewrite rules satisfying the conditions in Deﬁnition 8 are:
+X, Y :Λ (λ[a]X)Y → X[a→Y ]:Λ X, Y :Λ; a#X X[a→Y ] → X:Λ Y :Λ a[a→Y ] → Y :Λ X, Y :Λ; b#Y (λ[b]X)[a→Y ] → λ[b](X[a→Y ]):Λ
+X, Y, Z:Λ (XY )[a→Z] → X[a→Z] Y [a→Z]:Λ
+The freshness conditions are exactly what is needed so that no atom moves across the scope of an abstraction (which might change its type). For instance, in rule X, Y :Λ; a#X X[a→Y ] → X:Λ, X is under an abstraction for a in the left-hand side and not in the right-hand side, but we have a#X.
+The typed λ-calculus Suppose a type-former ⇒ of arity 2 and term-formers λ : ([α]β)(α ⇒ β), ◦ : (α ⇒ β × α)β, and σ : ([α]β × α)β. Sugar as in the previous example, so, instead of σ([a]s, t) we write s[a→t]. Then the following rewrite rules satisfy the conditions in Deﬁnition 8:
+X : α, Y : β; a#X X[a→Y ] → X : α Y : γ a[a→Y ] → Y : γ X : α ⇒ β, Y : α, Z : γ (XY )[a→Z] → (X[a→Z])(Y [a→Z]) : β
+X : β, Y : γ; b#Y (λ[b]X)[a→Y ] → λ[b](X[a→Y ]) : α ⇒ β
+For the β-reduction rule we mention two variants; they give the same rewrites:
+X:[α]β, Y :α (λX)Y → σ(X, Y ) : β X:β, Y :α (λ[a]X)Y → σ([a]X, Y ) : β
+Assume types B and N. Then B : B, N : N ((λ[a]a)B, (λ[a]a)N ) : B × N and
+B : B, N : N ((λ[a]a)B, (λ[a]a)N ) → (B, N ) : B × N.
+λ[a]a takes diﬀerent types just like λx.x in the Hindley-Milner type system; pt( λ[a]a) = (Id, α ⇒ α). Our system will not type B : B, N : N BN or λ[a]aa — the system for the untyped λ-calculus above, types the second term.
+Surjective pairing Rewrites for surjective pairing cannot be implemented by a compositional translation to λ-calculus terms [4]. Our system deals with rules deﬁning surjective pairing directly; assume f st : (α × β)α and snd : (α × β)β:
+X : α, Y : β f st(X, Y ) → X : α X : α, Y : β snd(X, Y ) → Y : β X : α × β (f st(X), snd(X)) → X : α × β
+13
+
+Higher-order logic. Extend the typed λ-calculus above with a type P rop and term-formers : P rop, ⊥ : P rop, = : (α × α)P rop, ∀ : ([α]P rop)P rop, ∧: (P rop × P rop)P rop, and so on. Rewrite rules include:
+X : α X = X → : P rop X : P rop; a#X ∀[a]X → X : P rop X, Y : P rop ∀[a](X ∧ Y ) → ∀[a]X ∧ ∀[a]Y : P rop
+Arithmetic Extend further with a type N, term-formers 0 : N, succ : (N)N, + : (N × N)N and =: (α × α)P rop. Observe that λ[a]succ(a) has principal type N ⇒ N whereas λ[a]0 has principal type α ⇒ N. Likewise, ∀[a](a = 0) is typable (with type P rop) whereas ∀[a](λ[a]succ(a) = 0) is not typable.
+5 Conclusions and future work
+We have deﬁned a syntax-directed type inference algorithm for nominal terms. It smoothly resolves the tension between the denotational intuition of a type as a set, and the syntactic intuition of a variable in nominal terms as a term which may mention atoms. The algorithm delivers principal types (our function pt). The types produced resemble the Hindley-Milner polymorphic type system for the λ-calculus, but are acting on nominal terms which include variables X representing context holes as well as atoms a representing program variables, and such that the same atom may occur in many diﬀerent abstraction contexts and thus may acquire diﬀerent types in diﬀerent parts of the term.
+Theorem 8 proves our types compatible with the powerful notion of αequivalence inherited from nominal terms [21]. Theorem 11 shows that a notion of typed nominal rewrite rule exists which guarantees preservation of types.
+Our system is in Curry style; type annotations on terms are not required. We do rely on type declarations for function symbols (arities) and in future we may investigate inferring the type of a function from its rewrite rules.
+Type inference is well-studied for the λ-calculus and Curry-style systems also exist for ﬁrst-order rewriting systems [2] and algebraic λ-calculi (which combine term rewriting and λ-calculus) [3]. We know of no type assignment system for the standard higher-order rewriting formats (HRSs use a typed metalanguage, and restrict rewrite rules to base types).
+Our type system has only rank 1 polymorphism (type-variables are quantiﬁed, if at all, only at the top level of the type). It should be possible to consider more powerful systems, for instance using rank 2 polymorphic types, or intersection types [6]. The latter have been successfully used to provide characterisations of normalisation properties of λ-terms. Normalisation of nominal rewriting using type systems is itself a subject for future work, and one of our long-term goals in this work is to come closer to applying logical semantics such as intersection types, to nominal rewriting.
+14
+
+References
+1. F. Baader and W. Snyder, Uniﬁcation Theory, Handbook of Automated Reasoning, volume I, chapter 8, 445–532. A. Robinson and A. Voronkov (eds.), Elsevier Science, 2001.
+2. S. van Bakel and M. Fern´andez. Normalization results for typable rewrite systems. Information and Computation, 133(2):73–116, 1997.
+3. F. Barbanera and M. Ferna´ndez. Intersection type assignment systems with higherorder algebraic rewriting. Theoretical Computer Science, 170:173–207, 1996.
+4. H. P. Barendregt, Pairing without conventional constraints, Zeitschrift fu¨r mathematischen Logik und Grundlagen der Mathematik 20 (1974), 289–306.
+5. H. P. Barendregt, Lambda Calculi With Types, Handbook of Logic in Computer Science, Oxford University Press, S. Abramsky, D. Gabbay and T. S. E. Maibaum (eds.), 1992.
+6. H. P. Barendregt, M. Coppo and M. Dezani-Ciancaglini, A ﬁlter lambda model and the completeness of type assignment. Journal of Symbolic Logic, 48(4):931–940, 1983.
+7. S. Berghofer and C. Urban, A Head-to-Head Comparison of de Bruijn Indices and Names. LFMTP’06, 46–59, 2006.
+8. H. B. Curry and R. Feys, Combinatory Logic, volume 1. North Holland,1958. 9. L. M. M. Damas and R. Milner, Principal Type Schemes for Functional programs,
+Conference Record of the Ninth Annual ACM Symposium on Principles of Programming Languages, 1982. 10. M. Fern´andez, M. J. Gabbay and I. Mackie, Nominal Rewriting Systems, ACM Symposium on Principles and Practice of Declarative Programming (PPDP’04), ACM Press, 2004. 11. M. Fern´andez and M. J. Gabbay, Nominal Rewriting with Name Generation: Abstraction vs. Locality, ACM Symposium on Principles and Practice of Declarative Programming (PPDP’05), ACM Press, 2005. 12. M. Fern´andez and M. J. Gabbay, Nominal Rewriting, Information and Computation, to appear, available from http://dx.doi.org/10.1016/j.ic.2006.12.002. 13. M. J. Gabbay and A. M. Pitts, A New Approach to Abstract Syntax with Variable Binding. Formal Aspects of Computing, vol. 13, pp. 341–363, 2002. 14. M. J. Gabbay. A Theory of Inductive Deﬁnitions with Alpha-Equivalence. PhD Thesis, Cambridge University, 2000. 15. J-Y. Girard, The System F of Variable Types, Fifteen Years Later, Theoretical Computer Science, 45, 1986. 16. J. Gosling, B. Joy, and G. Steele. The Java Language Speciﬁcation. AddisonWesley, Reading, MA, 1996. 17. Z. Khasidashvili, Expression reduction systems, Proceedings of I.Vekua Institute of Applied Mathematics (Tbisili), vol. 36, 1990, pp. 200–220. 18. J.-W. Klop, V. van Oostrom, and F. van Raamsdonk, Combinatory reduction systems, introduction and survey, Theoretical Computer Science 121 (1993), 279– 308. 19. R. Mayr and T. Nipkow, Higher-order rewrite systems and their conﬂuence, Theoretical Computer Science 192 (1998), 3–29. 20. M. R. Shinwell, A. M. Pitts, and Murdoch Gabbay, FreshML: Programming with binders made simple, ICFP 2003, pp. 263–274. 21. C. Urban, A. M. Pitts, and M. J. Gabbay, Nominal uniﬁcation, Theoretical Computer Science, 323, pp. 473–497, 2004.
+15
+
+

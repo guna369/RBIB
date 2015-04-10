@@ -1,0 +1,479 @@
+Intrusion-Tolerant Enclaves£
+To be presented at the IEEE Conference on Security and Privacy, Oakland, CA, May 2002
+Bruno Dutertre, Valentin Crettaz, Victoria Stavridou System Design Laboratory, SRI International, Menlo Park, CA
+bruno,valentin,victoria @sdl.sri.com
+
+Abstract
+Despite our best efforts, any sufﬁciently complex computer system has vulnerabilities. It is safe to assume that such vulnerabilities can be exploited by attackers who will be able to penetrate the system. Intrusion tolerance attempts to maintain acceptable service despite such intrusions. This paper presents an application of intrusiontolerance concepts to Enclaves, a software infrastructure for supporting secure group applications. Intrusion tolerance is achieved via a combination of Byzantine faulttolerant protocols and secret sharing techniques.
+1 Introduction
+Intrusion tolerance is the application of fault-tolerance methods to security. It assumes that system vulnerabilities cannot be totally eliminated, and that external attackers or malicious insiders will identify and exploit these vulnerabilities and gain illicit access to the system. The objective of intrusion tolerance is to maintain acceptable, though possibly degraded, service despite intrusions in parts of the system.
+This paper discusses the intrusion-tolerant version of Enclaves, a lightweight platform for building secure group applications. To support such applications, Enclaves provides a secure group communication service and associated group-management and key-distribution functions. The original Enclaves system [16] and its successor [9] have a centralized architecture. An application consists of a set of group members who cooperate and communicate via a single group leader. This leader is responsible for all groupmanagement activities, including authenticating and accepting new members, distributing cryptographic keys, and distributing group-membership information. Since the leader plays a critical role, it is an attractive target for attackers. Breaking into the leader can immediately lead to loss of
+£This material is based upon work supported by the Space and Naval Warfare Systems Center – San Diego, under Contract No. N66001-00-C8001.
+
+conﬁdentiality, interrupted communication, or other forms of denial of service.
+The intrusion-tolerant Enclaves architecture removes this single point of failure by distributing the groupmanagement functions among Ò leaders. The system uses a Byzantine fault-tolerant protocol for leader coordination and a veriﬁable secret sharing scheme for generating and distributing cryptographic keys to group members. This new architecture is intended to tolerate the compromise of up to leaders, where ¿ · ½ Ò. Compromised leaders are assumed to be under the full control of an attacker and to have Byzantine behavior, but it is also assumed that the attacker cannot break the cryptographic algorithms used. Under these assumptions, Enclaves ensures the conﬁdentiality and integrity of group communication, as well as proper group-management services.
+The remainder of the paper describes the intrusiontolerant Enclaves in greater detail. Section 2 gives an overview of the architecture and goals of Enclaves. Section 3 presents the protocols and secret sharing schemes used. Section 4 describes the current implementation of Enclaves. Section 5 assesses the security of the system, and Section 6 discusses related work.
+2 Overview
+2.1 Enclaves Services
+A group-oriented application enables users to share information and collaborate via a communication network such as the Internet. Enclaves is a lightweight software infrastructure that provides security services for such applications [16]. Enclaves provides services for creating and managing groups of users of small to medium sizes, and enables the group members to communicate securely. Access to an active group is restricted to a set of users who must be preregistered, but the group can be dynamic: authorized users can freely join, leave, and later rejoin an active application.
+The communication service implements a secure multicast channel that ensures integrity and conﬁdentiality of group communication. All messages originating from a
+
+group member are encrypted and delivered to all the other members of the group. For efﬁciency reasons, Enclaves provides best-effort multicast and does not guarantee that messages will be received, or received in the same order, by all members. This is consistent with the goal of supporting collaboration between human users, which does not require the same reliability guarantees as distributing data between servers or computers [16].
+The group-management services perform user authentication, access control, and related functions such as key generation and distribution. All group members receive a common group key that is used for encrypting group communication. A new group key is generated and distributed every time the group composition changes, that is, whenever a user enters or leaves the group. Optionally, the group key can also be refreshed on a periodic basis. Enclaves also communicates membership information to all group members. On joining the group, a member is notiﬁed of the current group composition. Once in the group, each member is notiﬁed when a new user enters or a member leaves the group. Thus, all members know who is in possession of the current group key.
+In summary, Enclaves enables users to be authenticated and to join a groupware application. Once in a group, a user
+is presented with a group view, that is, the list of all the other group members. The system is intended to satisfy the following security requirements:
+¯ Proper authentication and access control: Only autho-
+rized users can join the application and an authorized user cannot be prevented from joining the application.
+¯ Conﬁdentiality of group communication: Messages
+from a member can be read only by the users who were in ’s view of the group at the time the message was sent.
+¯ Integrity of group communication: A group message
+received by was sent by a member of ’s current view, was not corrupted in transit, and is not a duplicate.
+2.2 Centralized Architecture
+The original version of Enclaves [16] and a more recent version with improved protocols [9] rely on the centralized architecture shown in Figure 1. In this architecture, a single group leader is responsible for all group-management activities. The leader is in charge of authenticating and accepting new group members, generating group keys and distributing them to members, and distributing group membership information. With such an architecture, the security requirements are satisﬁed if the leader and all the group members are trustworthy, but the system is not intrusion tolerant. Proper service requires that the leader be trusted and
+
+Member
+
+Member
+
+Member
+
+Group Leader
+Member
+
+Member
+
+Figure 1. Centralized Enclaves Architecture
+never compromised. A single intrusion on the leader can easily lead to denial of service. For example, a compromised leader can interrupt group communication or prevent authorized users from joining the group. Since the leader is always in possession of the latest group key, an attacker breaking into the leader’s computer can also gain access to all group communication.
+Increasing the resilience of the Enclaves infrastructure requires removing this single point of failure, to guarantee that group communication will remain secure even after some components of the system have been compromised.
+2.3 Intrusion-Tolerant Architecture
+The architecture of the intrusion-tolerant version of Enclaves is shown in Figure 2. The group and key management functions are distributed across Ò leaders. The leaders communicate with each other and with users via an asynchronous network. Messages sent on this network are assumed to be eventually received, but no assumptions are made on the transmission delays and on the order of reception of messages. The architecture is designed to tolerate up to compromised leaders, where ¿ · ½ Ò. Compromised leaders are assumed to be under the full control of an attacker; they have Byzantine behavior and can collude with each other.
+The security requirements are the same as previously, and assume that a ﬁxed list of authorized participants is speciﬁed before an application starts. The new objective is now to ensure that these requirements are satisﬁed even if up to leaders are compromised.
+For proper group management, any modiﬁcation of the group composition requires agreement between the nonfaulty leaders. These leaders must agree before accepting a new member or determining that an existing member has left. Ideally, one would like all nonfaulty leaders to maintain agreement on the group composition. Unfortunately, this requires solving a consensus problem, in an asynchronous network, under Byzantine faults. As is well
+
+2
+
+Leader
+
+Leader
+
+Leader
+
+Leader
+
+Group Management Services - authentication - key distribution - group membership
+
+Member
+
+Member
+
+Member
+Group Communication Multicast Channel
+
+Figure 2. Intrusion-Tolerant Architecture
+
+known, there are no deterministic algorithms for solving this problem [12]. Randomized algorithms (e.g., [3]) or algorithms relying on failure detectors (e.g., [4, 20]) could be applicable, but these algorithms tend to be complex and expensive. Instead, a weaker form of consistency property is sufﬁcient for satisfying Enclaves’s security requirements. The algorithm we use is similar to consistent broadcast protocols such as Bracha and Toueg’s protocol [2, 18]. Combined with an appropriate authentication procedure, this algorithm ensures that any authorized user who requests to join the group will eventually be accepted. Unlike Byzantine agreement, this algorithm does not guarantee that users are accepted in the same order by all leaders. However, this does not lead to a violation of the conﬁdentiality or integrity properties. If the group becomes stable, all nonfaulty leaders eventually reach a consistent view of the group.
+As in previous Enclaves implementations, a common group key is shared by the group members. A new key is generated by the leaders whenever the group changes. The difﬁculty is to generate and distribute this key in an intrusion-tolerant fashion. All group members must obtain the same valid group key, despite the presence of faulty leaders. The attacker must not be able to obtain the group key even with the help of faulty leaders. These two requirements are satisﬁed by using a secret sharing scheme proposed by Cachin et al. [3]. In the Enclaves framework, this scheme is used by leaders to independently generate and send individual shares of the group key to group members. The protocol is conﬁgured so that · ½ shares are necessary for reconstructing the key. A share is accompanied with a description of the group to which it corresponds and a “proof of correctness” that is computationally hard to counterfeit. This allows group members to obtain strong evidence that a share is valid, and prevents faulty leaders from disrupting group communication by sending invalid shares.
+To join an application, a user must contact ¾ ·½ leaders. Once in the group, remains connected to these lead-
+
+ers and receives key and group update messages from them. A majority of consistent messages (i.e., · ½) must be received before takes any action. For example, changes its current group key only after receiving at least · ½ valid key shares from distinct leaders, and checking that these shares correspond to the same group description. This ensures that the new group key is valid and that at least one share came from a nonfaulty leader.
+Intrusion tolerance in Enclaves relies then on the combination of a cryptographic authentication protocol, a Byzantine fault-tolerant leader-coordination algorithm, and a secret sharing scheme. These protocols are presented in greater detail in the section that follows.
+
+3 Protocols
+
+3.1 Authentication
+
+To join the group, a user must ﬁrst initiate an authentication protocol with ¾ · ½ distinct leaders. is accepted as a new group member if it is correctly authenticated by at least · ½ leaders. This ensures that faulty leaders cannot prevent an honest user from joining the group, and conversely that faulty leaders cannot allow an unauthorized user to join the group.
+For authentication purposes, all users registered as authorized participants in an application share a long-term secret key with each leader. If Ä is one of the leaders, has a long-term key È that is known by Ä and . In the current implementation, È is computed from and Ä ’s identities, and ’s password by applying a one-way hash function. This ensures with high probability that two distinct leaders Ä and Ä do not have the same key for . Intrusion at a leader Ä can reveal key È to the attacker but does not reveal ’s password or È . Thus, access to up to long-term keys È does not enable an attacker to impersonate .
+The following protocol is used by to authenticate with
+
+Ä
+½ ¾
+
+Ä
+
+Ä
+
+¿Ä
+
+ÙØ ÁÒ ØÊ Õ Ä ÙØ Ã Ý ×Ø Ä
+
+½Ä Æ È
+
+½ ¾Ä
+
+ÆÆÃ
+
+È
+
+ÙØ  Ã Ý Ä Æ¾ Æ¿ Ã
+
+As a result of this exchange, is in possession of a session key Ã that has been generated by Ä . All groupmanagement messages from Ä to are encrypted with Ã . Thus, a secure channel is set up between and Ä that ensures conﬁdentiality and integrity of all groupmanagement messages from Ä to . Nonces and acknowledgments protect against replay as discussed in [9]. The key Ã is in use until leaves the group. A fresh session key will be generated if later rejoins the group.
+
+3
+
+3.2 Leader Coordination
+
+If a nonfaulty leader Ä successfully authenticates , Ä does not immediately add as a new group member. Instead, the leader coordination algorithm described in Figure 3 is executed. A similar algorithm is used to coordinate leaders when a member leaves the group.
+
+Leader Ä runs the following protocol
+
+After successful authentication of ,
+
+Ä sends ÈÖÓÔÓ×
+
+Ò to all leaders
+
+After receiving · ½ valid ÈÖÓÔÓ×
+
+Ò
+
+from different leaders, Ä sends ÈÖÓÔÓ×
+
+Ò
+
+to all leaders if it has not already done so
+
+ When Ä receives Ò valid ÈÖÓÔÓ×
+
+Ò
+
+ from Ò distinct leaders, Ä accepts as a
+
+new member
+
+Figure 3. Leader Coordination Protocol
+
+The notation
+
+denotes a message digitally signed
+
+by Ä . The constant Ò is used to protect against replay
+
+attacks. Each leader maintains a local integer variable Ò
+
+and its local view Å of the current group members. Å
+
+is updated and Ò is incremented every time Ä accepts a
+
+new member or removes an existing member. The message
+ÈÖÓÔÓ× Ò is considered valid by Ä if the signature
+
+checks, if Ò Ò , and if is not a member of Å . The
+
+pair Ò Å is Ä ’s current view of the group. In Figure 3,
+Ä must include its own ÈÖÓÔÓ× message among the
+ Ò messages necessary before accepting .
+
+This algorithm is a variant of existing consistent broad-
+
+cast algorithms [2, 18]. It satisﬁes the following properties
+
+as long as no more than leaders are faulty.
+
+¯ Consistency: If one nonfaulty leader accepts then all
+nonfaulty leaders eventually accept .
+
+¯ Liveness: If · ½ nonfaulty leaders announce , then
+is eventually accepted by all nonfaulty leaders.
+
+¯ Valid Authentication: If one nonfaulty leader accepts
+then has been announced, and thus authenticated,
+by at least one nonfaulty leader.
+
+The last property prevents the attacker from introducing unauthorized users into the group. Conversely, if is an authorized user and correctly executes the authentication protocol, will be announced by · ½ nonfaulty leaders, and thus will eventually be accepted as a new member by all nonfaulty leaders.
+
+The protocol works in an asynchronous network model where transmission delays are unbounded. It does not ensure that all nonfaulty leaders always have a consistent
+
+group view. Two leaders Ä and Ä may have different sets Å and Å for the same view number Ò Ò . This happens if several users join or leave the group concurrently,
+and their requests and the associated ÈÖÓÔÓ× messages are
+received in different orders by Ä and Ä . If the group becomes stable, that is, no requests for join or leave are generated in a long interval, then all nonfaulty leaders eventually converge to a consistent view. They communicate this view and the associated group-key shares to all their clients who all also eventually have a consistent view of the group and the same group key.
+Temporary disagreement on the group view may cause nonfaulty leaders to send valid but inconsistent group-key shares to some members. This does not compromise the security requirements of Enclaves but may delay the distribution of a new group key.
+3.3 Group-Key Management
+The group-key management protocol relies on secure secret sharing. Each of the Ò leaders knows only a share of the group key, and at least · ½ shares are required to reconstruct the key. Any set of no more than shares is insufﬁcient. This ensures that compromise of at most leaders does not reveal the group key to the attacker. In most secret
+sharing schemes, Ò shares ×½ ×Ò are computed from a
+secret × and distributed to Ò shareholders. The shares are computed by a trusted dealer who needs to know ×. In Enclaves, a new secret × and new shares must be generated whenever the group changes. This must be done online and without a dealer, to avoid a single point of failure. A further difﬁculty is that some of the parties involved in the share renewal process may be compromised.
+A solution to these problems was devised by Cachin et al. in [3]. In their protocol, the Ò shareholders can individually compute their share of a common secret × without knowing or learning ×. One can compute × from any set of · ½ or more such shares, but shares or fewer are not sufﬁcient. The shares are all computed from a common value that all shareholders know. In our context, the shareholders are the group leaders and is derived from the group view using a one-way hash function. Leader Ä computes its share × using a share-generation function Ë, the value , and a secret Ü that only Ä knows: × Ë´ Ü µ. Leader Ä also gives a proof that × is a valid share for . This proof does not reveal information about Ü but enables group members to check that × is valid.
+The protocol proposed by Cachin et al. [3] requires a trusted dealer to set up a number of public and private keys in an initialization phase. This can be performed ofﬂine, and the dealer is not involved in any of the subsequent computations. The share computations are performed individually by the leaders. The share validity checks and
+
+4
+
+group key construction are performed individually by group
+members. This protocol is related to veriﬁable secret sharing [6, 11, 19] and, more closely, to to threshold signature
+schemes [7, 14, 23].
+The secrecy properties of the protocol rely on the hardness of computing discrete logarithms in a group of large
+prime order. Such a group can be constructed by selecting two large prime numbers Ô and Õ such that Ô ¾Õ · ½ and deﬁning as the unique subgroup of order Õ in £Ô. The dealer chooses a generator of and performs the following operations:
+
+¯ Select randomly · ½ elements ¼
+
+of Õ.
+
+These coefﬁcients deﬁne a polynomial of degree in
+
+Õ ℄:
+
+¼· ½ · ·
+
+¯ Compute Ü½
+lows:
+
+ÜÒ of Õ and ½
+
+Ò of as fol-
+
+Ü ´µ
+Ü
+
+The numbers Ü½ ÜÒ must then be distributed se-
+
+cretly to the Ò leaders Ä½ ÄÒ, respectively. The
+
+generator and the elements ½
+
+Ò are made pub-
+
+lic. They must be known by all users and leaders.
+
+As in Shamir’s secret sharing scheme [22], any subset of
+· ½ values among Ü½ ÜÒ allows one to reconstruct by interpolation, and then to compute the value ¼ ´¼µ. For example, given Ü½ Ü ·½, one has
+·½ ¼Ü
+½
+
+where
+
+Éis obtained from ½
+
+· ½ by
+
+É  ´ µ
+
+By this interpolation method, one can compute ¼ for any
+
+¾ given any subset of ·½ values among Ü½
+
+ÜÒ .
+
+For example, from Ü½
+
+Ü ·½, one gets
+
+·½
+¼ ´µ
+½
+
+(1)
+
+As discussed previously, leader Ä maintains a local
+
+group view Ò Å . Ä ’s share × is a function of the group
+
+view, the generator , and Ä ’s secret value Ü . Ä ﬁrst com-
+
+¾putes
+
+using a one-way hash function À½:
+
+½À ´Ò Å µ
+
+The share × is then deﬁned as Ü
+×
+
+The group key for the view Ò Å is deﬁned as
+¾Ã À ´ ¼ µ
+
+where À¾ is another hash function from to ¼ ½ (
+
+is the key length). Using equation (1), a group member can compute ¼ given any subset of · ½ or more shares
+
+for the same group view. The security of this approach is
+
+proved in [3]. Under a standard intractability assumption, it
+
+is computationally infeasible to compute Ã knowing fewer
+
+than · ½ shares. It is also infeasible for an adversary to
+
+predict the values of future group keys Ã even if the ad-
+
+versary corrupts leaders and has access to secret values
+
+among Ü½
+
+ÜÒ.
+
+Equation (1) allows a group member to compute ¼ and Ã from · ½ valid shares of the form × Ü . However,
+
+a compromised leader Ä could make the computation fail
+
+by sending an invalid share ×
+
+Ü . Ä could also cause
+
+different members to compute different Ã’s by sending dif-
+
+ferent shares to each. To protect against such attacks, the
+
+share × is accompanied with a proof of validity. This ex-
+
+tra information enables a member to check that × is equal to Ü with very high probability. The veriﬁcation uses the public value that is known to be equal to Ü (since the
+
+dealer is trusted). To prove validity without revealing Ü ,
+
+leader Ä generates evidence that
+
+ÐÓ ×
+
+ÐÓ
+
+This uses a technique proposed by Chaum and Pedersen [5]. To generate the evidence, Ä randomly chooses a number Ý in Õ and computes
+Ý
+Ù
+Ý
+Ú
+
+Then Ä uses a third hash function À¿ from
+compute
+
+to Õ to
+
+¿
+
+À´
+
+Ù × Úµ
+
+Þ Ý·Ü 
+
+The proof that × is a valid share for is the pair ´ Þµ. The information sent by Ä to a group member is then the tuple
+Ò Å × Þ
+This message is sent via the secure channel established between and Ä after authentication. This prevents an attacker in control of leaders from obtaining extra shares by eavesdropping on communications between leaders and clients.
+
+5
+
+On receiving the above message, a group member
+evaluates ½À ´Ò Å µ and
+¼ Þ
+Ù
+¼ Þ
+Ú×
+
+accepts the share as valid if the following equation holds:
+
+¿
+
+À´
+
+¼
+Ù
+
+× Ú¼µ
+
+If this check fails, × is not a valid share and ignores it. Once receives · ½ valid shares corresponding to the same group view, can construct the group key. Since maintains a connection with at least · ½ honest leaders, eventually receives at least · ½ valid shares for the same view, once the group becomes stable.
+Cachin et al. [3] prove that it is computationally infeasible, in the random oracle model, for a compromised leader Ä to produce an invalid share ×¼ and two values  and Þ that pass the share-veriﬁcation check.
+
+3.4 Cryptographic Material
+
+The following cryptographic keys and secret material must be distributed to the leaders and registered users:
+¯ Each leader Ä must own a private key to sign mes-
+sages when executing the leader-coordination protocol. The corresponding public key must be known by all the other leaders.
+¯ Ä must also hold the secret Ü used to generate shares
+of group keys. The corresponding veriﬁcation key must be known by all the registered users.
+¯ For every registered user and leader Ä , a secret
+longterm key È is shared by and Ä . This key is used for authentication.
+
+4 Implementation
+
+Enclaves is currently implemented in Java, using Sun Microsystems’ Java 2 SDK 1.3.1 and the Cryptix 3.2 cryptographic libraries.1 The source consists of around 9,000 lines of code in approximately 100 classes.
+The software is organized in two main modules as described in Figure 4. A set of classes implements the core Enclaves functionalities, namely, the authentication, group management, and key-management functions described previously. On top of this basis, a user interface is available that can be customized to support diverse applications. The interface allows users to authenticate and log in to an Enclaves group and displays status information, including the list of members. Applications can be easily incorporated into this interface via a “plugin” mechanism.
+1http://www.cryptix.org
+
+Application
+Crypto Modules
+
+Plug-Ins User Interface
+Enclaves Layer (Authentication & Group-management)
+
+Core
+
+Communication Layer Network Layer
+
+Figure 4. Main Software Modules
+4.1 Core Enclaves
+The core classes implement the protocols and algorithms described previously. These classes are organized in an Enclaves layer responsible for authentication and groupmanagement services, a cryptographic module, and a communication layer that interface with Java networking functions. In the current prototype, group communication (between group members) as well as communication between leaders is implemented using IP multicast. Leader-to-client connections rely on TCP.
+Enclaves uses Cryptix 3.2 as a cryptographic module, but other providers complying with the Java Security Architecture can be used. Enclaves uses a symmetric-key encryption algorithm (currently triple DES), a digital signature algorithm (DSA), and secure hashing algorithm (SHA). These can be easily replaced by other algorithms with similar functionality. The secret sharing algorithm of Section 3.3 was not available off the shelf and had to be implemented.
+4.2 Plugins
+Enclaves provides a simple user interface that can be customized for various applications via the use of “plugins”. The plugins are loaded on startup and executed as the user requires. This architecture allows several applications to coexist and run concurrently in the same Enclaves group. The underlying support classes transparently encrypt all application messages and distribute them to all group members. Conversely, messages received from the group are decrypted and dispatched to the relevant plugin.
+Communication between an application and the underlying Enclaves layer must follow the interface described in Figure 5. A plugin simply needs to implement the three methods of abstract class PlugIn. Method buildGUI is
+
+6
+
+public abstract class PlugIn extends JFrame implements ... {
+protected abstract void buildGUI();
+protected abstract void receiveMessage(Message m);
+protected final boolean sendMessage(byte[] msg);
+}
+Figure 5. Plugin Interface
+Figure 6. Whiteboard Application
+invoked by the user interface for the application to initialize. Afterwards, communication between the application and the Enclaves middleware is performed via two methods for sending and receiving messages. When a plugin is ready to be deployed, the developer must package it and every resource it needs into a JAR ﬁle and put it in a speciﬁc directory. The new plugin is then loaded and available to users.
+Currently, four basic plugins have been developed for Enclaves: a shared whiteboard application (Paint), a messaging application allowing users to send text messages (Chat), a ﬁle transfer application for multicasting data ﬁles (FTP plugin), and a Sound plugin for multicast of streaming audio. Figure 6 shows a screen dump of the Paint application.
+5 Assessment
+Enclaves’s security requirements can be shown to theoretically hold if no more than leaders are compromised, no group member is compromised, the attacker does not break the cryptographic algorithms, and the network assumptions are satisﬁed.2 Obviously, none of these assumptions can be guaranteed to hold with certainty in the real world. What really matters is the effort it takes an attacker to compromise security by making one of these assumptions fail.
+We can be reasonably conﬁdent that the cryptographic and secret sharing protocols used are hard to break. If weak-
+2And, of course, the Java code correctly implements the protocols.
+
+nesses are discovered, the Enclaves implementation makes it easy to change cryptographic primitives.
+As in any group-communication system, if an attacker can compromise a member machine and get hold of the group key, or if one member is nontrustworthy, then conﬁdentiality is lost. Clearly, there is no absolute defense against this vulnerability as it is the function of the system to distribute data to all group members. Mitigating measures could be implemented, such as requiring members to periodically reauthenticate before sending them a new key, or relying on intrusion detection and expel members suspected of being compromised.
+Enclaves can also be vulnerable to network-based denialof-service attacks based on ﬂooding. This is not speciﬁc to Enclaves, as current TCP/IP protocols make it difﬁcult to defend against such attacks in any system. However, the distributed architecture of Enclaves increases the resilience of the system to such attacks. A useful property is also that group communication can continue even after a successful denial-of-service attack on the leaders. Such an attack prevents new users from joining an application and the group key from being refreshed but does not immediately affect the users already in the group.
+Clearly, the intrusion-tolerant architecture of Enclaves improves security only if it is substantially harder for an attacker to penetrate several leaders than a single one. Every attempt should then be made to prevent common vulnerabilities, so that the same attack does not succeed on all leaders. This requires diversity. Leaders should use different hardware and operating systems, and, as a minimum, different implementations of the Java Virtual Machine. It is also desirable to put the different leaders under the responsibility of different administrators, as a protection against the insider threat.
+Even with such measures, resilience is not absolute. With enough time and resources, a determined attacker can compromise a sufﬁcient number of leaders to break the system. Intrusion tolerance should be seen as the ultimate defense, intended to give the defender extra time to detect and react to attacks before too much damage is done. Intrusion tolerance can be effective only if combined with traditional measures to avoid and remove vulnerabilities in system components, and with intrusion detection mechanisms to help respond to attacks before it is too late.
+6 Related Work
+Early work on intrusion tolerance [8,10,13] applied fault tolerance and dependability concepts to common services of distributed systems, such as ﬁle storage. These approaches already used secret sharing, encryption, and redundancy to maintain security and availability in the presence of compromised components. The same techniques
+
+7
+
+are being applied, for example, for building survivable information storage [27].
+Wu et al. [26] present examples of intrusion-tolerant applications that rely on threshold cryptography. A number of servers, each holding a share of an RSA private key can be contacted by a client for operations such as signing or decrypting messages. Each server performs a local computation using its key share, and the individual results from each server are combined by the client. This is similar to the group key protocol of Cachin et al. [3] that is used in Enclaves.
+Enclaves relies on the same techniques as these other systems, namely, secret sharing techniques and faulttolerant distributed algorithms. The main novelty is the type of application supported by the intrusion-tolerant Enclaves, that is, secure group communication.
+Gong [15] describes a fault-tolerant protocol for authentication and key distribution that relies on several authentication servers, some of which may be compromised. The system provides an authentication service to establish secure point-to-point connections between two users and , and distribute a shared symmetric key to both. Proper service is guaranteed as long as the majority of the servers are not compromised. The Ò leaders of Enclaves provide a similar authentication service, but for a group rather than a pair of users. They are also supporting other group-management activities including renewing the group key and maintaining the current set of group members, which requires close coordination of the leaders.
+Other systems such as Secure Spread [1], Ensemble [21], or Horus [25], provide secure group communication between distributed computers. These infrastructures provide group-membership and multicast services that support a variety of network-level faults, including network partitioning. Key-agreement or key-distribution protocols (e.g., [24]) are implemented on top of these services, and cryptography ensures conﬁdentiality and integrity of group communication. These systems typically provide security against attacks on network trafﬁc but are not designed for intrusion tolerance.
+Enclaves is also related to systems such as Rampart [20] or the SecureRing [17], which use fault-tolerant protocols for consistent operation of a set of servers. These systems implement consensus in asynchronous networks under Byzantine fault models, but rely on some form of failure detection. Enclaves chose to relax the strict consensus requirement to achieve a weaker, but sufﬁcient in practice, form of agreement between leaders. This results in a simpler and lighter protocol that does not rely on failure detection.
+
+7 Conclusion
+A combination of fairly standard fault-tolerant algorithms, secret sharing schemes, and traditional authentication protocols was used to develop an intrusion-tolerant version of the Enclaves group communication framework. The architecture provides secure services even if a number of its main components are compromised. The resulting Enclaves system remains easily deployable and lightweight, while being considerably more resilient to attacks than its predecessors.
+Acknowledgements
+The design and implementation of Enclaves beneﬁted from the help of Mohamed Layouni and his many useful comments and suggestions.
+References
+[1] Y. Amir, G. Ateniese, D. Hasse, Y. Kim, C. Nita-Rotaru, T. Schlossnagle, J. Schultz, J. Stanton, and G. Tsudik. Secure Group Communication in Asynchronous Networks with Failures: Integration and Experiments. In Proceedings of the 20th IEEE International Conference on Distributed Computing Systems, Taipei, Apr. 2000.
+[2] G. Bracha and S. Toueg. Asynchronous Consensus and Broadcast Protocols. Journal of the ACM, 32(4):824–840, Oct. 1985.
+[3] C. Cachin, K. Kursawe, and V. Shoup. Random Oracles in Constantinople: Practical Asynchronous Byzantine Agreement Using Cryptography. In Proceedings of the 19th Annual Symposium on Principles of Distribtued Computing, Portland, OR, July 2000.
+[4] M. Castro and B. Liskov. Practical Byzantine Fault Tolerance. In Proceedings of the Third Symposium on Operating Systems Design and Implementation, pages 173–186, New Orleans, LA, Feb. 1999.
+[5] D. Chaum and T. Pedersen. Wallet Databases with Observers. In Crypto’92, number 740 in Lecture Notes in Computer Science, pages 89–105, Santa Barbara, CA, Aug. 1992. Springer-Verlag.
+[6] B. Chor, S. Goldwasser, S. Micali, and B. Awerbuch. Veriﬁable Secret Sharing and Achieving Simultaneity in the Presence of Faults. In Proc. 26th IEEE Symp. Found. of Comp. Sci., pages 383–395. IEEE Press, 1985.
+[7] Y. Desmedt and Y. Frankel. Shared Generation of Authenticators and Signatures. In Advances in Cryptology – CRYPTO’91, volume 576 of Lecture Notes in Computer Science, pages 457–469. Springer-Verlag, 1991.
+[8] Y. Deswarte, L. Blain, and J.-C. Fabre. Intrusion Tolerance in Distributed Computing Systems. In Proceedings of the IEEE Symposium on Research in Security and Privacy, pages 110–121, Oakland, CA, May 1991.
+
+8
+
+[9] B. Dutertre, H. Sa¨ıdi, and V. Stavridou. Intrusion-tolerant Group Management in Enclaves. In International Conference on Dependable Systems and Networks (DSN’01), pages 203–212, Go¨teborg, Sweden, July 2001.
+[10] J.-C. Fabre, Y. Deswarte, and B. Randell. Designing Secure and Reliable Applications Using FragmentationRedundancy-Scattering: An Object-oriented Approach. In First European Dependable Computing Conference (EDCC1), volume 852 of Lecture Notes in Computer Science, pages 21–38. Springer-Verlag, Oct. 1994.
+[11] P. Feldman. A Practical Scheme for Non-interactive Veriﬁable Secret Sharing. In Proc. 28th IEEE Symp. Found. of Comp. Sci., pages 427–437, 1987.
+[12] M. Fischer, N. Lynch, and S. Paterson. Impossibility of Distributed Consensus with One Faulty Process. Journal of the ACM, 32(2):374–382, Apr. 1985.
+[13] J. Fray, Y. Deswarte, and D. Powell. Intrusion Tolerance Using Fine-Grain Fragmentation Scattering. In Proceedings of the IEEE Symposium on Security and Privacy, pages 194– 201, Oakland, CA, Apr. 1986.
+[14] R. Gennaro, S. Jarecki, H. Krawczyk, and T. Rabin. Robust Threshold DSS Signatures. In Avances in Cryptology – EUROCRYPT’96, volume 1070 of Lecture Notes in Computer Science, pages 354–371. Springer-Verlag, 1996.
+[15] L. Gong. Increasing Availability and Security of an Authentication Service. IEEE Jounral on Selected Areas in Communications, 11(5):657–662, June 1993.
+[16] L. Gong. Enclaves: Enabling Secure Collaboration over the Internet. IEEE Journal of Selected Areas in Communications, 15(3):567–575, Apr. 1997.
+[17] K. Kihlstrom, L. Moser, and P. Melliar-Smith. The SecureRing Protocols for Securing Group Communication. In Proceedings of the 31st IEEE Hawaii International Conference on System Sciences, volume 3, pages 317–326, Kona, HI, Jan. 1998.
+[18] N. Lynch. Distributed Algorithms. Morgan Kaufmann, 1996.
+[19] T. Pedersen. Non-interactive and Information-theoretic Secure Veriﬁable Secret Sharing. In Advances in Cryptology – CRYPTO’91, volume 576 of Lecture Notes in Computer Science, pages 129–140. Springer-Verlag, 1992.
+[20] M. Reiter. The Rampart Toolkit for Building High-Integrity Services. In Theory and Practice in Distributed Systems, pages 99–110. Springer Verlag, LNCS 938, 1995.
+[21] O. Rodeh, K. Birman, M. Hayden, Z. Xiao, and D. Dolev. Ensemble Security. Technical Report TR98-1703, Department of Computer Science, Cornell University, Sept. 1998.
+[22] A. Shamir. How to Share a Secret. Communications of the ACM, 22:612–613, 1979.
+[23] V. Shoup. Practical Threshold Signatures. In Advances in Cryptology – EUROCRYPT’2000, volume 1807 of Lecture Notes in Computer Science, pages 207–220. SpringerVerlag, 2000.
+[24] M. Steiner, G. Tsudik, and M. Waidner. CLIQUES: a New Approach to Group Key Agreement. In Proceedings of the 18th International Conference on Distributed Computing Systems (ICDCS’98), pages 380–387, Amsterdam, The Netherlands, May 1998.
+
+[25] R. van Renesse, K. Birman, and S. Maffeis. Horus: A Flexible Group Communications System. Communications of the ACM, 39(4):76–83, Apr. 1996.
+[26] T. Wu, M. Malkin, and D. Boneh. Building Intrusiontolerant Applications. In Eigth USENIX Security Symposium, pages 79–91, Aug. 1999.
+[27] J. J. Wylie, M. W. Bigrigg, J. D. Strunk, G. R. Ganger, H. Kılıc¸c¸o¨te, and P. K. Khosla. Survivable Information Storage Systems. Computer, pages 61–68, Aug. 2000.
+
+9
+
+

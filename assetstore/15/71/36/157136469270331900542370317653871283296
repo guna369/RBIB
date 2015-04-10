@@ -1,0 +1,2352 @@
+AAECC manuscript No. (will be inserted by the editor)
+Lambda-Calculus with Director Strings
+Maribel Ferna´ndez1, Ian Mackie1, Franc¸ois-Re´gis Sinot2, 1 Department of Computer Science, King’s College London
+Strand, London WC2R 2LS, UK e-mail: {maribel,ian}@dcs.kcl.ac.uk 2 LIX, E´ cole Polytechnique, 91128 Palaiseau, France e-mail: frs@lix.polytechnique.fr
+Received: date / Revised version: date
+Abstract We present a name free λ-calculus with explicit substitutions, based on a generalised notion of director strings. Terms are annotated with information – directors – that indicate how substitutions should be propagated. We ﬁrst present a calculus where we can simulate arbitrary β-reduction steps, and then simplify the rules to model the evaluation of functional programs (reduction to weak head normal form). We also show that we can deﬁne the closed reduction strategy. This is a weak strategy which, in contrast with standard weak strategies, allows certain reductions to take place inside λ-abstractions thus offering more sharing. Our experimental results conﬁrm that, for large combinator-based terms, our weak evaluation strategies out-perform standard evaluators. Moreover, we derive two abstract machines for strong reduction which inherit the efﬁciency of the weak evaluators.
+Key words λ-calculus – explicit substitutions – director strings – strategies
+1 Introduction
+In the λ-calculus, the operation of substitution used in the β-reduction rule is deﬁned outside the system: it is a meta-operation (see [5]). In contrast, explicit substitution calculi deﬁne substitution with reduction rules at the same level as βreduction. Over the last years a whole range of explicit substitution calculi have been proposed, starting with the work of de Bruijn [14] and the λσ-calculus [1]. Although there are many different applications of such calculi, one of the main advantages that we see in describing the process of propagation of substitution at the same level as β-reduction is that it allows us to control the substitution process, with an emphasis on implementation.
+Projet Logical, Poˆle Commun de Recherche en Informatique du plateau de Saclay, CNRS, E´ cole Polytechnique, INRIA, Universite´ Paris-Sud.
+
+2 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+There are different notations for substitution, or more precisely, for variables in the λ-calculus. Explicit substitution calculi can be classiﬁed as:
+– named, when variables are denoted by names such as x, y, . . .; and – unnamed, for instance when numbers (also called indices) are used.
+During the process of propagation of substitution, it may be necessary to perform α-conversion (i.e. variable renaming) to avoid variable capture or clash. Unnamed explicit substitution calculi are thus often preferred for implementation purposes (although there are some exceptions, see for instance [33, 17]). De Bruijn notation [13] has, without doubt, become the standard name-free syntax for explicit substitution calculi. The purpose of this paper is to deﬁne an alternative notation for unnamed explicit substitution calculi, based on director strings.
+Director strings were introduced by Kennaway and Sleep [22] for combinator reduction, which translated to the λ-calculus gives a system where no reduction can be performed under abstractions. They were generalised in [17, 18] in order to deﬁne closed reduction for the λ-calculus (a weak reduction strategy which in contrast with standard weak strategies allows certain reductions to take place inside λ-abstractions, thus offering more sharing). A further generalisation of director strings was used in [35] to deﬁne strong reduction strategies for the λ-calculus, and to derive abstract machines suitable for reduction to weak head normal form and to full normal form. In this present paper we deﬁne a calculus of explicit substitutions with director strings in which any strategy of reduction in the λ-calculus can be simulated, and we explore the properties of this general director string calculus as a rewrite system and also as a means to express efﬁcient (weak and strong) reduction strategies for the λ-calculus. We consider this important for several reasons:
+– Director strings offer an alternative to de Bruijn notation [13] for unnamed calculi. However, as for de Bruijn notation, the syntax is not as readable as the corresponding named version. We will show that the general notation can be simpliﬁed in some cases, for instance, closed reduction turns out to be a natural restriction leading to a very simple rewrite system for weak reduction.
+– Director strings are a natural notation for explicit substitutions from an operational point of view: terms are annotated to indicate what they should do with a substitution. Substitutions are only propagated to places where they are needed, thus these calculi preserve strong normalisation (i.e. if a λ-term is strongly normalisable, so is its compilation). Other calculi preserving strong normalisation are presented in [27,12] (see [29, 9] for counterexamples in λσ).
+– We provide a generalisation of the director strings introduced by Kennaway and Sleep [22] for combinator reduction. With our generalised director strings we can simulate arbitrary β-reductions.
+We thus see the calculi presented in this paper both as an alternative syntax for explicit substitutions and as a basis for more efﬁcient implementations of the λcalculus. We present three calculi based on director strings. The ﬁrst one, which we call λo, is a general system where any β-reduction in the λ-calculus can be simulated. From a theoretical point of view, λo has the desired properties (it is conﬂuent, preserves strong normalisation, fully simulates the λ-calculus), however, from an
+
+Lambda-Calculus with Director Strings
+
+3
+
+implementation perspective, its generality is a drawback rather than an advantage. In the other two calculi, which we call λl and λc, reduction is restricted so that only some evaluation strategies (which are efﬁcient) can be simulated. In this sense, λl and λc are weak, but not as weak as standard weak calculi. It is well-known that standard weak explicit substitution calculi avoid α-conversion by allowing neither reduction under abstraction nor propagation of substitution through an abstraction (see for instance [11]). In contrast, our weak calculi allow certain reductions under, and propagation of substitutions through, abstractions. In this way more reductions can be shared. Moreover we may use the explicit information given by directors to avoid copying a substitution which contains a free variable, avoiding the duplication of potential redexes.
+We have implemented a family of abstract machines for weak and strong reduction based on the director strings calculi, and the benchmarks (given in Section 8) show that the level of sharing obtained is close to optimal reduction [23, 19, 3] with considerably less overhead in many cases. Immediate applications of this work include, on one hand λ-calculus/functional language evaluators (where weak reduction is needed), and on the other hand, partial evaluation (also called program specialisation) and proof assistants based on powerful type theories (where strong reduction is needed).
+
+1.1 Related Work
+Our work is clearly related to the general work on explicit substitutions, starting from de Bruijn’s seminal λCξφ [14] (see [7] for a modern presentation) and the λσ-calculus [1]. However, it is much more in line with the use of explicit substitutions for controlling the substitution process in implementations of the λcalculus [2, 36,21,24,31]. Our calculi are closer to λυ [26, 27] than to λσ [1] in the sense that we do not have a syntactic construct for concatenation (also sometimes referred to as composition) of independent substitutions. Nadathur’s work [30, 31] is also concerned with efﬁciency and has some common points with ours (although in a quite different framework): for instance, a variant of his calculus has conditions of closedness on certain terms.
+Efﬁciency and sharing in the λ-calculus have been important topics in the last twenty years. There is, in the literature, a wide range of mechanisms used for sharing: environments [36], sharing graphs [4], calculi with explicit addressing [8, 24]. We use director strings and the mechanism of explicit substitution itself for the purpose of sharing, i.e. we do not use any external machinery. While optimal sharing [28] means optimal number of β-reductions, its implementation relies on sharing graphs [23,19,3,4] in which a wealth of costly book-keeping rules are necessary (see [25] for instance). Hence we will in this paper give to efﬁciency a rather algorithmic meaning, or more pragmatically, we will count the total number of reduction steps necessary to reach a normal form, provided these steps are elementary in some sense.
+Director strings were introduced in [22] for combinatory reduction. A ﬁrst generalisation was used in [18] for closed reduction, which was the starting point of [35]. This present work is a substantially revised and extended version of [35].
+
+4 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+1.2 Overview
+The rest of this paper is structured as follows. In the following section we provide the background material and deﬁne the syntax of director strings. In Section 3 we present a general calculus where we can simulate arbitrary β-reduction steps. Section 4 presents the simpliﬁed local open calculus, and the closed reduction system. A type system for these calculi is presented in Section 5. We then use these calculi to deﬁne several strategies: weak (Section 6) and strong ones (Section 7), which we experimentally compare (Section 8). Finally, we conclude the paper in Section 9.
+2 Director Strings
+2.1 Background
+We brieﬂy recall the basic ideas of director strings [22]. As a motivating example, consider a term with two free variables f, x and substitutions for both of them: ((f (f x))[F/f ])[X/x]. The best way to perform these substitutions is to propagate them only to the places in the syntactic tree where they are required. Figure 1(a) shows the paths which the substitutions should follow in the tree, where the solid line corresponds to the substitution for f , and the dotted line for x.
+
+@
+
+ d
+
+f 
+
+d @
+
+ d f  dx
+
+@
+
+ d
+
+f 
+
+d @
+
+ d f  dx
+
+(a) Paths
+
+(b) Annotated term
+
+Fig. 1 Substitution paths and director strings
+
+A natural way to guide the substitutions to their correct destination is given in Figure 1(b) by director strings, which annotate each node in the graph with information about where the substitution must go (on both application nodes the ﬁrst arrow-like symbol or director corresponds to f and the second to x). When the substitution for f passes the root of this term, a copy of F is sent to both subterms, and the director is erased. The second substitution can then pass the root, where it is directed uniquely to the right branch by the director . Note that substitutions
+
+Lambda-Calculus with Director Strings
+
+5
+
+are copied only when they need to be: if there is just one occurrence of a variable in a term, then no duplication is performed.
+This simple idea works well when the substitution is closed (does not contain free variables). Otherwise, as each open substitution passes a given node we must add the additional directors for each free variable in the substitution.
+We end this section by brieﬂy recalling the analogy between director strings and combinator reduction, as presented in [22]. The reduction rules for the S, B, C, K combinators are the following:
+S x y z → x z (y z) B x y z → x (y z) Cxyz → xzy Kxy → x
+where S x y takes an argument and directs it to both x and y; B x y takes an argument and directs it just to y; C x y takes an argument and directs it just to x; and ﬁnally K x takes an argument and discards it. Thus we can annotate the application x y with the combinators, which correspond exactly to the directors: S is , B is
+, C is and K is − (see below).
+
+2.2 Syntax
+We assume the reader is familiar with the λ-calculus [5] and rewrite systems [15]. We recall that a reduction relation → is terminating (or strongly normalising) if all reduction sequences are ﬁnite. It is locally conﬂuent if t → u and t → v implies that there exists w such that u →∗ w and v →∗ w; we say that u and v are joinable in this case1. If u and v are joinable with one-step reductions, the relation is strongly conﬂuent. It is conﬂuent if t →∗ u and t →∗ v implies that there exists w such that u →∗ w and v →∗ w.
+We now introduce more formally the syntax of annotated terms. This syntax is common to the different rewrite systems that will be described later.
+Deﬁnition 1 (λ-calculus with Director Strings) We deﬁne four syntactic categories:
+Directors: We use ﬁve special symbols, called directors, ranged over by α,γ,δ: 1. ‘ ’ indicates that the substitution should be propagated only to the right branch of a binary construct (application or substitution, as given below). 2. ‘ ’ indicates that the substitution should be propagated only to the left branch of a binary construct. 3. ‘ ’ indicates that the substitution should be propagated to both branches of a binary construct. 4. ‘↓’ indicates that the substitution should traverse a unary construct (abstraction and variables, see below).
+1 →∗ denotes the reﬂexive and transitive closure of →.
+
+6 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+
+5. ‘−’ indicates that the substitution should be discarded (when the variable concerned does not occur in a term).
+Strings: A director string is either empty, denoted by , or built from the above symbols (so is of the form α1α2 . . . αn where the αi’s are directors). We use Greek letters such as ρ,σ. . . to range over strings. The length of a string σ is denoted by |σ|. If α is a director, then αn denotes a string of α’s of length n. If σ is a director string of length n and 1 ≤ i ≤ j ≤ n, σi denotes the ith director of σ and σ\i = σ1 . . . σi−1σi+1 . . . σn is σ where the ith director has been removed. σi..j = σi . . . σj is our notation for substrings. |σ|l denotes the number of and occurring in σ, |σ|r the number of and , and |σ|+ the number of directors that are not −.
+Preterms: Let σ range over strings, k be a natural number and t, u range over preterms, which are deﬁned by the following grammar:
+t ::= σ | (λt)σ | (t u)σ | (t[k/u])σ
+We denote preterms by t, or tσ if we want to emphasise the director string σ. Terms: Well-formed terms are preterms that recursively satisfy the following con-
+ditions, where U = (↓ |−)∗ and B = ( | | |−)∗:
+
+Name
+
+Term
+
+Constraints
+
+Variable
+
+σ
+
+σ ∈ U , |σ|+ = 1
+
+Abstraction (λtρ)σ
+
+σ ∈ U , |ρ| = |σ|+ + 1
+
+Application (tρ uν )σ σ ∈ B, |ρ| = |σ|l, |ν| = |σ|r
+
+Substitution (tρ[k/uν])σ σ ∈ B, |ρ| = |σ|l + 1, |ν| = |σ|r, 1 ≤ k ≤ |ρ|
+
+Remark 1 For terms we use the same convention as for preterms, writing t or tσ depending on whether or not we need to mention speciﬁcally the director string of an annotated term, as in the deﬁnition above. To sum up the naming conventions in this paper, boldface lower-case letters designate preterms in general (hence also well-formed terms), while normal lower-case letters designate preterms (or terms) with their root director string removed, hence explicitly needing a director string to form a preterm or term. Upper-case letters are reserved for terms of the usual λ-calculus.
+
+We have a variety of different term constructs:
+– represents variables (a place holder), – (λt)σ is an abstraction, – (t u)σ is an application, – ﬁnally (t[k/u])σ is our notation for explicit substitution, meaning that the vari-
+able corresponding to the kth director in t’s string is to be replaced by u. We will often write (t[u])σ instead of (t[1/u])σ when the substitution binds the ﬁrst variable.
+The name of the variable is of no interest since the director strings give the path that the substitution must follow through the term to ensure that it gets to the right place; all we need is a place holder.
+
+Lambda-Calculus with Director Strings
+
+7
+
+In contrast with other explicit substitutions syntax, ours has explicit information about duplication ( ) and erasing (−). This is inspired by calculi for linear logic, and will allow us a ﬁner control on substitutions: we may reduce a subterm more when encountering a , thus taking advantage of the mechanism of explicit substitution to share some reductions. There is an alternative presentation which combines the director ‘−’ with abstraction, using the notation (λ−t)σ to indicate that the bound variable does not occur in the term t. The resulting syntax is simpler, and it allows us to erase terms as soon as possible. However, it does not allow to deﬁne β-reduction in full generality. We will discuss this choice again in Section 4.
+As with most λ-calculi, we will adopt several syntactic conventions: we will drop parentheses whenever we can, and omit the empty string unless it is essential.
+
+2.3 Compilation and Readback
+
+We use λ-terms with director strings as an intermediate language. We thus need to provide a function to compile usual λ-terms into this syntax and another to read them back. Notice that, as usual, we consider terms of the λ-calculus modulo α-conversion (renaming of bound variables).
+The following deﬁnition of a compilation from the usual λ-calculus into director strings syntax indicates precisely how the strings and terms are built. We use an auxiliary ordered list [x1, . . . , xn] in the compilation function to keep track of the variable names corresponding to each director in the strings. Each step of the compilation function goes down one node in the syntax tree of the term, and computes the corresponding string using auxiliary functions ξ and θ. We denote by fv(M ) the set of free variables of the λ-term M . We use the standard notations for the empty list and the cons and append operations ([ ], x :: and · respectively) and abbreviate x1 :: . . . :: xn :: [ ] to [x1, . . . , xn] or x. We denote i the ith element of a list .
+
+Deﬁnition 2 (Compilation) Let M be a λ-term with fv(M ) ⊆ {x1, . . . , xn}, its compilation M x is deﬁned as follows:
+
+xx = σ
+
+where ([x], σ) = ξx(x)
+
+λx.M x = (λ M ·[x])σ where ( , σ) = ξ(λx.M)(x)
+
+(M N ) x = ( M N )σ where ( , , σ) = θM,N (x)
+
+ξM ([ ]) = ([ ], )
+
+ξM (x :: ) =
+
+(x :: , ↓ σ) if x ∈ fv(M ) ( , −σ) if x ∈ fv(M )
+
+where( , σ) = ξM ( )
+
+θM,N ([ ]) = ([ ], [ ], )
+
+ (x :: , , σ) if x ∈ fv(M ) \ fv(N ) 
+
+
+
+θM,N (x ::
+
+)
+
+=
+
+ 
+
+( (x
+
+,x ::
+
+:: ,
+
+x
+
+, ::
+
+
+
+σ)
+
+if
+
+x ∈ fv(N
+
+)
+
+\
+
+fv(M )
+
+ 
+
+where
+
+,
+
+σ) if x ∈ fv(M ) ∩ fv(N ) ( , 
+
+, σ) = θM,N ( )
+
+ 
+
+(
+
+,
+
+, −σ)
+
+if
+
+x
+
+∈
+
+fv(M
+
+)
+
+∪
+
+fv(N
+
+)
+
+ 
+
+8 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+
+When there is no ambiguity, we use the notation M x with the implicit assumption that fv(M ) ⊆ x, and write M when the list is empty.
+
+Remark 2 (Order of directors) In an abstraction (λtρ)σ, the last director in the string ρ corresponds to the bound variable. This is reminiscent of Cre´gut’s reversed de Bruijn’s indexing [10].
+
+Example 1 We show the compilation of some λ-terms:
+
+I = λx.x
+
+= (λ ↓)
+
+K = λx.λy.x
+
+= (λ(λ ↓−)↓)
+
+S = λx.λy.λz.(xz)(yz) = (λ(λ(λ(( ↓ ↓) ( ↓ ↓)
+
+2 = λf.λx.f (f x)
+
+= (λ(λ( ↓( ↓ ↓) ) )↓)
+
+)
+
+)↓↓)↓)
+
+In order to show that the result of the compilation is a well-formed term, we need two auxiliary lemmas.
+
+Lemma 1 If (M N ) is an application with fv(M N ) ⊆ {x1, . . . , xn}, then θM,N ([x1, . . . , xn]) = ( 1, 2, σ) where 1 = fv(M ), 2 = fv(N ), and |σ| = n.
+
+Proof Straightforward induction on n.
+
+Lemma 2 (Length of Strings) Let M be a λ-term and fv(M ) ⊆ {x1, . . . , xn}, then:
+M x = uσ where |σ| = n
+In particular, if M is closed then M has an empty director string ( ).
+
+Proof By induction on n.
+For n = 0, M is either an abstraction, in which case the compiled term has director string ↓0 = as required, or an application and (M N ) = ( M N ) since θM,N ([ ]) = ([ ], [ ], ) by deﬁnition.
+For n > 0 we distinguish cases according to M . The cases of variable and abstraction are trivial. The interesting case is application. In this case, the property is a direct consequence of Lemma 1.
+
+Proposition 1 (Consistency of Compilation) If M is a λ-term with fv(M ) ⊆ x then M x is a well-formed term.
+
+Proof By induction on the structure of λ-terms. If M is a variable then the result holds trivially. If M is an abstraction, then the result holds by induction. If M is an application, it is a consequence of Lemma 1, the induction hypothesis, and the construction of σ in the deﬁnition of θ.
+
+Since we prefer to think of this calculus as some form of intermediate language, we also provide a notion of readback, which simply puts names back in.
+
+Lambda-Calculus with Director Strings
+
+9
+
+Deﬁnition 3 (Readback) Let t = tσ be a term where |σ| = n, and let x1, . . . , xn be n fresh variables. We deﬁne the readback of t as t [x1,...,xn], where the read-
+back function (which uses an auxiliary list M of λ-terms) is deﬁned as follows:
+
+σ M
+
+=M
+
+(λt)σ M
+
+= λx. t κσ(M·[x])
+
+(t u)σ M = t u
+
+(t[k/u])σ M = t [ 1,..., k−1, u
+
+where [M ] = κσ(M ) where x is fresh
+where ( , ) = γσ(M ) , k,..., m] where ( , ) = γσ(M )
+
+κ ([ ])
+
+=[]
+
+κ↓σ(M :: ) = M :: κσ( ) κ−σ(M :: ) = κσ( )
+
+γ ([ ])
+
+= ([ ], [ ])
+
+γ σ(M :: ) = (M :: , ) γ σ(M :: ) = ( , M :: ) γ σ(M :: ) = (M :: , M ::
+
+γ−σ(M :: ) = ( , )
+
+
+
+    
+where ( ,
+
+)
+
+ 
+
+
+
+
+
+
+
+) = γσ( )
+
+Notice that in the case of a variable σ we must have |σ|+ = 1 since the term is
+well-formed, hence κσ(M ) is a singleton. Also note that the auxiliary list M may contain arbitrary λ-terms, and not necessarily only variables as in the compilation. This makes it possible to complete substitutions in a thorough and elegant way: we only put them in the list, and the terms will be guided to the right places, thanks to the directors. More precisely:
+
+t [x1,...,xn]{xi → Mi} = t [x1,...,xi−1,Mi,xi+1,...,xn]
+where M {x → N } is our notation for implicit substitution (the meta-operation of substitution in the λ-calculus).
+
+Example 2 We give two small examples of the readback procedure:
+
+(λ ↓)
+
+= λx. ↓ [x] = λx.x
+
+(λ(λ( ↓( ↓ ↓) ) )↓) = λx.λy. ( ↓( ↓ ↓) )
+
+= λx.λy.x (x y)
+
+[x,y]
+
+To prove that the readback function is well deﬁned we use the following lemma:
+
+Lemma 3 If |σ| = n and M1, . . . , Mn are λ-terms then – length(κσ([M1, . . . , Mn])) = |σ|+ if σ ∈ U ; – γσ([M1, . . . , Mn]) = ( , ) where length( ) = |σ|l and length( ) = |σ|r.
+Proof Straightforward induction on n.
+
+Lemma 4 During the readback of a well-formed term, the readback procedure is only called under the form tρ [M1,...,Mn] with |ρ| = n.
+
+10 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+
+Proof By induction and Lemma 3. Each step of the procedure adjusts the length of the auxiliary list according to the constraints on well-formed terms (see Deﬁnitions 1 and 3).
+
+Proposition 2 (Consistency of Readback) If tσ is a well-formed term with |σ| = n and x1, . . . , xn are n fresh variables then tσ [x1,...,xn] is a λ-term.
+Proof We prove the more general property: If tσ is a well-formed term, |σ| = n and M1, . . . , Mn are λ-terms, then
+tσ [M1,...,Mn] is well-formed. This is proved by induction on t, using Lemma 4. The case of a variable σ
+is trivial since |σ|+ = 1 by well-formedness. For an abstraction, application or substitution the result follows directly by induction and Lemma 4.
+
+The compilation and the readback function are inverses modulo α-conversion. To prove it we use the following auxiliary lemma:
+
+Lemma 5 – ξM ([x1, . . . , xn]) = ( , σ) implies κσ([x1, . . . , xn]) = ; – θM,N ([x1, . . . , xn]) = ( 1, 2, σ) implies γσ([x1, . . . , xn]) = ( 1, 2).
+Proof Straightforward induction on n.
+
+Proposition 3 (Inverses) If M is a λ-term with fv(M ) ⊆ x, then M x x =α M. In particular, if M is a closed λ-term, M =α M .
+
+Proof By induction on M .
+
+– Variable:
+x x x = x as required. – Abstraction:
+(λx.M ) x x = (λ M ·[x])σ x = λy. M ·[x] ·[y], using Lemma 5, where ( , σ) = ξλx.M (x). By induction, this is α-equivalent to λx.M . – Application:
+M N x x = ( M N )σ x, where ( , , σ) = θM,N (x). By Lemma 5 and the deﬁnition of readback:
+
+( M N )σ x = ( M
+
+N ).
+
+The result then follows directly by induction.
+
+3 The Open Calculus
+We will now give the reduction rules that will allow us to fully simulate the λcalculus. This calculus is called open (λo) in contrast with the calculus for closed reduction (λc) deﬁned in Section 4.3, which is simpler but does not fully simulate β-reduction.
+
+Lambda-Calculus with Director Strings
+
+11
+
+3.1 The Beta Rule
+We need a Beta rule to eliminate β-redexes and introduce an explicit substitution instead. In a compiled term (λtν)ρ the variable bound by the abstraction is determined by the last director in ν (see Remark 2), and |ν| = |ρ|+ + 1 according to the constraints in Deﬁnition 1. Since ρ may contain erasing directors (−) which we have to preserve, we move them up to the director string of the substitution:
+
+Beta ((λt)ρ u)σ o (t[|ρ|+ +1 / u])τ
+
+where τ = ψb(σ, ρ)
+
+with:
+
+ψb( , ) =
+ψb( σ, ρ) = ψb(σ, ρ) ψb( σ, ↓ ρ) = ψb(σ, ρ) ψb( σ, ↓ ρ) = ψb(σ, ρ) ψb(− σ, ρ) = − ψb(σ, ρ) ψb( σ, − ρ) = − ψb(σ, ρ) ψb( σ, − ρ) = ψb(σ, ρ)
+
+Remark 3 If the function is closed (i.e. has an empty director string), then the substitution binds the ﬁrst (and only) variable of t, and we simply have:
+
+((λt) u)σ o (t[u])σ.
+
+Based on this idea we will deﬁne a simpliﬁed system for the evaluation of closed terms in Section 4.
+
+3.2 Propagation Rules
+
+We need rules to propagate the substitutions created by the Beta rule deﬁned above in Section 3.1. The directors indicate the path that the substitution should follow: we will need a rule per term construct and possible director.
+To understand how the rules for the propagation of substitutions are deﬁned, consider a simple case: an application (t u) ρ with a substitution concerning the ﬁrst variable, i.e. we have ((t u) ρ[v])σ. The substitution should be propagated to the left branch of the application node as the director indicates. Therefore we need a rule of the form:
+
+(App1)
+
+((t u) ρ[v])σ ((t[v])ρ u)σ
+
+Let’s try to ﬁnd ρ and σ . Suppose that a (closed) substitution is applied to the left and right hand-sides of the above equation. If, for example, σ = ρ = , then the substitution is for t on the left, so we must have σ = ρ = to ensure that the substitution is also guided towards t on the right. If σ = and ρ = , then it is to be directed towards u, and we must have σ = and ρ is not concerned (say ρ = here). Finally, if σ = , the substitution is for v, and we write σ = and ρ=.
+
+12 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+
+Name
+
+Reduction
+
+Cond.
+
+Var ( ρ[i/vν ])σ
+
+o vτ
+
+where τ = π (σ, ν) ρi =↓
+
+App1 ((t u)ρ[i/v])σ
+
+o ((t[j/v])υ u)τ
+
+ρi =
+
+where υ = φl(σ, ρ\i), τ = ψ1(σ, ρ\i), j = |ρ1..i|l
+
+App2 ((t u)ρ[i/v])σ
+
+o (t (u[k/v])ω)τ
+
+ρi =
+
+where ω = φr(σ, ρ\i), τ = ψ2(σ, ρ\i), k = |ρ1..i|r
+
+App3 ((t u)ρ[i/v])σ
+
+o ((t[j/v])υ (u[k/v])ω)τ
+
+ρi =
+
+where υ = φl(σ, ρ\i), ω = φr(σ, ρ\i), τ = ψ3(σ, ρ\i), j = |ρ1..i|l, k = |ρ1..i|r
+
+Lam ((λt)ρ[i/v])σ
+
+o `λ(t[i/v])υ· ´τ
+
+ρi =↓
+
+Comp ((t[j/u])ρ[i/v])σ
+
+where υ = φd(σ, ρ\i), τ = ψd(σ, ρ\i)
+
+o (t[j/(u[k/v])ω])τ
+
+ρi =
+
+Erase (tρ[i/v])σ
+
+where ω = φr(σ, ρ\i), τ = ψ2(σ, ρ\i), k = |ρ1..i|r
+
+o tτ
+
+where τ = π(σ, ρ\i) ρi = −
+
+Fig. 2 Propagation Rules: P
+σ1 ρ1 φl φr ψ1 ψ2 ψ3 π −
+
+− − −
+
+− − −− − − −−
+−
+
+Fig. 3 Functions used in the Propagation Rules
+
+σ1 ρ1 ψd φd ψb ↓
+↓↓ ↓↓ − −− −− − −↓
+
+We obtain most of the propagation rules in the same way. Notice that not every
+
+combination of directors is to be considered, as some of them do not correspond to well-formed terms. Figure 2 shows the set P of propagation rules.
+
+The various functions φ and ψ used in the propagation rules just compute the
+
+ad hoc director strings. They are generated recursively in the same way as above
+
+from the tables in Figure 3.
+
+For example:
+
+φl( , φl( σ, φl( σ, φl( σ,
+
+)= ρ) = ρ) = ρ) =
+
+φl(σ, ρ) φl(σ, ρ) φl(σ, ρ), etc.
+
+The function π used only in the Erase rule adds a new director − for every free
+
+variable of an erased term, and can be paraphrased from Figure 3 in the following
+
+way (α is any director):
+
+Lambda-Calculus with Director Strings
+
+13
+
+π( , ) = π( σ, ρ) = − π(σ, ρ) π( σ, α ρ) = α π(σ, ρ) π( σ, α ρ) = α π(σ, ρ) π(− σ, ρ) = − π(σ, ρ)
+The function π used for the Var rule performs a similar job (π is not in Figure 3 because it does not follow exactly the same pattern):
+π( , )= π ( σ, α ν) = α π (σ, ν) π ( σ, ν) = − π (σ, ν) π ( σ, α ν) = α π (σ, ν) π (− σ, ν) = − π (σ, ν)
+These rules deserve some explanations:
+– The Var rule is the simplest. When the substitution reaches such a place holder with a corresponding director ↓, we know that it is indeed the right variable (because the substitution has been guided there earlier and is not erased). We know that ρ\i = −n if the term is well-formed so that both ‘−’ and in σ should result in a ‘−’ in τ to ensure that the erased variables are preserved. Moreover we do not need to inspect ρ in the computation of τ .
+– The rules for application are the main rules here. Depending on ρi, the substitution is guided to the left or right, or copied in App3 only when there is more than one occurrence of the given variable. The new director strings are computed by ad hoc functions from σ and ρ (omitting the ith director of the last one).
+– Surprisingly, the rule that allows an open substitution to pass through an abstraction (Lam) is simple. This is quite remarkable, as this is especially difﬁcult in usual calculi. For example, it requires α-conversion in a calculus with names.
+– The Comp rule is the counterpart of App2 in terms of substitution instead of application. We could have written composition rules for substitutions similar to App1 and App3, but the substitutions would then be allowed to overtake (i.e. their order would not be preserved), which means that the system would trivially fail to preserve strong normalisation.
+– The Erase rule applies to a substitution in any term construct, provided the director corresponding to the substitution is ‘−’. Then the substitution is simply discarded and new ‘−’ directors are added to take into account possible free variables of the discarded term.
+We have a small number of propagation rules in comparison with standard explicit substitution calculi. However, our rules require non-trivial syntactical computations on director strings when we consider arbitrary substitutions. The system can be drastically simpliﬁed if we impose some restrictions on the substitutions, as we will see in the next section. Note that the condition on ρi in the rules has been externalised only to improve readability and is of course a simple pattern-matching.
+
+14 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+Example 3 We show a reduction sequence using this calculus. Consider the λ-term λx.(λy.y)x which contains a single redex:
+λx.(λy.y)x = (λ((λ ↓) ↓) ) o (λ( ↓[ ↓]) ) o (λ ↓) = λx.x
+Note that an encoding into combinators, using director strings as presented in [22], would not allow this redex to be contracted, and thus if used as an argument could potentially be duplicated. In this sense, our calculus offers a generalisation of the director strings of [22].
+
+3.3 Properties
+
+Lemma 6 (Preservation of Well-Formedness) If tσ is a well-formed term and tσ o uτ , then uτ is a well-formed term, moreover |σ| = |τ |.
+Proof We have to prove that each rule produces a well-formed term with a director string of the same size. The proof is laborious but not difﬁcult, and we omit the details.
+
+The process of propagating a substitution to the corresponding leaves in the tree associated to the term, using the rules in P, is terminating: each rule either erases the substitution or moves it down towards the leaves. Formally, we prove the termination of P by using an interpretation function. This function computes the lengths of the paths to be traversed by a substitution to reach the corresponding leaves. We call it the distance of a substitution.
+
+Deﬁnition 4 (Distance) The distance associated to the substitution [i/v] in the term (t[i/v])ρ is computed by the function |t[i/v]| deﬁned by induction on t as
+follows:
+
+| σ[i/v]| = 1
+
+|(λt)σ[i/v]| = 1
+
+(if σi = −)
+
+|(λt)σ[i/v]| = 1 + |t[i/v]|
+
+(if σi =↓)
+
+|(t u)σ[i/v]| = |(t[j/u])σ[i/v]| = 1 + |t[k/v]|
+
+(if σi = ,
+
+k computed as in Fig. 2)
+
+|(t u)σ[i/v]| = |(t[j/u])σ[i/v]| = 1 + |u[k/v]|
+
+(if σi = ,
+
+k computed as in Fig. 2)
+
+|(t u)σ[i/v]| = |(t[j/u])σ[i/v]| = 1 + |t[k/v]| + |u[k /v]| (if σi = ,
+
+k, k computed as in Fig. 2)
+
+|(t u)σ[i/v]| = |(t[j/u])σ[i/v]| = 1
+
+(if σi = −)
+
+Proposition 4 (Termination of Propagation) The set P of propagation rules is terminating.
+
+Proof We deﬁne an interpretation that associates to each term t a multiset with an element |u[i/v]| for each subterm (u[i/v])ρ occurring in t. Each application of a propagation rule decreases the interpretation of the term: rules Var and Erase erase one element of the multiset, and in the other rules one element is replaced by one or two strictly smaller elements.
+
+Lambda-Calculus with Director Strings
+
+15
+
+It is easy to see that using the propagation rules we eventually reach a pure term (i.e. a term without substitutions):
+Proposition 5 (Completion of Substitutions) Every term has a P-normal form which is a pure term.
+Proof We prove by contradiction that any term of the form (u[i/v])ρ can be reduced by a rule in P. Assume there is a counterexample, and take one of minimal size: (t[i/w])σ. Consider all the cases for t. If t is a variable, application or abstraction obviously we can apply a rule from P. If it is a substitution (t [j/u ])υ, then it is reducible (by the minimality of the counterexample).
+Lemma 7 (Local Conﬂuence of Propagation) The set P of propagation rules is locally conﬂuent.
+Proof P has seven critical pairs, all with Comp. In the version of the calculus without the director for erasing (Section 4), they all easily converge. But here, the pairs reduce to terms where the erasing may occur at two different levels, and we need to go one step further with the corresponding rule to ﬂatten these two strings to one, and obtain syntactically equal terms. Of course, this makes the proof rather tiresome, due to the deﬁnition by cases of the functions involved in the rules, so we only give the details for the Var/Comp pair, as the other critical pairs can be dealt with in a similar way.
+
+(( χ[j/uν ])ρ[i/v])σ
+Var
+? (uγ [i/v])σ
+
+Comp - ( χ[j/(uν [k/v])ω])τ
+Var
+? (uν [k/v])µ
+
+?
+
+with the conditions χj =↓, ρi = and the intermediate results: k = |ρ1..i|r, γ = π (ρ, ν), τ = ψ2(σ, ρ\i), ω = φr(σ, ρ\i), µ = π (τ, ω).
+The two terms may be syntactically different, the only difference being that
+
+directors ‘−’ may have been added in γ in the left term and in µ in the right term,
+
+so at different levels. Fortunately, these terms are not in P-normal form (thanks
+
+to Proposition 5), and we know that another P-rule may be applied at the root
+
+of both terms. (There is one case where we can’t, but then we have uν
+
+∗ o
+
+uν
+
+where we can reduce at the root and uγ = uπ (ρ,ν)
+
+∗ o
+
+u
+
+π
+
+(ρ,ν
+
+),
+
+and
+
+the
+
+situation
+
+is similar). It is indeed the same rule for both terms, because the unlabelled term
+
+to the left of the substitution is the same and γi = νk, which comes from the
+
+following observations:
+
+(i) π (ρ, ν) is well-deﬁned if and only if |ν| = |ρ|r; (ii) if |ν| = |ρ|r, 1 ≤ i ≤ |ρ| and k = |ρ1..i|r, π (ρ1..i, ν1..k) is a preﬁx of π (ρ, ν); (iii) if |ν| = |ρ|r, |π (ρ, ν)| = |ρ|;
+
+16 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+
+(iv) if |ν| = |ρ|r, 1 ≤ i ≤ |ρ| and k = |ρ1..i|r, (π (ρ, ν))1..i = π (ρ1..i, ν1..k).
+
+(i), (ii), (iii) are clear from the deﬁnition of π and (iv) is a direct consequence
+
+of (ii) and (iii). As a corollary, we have indeed from (iv), back to our case, that
+
+γi
+
+=
+
+νk
+
+and
+
+(π
+
+(ρ,
+
+ν))
+\i
+
+=
+
+π
+
+(ρ\i,
+
+ν\k ).
+
+(∗)
+
+Now, to prove that the terms are equal after this (unknown) reduction, we just
+
+need to show that f (σ, γ\i) = f (µ, ν\k) for f ∈ {φl, φr, φd, ψ1, ψ2, ψ3, ψd, π, π } and |γ1..i|r = |ν1..k|r, |γ1..i|l = |ν1..k|l.
+
+This job is of course awfully tiresome and we will omit most of it. We will
+
+however deal completely with one case, say ψ1, which means that our unknown
+
+rule was in fact App1, and we want to compare the outermost director strings of
+both terms. We thus have to compare ψ1(σ, γ\i) and ψ1(µ, ν\k) for every valid case, i.e. for every case that corresponds to initially well-formed terms:
+
+σ ρ\i ν\k γ\i ψ1(σ, γ\i) τ ω µ ψ1(µ, ν\k)
+
+−− −
+
+−
+
+−−
+
+−−
+
+− −−
+
+−−
+
+− − −− −
+
+Note that we compute γ\i from ρ\i and ν\k thanks to (∗). The table above shows that if σ, ρ, ν are as deﬁned in a well-formed term,
+ψ1(σ, γ\i) = ψ1(µ, ν\k) (cases with have been omitted but are similar), hence, after the application of an App1 rule to both terms of the critical pair, their outermost director strings are the same. A similar proof with φl would allow to conclude that these terms are indeed the same, which concludes this case. All the other cases
+are similar.
+
+Local conﬂuence and termination imply conﬂuence, using Newman’s Lemma [32].
+
+Corollary 1 (Conﬂuence of Propagation) The set P of propagation rules is conﬂuent on λo-terms.
+
+As a consequence of conﬂuence (Corollary 1) and termination (Proposition 4), the set P of propagation rules deﬁnes a function from a term t to its unique normal form, denoted P(t). The following lemma shows that P implements the metaoperation of substitution in the λ-calculus: to compute M {x → N } we compile M , compile N , create an explicit substitution, and normalise it with P.
+
+Lemma 8 (Substitution) Let M and N be λ-terms. Let M x = tρ, N y = u. Let ρ = ρ− and i = |ρ| + 1 if x ∈ x, otherwise ρ = ρ and i is the position of x in x. Then P((tρ [i/u])σ) z = M {x → N } (where x, y, z, σ are adequately
+chosen).
+
+Lambda-Calculus with Director Strings
+
+17
+
+Proof By induction on M . If M is a variable we distinguish two cases: if M = y = x we obtain the required result using the rule Erase, otherwise we use Var. The case of an application follows directly by induction using rules App1, App2, App3 or Erase. For an abstraction we use the induction hypothesis and rules Lam or Erase.
+Reduction in λo is sound with respect to the λ-calculus, in the following sense.
+Proposition 6 (Soundness of λo) If t o u then t x →∗β u x. In particular:
+1. if t P u then t x = u x, and 2. if t is a P-normal form then t x →β u x.
+Proof The result is trivial if the reduction step uses a rule in P, since the readback function performs the substitution. Note that
+t =[x1,...,xi−1,Mi,xi+1,...,xn] t [x1,...,xn]{xi → Mi}.
+Assume we use the Beta rule. We proceed by induction on t. The only interesting case is when the reduction takes place at the root of t. In this case t = ((λw)ρ v)σ and u = (w[|ρ|+ + 1/v])τ . By deﬁnition of readback, t x = (λx. w y) v z, where x, y, z are the corresponding lists of free variables. There is therefore a βreduction step: t x →β w y{x → v z} = u x by deﬁnition of readback. Note that in the general case this Beta-redex might occur in a substitution and it might be copied or erased by the readback function, thus t x →∗β u x. In particular, if t is a P-normal form then t x →β u x since t does not contain substitutions.
+
+We also have a Simulation Theorem which shows the completeness of λo with respect to β-reduction.
+
+Theorem 1 (Simulation) Let M be a λ-term with fv(M ) ⊆ x. If M →β N , then
+
+there exists u such that M x
+
+∗ o
+
+u
+
+and
+
+u x = N.
+
+·
+
+M.........?
+
+→β -
+
+N..........6·
+
+t -u
+
+∗
+
+o
+
+Proof Since the compilation function (Deﬁnition 2) transforms applications into applications and abstractions into abstractions, it is clear that if M has a β-redex then M x has a Beta-redex. We proceed by induction on M . The only interesting case is when the β-reduction takes place at the root of M . In this case, M = (λx.M ) N and N = M {x → N }. Using the compilation function, we get:
+
+– λx.M z = (λr)ν where r = M z x – N y=w
+– M x Beta (r[i/w])σ
+
+18 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+
+Using the Substitution Lemma (Lemma 8) we obtain the required result:
+
+(r[i/w])σ
+
+∗ o
+
+u
+
+with
+
+u x = N.
+
+The reduction steps in the latter reduction are all in P.
+
+Remark 4 In general, we do not have u = N x (which would be stronger). For
+
+instance, λxy.((λz.y) x) = (λ(λ((λ ↓−)↓ ↓) )↓)
+
+∗ o
+
+(λ(λ
+
+−↓)↓) , and
+
+(λ(λ −↓)↓) = λxy.y, while λxy.y = (λ(λ ↓)−) . Intuitively, there are
+
+two different levels where we may say that x should be erased. The compilation
+
+function makes the canonical choice to put this information at the highest possible
+
+level, i.e. right below the corresponding λ, but it may also happen that a variable
+
+disappears “at runtime”, as in the example above. Then we could of course add a
+
+rule to make the erasing director go up until it reaches its canonical position, so that
+
+we would indeed have u = N x. But this would be useless, and this is exactly
+
+what the simulation theorem says: we may have different internal representations
+
+corresponding to the same term in the course of reduction, but we do not care as
+
+long as we can still correctly read back a λ-term at the end of the reduction. Hence
+
+although seemingly weaker than one could expect, Theorem 1 is exactly the right
+
+property for an intermediate language that cleanly separates the readback from the
+
+reduction rules.
+
+In order to prove conﬂuence of λo, we need some extra lemmas. Let’s deﬁne
+
+t →B u if t, u are in P-normal form and t
+
+Beta
+
+∗ P
+
+u.
+
+Lemma 9 t o u ⇒ P(t) →∗B P(u).
+
+Proof Obvious if t P u. If t Beta u, the interesting case is when reduction is at the root. Then ((λt)ρ v)σ Beta (t[|ρ|+ +1/v])τ and ((λP(t))ρ P(v))σ →B P((P(t)[|ρ|+ +1/P(v)])τ ) = P(u).
+
+Lemma 10 If t →B u then t x →β u x (one step).
+
+Proof Direct consequence of Proposition 6.
+
+According to the relation →B on P-normal forms of λo-terms, we may deﬁne the notions of residuals and developments as in the λ-calculus (see [5]). Then clearly by Lemma 10, to a residual of t according to →B corresponds a residual of t x using →β. We hence have a Finite Developments Theorem for →B:
+Lemma 11 (FD for →B) If t is a P-normal form, all developments of t according to the reduction →B are ﬁnite.
+Proof Assume an inﬁnite development of (t, F) where t is a λo-term in P-normal form and F a set of →B-redex occurrences of t:
+t →B t1 →B · · · →B tn →B · · ·
+
+Then we have by Lemma 10:
+
+t x →β t1 x →β · · · →β tn x →β · · ·
+where every step is a residual of a redex corresponding to F. Since the λ-calculus satisﬁes the Finite Developments Theorem [5], this is impossible.
+
+Lambda-Calculus with Director Strings
+
+19
+
+A complete development of (t, F) is a development of (t, F) such that there is no residual of F after it.
+
+Lemma 12 All complete developments of (t, F) with →B end with the same term.
+
+Proof Assume that t →B u and t →B v are the ﬁrst steps in two complete de-
+
+velopments of (t, F), obtained by reducing redexes f1 and f2 respectively. Then,
+
+by deﬁnition of →B, u and v are P-normal forms, and there are terms u and v
+
+such that t Beta u
+
+∗ P
+
+u
+
+≡
+
+P (u
+
+)
+
+and
+
+t
+
+Beta v
+
+∗ P
+
+v
+
+≡
+
+P (v
+
+).
+
+If the Beta-redex reduced is the same in both cases, then obviously u ≡ v be-
+
+cause P is conﬂuent. Let’s assume that f1, f2 ∈ F are different Beta-redexes.
+
+Then u and v can be joined using Lemma 9, as shown in the following diagram,
+
+where
+
+fi /fj Beta
+
+denotes
+
+the
+
+Beta -reduction
+
+of
+
+the
+
+residuals
+
+of
+
+fi
+
+relative
+
+to
+
+fj
+
+(see [5]):
+
+f1
+
+t
+
+Beta
+-
+
+u
+
+∗
+
+P
+-
+
+u
+
+f2 Beta
+? v
+∗ P
+v?
+
+f2 /f1 Beta
+- s?
+f1 /f2 Beta
+
+→∗B
+
+∗P -
+
+? - P(s) →∗B
+
+Note that the rule Beta is left-linear and only superposes trivially with itself, which guarantees the existence of the terms s and P(s) obtained by developing (t, {f1, f2}).
+Lemma 11 and Newman’s Lemma [32] complete the proof.
+
+Lemma 13 →B is conﬂuent.
+
+Proof Deﬁne t B u if u is a complete development of (t, F ) according to →B for some F. Then:
+
+– →∗B=
+
+∗ B
+
+– B is strongly conﬂuent: if t B t1 (with F1) and t B t2 (with F2),
+
+then let t3 be the complete development of t with F1 ∪ F2. t B t1 results
+
+from a partial development of (t, F1 ∪ F2), hence by completely developing
+
+the residuals of F1 ∪ F2 in t1, one obtains by Lemma 12 t1 B t3. Similarly
+
+t2 B t3.
+
+Theorem 2 (Conﬂuence) The calculus λo is conﬂuent.
+
+20 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+
+Proof The situation is the following: t
+
+∗
+
+o
+-
+
+u
+
+∗∗ oo
+
+v? - w?
+∗ o
+
+We use the interpretation method. By Lemma 9, P(t) →∗B P(u) and P(t) →∗B
+
+P(v). By Lemma 13, there exists w such that P(u) →∗B w and P(v) →∗B w.
+
+And since →∗B⊂
+
+∗ o
+
+,
+
+the
+
+derivations
+
+u
+
+∗ o
+
+P (u)
+
+∗ o
+
+w
+
+and
+
+v
+
+∗ o
+
+P (v)
+
+∗ o
+
+w
+
+conclude the proof.
+
+The conﬂuence property above is sometimes called ground conﬂuence in the terminology of explicit substitution calculi, since it applies to terms in λo rather than terms with metavariables of the rewrite system. Another property that has been extensively studied for explicit substitution calculi is the preservation of strong normalisation (PSN): a calculus of explicit substitutions preserves strong normalisation if the compilation of a strongly normalisable λ-term is strongly normalisable (see [29] for a counterexample for λσ, and [27, 12] for calculi satisfying PSN). Thanks to our limited form of composition (the rule Comp only allows to move a substitution inside another where the substituted variable does occur) λo preserves strong normalisation. Our proof of PSN is inspired from that of λυ [27]. We ﬁrst deﬁne a notion of minimal inﬁnite derivation and external reduction. Intuitively, a derivation is minimal if we always reduce a lowest possible redex to keep non termination, and a reduction step is external if it does not take place inside a substitution. We denote by Beta,p a Beta reduction at position p, and by o,p an arbitrary λo reduction at position p.
+
+Deﬁnition 5 (Minimal Derivation) An inﬁnite λo sequence of reductions
+
+t1
+
+Beta,p1 t1
+
+∗ P
+
+· · · ti
+
+Beta,pi ti
+
+∗ P
+
+...
+
+is minimal if for any other inﬁnite derivation
+
+t1
+
+Beta,p1 t1
+
+∗ P
+
+· · · ti
+
+Beta,q u
+
+∗ P
+
+···
+
+we have q = pip for every p .
+
+In other words, in any other inﬁnite derivation, pi and q are disjoint or q is above pi, which means that the Beta-redex we reduce is a lowest one.
+
+Deﬁnition 6 (External Reduction) The set Ext(t) of external positions in the term t is deﬁned as follows, where Λ denotes the root position and x X denotes {x · y | y ∈ X} if X is a set of positions:
+
+Ext( σ)
+
+= {Λ}
+
+Ext((λt)σ) = 1Ext(t) ∪ {Λ}
+
+Ext((t u)σ) = 1Ext(t) ∪ 2Ext(u) ∪ {Λ}
+
+Ext((t[k/u])σ) = 1Ext(t) ∪ {Λ}
+
+Lambda-Calculus with Director Strings
+
+21
+
+A reduction step t o,p u is external if p ∈ Ext(t), otherwise it is internal. We
+
+write t
+
+ext o
+
+u (resp. t
+
+int o
+
+u) to emphasise that a rewrite is external (resp.
+
+internal).
+
+Lemma 14 If t Beta,p u is an external reduction step then t x →+β u x. In particular t x = u x if t x is strongly normalisable.
+
+Proof The term t contains a Beta redex, and since it is external it is obviously not erased in the readback (see Proposition 6). Hence t x →+β u x.
+Lemma 15 If there is an inﬁnite derivation
+
+t o t1 o t2 o t3 o t4 · · ·
+
+in which all the Beta steps are internal, then there exists another inﬁnite derivation
+
+t
+
+∗ P
+
+u1
+
+o u2
+
+o u3
+
+o u4 · · ·
+
+in which the rewrites from t to u1 are the only external ones (i.e. all steps are internal from u1). Moreover, the transformation preserves minimality.
+
+Proof It is sufﬁcient to prove that if u
+
+int o
+
+v
+
+ext o
+
+w
+
+in a
+
+minimal
+
+derivation
+
+then u
+
+ext o
+
+v
+
+int ∗ o
+
+w
+
+preserving
+
+minimality.
+
+The
+
+proof
+
+is
+
+by
+
+induction
+
+on
+
+the structure of u. If the external rewrite does not take place at the root position
+
+then the result follows by induction. If the external rewrite takes place at the root
+
+of u, then the rule applied is in P by assumption, and therefore u is a term of the
+
+form (t[i/v])σ. We distinguish cases according to the rule applied. If the rule is
+
+Var, App1, App2, Lam, or Comp the rewrite steps commute. If the rule is App3 the
+
+internal rewrite is replaced by two internal rewrites. If the rule is Erase the internal
+
+rewrite is not needed.
+
+The termination of P (Proposition 4) ensures that there are a ﬁnite number of
+
+external steps t
+
+∗ P
+
+u1,
+
+completing
+
+the
+
+proof.
+
+We will prove a result which is slightly more general than preservation of strong normalisation and will also be used to prove the termination of typeable terms in Section 5.
+
+Proposition 7 If t x is a strongly normalisable λ-term then t is strongly normalisable in λo.
+
+Proof For a contradiction, assume that there is an inﬁnite reduction sequence starting from t. We show that there is an inﬁnite derivation for t x. For this we consider an inﬁnite minimal reduction sequence, which contains an inﬁnite number of applications of Beta since the propagation rules are terminating:
+
+t
+
+∗ P
+
+t1
+
+Beta t2
+
+∗ P
+
+t3
+
+Beta t4 · · ·
+
+By Proposition 6:
+
+t x = t1 x →∗β t2 x = t3 x →∗β t4 x · · ·
+
+22 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+and since t x is strongly normalisable by assumption, there exists k such that for all i ≥ k, ti x = ti+1 x. Hence, by Lemma 14, all the Beta reduction steps after that point are internal, and by Lemma 15 we can assume that all the reduction steps after tk are internal. There is therefore a subterm u[i/v] of tk with an inﬁnite reduction sequence out of v. But this substitution was created by a previous Beta step, which contradicts the minimality assumption.
+Theorem 3 (PSN) If M is a strongly normalisable λ-term with fv(M ) ⊆ x then M x is strongly normalisable in λo.
+Proof Direct consequence of Propositions 7 and 3.
+
+4 Simpliﬁed Calculi
+
+We now have a general framework to simulate the λ-calculus with a director strings notation. However, our aim is to search for new efﬁcient reduction strategies, so we may give up completeness if we can gain some efﬁciency and simplicity, provided that we are still able at least to reduce closed terms to weak head normal form2, which is the widely accepted minimal requirement for a λ-evaluator, such as found in functional compilers and interpreters.
+We will thus introduce two new calculi λl and λc (with reduction l and c respectively) on the same terms, which will be simpliﬁcations (specialisations) of λo. By deﬁnition, the following relation will hold:
+
+c⊂
+
+l⊂
+
+∗ o
+
+so that, for instance, λl and λc will inherit properties of termination of λo. From an algorithmic point of view, the rewrite rules of λo cannot be consid-
+ered as constant time operations, because we have to access directors at arbitrary positions in strings, and the computation of the new director strings a priori seems to require a time linear in the size of the original ones. In contrast with λo, the calculus λl performs only local reduction steps. In other words, λl is a restriction of λo where the rewrite rules make only local modiﬁcations in the director strings. It is the most general sub-calculus of λo with such a property.
+The calculus λc is a restriction of λl which implements a closed reduction strategy. This is the most interesting calculus from an implementation perspective, as our benchmarks show (see Section 8).
+We will ﬁrst deﬁne the common syntax for λl and λc, then we will give the two sets of rewrite rules deﬁning these calculi, focusing on the properties of λc (the proofs for λl are similar).
+2 A λ-term is in weak head normal form if it is either an abstraction or a nested application ultimately beginning by a variable, i.e. any term not beginning by a redex.
+
+Lambda-Calculus with Director Strings
+
+23
+
+4.1 Syntax
+
+Deﬁnition 7 (Simpliﬁed Terms) In this section, the syntax is slightly different:
+– The directors are , , and ↓ only (− is no longer a director). – Preterms are deﬁned according to the following grammar:
+t ::= | (λt)σ | (λ−t)σ | (t u)σ | (t[u])σ
+where (λ−t)σ is an abstraction where the bound variable does not occur in t and (t[u])σ is a substitution for the ﬁrst variable of t only. – Terms are preterms satisfying the constraints given in Deﬁnition 1 for λo, taking U =↓∗ and B = ( | | )∗. Note that now variables do not have a director string. Moreover, abstractions have the following additional constraint:
+(λ−tρ)σ is well-formed if σ ∈ U and |ρ| = |σ|
+The new set of terms can be seen as a subset of λo-terms using some abbreviations:
+Proposition 8 (Syntactic Equivalence) The following mapping from simpliﬁed terms to λo-terms is injective.
+– ‫↓ = ) (ג‬ – ‫((ג‬λt)σ) = (λ‫(ג‬t))σ – ‫((ג‬λ−tρ)σ) = (λ‫(ג‬tρ−))σ – ‫((ג‬t u)σ) = (‫(ג‬t) ‫(ג‬u))σ – ‫((ג‬t[u])σ) = (‫(ג‬t)[1/‫(ג‬u)])σ
+We will hence sometimes feel free to identify simpliﬁed terms with λo-terms (i.e. to omit ‫)ג‬.
+
+4.2 The Local Open Calculus
+Taking a closer look at the Beta rule, we notice that for a redex where the function is closed, we generate a substitution for the ﬁrst (and only) variable of the function body (which was bound by the abstraction). Moreover, we know from [17] that restricting β-reduction to closed functions still allows to reach weak head normal form, for closed terms. In this section we will thus describe the calculus resulting from this restriction which greatly simpliﬁes the rules. This calculus will be called local open (λl) because it still allows open substitutions to propagate, even inside abstractions (in contrast with the system of closed reduction [17]). This does not need global rewrite steps if we restrict the syntax to allow substitutions for the ﬁrst director only.
+
+24 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+
+Deﬁnition 8 (λl-calculus) Below are shown the reduction rules for the local open calculus.
+
+Name
+
+Reduction
+
+Beta ((λt) u)σ
+BetaE ((λ−t) u )
+Var ( [v])σ App1 ((t u) ρ[v]) m· n App2 ((t u) ρ[v]) m· n App3 ((t u) ρ[v]) m· n Lam ((λt)↓ρ[v])σ
+LamE ((λ−t)↓ρ[v])σ Comp ((t[w]) n+1· m [v]) p· q
+
+l (t[u])σ
+lt
+lv l ((t[v]) m· |ρ|l u) m·ρ l (t (u[v]) m· )|ρ|r m·ρ l ((t[v]) m· |ρ|l (u[v]) m· )|ρ|r m·ρ l (λ(t[v])σ· )↓|σ| l (λ−(t[v])σ)↓|σ| l (t[(w[v]) p· n ]) p+n· m
+
+Even though the rules in this system apply to terms with director strings of a particular pattern, the system is still suitable to reduce general terms, thanks to the following property.
+
+Lemma 16 (Completeness of the Reduction) In any reduct of a closed compiled term, any subterm of the form (t[v])σ has a director string σ = m · n for some
+natural numbers m, n.
+
+Proof It is sufﬁcient to notice that the rules for propagation only generate substitutions of this form, and that the Beta rule does as well: if the term ((λt) u)σ is well-formed (and it is by induction) then σ is of the form n.
+
+We remark that, in this calculus, we allow even open substitutions to pass through abstractions, without any global reduction step. This is of course one of the greatest strengths of this calculus, compared to those based on names or de Bruijn indices.
+
+Lemma 17 (Preservation of Well-Formedness) If t is a well-formed term in λl and t l u then u is a well-formed term in λl.
+
+Proof Straightforward inspection of the rewrite rules.
+
+Proposition 9
+
+l⊂
+
+∗ o
+
+Proof We can easily check that all the rules given in Deﬁnition 8, except BetaE, are particular cases of the rules for λo taking into account the simpliﬁed syntax of terms. The rule BetaE can be simulated in λo with two reductions: Beta followed by Erase.
+
+Theorem 4 below summarises the properties of λl. The calculus λl is conﬂuent and preserves strong normalisation. However, it does not fully simulate βreduction. Instead we can show that it can be used to evaluate closed λ-terms. This is a consequence of the fact that λc, which will be shown to be a restriction of λl, can compute weak head normal forms of closed terms (see next section).
+
+Lambda-Calculus with Director Strings
+
+25
+
+Theorem 4 (Properties of λl)
+Conﬂuence: λl is conﬂuent. PSN: λl preserves strong normalisation. Adequacy: λl can evaluate closed terms.
+Proof Conﬂuence is shown by easily adapting the proof of conﬂuence of λc, which is given in the next section. PSN comes from Theorem 3 (PSN for λo) and Proposition 9. Adequacy will be obvious from Theorems 7 and 8 (adequacy for λc) and Proposition 10 (see next section).
+
+4.3 The Closed Calculus
+
+The notion of closed reduction was introduced in [17] using a calculus of explicit substitutions with names where β-reductions are performed when the function part is closed (as above) and substitutions are propagated through abstractions only if they are closed, which is crucial to avoid α-conversion in a named setting. These restrictions were expressed by rewrite rules with external conditions on free variables, and the internalisation of these conditions was the main motivation for the introduction of director strings in [18].
+We can easily derive a calculus for closed reduction (λc) by adding restrictions to the rules of λl (see Deﬁnition 8) as follows: Beta, BetaE, Var are the same; in every other rule we force the substitution v to be closed, that is, to have an empty string ( ). Moreover, in App1,2,3, m = 0, and in Comp, m = p = 0 and n = q. This thus leads to the very simple following rewrite system.
+
+Deﬁnition 9 (λc-calculus) The reduction rules for the closed calculus are:
+
+Name
+
+Reduction
+
+n
+Beta ((λt) u)
+
+n
+c (t[u])
+
+BetaE ((λ−t) u )
+Var ( [v]) n
+App1 ((t u) ρ[v ]) n App2 ((t u) ρ[v ]) n App3 ((t u) ρ[v ]) n Lam ((λt)↓ρ[v ]) n
+LamE ((λ−t)↓ρ[v ]) n
+Comp ((t[w]) n+1 [v ]) n
+
+ct
+cv c ((t[v ]) |ρ|l u)ρ c (t (u[v ]) )|ρ|r ρ c ((t[v ]) |ρ|l (u[v ]) )|ρ|r ρ c (λ(t[v ]) )n+1 ↓n c (λ−(t[v ]) n )↓n c (t[(w[v ]) n ]) n
+
+This system is complete because a property similar to Lemma 16 still holds here:
+
+Lemma 18 (Completeness of the Reduction) In any reduct of a closed compiled term, if a subterm is of the form (t[v])σ then either σ = n or σ = n for some
+natural number n.
+
+26 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+
+Proof Beta creates a substitution annotated by n, the other rules only generate substitutions with a n string.
+
+Note that the choice between n and n is always obvious from the context
+
+(by well-formedness). For instance, in rule Comp, we reduce a term of the form
+
+((t[w])
+
+n+1 [v
+
+])
+
+m
+,
+
+then
+
+it
+
+is
+
+easy
+
+to
+
+see
+
+that
+
+m
+
+=
+
+n.
+
+Lemma 19 (Preservation of Well-Formedness) If tσ is a well-formed term in λc and tσ c uτ then uτ is a well-formed term in λc. Moreover, |σ| = |τ |.
+
+Proof Straightforward inspection of the rewrite rules.
+
+Proposition 10
+
+c⊂
+
+l⊂
+
+∗ o
+
+Proof Since the rewrite rules in Deﬁnition 9 are particular instances of the rules of λl (Deﬁnition 8), the rewrite relation c is included in l. The latter inclusion was established in Proposition 9.
+
+We will show that c is conﬂuent on λc-terms, preserves strong normalisation, and implements call-by-value and call-by-name evaluation strategies for closed λterms. For this, we ﬁrst show that the propagation rules (i.e. all the rules except Beta and BetaE) are terminating and conﬂuent, and are sufﬁcient to implement the metaoperation of substitution in the λ-calculus, provided substitutions are closed. The set of propagation rules will be denoted Pc.
+
+Proposition 11 (Termination and Conﬂuence of Pc) All the reduction sequences on λc using only rules in Pc are ﬁnite. Moreover, Pc is locally conﬂuent (hence conﬂuent).
+
+Proof Termination is a direct consequence of Proposition 4 since
+
+∗ Pc
+
+⊂
+
+∗ P
+
+.
+
+Local conﬂuence is proved by showing that the critical pairs are joinable. There
+
+is only one, between Comp and Var (the conditions on the director strings prevent
+
+superpositions between Comp and the other propagation rules).
+
+n+1
+
+n
+
+(( [v]) [u ])
+
+Comp
+
+nn
+
+- ( [(v[u ]) ])
+
+Var
+?
+n
+(v[u ])
+
+Var
+
+?
+
+≡
+
+n
+(v[u ])
+
+Since the propagation rules are terminating, the system is conﬂuent by Newman’s Lemma [32].
+
+Since Pc is terminating and conﬂuent, it deﬁnes a function associating to each λc-term t its unique normal form, denoted Pc(t).
+
+Lemma 20 (Closed Substitutions) Let M and N be λ-terms such that x ∈ fv(M )
+⊆ x and fv(N ) = ∅. Let M x = t, N = u , M {x → N } y = vσ, where y = x\{x}. Then Pc((t[u ])σ) = vσ.
+
+Lambda-Calculus with Director Strings
+
+27
+
+Proof By induction on M . If M is a variable (in this case it must be x) then its compilation is simply and using the rule Var, [u ] c u = M {x → N } y as required. If M is an application, then one of the rules App1, App2, App3 applies, and the result follows directly by induction. If M is an abstraction then either Lam
+or LamE applies and again the result follows by induction.
+
+As a consequence, we deduce that even with the restrictions imposed by λc rules, closed substitutions do not remain blocked: if a closed substitution is created, it will be fully propagated.
+The following lemma shows that the rules Beta and BetaE also generate a conﬂuent relation, which we denote B. In the proof we use an auxiliary relation, ⇒, which makes B steps in parallel. It is deﬁned by induction.
+
+Deﬁnition 10 (Parallel Beta) Let ⇒ be the rewrite relation on λc-terms inductively deﬁned as follows.
+1. t ⇒ t, 2. ((λt) u) n ⇒ (t [u ]) n if t ⇒ t and u ⇒ u , 3. ((λ−t) u ) ⇒ t if t ⇒ t , 4. (λt)σ ⇒ (λt )σ if t ⇒ t , 5. (t u)σ ⇒ (t u )σ if t ⇒ t and u ⇒ u , 6. (t[v])σ ⇒ (t [v ])σ if t ⇒ t and v ⇒ v .
+
+Lemma 21 (Conﬂuence of Beta reductions) B is conﬂuent.
+
+Proof We show that ⇒ is strongly conﬂuent (i.e. has the diamond property), and
+
+since obviously
+
+B⊆⇒ and ⇒∗=
+
+∗ B
+
+,
+
+we
+
+obtain
+
+conﬂuence
+
+of
+
+B.
+
+Assume t ⇒ u and t ⇒ v (u = v). We show that ∃w such that u ⇒ w and
+
+v ⇒ w by induction on t ⇒ u. The proof is standard. The case t ⇒ t is trivial,
+
+taking w
+
+≡
+
+v. We give the details for ((λt)
+
+u)
+
+n
+
+⇒
+
+(t [u ])
+
+n
+, where t
+
+⇒
+
+t
+
+and u ⇒ u . In this case, the only alternatives are:
+
+–
+
+v ≡ ((λt)
+
+u)
+
+n
+,
+
+in
+
+which
+
+case
+
+we
+
+take
+
+w
+
+≡
+
+(t
+
+[u
+
+])
+
+n
+, or
+
+– v ≡ ((λt ) u ) n , where t ⇒ t and u ⇒ u . By induction, there exists w
+
+and w such that t ⇒ w , t ⇒ w , u ⇒ w , u ⇒ w . Hence we take
+
+w ≡ (w [w
+
+])
+
+n
+.
+
+The case ((λ−t) u ) ⇒ t where t ⇒ t is similar. All the other cases follow directly by induction.
+
+Next we prove the commutation of B and Pc . Rosen’s Lemma [34] states that if two conﬂuent rewrite relations are independent (commute) then their union
+is conﬂuent. Since c= B ∪ Pc and we have just shown that both relations are conﬂuent, commutation implies conﬂuence of c.
+
+Lemma 22 (Commutation) If t
+
+a
+
+∗ B
+
+c
+
+and
+
+b
+
+∗ Pc
+
+c.
+
+∗ Pc
+
+a
+
+and
+
+t
+
+∗ B
+
+b,
+
+then
+
+there
+
+exists
+
+c
+
+such
+
+that
+
+28 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+
+Proof Again we use the parallel reduction relation ⇒ (Deﬁnition 10). Since ⇒∗
+
+coincides with
+
+∗ B
+
+,
+
+it
+
+is
+
+sufﬁcient
+
+to
+
+prove
+
+that
+
+if
+
+b
+
+⇐
+
+t
+
+Pc a then there exists
+
+a term c such that b
+
+and t
+
+∗ B
+
+b
+
+(which
+
+is
+
+of the derivation t ⇒∗
+
+Pc c ⇐ a. equivalent
+b.
+
+In to
+
+this way b ∗⇐ t
+
+we can close the diagram: t
+
+∗ Pc
+
+a),
+
+by
+
+induction
+
+on
+
+the
+
+∗ Pc
+
+a
+
+length
+
+We proceed by induction on t ⇒ b. We distinguish the following cases:
+
+1. t ≡ b: Then we take c ≡ a. 2. ((λt) u) n ⇒ b ≡ (t [u ]) n where t ⇒ t and u ⇒ u : Since no rule
+
+from Pc applies at the root, it must be either t Pc t or u Pc u . In
+
+the ﬁrst case, by induction, there exists a term t t ⇒ t , therefore we can take c ≡ (t [u ])
+
+such n . In
+
+that the
+
+t Pc second
+
+t and case, by
+
+induction, there exists u such that u can take c ≡ (t [u ]) n .
+
+Pc u and u ⇒ u , therefore we
+
+3. The case ((λ−t) u ) ⇒ b ≡ t where t ⇒ t is similar to the above.
+
+4. (t[v])σ ⇒ (t [v ])σ where t ⇒ t and v ⇒ v : We distinguish two cases
+
+according to the position of the Pc-reduction step (t[v])σ Pc a. – If it does not apply at the root then the property holds by induction.
+
+– If it applies at the root: then there is a substitution θ and a rule l → r in Pc such that (t[v])σ = lθ and a ≡ rθ.
+
+– If all the B-redexes that are contracted in the reduction (t[v])σ ⇒ (t [v ])σ ≡ b are under variables in l (that is, they are in θ) then
+
+these variables are uniquely identiﬁed (since l is left-linear) and we
+
+can therefore deﬁne a substitution θ such that θ ⇒ θ and the diagram
+
+commutes: (t[v])σ ≡ lθ Pc rθ ≡ a ⇒ rθ ≡ c and (t[v])σ ≡
+lθ ⇒ lθ ≡ b Pc rθ ≡ c. – If there is a B-redex at the root of t in (t[v])σ then we have a critical
+pair, between the Pc-rule applied at the root of (t[v])σ and the Beta
+or BetaE rule applied at the root of t. In that case the Pc-rule applied
+
+must be App2 (it cannot be App1 or App3 because of the restrictions:
+
+the function has a director ). Then the diagram commutes as follows:
+
+we have
+
+(t[v])σ ≡ (((λw)
+
+u)
+
+n+1
+[v
+
+])
+
+n
+
+App2
+
+((λw)
+
+(u[v
+
+])
+
+n
+)
+
+n
+
+≡a
+
+and
+
+(t[v])σ ≡ (((λw)
+
+u)
+
+n+1
+[v
+
+])
+
+n
+
+⇒ ((w [u ])
+
+n+1
+[v ])
+
+n
+
+≡b
+
+where w ⇒ w , u ⇒ u , v ⇒ v , hence
+
+a ⇒ (w [(u [v ])
+
+n
+])
+
+n
+
+≡c
+
+and
+
+b
+
+Comp
+
+(w [(u [v ])
+
+n
+])
+
+n
+
+≡ c.
+
+5. In the other cases the property follows directly by induction.
+
+This concludes the proof.
+
+Lambda-Calculus with Director Strings
+
+29
+
+Theorem 5 (Conﬂuence) λc is conﬂuent.
+Proof Consequence of Proposition 11, Lemma 21, and Lemma 22, using Rosen’s Lemma [34].
+Theorem 6 (PSN) λc preserves strong normalisation.
+Proof Consequence of Theorem 3 (PSN for λo) and Proposition 10.
+The restrictions imposed on the rewrite rules of λc still allow us to simulate the usual evaluation strategies, for closed λ-terms. We will show that call-by-value and call-by-name reductions to weak head normal form can be implemented in λc.
+
+Call-by-name. We recall the evaluation rules for weak reduction in the call-byname λ-calculus:
+
+M ⇓ λx.M M {x → N } ⇓ V
+
+x ⇓ x λx.M ⇓ λx.M
+
+(M N ) ⇓ V
+
+where M ⇓ V means that M evaluates to the (principal) weak head normal form V using the call-by-name strategy.
+
+Theorem 7 (Call-by-name Evaluation) If M is a closed λ-term and M ⇓ V by
+
+the call-by-name strategy, then M
+
+∗ c
+
+V
+
+.
+
+Proof By induction on the derivation of M ⇓ V .
+
+If M is a weak head normal form then the theorem holds trivially. Otherwise,
+
+it is an application (M N ) and (M N ) = ( M N ) (since fv(M N ) = ∅).
+
+By induction, since M ⇓ λx.M , we know that M
+
+∗ c
+
+λx.M
+
+. Now there are
+
+two alternatives.
+
+– λx.M = (λ M [x]) if x ∈ fv(M ).
+
+Then ((λ M [x]) N ) c ( M [x][ N ]) . By Lemma 20, ( M [x][ N ])
+
+∗ c
+
+M {x → N }
+
+and by induction the latter reduces to
+
+V
+
+as required.
+
+– λx.M = (λ− M ) if x ∈ fv(M ).
+
+Then ((λ− M ) N ) c M = M {x → N } and by induction the
+
+latter reduces to V as required.
+
+Call-by-value. We recall the evaluation rules for weak reduction in the call-byvalue λ-calculus:
+
+M ⇓ λx.M N ⇓ V M {x → V } ⇓ V
+
+x ⇓ x λx.M ⇓ λx.M
+
+(M N ) ⇓ V
+
+where V is a weak head normal form.
+
+Theorem 8 (Call-by-value Evaluation) If M is a closed λ-term and M ⇓ V by
+
+the call-by-value strategy, then M
+
+∗ c
+
+V
+
+.
+
+30 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+
+Proof Similar to Theorem 7. In the case of an application (M N ) where M ⇓
+
+λx.M and N ⇓ V , we get: (M N ) = ( M N ) (since fv(M N ) = ∅), and
+
+by induction, M
+
+∗ c
+
+λx.M
+
+,
+
+N
+
+∗ c
+
+V
+
+. Again there are two cases to
+
+consider, which are identical to those in the proof of Theorem 7 above.
+
+This system has several advantages as a basis for an implementation of a λcalculus evaluator:
+– closed substitutions can be propagated through abstractions, which permits more sharing of work than in standard weak calculi,
+– it forbids copying open terms, which ensures that we never duplicate a potential redex.
+Moreover, the shape of the rewrite rules shows that in most cases we do not need to represent director strings as complex structures. For example, a director string of a substitution can be represented as a simple relative integer, because of Lemma 18. In the same spirit, the information on |ρ|l and |ρ|r can be maintained at each step. The system can thus be implemented in a realistic and efﬁcient way, giving to each rewrite step a constant algorithmic cost. We will come back to this point in Section 6.
+
+5 A Type System for Director Strings Calculi
+
+For completeness, we present in this section a type system common to the above
+deﬁned calculi and which enjoys the same kind of properties as the usual simply typed λ-calculus. We present the system with the syntax of λo, but it is of course also valid for λl and λc thanks to Proposition 8. The types are the simple types of the λ-calculus: type variables A, B . . . and function types A → B. We also add a generic constant σ of type (well-formed iff σ = −n for some n). Typing judgements will be of the form Γ t : A where the context Γ is an ordered list of
+types.
+
+Deﬁnition 11 (Typed Terms) Each term t is assigned a type in a given context: Γ t : A, as given by the following set of rules. A term is typeable if there exists a context such that it is typeable in that context. The typing rules make use of two auxiliary relations deﬁned below.
+
+Γ ∼σ ∅ (Cst )
+Γ σ:
+
+Γ ∼σ A (Ax )
+Γ σ:A
+
+Γ , A t : B Γ ∼σ Γ (Abs )
+Γ (λt)σ : A → B
+
+Γ1 t : A → B Γ2 u : A Γ (t u)σ : B
+
+Γσ
+
+Γ1 Γ2 (App)
+
+Lambda-Calculus with Director Strings
+
+31
+
+Γ1 i/A t : B Γ2 u : A Γ (t[i/u])σ : B
+
+Γσ
+
+Γ1 Γ2 (Sub)
+
+where Γ i/A = A1, . . . , Ai−1, A, Ai, . . . , An if Γ = A1, . . . , An.
+
+Note that there are no structural rules, as the type of a given variable is always
+
+at a known location in the context. In the typing rules we used two auxiliary relations. The ﬁrst one (Γ ∼σ Γ )
+
+ensures that the right types are erased from Γ depending on σ. The second one
+
+ensures that a context adequately splits according to a director string, which is
+
+shown as Γ σ ΓΓ12.
+
+Γ ∼σ Γ
+
+Γ ∼σ Γ
+
+∅ ∼ ∅ A, Γ ↓∼σ A, Γ
+
+A, Γ −∼σ Γ
+
+Γ σ Γ1 Γ2
+
+Γσ
+
+Γ1 Γ2
+
+∅
+
+∅ ∅
+
+A, Γ
+
+σ A, Γ1 A, Γ2
+
+A, Γ −σ
+
+Γ1 Γ2
+
+Γσ
+
+Γ1 Γ2
+
+Γσ
+
+Γ1 Γ2
+
+A, Γ
+
+σ Γ1 A, Γ2
+
+A, Γ σ A, Γ1 Γ2
+
+Remark 5 If a term t is typeable in a context Γ , then the length of Γ is exactly the length of t’s string. In particular, a term with empty director string (e.g. the compilation of a closed λ-term) is typeable if and only if it is typeable in the empty context.
+
+Example 4 We give two small examples of type derivations in this system. 1. (λ ↓) : A → A
+
+∅ 2. (λ(λ ↓−)↓) : A → B → A
+
+A ↓:A (λ ↓) : A → A
+
+A, B ↓− : A A (λ ↓−)↓ : B → A ∅ (λ(λ ↓−)↓) : A → B → A
+A ﬁrst useful property is the following:
+Proposition 12 (Well-Formedness) Typeable preterms are well-formed terms.
+
+32 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+
+Proof The functions ∼· and · clearly enforce the constraints on well-formed terms (Deﬁnition 1).
+
+This type system corresponds to the λ-calculus simple type system (see for instance [6]), whose judgements we denote Γ λ M : A, in the following sense:
+
+Lemma 23
+1. x1 : A1, . . . , xn : An λ M : A =⇒ A1, . . . , An 2. A1, . . . , An t : A =⇒ x1 : A1, . . . , xn : An λ
+
+M [x1,...,xn] : A t [x1,...,xn] : A
+
+Proof By straightforward induction on the type derivation.
+
+We also have the basic results expected from a simply typed calculus:
+
+Theorem 9 (Subject Reduction) If Γ t : A and t u then Γ u : A (for ∈ { o, l, c}).
+
+Proof By Proposition 10, the cases for λl and λc follow from the general case
+of λo, which is proved by checking that each rule preserves type. We will only
+illustrate the proof on the case of App1, the others being similar. The situation is the following, where ρi = , j = |ρ1..i|l, υ = φl(σ, ρ\i),
+τ = ψ1(σ, ρ\i) and Γ = A1, . . . , An:
+
+∆1
+
+t : A → B ∆2 ∆ = Γ1 i/C
+
+u:A ∆ ρ (t u)ρ : B
+
+∆1 ∆2
+Γ2
+
+v:C
+
+Γσ
+
+Γ1 Γ2
+
+Γ ((t u)ρ[i/v])σ : B
+
+↓
+
+Ω1 j/C
+
+t:A→B
+
+Ω2
+
+v:C
+
+Θ1 υ
+
+Ω1 Ω2
+
+Θ1 (t[j/v])υ : A → B
+
+Θ2
+
+u:A Γ τ
+
+Θ1 Θ2
+
+Γ ((t[j/v])υ u)τ : B
+
+Then subject reduction is veriﬁed for this rule, provided that
+
+ 
+
+Ω1
+
+j/C
+
+= ∆1
+
+Ω2 = Γ2
+
+ Θ2 = ∆2
+
+Let’s write Lσ = {i | σi = or }, Rσ = {i | σi = or } and [A]I = Ai1 , . . . , Aim if I = {i1, . . . , im} and (ij)j is increasing, so that Γ = [A]{1...n}. Then we have:
+
+Γ1 = [A]Lσ Γ2 = [A]Rσ ∆1 = [A]Lσ∩Lρ j/C ∆2 = [A]Lσ∩Rρ
+
+since ρi =
+
+and j = |ρ1..i|l
+
+Lambda-Calculus with Director Strings
+
+33
+
+and on the other hand:
+Θ1 = [A]Lτ Θ2 = [A]Rτ = [A]Lσ∩Rρ by deﬁnition of ψ1 Ω1 = [A]Lτ ∩Lυ = [A]Lσ∩Lρ by deﬁnition of φl Ω2 = [A]Lτ ∩Rυ = [A]Rσ again by deﬁnition of φl
+Hence subject reduction holds for App1. The other cases are similar.
+Theorem 10 (Termination) If Γ t : A then t is strongly normalisable (in λo, λl, λc).
+Proof Since typeable λ-terms are strongly normalisable, this is a direct consequence of Lemma 23 and PSN for the corresponding calculus.
+
+6 An Abstract Machine for Evaluation
+In this section we will exhibit a strategy which makes use of the explicit information carried by director strings to efﬁciently reduce closed terms to weak head normal form. Efﬁciency is measured with respect to the total number of rewriting steps (not just β-steps) and we will give experimental comparisons in Section 8.
+Notice that the syntax of director strings allows us to identify the moment when we have to copy a term, and we can reduce it before copying. In particular, we may want to use the most general rules, in order to be able to reduce a term to be copied to its full normal form, thus avoiding copying any redex. However, if we do so, then open substitutions are allowed in App3 as well, which means that terms with free variables, i.e. potential redexes, might be copied. Our experimental tests conﬁrmed that restricting just that rule to the closed case, we obtain a strategy very similar to closed reduction. This is because the propagation of an open substitution is very likely to be blocked by this restriction. Thus, the best strategy we found is based on the closed calculus, which is good news since it is also the simplest.
+We cannot expect to reduce to full normal form with the closed rules, but some open terms can still be reduced. Thus, our strategy to compute the weak head normal form of a term t can be summarised as follows: we use the closed calculus, which allows some extra reductions under abstractions, but we stop the reduction as soon as we reach a weak head normal form of t. The extra reductions are done only when we reduce a subterm to be copied, to share more work than in usual strategies.
+To formally specify this strategy we will interleave one strategy which reduces under λ’s and one which does not. We thus deﬁne three mutually recursive relations: →w, →f and →. The last one will be the strategy we want to exhibit. The relation →w is deﬁned in Figure 4, which, together with the other two relations below deﬁne the big-step operational semantics which the closed abstract machine implements.
+The reduction relation →w is used as a tool to deﬁne the other two and should not be interpreted on its own, as it does not treat the case of an abstraction. Notice
+
+34 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+
+t → (λr) (r[u])σ → v
+
+(t u)σ →w v
+
+(Beta )
+
+t → (λ−v)
+(BetaE ) (t u) →w v
+
+(Ax ) →w
+
+t → v v = (λr) ∧ (v = (λ−r) ∨ ρ = )
+
+(t uρ)σ →w (v uρ)σ
+
+(Arg )
+
+((t[v ]) |ρ|l u)ρ → w (App1 )
+((t u) ρ[v ])σ →w w
+
+(t (u[v ]) )|ρ|r ρ → w (App2 )
+((t u) ρ[v ])σ →w w
+
+v →f v ((t[v ]) |ρ|l (u[v ]) )|ρ|r ρ → w (App3 )
+((t u) ρ[v ])σ →w w
+
+(λ(t[u ]) )|ρ|+1 ρ → v (Lam )
+((λt)↓ρ[u ])σ →w v
+
+(λ−(t[u ]) )|ρ| ρ → v (LamE )
+((λ−t)↓ρ[u ])σ →w v
+
+v→w (Var )
+( [v])σ →w w
+
+(t[(u[v ]) |ρ| ])ρ → w (Comp)
+((t[u]) ρ[v ])σ →w w
+
+t → u (u[vρ])σ → w ρ =
+
+(t[vρ])σ →w w
+
+(Subst )
+
+Fig. 4 The relation →w
+
+that the (App3) rule calls the stronger reduction →f , which is deﬁned by:
+
+t →w v t →f v
+
+t →f v (λt)σ →f (λv)σ
+
+t →f v (λ−t)σ →f (λ−v)σ
+
+→f is the relation which reduces under λ’s (but not to full normal form). Finally, → is the combination of the two other relations: we reduce to weak
+head normal form, but we reduce more the subterms that will be copied.
+
+t →w v t→v
+
+(λt)σ → (λt)σ
+
+(λ−t)σ → (λ−t)σ
+
+It may seem that the machine returns terms which are not weak head normal forms (cf. (Arg) rule). In fact, the theory ensures that this is not the case: starting from a closed term, the closed rules allow us to reach a weak head normal form (see Theorem 7). Nevertheless, the (Arg) rule may be applied in a reduction of a term to be copied, so it is indispensable.
+The (Subst) and (Comp) rules call for a comment: the restriction on (Subst) (vρ open) forces (Comp) to be used as much as possible before reducing to the left of a closed substitution. Both intuition and experimentation conﬁrm that this is indeed the right choice.
+Notice that each rule either corresponds to a closed rule (see Deﬁnition 9) or focuses reduction on a subterm (corresponding to stack manipulations) and can indeed be implemented in constant time.
+
+Lambda-Calculus with Director Strings
+
+35
+
+7 Reduction to Full Normal Form
+We have presented so far a rather complex system to fully simulate β-reduction and simpler systems to reach only weak head normal form. If we were however interested in computing full normal forms, which is the case for many applications (e.g. partial evaluation or proof assistants), then we could of course use the general setting. But this is not really satisfactory (it does not provide any guidance towards an efﬁcient strategy). On the other hand, we have an efﬁcient strategy to reduce closed terms to weak head normal form. The idea then naturally arises to use our efﬁcient weak evaluator to reach full normal form, in a way similar to [10].
+The idea is to reduce a closed term to weak head normal form, then to distinguish the variable bound by the outermost abstraction in some way (to “freeze” it), so that we can still consider the term under the λ as closed, and recursively apply the same process to this subterm. There are several ways to distinguish those variables in the syntax. Below we present two natural alternatives.
+
+7.1 With Names
+
+If we choose to represent the frozen variables with names, we can avoid any complex manipulation of the director strings to keep track of the paths to these variables. As a result, we obtain a rather simple system because we can use the usual rules (for example the closed ones), where the frozen variables are just considered as constants and do not need any extra rule. Moreover readback into named λ-calculus is then performed at the same time.
+Formally, we extend the syntax of terms in the following way, where σ ranges over strings, and x ranges over variable names:
+
+t, u ::= | (λt)σ | (λ−t)σ | (t u)σ | (t[u])σ | x | λ x.t
+
+that is, we add named variables, whose implicit director string is , and named abstraction binding written as λ x.t. We do not write any director string for this
+abstraction, since we will always consider closed terms of this form. Using a weak evaluation relation ⇓w, we can then deﬁne reduction to full nor-
+mal form ⇓f .
+
+t ⇓w (λt )
+
+(t [x]) ⇓f t
+
+x fresh
+
+t ⇓f λ x.t
+
+t ⇓w (λ−t )
+
+t ⇓f t
+
+x fresh
+
+t ⇓f λ x.t
+
+t ⇓w x (x variable)
+
+t ⇓f x
+
+t ⇓w (u v)
+
+u ⇓f u
+
+v ⇓f v
+
+t ⇓f (u v )
+
+36 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+
+Notice that the last rule is used since we are now in a calculus with constants (the named variables), and the weak head normal form of a term may be an application (e.g. (x t) where x is a named variable).
+
+Proposition 13 (Correctness) Let’s write u˜ for the readback of a reduced term u, so ˜· just transforms λ to λ and erases the remaining director strings. Then, if M is a closed λ-term:
+M ⇓f u ⇐⇒ M →∗β u˜ irreducible.
+Proof Assuming correctness of ⇓w, the proof is easily adapted from [10] or the more recent [20].
+
+If we want to reduce an open term t = tσ with |σ| = n, we ﬁrst take n fresh variable names x1, . . . , xn and start the reduction from:
+
+n−1
+
+n−2
+
+((. . . ((t[x1]) [x2]) . . . [xn−1]) [xn])
+
+The reduction to normal form follows exactly the same strategy as the corresponding weak reduction. Thus, for terms for which full and weak head normal forms are the same, the two processes need the same numbers of β and total steps. In particular, this strategy is much more efﬁcient than the usual naive one.
+Although we now have to deal with names and fresh variables during reduction (which was not the case for reduction to weak head normal form), we still do not have to deal with name capture and α-conversion. Also, the readback is now simpliﬁed.
+
+7.2 With Directors
+The previous strategy performs readback at the same time as computation of the normal form, which may, or may not, be wished. We can however implement a similar idea using only directors, obtaining a result in this syntax. We just need a way to distinguish between usual variables, and frozen ones, which correspond to an abstraction outside of the term we actually want to reduce to weak head normal form. This can be done in a quite obvious way: by introducing a new kind of directors corresponding to these frozen variables. However, the frozen part of director strings may be of any form, so we need to use the general rules on this part. From an algorithmic point of view, this means that the cost of a reduction step may be at most linear in the depth of λ-abstractions in the resulting normal form, which still seems reasonable. We do not go further on this point as the interesting ideas have already been exposed in the previous section.
+
+8 Experimental Results
+One of the main motivations for this work is the desire to ﬁnd more efﬁcient implementations of the λ-calculus. This interest is not simply to ﬁnd minor tweaks
+
+Lambda-Calculus with Director Strings
+
+37
+
+(or optimisations) of existing systems, but rather to attempt a fresh start to uncover new strategies, and new machinery, which give asymptotic improvements over standard techniques in use in implementations of functional languages. Consequently it is essential that our strategies are implemented so that the ideas of this paper can be backed up with some experimental evidence and compared to existing evaluators.
+It is difﬁcult, if not impossible, to ﬁnd a relevant measure to compare different implementations. This point is even more pertinent when we are comparing prototype implementations. Nevertheless, what we are able to do is to identify atomic reduction steps for several evaluators. Although the algorithmic cost of a single step may vary for each evaluator, the respective speed-up can still be examined. The following benchmarks suggest that the strategies developed in the paper behave better than standard reduction strategies, and moreover offer some surprising statistics with respect to some of the very best evaluators known to date.
+We have two set of examples: one that belongs to λI in order to avoid the problem of erasing, and a small set of λK terms to illustrate some speciﬁc behaviours. The Church numerals are an excellent means to produce a panel of large λ-terms. We recall that Church numerals are of the form n = λf.λx.f n x and that application corresponds to exponentiation: n m ≡ mn. We apply Church numerals in our examples to I I, where I = λx.x, which is sufﬁcient to force reduction to full normal form, and allows us to compare weak and full reducers. We also use the combinators K = λx.λy.x and M = λx.λy.(K I x)(K I x y).
+We compare our machines with standard call-by-value and call-by-name evaluators, and in addition to the optimal interpreter of Asperti et al. (BOHM [3]). The latter result provides a comparison with the best known evaluator for such terms. We show the total number of steps of these evaluators (including stack manipulations). We show the number of β-reductions between round brackets, thus the number shown for BOHM is the minimum number of β-reductions possible. The results for the machines that reduce to full normal form are not shown, as they are the same as those of the underlying weak strategies on these examples.
+
+Term
+
+closed
+
+CBV
+
+CBN
+
+BOHM
+
+22II
+
+61(9)
+
+78(11)
+
+76(12)
+
+40(9)
+
+2 2 2 I I 140(19)
+
+362(42)
+
+471(60)
+
+93(16)
+
+55II
+
+217(33)
+
+29 723(3 913) 31 250(4 689) 208(33)
+
+5 2 2 I I 832(109)
+
+-
+
+- 847(31)
+
+2 2 2 2 2 I I 1 507 714(196 655) -
+
+- 1 074 037 060(61)
+
+M (5 5 I I) I 266(42)
+
+41(8)
+
+31(8)
+
+22(8)
+
+K I (5 5 I I) 7(2)
+
+29731(3915) 7(2)
+
+4(2)
+
+To put some of these results into perspective, we remark that the actual time taken to compute, for example, 5 2 2 I I using OCaml is around 5 minutes, and around 3 minutes using Standard ML (both implementing a variant of call-byvalue). The results for both closed reduction and BOHM are essentially instantaneous.
+
+38 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+The main point that we want to make with the above table is that closed reduction, a simple implementation of the λ-calculus, clearly out performs traditional strategies, such as call-by-value, and moreover is a serious competitor to highly sophisticated implementations, such as BOHM. The comparison with call-by-value and call-by-name shows that allowing reductions under abstractions, which is especially easy with director strings compared to usual calculi, is crucial for both sharing and efﬁciency.
+The interesting point is the comparison on large terms. The results show that our machine is able to reduce larger terms than the other machines, and the larger the term, the better is our machine compared to the others. This hints that it allows for a high degree of sharing (because the larger the term, the more possible sharing). The last example of the ﬁrst set shows that our machine eventually explodes in terms of number of β-reductions compared to the optimal one but outperforms BOHM in total number of steps, which is our notion of efﬁciency.
+Besides this classical benchmark, we give two λK terms to illustrate the following points: – The closed strategy may perform more work than necessary, when every copy
+of a term will be erased. The occurrence of such terms in practical situations is however questionable. One could also combine the closed strategy with a call-by-need strategy similarly to [16] to avoid this problem. – Except for the previous situation, we may avoid doing useless work, as opposed to call-by-value for instance, i.e. we also have some of the advantages of call-by-name.
+9 Conclusion
+We have presented a name-free syntax to represent terms of the λ-calculus with explicit substitutions, in a way that follows the usual intuitions about the operational semantics of the propagation of substitutions. We have given a general calculus on director strings which can fully simulate the λ-calculus, with rather complicated rules. We then described an intermediate calculus, the local open calculus, with very simple rules and still allowing open substitutions to traverse abstractions without global rewriting. Finally, we derived the closed reduction calculus of [18], which internalises the conditions on the original system [17].
+These calculi were used as a basis to describe and implement abstract machines for weak and strong reduction (the latter was an open problem for director strings). Efﬁciency was our main motivation, and we found in practice that these machines are quite efﬁcient on large terms and allow for a high degree of sharing. In particular, they quite favourably compare to standard evaluators, which suggests that more efﬁcient implementations of functional languages and λ-calculus based proof assistants are still possible.
+References
+1. M. Abadi, L. Cardelli, P.-L. Curien, and J.-J. Le´vy. Explicit substitutions. Journal of Functional Programming, 1(4):375–416, 1991.
+
+Lambda-Calculus with Director Strings
+
+39
+
+2. Z. M. Ariola, M. Felleisen, J. Maraist, M. Odersky, and P. Wadler. A call-by-need lambda calculus. In Proceedings of the 22nd ACM Symposium on Principles of Programming Languages (POPL’95), pages 233–246. ACM Press, 1995.
+3. A. Asperti, C. Giovanetti, and A. Naletto. The Bologna optimal higher-order machine. Journal of Functional Programming, 6(6):763–810, 1996.
+4. A. Asperti and S. Guerrini. The Optimal Implementation of Functional Programming Languages. Cambridge Tracts in Theoretical Computer Science. Cambridge University Press, 1998.
+5. H. P. Barendregt. The Lambda Calculus: Its Syntax and Semantics. North-Holland, revised edition, 1984.
+6. H. P. Barendregt. Lambda calculi with types. In S. Abramsky, D. Gabbay, and T. S. E. Maibaum, editors, Handbook of Logic in Computer Science. Oxford University Press, 1992.
+7. Z. Benaissa, D. Briaud, P. Lescanne, and J. Rouyer-Degli. Lambda-upsilon, a calculus of explicit substitutions which preserves strong normalisation. Journal of Functional Programming, 6(5):699–722, 1996.
+8. Z. Benaissa, K. H. Rose, and P. Lescanne. Modeling sharing and recursion for weak reduction strategies using explicit substitution. In H. Kuchen and D. Swierstra, editors, 8th PLILP—Symposium on Programming Language Implementation and Logic Programming, pages 393–407, Aachen, Germany, 1996.
+9. R. Bloo and H. Geuvers. Explicit substitution: on the edge of strong normalization. Theoretical Computer Science, 211(1):375–395, 1999.
+10. P. Cre´gut. An abstract machine for lambda-terms normalization. In Lisp and Functional Programming 1990, pages 333–340. ACM Press, 1990.
+11. P.-L. Curien, T. Hardin, and J.-J. Le´vy. Conﬂuence properties of weak and strong calculi of explicit substitutions. Journal of the ACM, 43(2):362–397, 1996.
+12. R. David and B. Guillaume. A λ-calculus with explicit weakening and explicit substitution. Mathematical Structures in Computer Science, 11(1):169–206, 2001.
+13. N. G. de Bruijn. Lambda calculus notation with nameless dummies. Indagationes Mathematicae, 34:381–392, 1972.
+14. N. G. de Bruijn. A namefree lambda calculus with facilities for internal deﬁnition of expressions and segments. Technical Report T.H.-Report 78-WSK-03, Department of Mathematics, Eindhoven University of Technology, 1978.
+15. N. Dershowitz and J.-P. Jouannaud. Rewrite Systems. In J. van Leeuwen, editor, Handbook of Theoretical Computer Science: Formal Methods and Semantics, volume B. North-Holland, 1989.
+16. R. Ennals and S. P. Jones. Optimistic evaluation: an adaptive evaluation strategy for non-strict programs. In C. Norris and J. James B. Fenwick, editors, Proceedings of the 8th ACM SIGPLAN International Conference on Functional Programming (ICFP-03), volume 38, 9 of ACM SIGPLAN Notices, pages 287–298. ACM Press, 2003.
+17. M. Ferna´ndez and I. Mackie. Closed reductions in the λ-calculus. In J. Flum and M. Rodr´ıguez-Artalejo, editors, Proceedings of Computer Science Logic (CSL’99), number 1683 in Lecture Notes in Computer Sciences, pages 220–234. Springer-Verlag, 1999.
+18. M. Ferna´ndez and I. Mackie. Director strings and explicit substitutions. WESTAPP’01, Utrecht, 2001.
+19. G. Gonthier, M. Abadi, and J.-J. Le´vy. The geometry of optimal lambda reduction. In Proceedings of the 19th Annual ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages, pages 15–26, Albequerque, New Mexico, 1992.
+20. B. Gre´goire and X. Leroy. A compiled implementation of strong reduction. In Proceedings of ICFP’02, Pittsburgh, Pennsylvania, USA, 2002.
+
+40 M. Ferna´ndez, I. Mackie and F.-R. Sinot
+21. T. Hardin, L. Maranget, and B. Pagano. Functional runtime systems within the lambdasigma calculus. Journal of Functional Programming, 8(2):131–176, 1998.
+22. J. Kennaway and M. Sleep. Director strings as combinators. ACM Transactions on Programming Languages and Systems, 10(4):602–626, 1988.
+23. J. Lamping. An algorithm for optimal lambda calculus reductions. In Proceedings 17 th ACM Symposium on Principles of Programming Languages, pages 16–30, 1990.
+24. F. Lang. Mode`les de la β-re´duction pour les implantations. PhD thesis, E´ cole Normale Supe´rieure de Lyon, 1998.
+25. J. L. Lawall and H. G. Mairson. Optimality and inefﬁciency: What isn’t a cost model of the lambda calculus? In International Conference on Functional Programming, pages 92–101, 1996.
+26. P. Lescanne. From λσ to λυ: a journey through calculi of explicit substitutions. In Proceedings of the 21st ACM Symposium on Principles of Programming Languages (POPL’94). ACM Press, 1994.
+27. P. Lescanne and J. Rouyer-Degli. The calculus of explicit substitutions lambda-upsilon. Technical Report RR-2222, INRIA, 1995.
+28. J.-J. Le´vy. Optimal reductions in the lambda-calculus. In J. P. Seldin and J. R. Hindley, editors, To H. B. Curry: Essays in Combinatory Logic, Lambda Calculus and Formalism, pages 159–191. Academic Press, 1980.
+29. P.-A. Mellie`s. Typed lambda-calculi with explicit substitutions may not terminate. In Proceedings of the 2nd International Conference on Typed Lambda Calculi and Applications, number 902 in Lecture Notes in Computer Science, pages 328–334. SpringerVerlag, 1995.
+30. G. Nadathur. A ﬁne-grained notation for lambda terms and its use in intensional operations. Journal of Functional and Logic Programming, 1999(2), 1999.
+31. G. Nadathur. The suspension notation for lambda terms and its use in metalanguage implementations. In R. de Queiroz, L. C. Pereira, and E. H. Haeusler, editors, Electronic Notes in Theoretical Computer Science, volume 67. Elsevier, 2002.
+32. M. Newman. On theories with a combinatorial deﬁnition of “equivalence”. Annals of Mathematics, 43(2):223–243, 1942.
+33. K. Rose. Explicit substitution - tutorial and survey, 1996. Lecture Series LS-96-3, BRICS, Dept. of Computer Science, University of Aarhus, Denmark.
+34. B. Rosen. Tree-manipulating systems and Church-Rosser theorems. Journal of the ACM, 20(1):160–187, 1973.
+35. F.-R. Sinot, M. Ferna´ndez, and I. Mackie. Efﬁcient reductions with director strings. In R. Nieuwenhuis, editor, Proceedings of Rewriting Techniques and Applications (RTA’03), volume 2706 of Lecture Notes in Computer Science, pages 46–60. SpringerVerlag, 2003.
+36. N. Yoshida. Optimal reduction in weak lambda-calculus with shared environments. Journal of Computer Software, 11(6):3–18, 1994.
+
+
