@@ -1,0 +1,1675 @@
+Programming Examples Needing Polymorphic Recursion
+J. J. Hallett 1
+Department of Computer Science Boston University Boston, USA
+A. J. Kfoury 2
+Department of Computer Science Boston University Boston, USA
+Abstract Inferring types for polymorphic recursive function deﬁnitions (abbreviated to polymorphic recursion) is a recurring topic on the mailing lists of popular typed programming languages. This is despite the fact that type inference for polymorphic recursion using ∀-types has been proved undecidable. This report presents several programming examples involving polymorphic recursion and determines their typability under various type systems, including the Hindley-Milner system, an intersection-type system, and extensions of these two. The goal of this report is to show that many of these examples are typable using a system of intersection types as an alternative form of polymorphism. By accomplishing this, we hope to lay the foundation for future research into a decidable intersection-type inference algorithm.
+We do not provide a comprehensive survey of type systems appropriate for polymorphic recursion, with or without type annotations inserted in the source language. Rather, we focus on examples for which types may be inferred without type annotations, with an emphasis on systems of intersection-types.
+Key words: polymorphic recursion, intersection types, ﬁnitary polymorphism
+1 Email: jhalllett@cs.bu.edu 2 Email: kfoury@cs.bu.edu
+c 2004 Published by Elsevier Science B. V.
+
+Hallett, Kfoury
+1 Introduction
+Background and Motivation
+Type inference in the presence of polymorphic recursion using ∀-types (the familiar “type schemes” of SML) is undecidable [10,11,4]. Attempts to work around this limitation include explicit type annotations by the user [8] and user-tunable iteration limits [17]. However, both of these approaches require the programmer to be actively engaged in the type checking process, thereby defeating the goal of automatic type inference and transparent type checking. There is also an implementation of SML that allows the user to switch between the standard type system (which is restricted to monomorphic recursion) and a type system augmented with polymorphic recursion using ∀-types, in an attempt to prove that “hard” examples of polymorphic recursion do not arise in practice [1]. Yet, practical examples of programs requiring polymorphic recursion continually appear in discussions on the mailing lists of programming languages such as SML, Haskell, and OCaml.
+Contribution of the Report
+This document attempts to lay the foundation for further research into the typability of implicit polymorphic recursion by discussing several examples which fail to type under the standard type system of SML – also called the Hindley-Milner system. The examples are written (mostly) in SML syntax (one example is presented in Haskell syntax) and are accompanied by the corresponding error found by the SML/NJ type checker. A few of the examples are also shown in Haskell syntax with its corresponding GHC error message for the side purpose of comparing the error reporting of the SML/NJ and GHC compilers.
+We also discuss examples which remain untypable using the Hindley-Milner system augmented with polymorphic recursion with ∀-types – also called the Milner-Mycroft system – but are typable using an intersection-type system. These examples support the use of intersection types as an alternative to ∀types to represent polymorphism.
+In addition, we elucidate the need for what we call “inﬁnite-width” intersection types by examples. However, we do not extend our standard (ﬁnitewidth) intersection type system in this way, because we do not know a straightforward extension of the standard system and developing one is beyond the scope of this report. Consequently, we resort to polymorphic recursion with ∀-types for these examples; i.e., we present examples which are not typable using our intersection-type system, but are with ∀-types. An example is also given which requires both intersection types and ∀-types. Lastly, we present a polymorphic recursive program that is not typable with either intersection types or ∀-types.
+2
+
+Hallett, Kfoury
+
+Organization of the Report
+
+The paper is organized as follows. First we deﬁne the types that we deal with, and then we present the rules of several type systems we consider later in the report, starting with the Hindley-Milner system which we here denote HM; this is done in Section 2. In the remaining sections, we introduce several simple and natural examples of polymorphic recursion to motivate the augmentation of system HM. We develop type systems that allow polymorphic recursion using only ∀-types (HM∀), only intersection types (S), and both universal and intersection types (S∀). Using these systems we show that we can construct valid typing derivations for most examples. The following chart summarizes the typability of the examples developed in this report with respect to the four type systems we deﬁne. 3 The last column in the chart, with the heading “Minor Alteration”, indicates whether an example can be “easily” altered to make it typable under system HM.
+
+Example
+
+HM HM∀ S S∀ Minor Alteration
+
+Double
+Mycroft
+Sum List
+Composition
+Compiler Pass
+Confusing
+Matrix Transpose
+Vector Addition
+Collect
+Bar
+Construct List
+Delay The above table is a little misleading in the following respect. The table indicates that certain examples are typable in our system of intersection types (S) but not in our system of ∀-types (HM∀). Whereas HM∀ restricts ∀quantiﬁers to appear only in the outermost position of type expressions, S imposes no similar restriction on occurrences of ∧ in type expressions. See Section 8 for further discussion of this matter.
+
+3 System S is called “S” for lack of a better name.
+3
+
+Hallett, Kfoury
+Related Work
+For other examples of polymorphic recursive programs, speciﬁcally nested recursive data types similar to the Collect example, see Chris Okasaki’s book [16]. Simon Peyton-Jones and Mark Shields have written a paper describing the approach taken by GHC when inferring arbitrary high rank types via explicit user-deﬁned type annotations [9].
+Future Work
+In the future we plan to explore the possibility of a decidable (and hopefully feasible) type inference and checking algorithm for a system of intersection types under which most, if not all, of the examples in this report can be typed. We would also like to investigate whether introducing expansion variables, a technology developed in conjunction with System I, into our intersection type system will yield any beneﬁts [14].
+Acknowledgments
+Joe Wells was a continual source of encouragement and technical advice. We would also like to thank Simon Peyton-Jones for his valuable feedback, particularly with regards to high-rank ∀-types.
+2 Types and Type Systems
+The syntax of types is speciﬁed by the following grammar:
+τ ∈ Type ::= α | τ → τ | τ × τ | τ list | τ ∧ τ | int | bool | . . . σ ∈ Scheme ::= τ | ∀α.σ
+Note that we use τ as a metavariable ranging over the set Type which comprises simple types combined with intersection types, and σ as a metavariable ranging over the set Scheme which comprises all members of Type each preceded by zero or more ∀ quantiﬁers. In particular, Type is a proper subset of Scheme.
+We list the four diﬀerent type systems considered in the rest of the report. The basic type system, HM, is analogous to the type system of SML, Haskell, and OCaml, which allows let-polymorphism and only monomorphic recursion. System HM∀ is an extension of system HM that allows polymorphic recursion with ∀-types, and ∀-types in general as long as the ∀ quantiﬁers are outside all type constructors. System S allows intersection types; S provides polymorphic recursion via intersection types. The last system that we develop is called S∀. System S∀ allows intersection types and ∀-types together; S∀ also requires that ∀ quantiﬁers are kept outside all type constructors.
+We now outline the conventions for reading the following tables. We assume there exists a function, type, from term constants to types, such that
+4
+
+Hallett, Kfoury
+the type(c) is the type of constant c. We use ∆ as a context in our typing judgement. ∆ is a sequence of bindings between term variables and types. However, we also allow ∆ to act as a function from term variables to types, such that ∆(x) is the type bound to variable x. Lastly, we use the function FTV from contexts to sets of type variables, such that FTV(∆) is the set of free type variables that occur in context ∆. First we deﬁne system HM.
+System HM Typing Rules: (all types are ∧-free)
+
+type(c) = σ
+
+∆(x) = σ
+
+∆ c : σ (∀-Const) (σ closed) ∆ x : σ (∀-Var)
+
+∆, x : τ M : τ ∆ fn x => M : τ → τ (Abs)
+
+∆
+
+M :τ →τ ∆ ∆ MN : τ
+
+N : τ (App)
+
+∆ ∆
+
+M : σ ∆, x : σ let x = M in N
+
+N :τ end : τ
+
+(∀-Let)
+
+∆, x1 : τ1, . . . , xn : τn N : τ ∆, x1 : τ1, . . . , xn : τn Mp : τp (Rec)
+∆ let val rec x1 = M1 and . . . and xn = Mn in N end : τ
+
+(1 ≤ p ≤ n)
+
+∆ ∆
+
+M M:
+
+:σ ∀α.σ
+
+(Gen)
+
+(α ∈ FTV(∆))
+
+∆ ∆
+
+M : ∀α.σ M : σ[α := τ ]
+
+(Inst)
+
+∆ ∆
+
+M1 : τ1 ∆ M2 : τ2 (M1, M2) : τ1 × τ2
+
+(×)
+
+∆ M : τ1 × τ2 (Fst) ∆ fst(M ) : τ1
+
+∆ M : τ1 × τ2 (Snd) ∆ snd(M ) : τ2
+
+∆
+
+M1 : bool ∆ M2 : τ ∆ M3 : τ ∆ if M1 then M2 else M3 : τ
+
+(If)
+
+To deﬁne system HM∀ we simply augment HM with the rule (∀-Rec).
+
+5
+
+Hallett, Kfoury
+System HM∀ Typing Rules: (all types are ∧-free)
+
+All the typing rules of system HM are typing rules of system HM∀ in addition to the following.
+
+∆, x1 : σ1, . . . , xn : σn N : τ ∆, x1 : σ1, . . . , xn : σn Mp : σp (∀-Rec)
+∆ let val rec x1 = M1 and . . . and xn = Mn in N end : τ
+
+(1 ≤ p ≤ n)
+
+Note that we allow both rules (∀-Rec) and (Rec) to co-exist within system HM∀. This is acceptable because (Rec) is simply a special case of (∀-Rec).
+System S uses only intersection types.
+
+6
+
+Hallett, Kfoury
+
+System S Typing Rules: (all types are ∀-free)
+
+type(c) = τ
+
+∆(x) = τ
+
+∆ c : τ (∧-Const) (τ closed) ∆ x : τ (∧-Var)
+
+∆, x : τ M : τ ∆ fn x => M : τ → τ (Abs)
+
+∆
+
+M :τ →τ ∆ ∆ MN : τ
+
+N : τ (App)
+
+∆ ∆
+
+M : τ ∆, x : τ N : τ let x = M in N end : τ
+
+(∧-Let)
+
+∆, x1 : τ1, . . . , xn : τn N : τ ∆, x1 : τ1, . . . , xn : τn Mp : τp (∧-Rec)
+∆ let val rec x1 = M1 and . . . and xn = Mn in N end : τ
+
+(1 ≤ p ≤ n)
+
+∆ ∆
+
+M1 : τ1 ∆ M2 : τ2 (M1, M2) : τ1 × τ2
+
+(×)
+
+∆ M : τ1 × τ2 (Fst) ∆ fst(M ) : τ1
+
+∆ M : τ1 × τ2 (Snd) ∆ snd(M ) : τ2
+
+∆ ∆
+
+M : τi i ∈ I M : ∧i∈I τi
+
+(∧)
+
+(size(I) ≥ 2), (size(I) is ﬁnite)
+
+∆ M : τ τ ≤ τ (Sub) ∆ M :τ
+
+τ ≤ τ (S-Reﬂ)
+
+τ1
+
+≤ τ2 τ2 ≤ τ1 ≤ τ3
+
+τ3
+
+(S-Trans)
+
+τ1 ≤ τ1 τ2 ≤ τ2 τ1 → τ2 ≤ τ1 → τ2
+
+(S-Fun)
+
+τ1 ≤ τ1 τ2 ≤ τ2 τ1 × τ2 ≤ τ1 × τ2
+
+(S-Pair)
+
+τi ≤ τi i ∈ I I ⊆ J ∧i∈J τi ≤ ∧i∈I τi
+
+(S-∧)
+
+7
+
+Hallett, Kfoury
+This system has been proved sound. The proof can be found in appendix B. Lastly, we deﬁne system S∀.
+System S∀ Typing Rules:
+
+All the typing rules of system S are typing rules of system S∀ in addition to the following.
+
+type(c) = σ
+
+∆(x) = σ
+
+∆ c : σ (∀-Const) (σ closed) ∆ x : σ (∀-Var)
+
+∆ ∆
+
+M : σ ∆, x : σ N : τ let x = M in N end : τ
+
+(∀-Let)
+
+∆, x1 : σ1, . . . , xn : σn N : τ ∆, x1 : σ1, . . . , xn : σn Mp : σp (∀-Rec)
+∆ let val rec x1 = M1 and . . . and xn = Mn in N end : τ
+
+(1 ≤ p ≤ n)
+
+∆ ∆
+
+M :σ M : ∀α.σ
+
+(Gen)
+
+(α ∈ FTV(∆))
+
+∆ M : ∀α.σ (Inst) ∆ M : σ[α := τ ]
+
+Note that (∧-Const), (∧-Var), (∧-Let), and (∧-Rec) in system S are special cases of (∀-Const), (∀-Var), (∀-Let), and (∀-Rec) in system S∀.
+
+3 Typable in HM∀ and S
+3.1 Double
+3.1.1 Double - Coupled The following is a simple example that exposes the untypability of polymorphic recursion in SML.
+let val rec double = fn f => fn y => f (f y) and foo = fn v => double (fn x => x + 1) v and goo = fn w => double Math.sqrt w
+in (foo 3, goo 16.0) end SML Type Checker Reports:
+Error: operator and operand don’t agree [literal] operator domain: real -> real 8
+
+Hallett, Kfoury
+
+operand:
+
+int -> int
+
+in expression:
+
+double (fn x => x + 1)
+
+The deﬁnitions of double, foo, and goo are mutually recursive. Therefore the calls to double within the deﬁnition of foo and goo are recursive calls. Hence, the Hindley-Milner typing derivation breaks down with the realization that each of these recursive calls is on an argument of a diﬀerent type.
+This example is not typable under system HM. However, we can use either HM∀ or S to type it. Using HM∀ we can write a typing derivation for this example, where the ﬁnal types assigned are:
+
+double : ∀α.(α → α) → α → α foo : int → int goo : real → real.
+
+Using S we can also type this example. If double is given the following intersection type:
+
+((int → int) → int → int) ∧ ((real → real) → real → real)
+
+then the call to double within the body of foo would be able to utilize the ﬁrst component of the intersection type and the call to double within the body of goo would be able to use the second component. We hold oﬀ on a typing derivation in S until the next, more complicated, example.
+
+3.1.2 An Aside: SML/NJ vs. GHC As an aside we translate a couple of the examples in this report into Haskell syntax and compare the SML/NJ error messages with the GHC error messages (which uses Algorithm M in contrast to Algorithm W of SML/NJ - for more discussion see [3]). We choose to translate only those examples which will yield an interesting and diﬀerent error message. Most of the following examples, when translated, oﬀer error messages that are very similar to the SML/NJ error messages, but diﬀer occasionally in the program location which the compiler targets as problematic. This example, when translated, is no different.
+intFunc :: Int -> Int intFunc x = x + 1
+
+doubleFunc :: Double -> Double doubleFunc x = sqrt x
+
+myPair = let (double, foo, goo) = (\f -> \y -> f (f y), \v -> double intFunc v,
+9
+
+Hallett, Kfoury
+\w -> double doubleFunc w) in (foo 3, goo 16.0) GHC Type Checker Reports:
+Couldn’t match ‘Double’ against ‘Int’ Expected type: Int -> Int Inferred type: Double -> Double
+In the first argument of ‘double’, namely ‘doubleFunc’ In a lambda abstraction: \ w -> double doubleFunc w Both the SML/NJ and the GHC compiler detect the same error but SML/NJ assigns the type:
+double : (real → real) → real → real,
+while GHC assigns the type:
+double : (int → int) → int → int.
+Although this diﬀerence is not enormous, it does show an operational disparity between the two compilers.
+3.1.3 Double - Uncoupled The problem exhibited in the double example above can be alleviated by a technique that we call “uncoupling”. Namely, we make use of the HindleyMilner let-polymorphism by removing double from the mutual recursive deﬁnition and deﬁning it in an outer let.
+let val double = fn f => fn y => f (f y) in let val rec foo = fn v => double (fn x => x + 1) v
+and goo = fn w => double Math.sqrt w in (foo 3, goo 16.0) end end SML Type Checker Reports:
+No Errors
+3.2 Mycroft
+3.2.1 Mycroft - Coupled The following is the canonical example of polymorphic recursion as discovered by Alan Mycroft [15].
+let val rec myMap = fn f => fn l => if (null l) then l else cons (f(hd l)) (myMap f (tl l))
+and sqList = fn l => myMap (fn (x:int) => x * x) l 10
+
+Hallett, Kfoury
+
+and compList = fn l => myMap not l in (sqList [2,4], compList [true,false]) end
+
+SML Type Checker Reports:
+
+Error: operator and operand don’t agree [tycon mismatch]
+
+operator domain: bool -> bool
+
+operand:
+
+int -> int
+
+in expression:
+
+myMap (fn x : int => x * x)
+
+As before, we have three mutually recursive function deﬁnitions and two recursive calls with arguments of diﬀerent types. This example, though untypable in system HM, can be typed in a system of polymorphic recursion with ∀types or intersection types. To witness this either system must be able to handle lists. For the purposes of brevity we will consider hd, tl, cons, and nil to all be primitive constants within our language. With these constants we will be able to handle expressions with list types. Also, we note that the expressions [1,2] and [true, false] are simply syntactic sugar for
+cons 1 (cons 2 nil) and cons true (cons false nil) respectively. We are now able to assign the following types under HM∀:
+
+myMap : ∀α.∀β.(α → β) → α list → β list sqList : int list → int list compList : bool list → bool list.
+
+With S we can assign the following rank-1 types:
+
+myMap : ((int → int) → int list → int list) ∧ ((bool → bool) → bool list → bool list)
+sqList : int list → int list compList : bool list → bool list.
+
+In both systems the ﬁnal type assigned to Mycroft’s example is:
+
+int list × bool list.
+
+For the full typing derivation under S see appendix A.
+
+3.2.2 Mycroft - Uncoupled As before, uncoupling is possible. This is shown in a slightly diﬀerent form below.
+let val rec myMap = fn f => fn l => if (null l) then l else cons (f(hd l)) (myMap f (tl l))
+11
+
+Hallett, Kfoury
+val rec sqList = fn l => myMap (fn x => x * x) l and compList = fn l => myMap not l in (sqList [2,4], compList [true,false]) end SML Type Checker Reports: No Errors
+
+3.3 Sum List
+
+The example below ﬁnds the sum of the elements of a list, but also applied the polymorphic identity function to each element and sublist in the process. The idea here is that we may want to record some information about each element and its corresponding sublist (possibly via side eﬀects).
+
+let val rec id = fn x => x and sumList = fn l => if (null l) then 0 else (id (hd l)) + (sumList (id (tl l)))
+in sumList [1,2,3] end
+
+SML Type Checker Reports:
+
+Error: operator and operand don’t agree [circularity]
+
+operator domain: ’Z
+
+operand:
+
+’Z list
+
+in expression:
+
+id (tl l)
+
+Using HM∀ we assign the following types:
+
+id : ∀α.α → α sumList : int list → int.
+
+Using S we assign the following types:
+
+id : (int → int) ∧ (int list → int list) sumList : int list → int.
+
+The ﬁnal type assigned to this example is: int. This example can be uncoupled in the same way as the previous two examples. A natural question at this point would be to ask why id needs to be deﬁned mutually recursive to sumList. To avoid such a question we could pass id as an argument to sumList and then motivate this move by demonstrating a need to pass two diﬀerent functions to sumList. We show this for the Matrix Transpose example so we do not show it here.
+12
+
+Hallett, Kfoury
+
+3.4 Isomorphic Compositions
+
+This example uses the composition function as the polymorphic recursive function. The order of two composed functions are switched and applied to diﬀerent arguments. The results of both applications are then compared.
+
+let val createList = fn x => [x] val removeList = fn l => hd l val rec comp = fn f => fn g => f o g and appComp = fn v1 => fn v2 => (comp removeList createList v1) = hd (comp createList removeList v2)
+in appComp 5 [5] end
+
+SML Type Checker Reports:
+
+Error: operator and operand don’t agree [circularity]
+
+operator domain: ’Z list -> ’Z
+
+operand:
+
+’Z list -> ’Z list list
+
+in expression:
+
+comp createList
+
+Using HM∀ we assign the following types:
+
+createList : int → int list removeList : int list → int
+comp : ∀α.∀β.∀η.(β → η) → (α → β) → α → η appComp : int → int list → bool.
+
+Using S we assign the following types:
+
+createList : int → int list removeList : int list → int
+comp : ((int → int list) → (int list → int) → int list → int list) ∧ ((int list → int) → (int → int list) → int → int)
+appComp : int → int list → bool.
+
+In both systems the ﬁnal type assigned to this example is: bool. This example can also be uncoupled.
+
+3.5 Compiler Pass
+This example is very similar to the previous examples and is due to Simon Peyton Jones [6,7], who states that this is a program that he “really wanted to write”. The author was writing a compiler pass which made use of two data types and three functions written in continuation passing style. It is presented in Haskell syntax.
+13
+
+Hallett, Kfoury
+data Exp = Let Bind Exp data Bind = MkBind String Exp
+doBinds (b:bs) = doBindAndScope b (\b’ -> b’ : doBinds bs)
+doExp (Let b e) = doBindAndScope b (\b’ -> Let b’ (doExp e))
+doBindAndScope (MkBind s e) cont = cont (MkBind s (doExp e)) GHC Type Checker Reports: Couldn’t match ‘[Bind]’ against ‘Exp’
+Expected type: [Bind] Inferred type: Exp In the application ‘doBinds bs’ In the second argument of ‘(:)’, namely ‘doBinds bs’ The trouble with this program is that doExp and doBindAndScope are deﬁned mutually recursive to one another. This means that the call to doBindAndScope is a recursive call and can not be polymorphic. However, doBinds and doExp each call doBindAndScope with arguments of diﬀerent types. The author goes on to describe a way to alleviate this problem by encapsulating the polymorphism inside a data type structure and adding constructors to the arguments of doBindAndScope. However, he points out that this ﬁx is not only “obscure”, but also “ineﬃcient at runtime”. This example can be typed by either HM∀ or S. Under system HM∀ we can assign the following types:
+doBinds : Bind list → Bind list doExp : Exp → Exp
+doBindAndScope : ∀α.Bind → (Bind → α) → α.
+Under system S we can assign these types:
+doBinds : Bind list → Bind list doExp : Exp → Exp
+doBindAndScope : (Bind → (Bind → Bind list) → Bind list) ∧ (Bind → (Bind → Exp) → Exp).
+Besides the method for alleviating this example already discussed, we can uncouple this program in the usual way.
+3.6 Confusing
+3.6.1 Confusing - Unalleviated The following example is not very intuitive but serves a purpose.
+14
+
+Hallett, Kfoury
+
+let val rec f = fn n => fn x => fn y => if x > y orelse n = 0 then n else if n >= 100 then if n < 200 then n else f (n div 2) (x * y) y else if x < y then f (n*n) 0.03 1.0 else f (n*n) 1 1
+in f 3 5 6 end
+
+SML Type Checker Reports:
+
+Error: operator and operand don’t agree [literal]
+
+operator domain: real
+
+operand:
+
+int
+
+in expression:
+
+(f (n * n)) 1
+
+Error: operator and operand don’t agree [literal]
+
+operator domain: real
+
+operand:
+
+int
+
+in expression:
+
+(f 3) 5
+
+This example requires the second and third arguments of f to be of types
+int and real. The example makes use of the overloaded operators <, >, and *
+which are deﬁned for both these types. Notice that if we give f the appropriate type then this example is well-typed within both HM∀ and S.
+Under HM∀ we assign the following type:
+
+f : ∀α.int → α → α → int.
+
+Under S we assign the following type:
+
+f : (int → int → int → int) ∧ (int → real → real → int).
+
+In both systems, the ﬁnal type assigned to the example is: int. This example diﬀers from all the previous examples. The preceding examples all make use of a polymorphic function that is deﬁned mutually recursive to another function. The polymorphic function is then used twice on arguments of diﬀerent types. This example is designed to show that it is possible to deﬁne a polymorphic recursive function that is inherently so, without the aid of an external polymorphic function. As a result, this example is diﬃcult to alleviate. In the next sections we will see other polymorphic recursive functions that share this same property but are impossible to type without
+15
+
+Hallett, Kfoury
+extensions to HM∀ and S.
+3.6.2 An Aside: SML/NJ vs. GHC It is worth noting that when translated into Haskell syntax this example can be typed by the GHC compiler. The reason for this is that the GHC compiler converts the integers in this example to doubles and assigns the following type:
+f : double → double → double → double.
+3.6.3 Confusing - Alleviated We can alleviate this example by duplication. Consider the following program. let val rec f1 = fn n => fn x => fn y =>
+if x > y orelse n = 0 then n else if n >= 100
+then if n < 200 then n else f1 (n div 2) (x * y) y
+else if x < y then f2 (n*n) 0.03 1.0 else f1 (n*n) 1 1
+and f2 = fn n => fn x => fn y => if x > y orelse n = 0 then n else if n >= 100 then if n < 200 then n else f2 (n div 2) (x * y) y else if x < y then f2 (n*n) 0.03 1.0 else f1 (n*n) 1 1
+in f1 3 5 6 end This program is now typable under HM. We can assign the following types:
+f1 : int → int → int → int f2 : int → real → real → int.
+However, alleviating the example in this way diﬀers from all the previous attempts in that we must duplicate the entire program. Since duplication defeats the purpose of polymorphism this alteration cannot be recommended.
+16
+
+Hallett, Kfoury
+
+4 Typable in S Only
+
+4.1 Matrix Transpose
+
+4.1.1 Matrix Transpose - Unalleviated This examples shows a concise and elegant formulation of the matrix transpose operation.
+
+let val map1 = map val rec map2 = fn f => fn l => if (null l) then nil else if (null (hd l)) then nil else cons (f hd l) (map2 f (f tl l))
+in map2 map1 [[1,2],[3,4]] end
+
+SML Type Checker Reports:
+
+Error: operator and operand don’t agree [circularity]
+
+operator domain: ’Z list -> ’Z
+
+operand:
+
+’Z list -> ’Z list
+
+in expression:
+
+f tl
+
+This example, unlike the previous examples, cannot be typed by polymorphic recursion with ∀-types. The problem arises when trying to type the ﬁrst argument to map2, f. To see this, we need only look at the else-branch of the nested if-expression.
+Notice that from cons (f hd l) (map2 f (f tl l)) the type of the ﬁrst occurrence of f must be of the form:
+
+f : (α list → α) → α list list → α list.
+
+Yet, the second occurrence of f requires the form:
+
+f : (α list → α list) → α list list → α list list.
+
+Thus, f must have a polymorphic type. However, since we restrict ∀-quantiﬁers to be only on the outer most portion of the type, a ∀-type for map2 is impossible.
+Fortunately, using S we are able to assign this example a rank-2 type:
+
+map1 : ((int list → int) → int list list → int list) ∧ ((int list → int list) → int list list → int list list)
+map2 : (((int list → int) → int list list → int list) ∧ ((int list → int list) → int list list → int list list)) → int list list → int list list.
+17
+
+Hallett, Kfoury
+The ﬁnal type assigned to this example is: int list list. An objection made in a preliminary presentation of this work is that this example (Matrix Transpose) and the next (Vector Addition) are not cases of truly polymorphic recursive functions, because the polymorphism is not at the outermost position of the type expression, as in the previous examples. However, such a deﬁnition of polymorphic recursion is arguably too restrictive, as it disallows function types whose argument type (i.e., expressions to the left of the arrow constructor) are polymorphic.
+4.1.2 Matrix Transpose - Alleviated Similar to the previous example, uncoupling is impossible. However, we can side-step this dilemma with another crafty trick.
+let val map1 = map val rec map2 = fn f1 => fn f2 => fn l => if (null l) then nil else if (null (hd l)) then nil else cons (f1 hd l) (map2 f1 f2 (f2 tl l))
+in map2 map1 map1 [[1,2],[3,4]] end
+SML Type Checker Reports:
+No Errors
+By simply passing the map2 function two diﬀerent map1 functions so that each one is used with only one type, our example becomes typable. Although, this technique yields a well-typed program the process for transforming untypable polymorphic recursive programs has become ad-hoc. No longer, can the programmer use a simple uncoupling scheme. Instead, the programmer must come up with, possibly very complex, ﬁxes for each circumstance. A better programming language would not require these eﬀorts from the programmer, but rather allow the program to be typed as the programmer wrote it. With this as our goal we reject the alleviated example as our ultimate solution and determine to type the original, unalleviated example.
+As an alternative alleviation, one could simply remove the ﬁrst argument, f, of map2 and replace each f in the body of map2 with the standard map function. However, there may be cases where passing map1 as an argument is advantageous. To motivation this suppose the following. Given a matrix M , one wishes to calculate the pair (5 × M T, M T). This could easily be done in the following way.
+let val map1 = fn f => fn l => map (fn x => 5 * (f x)) l val rec map2 = fn f => fn l => if (null l)
+18
+
+Hallett, Kfoury
+then nil else if (null (hd l))
+then nil else cons (f hd l) (map2 f (f tl l)) in (map2 map1 [[1,2],[3,4]], map2 map [[1,2],[3,4]]) end
+Otherwise, the programmer would have to compute the transpose of M and separately multiply every element of M T by 5. A program that was implemented in this way would require signiﬁcant code duplication.
+
+4.2 Vector Addition
+
+This example computes the addition of equal-length vectors represented as list.
+
+let val addList = fn l => foldr (op +) 0 l val rec addVecs = fn f => fn l => if (null (hd l)) then nil else cons (addList (f hd l)) (addVecs f (f tl l))
+in addVecs map [[1,2,3],[4,5,6]] end
+
+SML Type Checker Reports:
+
+Error: operator and operand don’t agree [circularity]
+
+operator domain: ’Z list -> ’Z
+
+operand:
+
+’Z list -> ’Z list
+
+in expression:
+
+f tl
+
+This example is very similar to the Matrix Transpose example. Just has before, the f argument of addVecs requires a polymorphic type. However, since we disallow ∀-quantiﬁcation within a function type, system HM∀ is not suﬃcient to type addVecs.
+Again using S we are able to assign this example a rank-2 type:
+
+addList : int list → int addVecs : (((int list → int) → int list list → int list) ∧
+((int list → int list) → int list list → int list list)) → int list list → int list.
+
+The ﬁnal type assigned to this example is: int list. And again, we can alleviate this example using the alternative techniques to uncoupling described for the Matrix Transpose example alleviation.
+19
+
+Hallett, Kfoury
+5 Typable in HM∀ Only
+
+5.1 Collect
+This example from the ML mailing list was already discussed by Trevor Jim [5]. This function collects all the data from the deﬁned data type and stores them in a list.
+datatype ’a T = EMPTY | NODE of ’a * (’a T) T
+
+let val rec collect = fn t => case t of EMPTY = nil | NODE(n,t) = cons n (flatmap collect (collect t))
+in collect EMPTY end
+
+SML Type Checker Reports:
+
+Error: operator and operand don’t agree [circularity]
+
+operator domain: ’Z T
+
+operand:
+
+’Z T T
+
+in expression:
+
+collect t
+
+Here flatmap is a function similar to the map function. The type of flatmap is:
+flatmap : (α → β list) → α list → β list.
+
+Obviously this example is not typable in HM, however, using system HM∀ we can give this example the following types:
+
+flatmap : ∀α.∀β.(α → β list) → α list → β list collect : ∀α.α T → α list.
+
+Under system S this example is not typable. To see why let’s try to assign collect the following reasonable type:
+
+collect : α T → α list.
+
+We have no trouble deriving this type for the Empty-branch of the caseexpression. However, from the program fragment: collect t, of the Nodebranch, collect must have the following type:
+
+collect : α T T → α T list, 20
+
+Hallett, Kfoury
+since t has the following type:
+t : α T T.
+Therefore collect must have a polymorphic type. Unfortunately, using intersection types, it is not possible to assign the type:
+collect : (α T → α list) ∧ (α T T → α T list),
+because when deriving the type α T T → α T list for collect we will require:
+collect : α T T T → α T T list.
+This cyclic dilemma will continue indeﬁnitely. If we were to extend system S with inﬁnite width intersection types such
+as the following:
+collect : ∧i∈N τi+1 → τi list,
+where α if i = 0,
+τi = τi−1T otherwise, then we could derive a typing derivation for this example. However, we since we do not know how to deal with inﬁnite width intersection types we reject this idea and resort to system HM∀ and polymorphic recursion with ∀-types.
+Uncoupling this examples is impossible.
+5.2 BAR
+This example is a bit contrived but displays an interesting form of polymorphic recursion that is impossible to alleviate by uncoupling. Assuming the second argument to BAR is the f deﬁned in the example, BAR can be understood by the following mathematical formula:
+BAR x (λx.x × 2) Z = Z ∗ 22# of recursive calls = Z ∗ 2 .2log2(4/x)
+Below we show the example program. let val r = fn i => i >= 4
+val f = fn i => i * 2 val a = 5 val rec BAR = fn x => fn F => fn Z =>
+if r x then F Z else BAR (f x) (fn v => fn w => v (v w)) F Z in BAR 1 f a end
+21
+
+Hallett, Kfoury
+
+SML Type Checker Reports:
+Error: right-hand-side of clause doesn’t agree with function result type [circularity]
+expression: ((’Z -> ’Z) -> ’Z -> ’Z) -> (’Z -> ’Z) -> ’Z -> ’Z
+result type: ((’Z -> ’Z) -> ’Z -> ’Z) -> ((’Z -> ’Z) -> ’Z -> ’Z) -> (’Z -> ’Z) -> ’Z -> ’Z
+in declaration: BAR = (fn x => (fn <pat> => <exp>))
+
+Error: operator and operand don’t agree [literal]
+
+operator domain: (’Z -> ’Z) -> ’Z -> ’Z
+
+operand:
+
+int -> int
+
+in expression:
+
+(BAR 1) f
+
+This example, much like the previous, requires an inﬁnite width intersection type. To see why, observe that both sides of the if-expression in the body of BAR are required to of the same type by the rule (If). Assume, without a loss of generality, that the arguments to BAR have the following types:
+
+x : int F : int → int Z : int.
+
+then the then-branch has type: int. As a result, BAR must have the following
+
+type:
+
+BAR : int → (int → int) → int → int.
+
+Also as a result, the else-branch must have type: int. If this is to occur then
+
+the result of BAR applied to its three arguments in the else-branch must be type: int → int. This can only happen if the occurrence of BAR within the else-branch has the following type:
+
+BAR : int → ((int → int) → (int → int)) → (int → int) → (int → int).
+
+Just as we saw in the last example this issue can be resolved if we give BAR the type:
+
+BAR :(int → (int → int) → int → int) ∧ (int → ((int → int) → (int → int)) → (int → int) → (int → int)).
+
+However, now the rule (∧) requires us to type BAR as both components of the above intersection. Typing it as the second component will require us to expand the type of BAR even more. This cycle makes an inﬁnite intersection type for BAR imperative.
+22
+
+Hallett, Kfoury
+We will now show such an inﬁnite intersection type. Consider the following type:
+α if i = 0, τi = τi−1 → τi−1 otherwise. We can use this to deﬁne an inﬁnite intersection type for BAR as follows:
+BAR : ∧i∈N int → τi+1 → τi → τi.
+However, for the same reasons as before we choose to use ∀-types for this example. Under HM∀ we assign the following type:
+BAR : ∀α.int → (α → α) → α → α.
+The ﬁnal type assigned to this example is: int.
+
+6 Typable in S∀ Only
+
+6.1 Construct List
+
+The following example presents a function, constList, that takes an input x and a number n. constList then constructs a list of 22n elements, all equal to x. Here is the program.
+let val rec constList = fn x => fn n => if (n = 0) then [x,x] else cons x (tl (concat (constList (constList x (n-1)) (n-1))))
+val applyCL = fn l1 => fn l2 => fn f => ((constList l1 (f l1)), (constList l2 (f l2)))
+in applyCL [1,2,3] [true,false,true] length end
+SML Type Checker Reports:
+
+Error: operator and operand don’t agree [circularity]
+
+operator domain: ’Z list list * ’Z list list list
+
+operand:
+
+’Z list list * ’Z list
+
+in expression:
+
+x :: tl (concat ((constList <exp>) (<exp> - <exp>)))
+
+Error: operator and operand don’t agree [literal]
+
+operator domain: _ list list
+
+operand:
+
+int list
+
+23
+
+Hallett, Kfoury
+in expression: applyCL (1 :: 2 :: 3 :: nil)
+The above program is composed of one main function (constList), and one auxillary function (applyCL). The applyCM function makes two calls to constList (one for each input list) after applying an input function to each input list.
+constList is a simple formulation of a function that constructs a list of the length described above without the use of arithmetical operations to explicitly calculate 22n. Notice that a more concise formulation is not immediately evident.
+This example is unique in that it requires both ∀-types and intersection types. The need for ∀-types stems from the clause:
+constList (constList x (n-1)) (n-1)
+This statement requires that the result of constList be the same type as the ﬁrst argument to constList. Suppose the ﬁrst argument to constList is of type α. We also know that the return type of constList must be of type α list from the then-branch of the conditional. If we try to assign constList the type: (α → int → α list) ∧ (α list → int → α list list) then we run into the same cyclic dilemma that was described in the Collect example. Therefore the type of constList must be: ∀α.α → int → α list (inﬁnite width intersection types are another option but, again, we choose ∀-types). Note that this example uses the same mechanism to require ∀-types as the Collect example. Yet, this example does not involve a recursive data type as the Collect example does. Instead this example uses only lists.
+The need for intersection types arises when we inspect applyCL. Notice that we would like f to be a polymorphic argument to applyCL (this because we apply applyCL to two lists of diﬀerent types). Since f is an argument it is impossible assign it a ∀-type since we have restricted our ∀-types such that quantiﬁers are not allowed inside a type. Therefore our only option is to assign f an intersection type.
+Under S∀ the following types can be assigned:
+constMatrix : ∀α.α → int → α list applyCL : int list → bool list → ((int list → int list) ∧ (bool list → bool list)) → (int list list × bool list list)
+Uncoupling is not immediately evident for this example due to the fragment of the constList function that requires a ∀-type.
+24
+
+Hallett, Kfoury
+6.1.1 An Aside: SML/NJ vs. GHC We now return to our comparison of SML/NJ and GHC error reporting. The BAR example, this example, and the following example (Delay) all demonstrate a diﬀerence between the error reporting of the two compilers that we have not yet seen. Here we show the Haskell translation and GHC error message of this example.
+constList x 0 = [x,x] constList x n = (x:(tail (concat (constList
+(constList x (n-1)) (n-1)))))
+applyCL l1 l2 f = ((constList l1 (f l1)), (constList l2 (f l2)))
+GHC Type Checker Reports:
+Occurs check: cannot construct the infinite type: a = [a] Expected type: [[a]] Inferred type: [a]
+In the application ‘constList (constList x (n - 1)) (n - 1)’ In the first argument of ‘concat’, namely
+‘(constList (constList x (n - 1)) (n - 1))’
+Notice that the error message reported by GHC consists of only one message while SML/NJ reports two messages. This suggests that GHC may get to the heart of the error while SML/NJ reports numerous superﬂuous messages. On the other hand, perhaps SML/NJ error reporting is more precise, exposing every relevant error location. Since this is not the main objective of this report we leave this issue for future inquiry. However, the interested reader is advised to see [3] for more discussion.
+7 Untypable
+7.1 Delay Evaluation
+The following example shows some of the limitations of polymorphic recursion using intersection types and ∀-types.
+let val delay = fn x => fn () => x val rec nDelays = fn n => fn x => if n=0 then x else nDelays (n-1) (delay x)
+in nDelays 3 (fn x => x + 1) end
+SML Type Checker Reports:
+Error: right-hand-side of clause doesn’t agree with function result type [circularity]
+25
+
+Hallett, Kfoury
+
+expression: ’Z -> ’Z result type: (unit -> ’Z) -> ’Z in declaration:
+nDelays = (fn n => (fn <pat> => <exp>))
+
+Error: operator and operand don’t agree [literal]
+
+operator domain: unit -> ’Z
+
+operand:
+
+int -> int
+
+in expression:
+
+(nDelays 3) (fn x => x + 1)
+
+Polymorphic recursion with ∀-types is not powerful enough to type this example. To see why there is no ∀-type let us inspect the example. First, it is easy to see that the type of delay is:
+
+delay : ∀α.α → unit → α.
+
+It is apparent that n has type int. Suppose next, that we give x type α. From the then-branch we see that the return type of the function must be of type α. So far we have assigned nDelays the following type:
+
+nDelays : ∀α.int → α → α.
+
+Next, according to the rule (If), we will make sure that the else-branch also has type α. This is where the problem manifests. The ﬁrst argument to nDelays, n-1, clearly has type int. However, the second argument to nDelays, delay x, has type unit → α which, according to the type previously assigned to nDelays, means the else-branch has type unit → α.
+Polymorphic recursion with intersection types is also not suﬃcient to type this example. To see why, ﬁrst observe that to type:
+fn n => fn x => if n=0 then x else nDelays (n-1) (delay x),
+we require x to have an intersection type. In the then-branch, x must have the same type as the result of nDelays which we will call τ . In the else-branch, we require x to have a type with strictly fewer units than τ has, since the call to delay will add one unit and nDelays does not accept arguments with a greater number of units than its return type. Therefore by assigning the following type to x:
+x : α ∧ (unit → α),
+we are able to derive the same type in both branches of the if-expression. However, this presents a diﬀerent problem. In order to type:
+nDelays 3 (fn x => x + 1),
+26
+
+Hallett, Kfoury
+we require nDelays to have the type:
+
+int → (int → int) → τ.
+
+but as a result of the subtyping relation rules, this type is not attainable if
+
+we require the second argument of nDelays to have an intersection type. We
+
+can see this from the following failed subtype derivation (where the boxed
+
+judgement is the failure point).
+
+int → int ≤ ((int → int) ∧ . . .)
+
+σ ≤ σ (S-Reﬂ)
+
+int ≤ int (S-Reﬂ) ((int → int) ∧ . . .) → σ ≤ (int → int) → σ (S-Fun) int → (((int → int) ∧ . . .) → σ) ≤ int → ((int → int) → σ) (S-Fun)
+
+Therefore we cannot derive an intersection type for this example using our system.
+
+8 High-Order ∀-Polymorphism
+In this section we describe the diﬀerence between our construction of S and HM∀. We have chosen to disallow ∀-quantiﬁers anywhere inside a type. However, we allow ∧ to occur freely inside a type. At ﬁrst glance, these choices may seem biased toward the intersection type system. The rationalization behind these choices was a decision to investigate the typability of programs for which there is a known type inference algorithm that does not rely on any type annotations. It is known how to infer types for high-rank uses of intersection types [14], but this is not the case for high-rank uses of ∀-types. This being said, if we were to consider a system of ∀-types that allowed arbitrary rank uses of ∀-types, then under this system we could type every example in this report that S types.
+
+9 Conclusion
+In summary, we have shown several examples of programs that require polymorphic recursion. Each program is not typable in the traditional HindleyMilner system (HM). Some of the examples require ∧-types and others require ∀-types. Still others are not typable even with a combination of the two. We have seen that an intersection type system (S) can type many of our examples including Mycroft’s example. To the best of our knowledge System S is the ﬁrst type system that has been able to achieve this. Therefore, although a ﬁnite width intersection type system is not able to type all possible polymorphic recursive programs, it can type a signiﬁcant subset with the possibility of decidable type inference.
+27
+
+References
+
+Hallett, Kfoury
+
+[1] M. Emms, H. Leiss. Standard ml with polymorphic recursion, 1998. http://www.cis.uni-muenchen.de/projects/polyrec.html.
+[2] C. Haack, J. B. Wells. Type error slicing in implicitly typed, higher-order languages. In Programming Languages & Systems, 12th European Symp. Programming, vol. 2618 of LNCS. Springer-Verlag, 2003. Superseded by [3].
+[3] C. Haack, J. B. Wells. Type error slicing in implicitly typed, higher-order languages. Sci. Comput. Programming, 50, 2004. Supersedes [2].
+[4] F. Henglein. Type inference with polymorphic recursion. ACM Trans. on Prog. Langs. & Systs., 15(2), 1993.
+[5] T. Jim. What are principal typings and what are they good for? In Conf. Rec. POPL ’96: 23rd ACM Symp. Princ. of Prog. Langs., 1996.
+[6] S. P. Jones. Haskell mailing list - subject: Polymorphic recursion, 1993. http://www.mail-archive.com/haskell@haskell.org/msg00517.html.
+[7] S. P. Jones. Haskell mailing list - subject: Re: Polymorphic recursion, 1994. http://www.mail-archive.com/haskell@haskell.org/msg00492.html.
+[8] S. P. Jones, J. Hughes. Haskell 98: A non-strict, purely functional language. Technical report, The Haskell 98 Committee, 1999. Currently available at http://haskell.org.
+[9] S. P. Jones, M. Shields. Practical type inference for arbitrary-rank types. Under Consideration for the Journal of Functional Programming, 2004.
+[10] A. J. Kfoury, J. Tiuryn, P. Urzyczyn. Type reconstruction in the presence of polymorphic recursion. ACM Trans. on Prog. Langs. & Systs., 15(2), 1993.
+[11] A. J. Kfoury, J. Tiuryn, P. Urzyczyn. The undecidability of the semi-uniﬁcation problem. Inform. & Comput., 102(1), 1993.
+[12] A. J. Kfoury, J. B. Wells. Principality and decidable type inference for ﬁniterank intersection types. In Conf. Rec. POPL ’99: 26th ACM Symp. Princ. of Prog. Langs., 1999. Superseded by [14].
+[13] A. J. Kfoury, J. B. Wells. Principality and type inference for intersection types using expansion variables. Supersedes [12], 2003.
+[14] A. J. Kfoury, J. B. Wells. Principality and type inference for intersection types using expansion variables. Theoret. Comput. Sci., 311(1–3), 2004. Supersedes [12]. For omitted proofs, see the longer report [13].
+[15] A. Mycroft. Polymorphic type schemes and recursive deﬁnitions. In Proceedings, 6th International Conference on Programming. Springer-Verlag, 1984.
+28
+
+Hallett, Kfoury
+
+[16] C. Okasaki. Purely Functional Data Structures. Cambridge University Press, 1998.
+
+[17] Z. Somogyi.
+
+Comparing mercury and haskell, 2003.
+
+http://www.cs.mu.oz.au/research/mercury/information/comparison with haskell.html.
+
+A Mycroft Typing Derivation in System S
+Suppose we have the following types:
+τint = int → int τbool = bool → bool τint list = int list → int list τbool list = bool list → bool list
+τ× = int list × bool list τ∧ = (τint → τint list) ∧ (τbool → τbool list).
+Also suppose we have the following context:
+Γ = myMap : τ∧, sqList : τint list, compList : τbool list.
+Finally, suppose we have the following terms:
+M = fn f => fn l => if(null l) then l else cons (f (hd l)) (myMap f (tl l)) S = fn l => myMap (fn x => x ∗ x) l C = fn l => myMap not l E = (sqList (cons 2 (cons 4 nil)), compList (cons true (cons false nil))).
+
+Then we have the following typing derivation: 98. τbool → τbool list ≤ τbool → τbool list 97. τ∧ ≤ τbool → τbool list 96. Γ, f : τbool, l : bool list myMap : τ∧ 95. Γ, f : τbool, l : bool list l : bool list 94. Γ, f : τbool, l : bool list hd : bool list → bool 93. τint → τint list ≤ τint → τint list 92. τ∧ ≤ τint → τint list 91. Γ, f : τint, l : int list myMap : τ∧
+
+(S-Reﬂ) (S-∧) from 98 (∧-Var) (∧-Var) (∧-Const) (S-Reﬂ) (S-∧) from 93 (∧-Var)
+
+29
+
+Hallett, Kfoury
+
+90. Γ, f : τint, l : int list 89. Γ, f : τint, l : int list 88. Γ, f : τbool, l : bool list 87. Γ, f : τbool, l : bool list 86. Γ, f : τbool, l : bool list 85. Γ, f : τbool, l : bool list 84. Γ, f : τbool, l : bool list 83. Γ, f : τbool, l : bool list 82. Γ, f : τint, l : int list 81. Γ, f : τint, l : int list 80. Γ, f : τint, l : int list 79. Γ, f : τint, l : int list 78. Γ, f : τint, l : int list 77. Γ, f : τint, l : int list 76. Γ, f : τbool, l : bool list 75. Γ, f : τbool, l : bool list 74. Γ, f : τbool, l : bool list 73. Γ, f : τbool, l : bool list 72. Γ, f : τint, l : int list 71. Γ, f : τint, l : int list 70. Γ, f : τint, l : int list 69. Γ, f : τint, l : int list 68. Γ, l : int list, x : int 67. Γ, l : int list, x : int 66. Γ, f : τbool, l : bool list 65. Γ, f : τbool, l : bool list 64. Γ, f : τbool, l : bool list
+
+l : int list
+
+(∧-Var)
+
+hd : int list → int
+
+(∧-Const)
+
+l : bool list
+
+(∧-Var)
+
+tl : τbool list f : τbool myMap : τbool → τbool list
+
+(∧-Const) (∧-Var) (Sub) from 96, 97
+
+hd l : bool
+
+(App) from 94, 95
+
+f : τbool l : int list
+
+(∧-Var) (∧-Var)
+
+tl : τint list f : τint myMap : τint → τint list
+
+(∧-Const) (∧-Var) (Sub) from 91, 92
+
+hd l : int
+
+(App) from 89, 90
+
+f : τint
+
+(∧-Var)
+
+tl l : bool list
+
+(App) from 87, 88
+
+myMap f : τbool list
+
+(App) from 85, 86
+
+f (hd l) : bool
+
+(App) from 83, 84
+
+cons : bool → τbool list (∧-Const)
+
+tl l : int list
+
+(App) from 81, 82
+
+myMap f : τint list
+
+(App) from 79, 80
+
+f (hd l) : int
+
+(App) from 77, 78
+
+cons : int → τint list x : int
+
+(∧-Const) (∧-Var)
+
+∗ : int → τint
+
+(∧-Const)
+
+myMap f (tl l) : bool list (App) from 75, 76
+
+cons (f (hd l)) : τbool list (App) from 73, 74
+
+l : bool list
+
+(∧-Var)
+
+30
+
+Hallett, Kfoury
+
+63. Γ, f : τbool, l : bool list 62. Γ, f : τint, l : int list 61. Γ, f : τint, l : int list 60. Γ, f : τint, l : int list 59. Γ, f : τint, l : int list 58. Γ, l : int list, x : int 57. Γ, l : int list, x : int 56. Γ 55. Γ
+54. Γ 53. Γ
+52. Γ, f : τbool, l : bool list
+51. Γ, f : τbool, l : bool list 50. Γ, f : τbool, l : bool list 49. Γ, f : τint, l : int list
+48. Γ, f : τint, l : int list 47. Γ, f : τint, l : int list 46. Γ, l : int list, x : int 45.
+44. 43. Γ, l : int list 42.
+
+null : bool list → bool
+
+(∧-Const)
+
+myMap f (tl l) : int list
+
+(App) from 71, 72
+
+cons (f (hd l)) : τint list l : int list
+
+(App) from 69, 70 (∧-Var)
+
+null : int list → bool
+
+(∧-Const)
+
+x : int
+
+(∧-Var)
+
+∗x : τint 4 : int
+
+(App) from 67, 68 (∧-Const)
+
+cons :
+
+(∧-Const)
+
+int → int list → int list
+
+false : bool
+
+(∧-Const)
+
+cons :
+
+(∧-Const)
+
+bool → bool list → bool list
+
+cons (f (hd l))
+
+(myMap f (tl l)) : bool list (App) from 65, 66
+
+l : bool list
+
+(∧-Var)
+
+(null l) : bool
+
+(App) from 63, 64
+
+cons (f (hd l))
+
+(App) from 61, 62
+
+(myMap f (tl l)) : int list
+
+l : int list
+
+(∧-Var)
+
+(null l) : bool
+
+(App) from 59, 60
+
+x ∗ x : int
+
+(App) from 57, 58
+
+τint → τint list ≤ τint → τint list τ∧ ≤ τint → τint list myMap : τ∧ τbool → τbool list ≤
+
+(S-Reﬂ)
+(S-∧) from 45 (∧-Var) (S-Reﬂ)
+
+31
+
+Hallett, Kfoury
+
+41. 40. Γ, l : bool list 39. Γ 38. Γ
+37. Γ 36. Γ
+35. Γ 34. Γ
+33. Γ 32. Γ
+31. Γ, f : τbool, l : bool list
+30. Γ, f : τint, l : int list
+29. Γ, l : int list 28. Γ, l : int list 27. Γ, l : bool list 26. Γ, l : bool list 25. Γ 24. Γ
+
+τbool → τbool list τ∧ ≤ τbool → τbool list myMap : τ∧ nil : int list
+
+(S-∧) from 42 (∧-Var) (∧-Const)
+
+cons 4 :
+
+(App) from 55, 56
+
+int list → int list
+
+2 : int
+
+(∧-Const)
+
+cons :
+
+(∧-Const)
+
+int → int list → int list
+
+nil : bool list
+
+(∧-Const)
+
+cons false :
+
+(App) from 53, 54
+
+bool list → bool list
+
+true : bool
+
+(∧-Const)
+
+cons :
+
+(∧-Const)
+
+bool → bool list → bool list
+
+if(null l) then l
+
+(If) from 50, 51, 52
+
+else cons (f (hd l))
+
+(myMap f (tl l)) : bool list
+
+if(null l) then l
+
+(If) from 47, 48, 49
+
+else cons (f (hd l))
+
+(myMap f (tl l)) : int list
+
+fn x => x ∗ x : τint myMap : τint → τint list not : τbool myMap : τbool → τbool list
+
+(Abs) from 46 (Sub) from 43, 44 (∧-Const) (Sub) from 40, 41
+
+cons 4 nil : int list
+
+(App) from 38, 39
+
+cons 2 : int list → int list (App) from 36, 37
+
+32
+
+Hallett, Kfoury
+
+23. Γ 22. Γ 21. Γ, f : τbool
+20. Γ, f : τint
+19. Γ, l : int list 18. Γ, l : int list 17. Γ, l : bool list 16. Γ, l : bool list 15. Γ 14. Γ 13. Γ 12. Γ 11. Γ
+10. Γ
+9. Γ, l : int list
+
+cons false nil : bool list
+
+(App) from 34, 35
+
+cons true :
+
+(App) from 32, 33
+
+bool list → bool list
+
+fn l => if(null l) then l
+
+(Abs) from 31
+
+else cons (f (hd l))
+
+(myMap f (tl l)) : τbool list fn l => if(null l) then l
+
+(Abs) from 30
+
+else cons (f (hd l))
+
+(myMap f (tl l)) : τint list l : int list
+
+(∧-Var)
+
+myMap (fn x => x ∗ x) : τint list l : bool list
+
+(App) from 28, 29 (∧-Var)
+
+myMap not : τbool list cons 2 (cons 4 nil) : int list
+
+(App) from 26, 27 (App) from 24, 25
+
+sqList : τint list cons true (cons false nil) :
+
+(∧-Var) (App) from 22, 23
+
+bool list
+
+compList : τbool list fn f => fn l =>
+
+(∧-Var) (Abs) from 21
+
+if(null l) then l
+
+else cons (f (hd l))
+
+(myMap f (tl l)) : τbool → τbool list
+
+fn f => fn l =>
+
+(Abs) from 20
+
+if(null l) then l
+
+else cons (f (hd l))
+
+(myMap f (tl l)) : τint → τint list myMap (fn x => x ∗ x) l : int list (App) from 18, 19
+
+33
+
+Hallett, Kfoury
+
+8. Γ, l : bool list 7. Γ
+6. Γ
+5. Γ 4. Γ 3. Γ 2. Γ 1.
+
+myMap not l : bool list
+
+(App) from 16, 17
+
+sqList
+
+(App) from 14, 15
+
+(cons 2 (cons 4 nil)) : int list
+
+compList
+
+(App) from 12, 13
+
+(cons true (cons false nil)) :
+
+bool list
+
+M : τ∧
+
+(∧) from 10, 11
+
+S : τint list
+
+(Abs) from 9
+
+C : τbool list
+
+(Abs) from 8
+
+E : τ× let val rec myMap = M
+
+(Pair) from 6, 7 (∧-Rec) from 2, 3, 4, 5
+
+and sqList = S
+
+and compList = C in E end : τ×
+
+B Proof of Soundness of a Subsystem of S
+
+In this section our goal is to show the soundness of a subsystem of S. We choose to eliminate the pair and conditional rules of S for the simplicity of the proof. We do not anticipate any diﬃculties in the proof of soundness if these additional rules were included. To achieve soundness we ﬁrst deﬁne the operational semantics of our system. After this we prove the Inversion and Substitution Lemmas which allow us to show Subject Reduction holds.
+Before we deﬁne the operational semantics of our system let us deﬁne the expressions and values of our system.
+
+M, N ∈ Expressions ::= x | c | fn x => M | M N | let val x = M in N end |
+
+V ∈ Values
+
+let val rec x1 = M1 and . . . and xn = Mn in N end ::= x | fn x => M
+
+Now we review the static semantics of our system.
+
+34
+
+Hallett, Kfoury
+
+Subsystem of System S Typing Rules:
+
+type(c) = τ
+
+∆(x) = τ
+
+∆ c : τ (∧-Const) (τ closed) ∆ x : τ (∧-Var)
+
+∆, x : τ M : τ ∆ fn x => M : τ → τ (Abs)
+
+∆ M : τ → τ ∆ N : τ (App) ∆ MN : τ
+
+∆ ∆
+
+M : τ ∆, x : τ let x = M in N
+
+N :τ end : τ
+
+(∧-Let)
+
+∆, x1 : τ1, . . . , xn : τn N : τ ∆, x1 : τ1, . . . , xn : τn Mp : τp (∧-Rec)
+∆ let val rec x1 = M1 and . . . and xn = Mn in N end : τ
+
+(1 ≤ p ≤ n)
+
+∆ ∆
+
+M : τi i ∈ I M : ∧i∈I τi
+
+(∧)
+
+(size(I) ≥ 2), (size(I) is ﬁnite)
+
+∆ M : τ τ ≤ τ (Sub) ∆ M :τ
+
+τ ≤ τ (S-Reﬂ)
+
+τ1
+
+≤ τ2 τ2 ≤ τ3 τ1 ≤ τ3
+
+(S-Trans)
+
+τ1 ≤ τ1 τ2 ≤ τ2 τ1 → τ2 ≤ τ1 → τ2
+
+(S-Fun)
+
+τi ≤ τi ∧i∈J
+
+i∈I I τi ≤ ∧i∈I
+
+⊆J τi
+
+(S-∧)
+
+Below are the dynamic semantics our subsystem.
+
+35
+
+Hallett, Kfoury
+
+Subsystem of System S Operational Semantics:
+
+M MN
+
+⇒M ⇒M
+
+N
+
+(E-App1)
+
+N ⇒N V N ⇒V N
+
+(E-App2)
+
+(fn x => M ) V ⇒ M [x := V ] (E-AppAbs)
+
+M ⇒M let val x = M in N end ⇒ let val x = M
+
+in N end
+
+(E-Let1)
+
+let val x = V in N end ⇒ N [x := V ] (E-Let2)
+
+Mp[x1 := M1] . . . [xn := Mn] ⇒ Mp
+
+(E-Rec1)
+
+let val rec x1 = V1 and . . . and xp = Mp and . . . and xn = Mn in N end ⇒
+let val rec x1 = V1 and . . . and xp = Mp and . . . and xn = Mn in N end
+
+(1 ≤ p ≤ n)
+
+(E-Rec2) let val rec x1 = V1 and . . . and xn = Vn in N end ⇒ N [x1 := V1 ] . . . [xn := Vn]
+
+Lemma B.1 (Inversion of the Subtype Relation) If τ1 → τ2 ≤ τ1 → τ2, then τ1 ≤ τ1 and τ2 ≤ τ2.
+
+Proof. There are three possible subtyping rules which may have been the
+
+last rule applied in the subtyping derivation of the judgement τ1 → τ2 ≤ τ1 → τ2. If the rule (S-Fun) was last applied then the result is obvious. If the rule (S-Reﬂ) rule was last applied then the result can be obtained by
+
+straightforward induction on the premise of the rule. If the rule (S-Trans) was
+
+last applied then again we proceed by induction on the premises of the rule,
+
+but we must also apply the (S-Trans) rule to these results.
+
+2
+
+36
+
+Hallett, Kfoury
+
+Lemma B.2 (Inversion) If ∆ fn x => M : τ1 → τ2, then ∆, x : τ1 M : τ2 and τ1 ≤ τ1.
+
+Proof. By inspection of the inference rules we observe that the last rule applied in the typing derivation of the judgement ∆ fn x => M : τ1 → τ2 can only be one of two possibilities. We proceed by case analysis.
+
+case: D = ∆
+
+∆, x : τ1 M : τ2 fn x => M : τ1 →
+
+τ2
+
+(Abs)
+
+Then we have ∆, x : τ1 M : τ2 where τ1 = τ1 and τ1 ≤ τ1 by (S-Reﬂ).
+
+∆ case: D =
+
+fn x => M : τ1 → τ2 ∆ fn x => M
+
+τ1 → τ2 ≤ : τ1 → τ2
+
+τ1
+
+→ τ2
+
+(Sub)
+
+τ1 ≤ τ1 and τ2 ≤ τ2
+
+Subtype Inversion Lemma on
+
+τ1 → τ2 ≤ τ1 → τ2
+
+∆, x : τ1 M : τ2 and τ1 ≤ τ1
+
+I.H. on ∆ fn x => M : τ1 → τ2
+
+τ1 ≤ τ1
+
+(S-Trans) applied to τ1 ≤ τ1 and
+
+τ1 ≤ τ1
+
+∆, x : τ1 M : τ2
+
+(Sub) applied to ∆, x : τ1 M : τ2
+
+and τ2 ≤ τ2
+
+2
+
+Lemma B.3 (Weakening) If ∆ M : τ , then ∆, ∆ M : τ , provided that ∆, ∆ is a valid context.
+
+Proof. The proof proceeds by straightforward induction on the structure of
+
+the derivation D :: ∆ M : τ . The only case in which the context is examined
+
+is when the rule (Var) is the last rule applied in the derivation. It should be
+
+clear that (Var) is only applicable if the context ∆ contains the assignment x :
+
+τ . And by extending the context with additional, non-conﬂicting assignments
+
+we do not alter this property.
+
+2
+
+Lemma B.4 (Substitution) If ∆ N : τ and ∆, x : τ, ∆ M : τ , then ∆, ∆ M [x := N ] : τ .
+
+Proof. By structural induction on the derivation D :: ∆, x : τ, ∆ We show only a few cases, as the rest follow the same pattern.
+
+∆, x : τ, ∆ (y) = τ (∧-Var) case: D = ∆, x : τ, ∆ y : τ Depending on whether x = y we have two subcases.
+
+subcase: x = y and τ = τ
+
+37
+
+M :τ.
+
+Hallett, Kfoury
+
+x[x := N ] = N ∆, ∆ N : τ
+
+Deﬁnition of Substitution Weakening Lemma on assumption ∆ N : τ
+
+subcase: x = y y[x := N ] = y ∆, ∆ y : τ
+
+Deﬁnition of Substitution Assumptions ∆, x : τ, ∆ y : τ and x = y
+
+∆, x : τ, ∆ M1 : τ1 → τ ∆, x : τ, ∆ M2 : τ1 (App)
+
+case: D =
+
+∆, x : τ, ∆ M1M2 : τ
+
+Depending on whether x ∈ FV(M1) we have two subcases.
+
+subcase: x ∈ FV(M1) Depending on whether x ∈ FV(M2) we have two subsubcases.
+
+subsubcase: x ∈ FV(M2) ∆, ∆ M1[x := N ] : τ1 → τ
+∆, ∆ M2[x := N ] : τ1 ∆, ∆ M1[x := N ]M2[x := N ] : τ
+∆, ∆ (M1M2)[x := N ] : τ
+
+I.H. on ∆, x : τ, ∆ M1 : τ1 → τ I.H. on ∆, x : τ, ∆ M2 : τ1 (App) applied to ∆, ∆ M1[x := N ] : τ1 → τ and ∆, ∆ M2[x := N ] : τ1 Deﬁnition of Substitution
+
+subsubcase: x ∈ FV(M2) and ∆, ∆ ∆, ∆ M1[x := N ] : τ1 → τ ∆, ∆ (M1[x := N ])M2 : τ
+∆, ∆ (M1M2)[x := N ] : τ
+
+M2 : τ1 I.H. on ∆, x : τ, ∆ M1 : τ1 → τ (App) applied to ∆, ∆ M1[x := N ] : τ1 → τ and ∆, ∆ M2 : τ1 Deﬁnition of Substitution
+
+subcase: x ∈ FV(M1) and ∆, ∆ M1 : τ1 → τ Depending on whether x ∈ FV(M2) we have two subsubcases.
+
+subsubcase: x ∈ FV(M2)
+
+38
+
+Hallett, Kfoury
+
+∆, ∆ M2[x := N ] : τ1 ∆, ∆ M1(M2[x := N ]) : τ
+∆, ∆ (M1M2)[x := N ] : τ
+
+I.H. on ∆, x : τ, ∆ M2 : τ1 (App) applied to ∆, ∆ M1 : τ1 → τ and ∆, ∆ M2[x := N ] : τ1 Deﬁnition of Substitution
+
+subsubcase: x ∈ FV(M2) and ∆, ∆ M2 : τ1
+
+(M1M2)[x := N ] = M1M2 Deﬁnition of Substitution
+
+∆, ∆ M1M2 : τ
+
+Assumptions ∆, x : τ, ∆ M1M2 : τ , x ∈ FV(M1),
+
+and x ∈ FV(M2)
+
+The remaining cases are similar.
+
+2
+
+Theorem B.5 (Subject Reduction) If ∆ M : τ and M ⇒ M , then ∆ M : τ.
+
+Proof. By structural induction on the derivation of D :: ∆ M : τ .
+
+case:
+
+type(c) = τ D= ∆ c:τ
+
+(∧-Const)
+
+Can’t happen because there are no evaluation rules for constants.
+
+case:
+
+D
+
+=
+
+∆(x) = τ ∆ x:τ
+
+(∧-Var)
+
+Can’t happen because there are no evaluation rules for variables.
+
+∆, x : τ M : τ case: D = ∆ fn x => M : τ → τ (Abs) Can’t happen because there are no evaluation rules for abstractions.
+
+∆ M : τ → τ ∆ N : τ (App)
+
+case: D =
+
+∆ MN : τ
+
+From the operational semantics there are three ways we can derive M ⇒ M .
+
+We proceed by cases.
+
+subcase: M ⇒ M MN ⇒M N
+∆ M :τ →τ
+
+(E-App1) I.H. on ∆ M : τ → τ and M ⇒ M
+
+∆ MN :τ
+
+(App) applied to ∆
+
+subcase: M is a value and N ⇒ N
+
+39
+
+M : τ → τ and ∆
+
+N :τ
+
+Hallett, Kfoury
+
+MN ⇒MN ∆ N :τ ∆ MN : τ
+
+(E-App2) I.H. on ∆ N : τ and N ⇒ N (App) applied to ∆ M : τ → τ and ∆ N : τ
+
+subcase: M = fn x => M and N is a value
+
+(fn x => M ) N ⇒ M [x := N ]
+
+(E-AppAbs)
+
+∆, x : τ M : τ , where τ ≤ τ
+
+Inversion Lemma on
+
+∆ fn x => M : τ → τ
+
+∆ N :τ
+
+(Sub) applied to ∆ N : τ
+
+and τ ≤ τ
+
+∆ M [x := N ] : τ
+
+Substitution Lemma on
+
+∆, x : τ M : τ and ∆ N : τ
+
+∆ case: D = ∆
+
+M : τ ∆, x : τ let x = M in N
+
+N :τ end : τ
+
+(∧-Let)
+
+From the operational semantics there are two ways we can derive M ⇒ M .
+
+We proceed by cases.
+
+subcase: M ⇒ M let val x = M in N end ⇒
+
+let val x = M in N end ∆ M :τ ∆ let val x = M in N end : τ
+
+(E-Let1) I.H. on ∆ M : τ and M ⇒ M (∧-Let) applied to ∆ M : τ and
+
+∆, x : τ N : τ
+
+subcase: M is a value let val x = M in N end ⇒ N [x := M ]
+∆ N [x := M ] : τ
+
+(E-Let2) Substitution Lemma on ∆, x : τ N : τ and ∆ M :τ
+
+case:
+
+D
+
+∆, x1 : τ1, . . . , xn : τn N : τ = ∆ let val rec x1 = M1 and
+
+∆, x1 : τ1, . . . , xn : τn . . . and xn = Mn in N
+
+Mp : τp end : τ
+
+(∧-Rec)
+
+From the operational semantics there are two ways we can derive M ⇒ M .
+
+We proceed by cases.
+
+subcase: Mp ⇒ Mp, where 1 ≤ p ≤ n
+
+40
+
+Hallett, Kfoury
+
+let val rec x1 = M1 and . . . and xp = Mp and . . . and xn = Mn in N end ⇒ let val rec x1 = M1 and . . . and xp = Mp and . . . and xn = Mn in N end ∆, x1 : τ1, . . . , xn : τn Mp : τp
+∆ let val rec x1 = M1 and . . .
+and xp = Mp and . . . and xn = Mn in N end : τ
+
+(E-Rec1)
+
+I.H. on
+
+∆, x1 : τ1, . . . , xn : τn and Mp ⇒ Mp (∧-Rec) applied to
+
+Mp : τp
+
+∆, x1 : τ1, . . . , xn : τn Mp : τp and ∆, x1 : τ1, . . . , xn : τn N : τ
+
+subcase: M1 . . . Mn are all values. let val rec x1 = M1 and . . . and xn = Mn in N end ⇒ N [x := M1] . . . [x := Mn] ∆ N [x := M1] . . . [x := Mn] : τ
+
+(E-Rec2)
+By n applications of the Substitution Lemma
+
+∆ case: D = ∆
+
+M : τi i ∈ I M : ∧i∈I τi
+
+(∧)
+
+∆ M : τi i ∈ I
+
+I.H. on ∆
+
+M : τi
+
+i ∈ I and M ⇒ M
+
+∆ M : ∧i∈I τi
+
+(∧) applied to ∆ M : τi i ∈ I
+
+∆ M : τ τ ≤ τ (Sub) case: D = ∆ M : τ
+
+∆ M :τ
+
+I.H. on ∆ M : τ and M ⇒ M
+
+∆ M :τ
+
+(Sub) applied to ∆ M : τ and τ ≤ τ
+
+2
+
+41
+
+

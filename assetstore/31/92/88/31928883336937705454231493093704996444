@@ -1,0 +1,705 @@
+Fully Homomorphic Encryption Using Ideal Lattices
+Craig Gentry
+Stanford University and IBM Watson
+cgentry@cs.stanford.edu
+
+ABSTRACT
+We propose a fully homomorphic encryption scheme – i.e., a scheme that allows one to evaluate circuits over encrypted data without being able to decrypt. Our solution comes in three steps. First, we provide a general result – that, to construct an encryption scheme that permits evaluation of arbitrary circuits, it suﬃces to construct an encryption scheme that can evaluate (slightly augmented versions of) its own decryption circuit; we call a scheme that can evaluate its (augmented) decryption circuit bootstrappable.
+Next, we describe a public key encryption scheme using ideal lattices that is almost bootstrappable. Lattice-based cryptosystems typically have decryption algorithms with low circuit complexity, often dominated by an inner product computation that is in NC1. Also, ideal lattices provide both additive and multiplicative homomorphisms (modulo a public-key ideal in a polynomial ring that is represented as a lattice), as needed to evaluate general circuits.
+Unfortunately, our initial scheme is not quite bootstrappable – i.e., the depth that the scheme can correctly evaluate can be logarithmic in the lattice dimension, just like the depth of the decryption circuit, but the latter is greater than the former. In the ﬁnal step, we show how to modify the scheme to reduce the depth of the decryption circuit, and thereby obtain a bootstrappable encryption scheme, without reducing the depth that the scheme can evaluate. Abstractly, we accomplish this by enabling the encrypter to start the decryption process, leaving less work for the decrypter, much like the server leaves less work for the decrypter in a server-aided cryptosystem.
+Categories and Subject Descriptors: E.3 [Data Encryption]: Public key cryptosystems
+General Terms: Algorithms, Design, Security, Theory
+1. INTRODUCTION
+We propose a solution to the old open problem of constructing a fully homomorphic encryption scheme. This notion, originally called a privacy homomorphism, was intro-
+Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for proﬁt or commercial advantage and that copies bear this notice and the full citation on the ﬁrst page. To copy otherwise, to republish, to post on servers or to redistribute to lists, requires prior speciﬁc permission and/or a fee. STOC’09, May 31–June 2, 2009, Bethesda, Maryland, USA. Copyright 2009 ACM 978-1-60558-506-2/09/05 ...$5.00.
+
+duced by Rivest, Adleman and Dertouzos [54] shortly after the invention of RSA by Rivest, Adleman and Shamir [55]. Basic RSA is a multiplicatively homomorphic encryption scheme – i.e., given RSA public key pk = (N, e) and ciphertexts {ψi ← πie mod N }, one can eﬃciently compute
+i ψi = ( i πi)e mod N , a ciphertext that encrypts the product of the original plaintexts. Rivest et al. [54] asked a natural question: What can one do with an encryption scheme that is fully homomorphic: a scheme E with an eﬃcient algorithm EvaluateE that, for any valid public key pk, any circuit C (not just a circuit consisting of multiplication gates), and any ciphertexts ψi ← EncryptE (pk, πi), outputs
+ψ ← EvaluateE (pk, C, ψ1, . . . , ψt) ,
+a valid encryption of C(π1, . . . , πt) under pk? Their answer: one can arbitrarily compute on encrypted data – i.e., one can process encrypted data (query it, write into it, do anything to it that can be eﬃciently expressed as a circuit) without the decryption key. As an application, they suggested private data banks: a user can store its data on an untrusted server in encrypted form, yet still allow the server to process, and respond to, the user’s data queries (with responses more concise than the trivial solution: the server just sends all of the encrypted data back to the user to process). Since then, cryptographers have accumulated a list of “killer” applications for fully homomorphic encryption. However, prior to this proposal, we did not have a viable construction.
+1.1 Homomorphic Encryption
+A homomorphic public key encryption scheme E has four algorithms KeyGenE , EncryptE , DecryptE , and an additional algorithm EvaluateE that takes as input the public key pk, a circuit C from a permitted set CE of circuits, and a tuple of ciphertexts Ψ = ψ1, . . . , ψt ; it outputs a ciphertext ψ. The computational complexity of all of these algorithms must be polynomial in security parameter λ and (in the case of EvaluateE ) the size of C. E is correct for circuits in CE if, for any key-pair (sk, pk) output by KeyGenE (λ), any circuit C ∈ CE , any plaintexts π1, . . . , πt, and any ciphertexts Ψ = ψ1, . . . , ψt with ψi ← EncryptE (pk, πi), it is the case that:
+ψ ← EvaluateE (pk, C, Ψ) ⇒ C(π1, . . . , πt) = DecryptE (sk, ψ)
+By itself, mere correctness does not exclude trivial schemes.1 So, we require ciphertext size and decryption time to be up-
+1In particular, we could deﬁne EvaluateE (pk, C, Ψ) to just output (C, Ψ) without “processing” the circuit or ciphertexts at all, and DecryptE to decrypt the component ciphertexts and apply C to results.
+
+169
+
+per bounded by a function of the security parameter λ, independently of C (or perhaps, as a relaxation, dependent on the depth of C, but not the size).
+Definition 1 (Homomorphic Encryption). E is homomorphic for circuits in CE if E is correct for CE and DecryptE can be expressed as a circuit DE of size poly(λ).
+Definition 2 (Fully Homomorphic Encryption). E is fully homomorphic if it is homomorphic for all circuits.
+Definition 3 (Leveled Fully Hom. Encryption). A family of schemes {E (d) : d ∈ Z+} is leveled fully homomorphic if they all use the same decryption circuit, E (d) is homomorphic for all circuits of depth at most d (that use some speciﬁed set of gates Γ), and the computational complexity of E (d)’s algorithms is polynomial in λ, d, and (in the case of EvaluateE(d) ) the size of C.
+Remark 1. One may desire – e.g., for the two-party computation setting – the additional property that EncryptE and EvaluateE have the same output distribution, or that there is at least some post-hoc randomization procedure that induces the same output distribution. We discuss such circuit privacy in Section 7.
+Here, we focus on constructing a scheme that is semantically secure against chosen plaintext attacks (or just “semantically secure”). Unfortunately a scheme that has nontrivial homomorphisms cannot be semantically secure against adaptive chosen ciphertext attacks (CCA2), since it is malleable. There are relaxed notions of CCA2 security [3, 16, 52], but they do not apply to a fully homomorphic scheme. However, constructing a CCA1-secure fully homomorphic encryption scheme is an interesting open problem.
+1.2 Our Results
+We construct a fully homomorphic encryption scheme using ideal lattices. The result can roughly be broken down into three steps: a general “bootstrapping” result, an “initial construction” using ideal lattices, and a technique to “squash the decryption circuit” to permit bootstrapping.
+Our research began with the second step: a PKE scheme E1 described in Section 3 that uses ideal lattices and is homomorphic for shallow circuits. A ciphertext ψ has the form v + x where v is in the ideal lattice and x is an “error” or “oﬀset” vector that encodes the plaintext π. Interpreting ciphertext vectors as coeﬃcient vectors of elements in a polynomial ring Z[x]/f (x), we add and multiply ciphertexts using ring operations – ψ ← ψ1 + ψ2 or ψ ← ψ1 × ψ2 – and induce addition and multiplication of the underlying plaintexts. By itself, this scheme improves upon prior work. It compares favorably to Boneh-Goh-Nissim [11]; it is homomorphic for circuits with greater multiplicative depth while allowing essentially unlimited additions. The security of E1 is based on a natural decisional version of the closest vector problem for ideal lattices for ideals in a ﬁxed ring.
+E1 is homomorphic only for shallow circuits because the “error” vector grows with addition and (especially) multiplication operations; eventually, it becomes so long that it causes a decryption error. It is natural to ask: can we “refresh” a ciphertext whose error vector is almost too long to obtain a new ciphertext whose error vector is shorter? Obviously, we could refresh a ciphertext if we could completely
+
+decrypt it! This is the idea behind bootstrapping: we do decrypt the ciphertext, but homomorphically!
+Speciﬁcally, suppose E is bootstrappable with plaintext space P is {0, 1}, and that circuits are boolean. Suppose we have a ciphertext ψ1 that encrypts π under pk1, which we want to refresh. So that we can decrypt it homomorphically, suppose we also have sk1, the secret key for pk1, encrypted under a second public key pk2: let sk1j be the encrypted secret key bits. Consider the following algorithm.
+RecryptE (pk2, DE , sk1j , ψ1).
+Set ψ1j ←R EncryptE (pk2, ψ1j ) Output ψ2 ← EvaluateE (pk2, DE , sk1j , ψ1j )
+Above, Evaluate takes in the bits of sk1 and ψ1, each encrypted under pk2. Then, E is used to evaluate the decryption circuit homomorphically. The output ψ2 is thus an encryption under pk2 of DecryptE (sk1, ψ1) = π.2 Applying the decryption circuit DE removes the error vector associated to the ﬁrst ciphertext, but EvaluateE simultaneously introduces a new error vector. Intuitively, we have made progress as long as the second error vector is shorter.
+Suppose CE contains not just DE but also the augmentation of DE by NAND (i.e., a NAND gate connecting two copies of DE ). Then, we say E is bootstrappable.
+Theorem 1 (Informal). One can construct a (semantically secure) family {E (d)} of leveled fully homomorphic encryption schemes from any (semantically secure) bootstrappable encryption scheme E .
+E (d)’s public key contains d + 1 E public keys, basically one for each level of the circuit, and an acyclic chain of encrypted secret keys. It evaluates a d-depth NAND-circuit as follows: given ciphertexts encrypted under pki associated to wires at the ith level of the circuit, it Recrypts them so that they become encrypted under pki−1, applies the NAND gates at that level, and recurses for i − 1. If E securely encrypts key-dependent messages (is KDM-secure) [9, 24, 12] – i.e., roughly, if providing a ciphertext that encrypts a function of the secret key does not hurt security – then the E public keys need not be distinct; we can have a “loop,” even a “selfloop,” of encrypted secret keys, and the derived scheme is fully homomorphic. See Section 2 for formal details.
+In Section 4, we describe a scheme E2 that “tweaks” E1, analyze the complexity of its decryption circuit, and explain why we are unable to prove that it is bootstrappable. In Section 5, we describe a transformation of E2, labeled E3, where the E3 public key contains a set of vectors with a secret sparse subset whose sum is related to E2 secret key. This allows us to re-express decryption as a sparse subset vector sum rather than a full matrix-vector product, which requires a circuit of lower depth, permitting bootstrapping. It also entails an additional assumption: roughly, that it is hard to distinguish a set that has a sparse subset with a known sum from a set that is uniform. Similar assumptions have been analyzed in connection with server-aided decryption.
+Theorem 2 (Informal). E3 is bootstrappable and is semantically secure (under two assumptions).
+2Recrypt implies a one-way proxy re-encryption scheme [10].
+
+170
+
+1.3 Other Related Work
+Homomorphic encryption schemes that are not semantically secure, like basic RSA, may also have stronger attacks on their one-wayness. Boneh and Lipton [13] proved that any algebraic privacy homomorphism over a ring Zn can be broken in sub-exponential time under a (reasonable) number theoretic assumption, if the scheme is deterministic or otherwise oﬀers an equality oracle. See also [35] and [18].
+Goldwasser and Micali [23] proposed the ﬁrst semantically secure homomorphic encryption scheme (and also introduced the notion of semantic security). Their scheme is “additively homomorphic” over Z2; in our terminology, its set CE of permitted circuits contains circuits with XOR gates. Other additively homomorphic encryption schemes with proofs of semantic security are Benaloh [8], NaccacheStern [42], Okamoto-Uchiyama [46], Paillier [47], and DamgardJurik [19]. Some additively homomorphic encryption schemes use lattices or linear codes [22, 50, 27, 36, 37, 4]. ElGamal [20] is multiplicatively homomorphic.
+Semantically secure schemes that allow both addition and multiplication include Boneh-Goh-Nissim [11] (quadratic formulas) and “Polly Cracker” by Fellows and Koblitz [21, 29, 30, 31] (arbitrary circuits but with exponential ciphertextsize blow-up). Sanders, Young and Yung [56, 7] (SYY) use circuit-private additively homomorphic encryption to construct a circuit-private scheme that can handle NC1 circuits. Ishai and Paskin [26] do this for branching programs, which covers NC1 circuits (by Barrington [6]), and ciphertexts in their scheme are much shorter – proportional to the length of the branching program rather than its size, though the computation is proportional to the size.
+2. BOOTSTRAPPABLE ENCRYPTION
+To be bootstrappable, E needs to be able to evaluate not only its decryption circuit, which merely allows recryptions of the same plaintext, but also slightly augmented versions of it, so that we can perform nontrivial operations on plaintexts and make progress through a circuit.
+Definition 4 (Augmented Decryption Circuit). Let Γ be a set of gates with inputs and output in plaintext space P including the identity gate (input and output are the same). For gate g ∈ Γ, the g-augmented decryption circuit consists of a g-gate connecting multiple copies of DE (the number of copies equals the number of inputs to g), where DE takes a secret key and ciphertext as input formatted as elements of P (λ). We denote the set of g-augmented decryption circuits, g ∈ Γ, by DE (Γ).
+Definition 5 (Bootstrappable Encryption). Let CE be a set of circuits with respect to which E is homomorphic. We say that E is bootstrappable with respect to Γ if
+DE (Γ) ⊆ CE .
+For a family of schemes {E (d)} derived from E that we will deﬁne momentarily, we have the following theorems.
+Theorem 3. Let E be bootstrappable with respect to a set of gates Γ. Then the family {E (d)} is leveled fully homomorphic (for circuits with gates in Γ).
+Theorem 4. Let A be an algorithm that breaks the semantic security of E (d) with advantage . Then, there is an
+
+algorithm B that breaks the semantic security of E with probability at least / (d + 1), for as in Deﬁnition 4, and time poly( , d) times that of A.
+
+Note that Γ is arbitrary in Theorem 3. For example, each gate in Γ could be a circuit of (ANDs, ORs, NOTs) of depth m and fan-in 2; for this value of Γ, Theorem 3 implies the scheme correctly evaluates “normal” circuits of depth d · m.
+Now we specify the leveled fully homomorphic scheme. Let E be bootstrappable with respect to a set of gates Γ. For any integer d ≥ 1, we use E to construct a scheme E (d) = (KeyGenE(d) , EncryptE(d) , EvaluateE(d) , DecryptE(d) ) that can handle all circuits of depth d with gates in Γ. When we refer to the level of a wire in C, we mean the level of the gate for which the wire is an input. We use the notation DE (Γ, δ) to refer to the set of circuits that equal a δ-depth circuit with gates in Γ augmented by DE (copies of DE become inputs to the δ-depth circuit).
+
+KeyGenE(d) (λ, d). Takes as input a security parameter λ and a positive integer d. For = (λ) as in Deﬁnition 4, it sets
+
+(ski, pki) ←R KeyGenE (λ) skij ←R EncryptE (pki−1, skij )
+
+for i ∈ [0, d] for i ∈ [1, d], j ∈ [1, ]
+
+where ski1, . . . , ski is the representation of ski as elements of P. It outputs the secret key sk(d) ← sk0 and the public key pk(d) ← ( pki , skij ). For δ ≤ d, let E (δ) refer to the scheme using sk(δ) ← sk0 and pk(δ) ← ( pki i∈[0,δ], skij i∈[1,δ]).
+
+EncryptE(d) (pk(d), π). Takes as input a public key pk(d) and a plaintext π ∈ P. It outputs a ciphertext ψ ←R EncryptE (pkd, π).
+
+DecryptE(d) (sk(d), ψ). Takes as input a secret key sk(d) and a ciphertext ψ (which should be an encryption under pk0). It outputs DecryptE (sk0, ψ).
+
+EvaluateE(δ) (pk(δ), Cδ, Ψδ). Takes as input a public key pk(δ), a circuit Cδ of depth at most δ with gates in Γ, and a tuple of input ciphertexts Ψδ (where each input ciphertext should be under pkδ). We assume that each wire in Cδ connects gates at consecutive levels; if not, add identity gates to make it so. If δ = 0, it outputs Ψ0 and terminates. Otherwise, it does the following:
+◦ Sets (Cδ†−1, Ψ†δ−1) ← AugmentE(δ) (pk(δ), Cδ, Ψδ). ◦ Sets (Cδ−1, Ψδ−1) ← ReduceE(δ−1) (pk(δ−1), Cδ†−1, Ψ†δ−1). ◦ Runs EvaluateE(δ−1) (pk(δ−1), Cδ−1, Ψδ−1).
+
+AugmentE(δ) (pk(δ), Cδ, Ψδ). Takes as input a public key pk(δ), a circuit Cδ of depth at most δ with gates in Γ, and a
+tuple of input ciphertexts Ψδ (where each input ciphertext
+should be under pkδ). It augments Cδ with DE ; call the resulting circuit Cδ†−1. Let Ψ†δ−1 be the tuple of ciphertexts formed by replacing each input ciphertext ψ ∈ Ψδ by the tuple skδj , ψj , where ψj ← EncryptE(δ−1) (pk(δ−1), ψj ) and the ψj’s form the properly-formatted representation of ψ as elements of P. It outputs (Cδ†−1, Ψ†δ−1).
+
+ReduceE(δ) (pk(δ), Cδ†, Ψ†δ). Takes as input a public key pk(δ), a tuple of input ciphertexts Ψ†δ (where each input ciphertext should be an output of EncryptE(δ) ), and a circuit Cδ† ∈ DE (Γ, δ +1). It sets Cδ to be the sub-circuit of Cδ† consisting of the ﬁrst δ levels. It sets Ψδ to be the induced input
+
+171
+
+ciphertexts of Cδ, where the ciphertext ψδ(w) associated to wire w at level δ is set to EvaluateE (pkδ, Cδ(w), Ψ(δw)), where Cδ(w) is the sub-circuit of Cδ† with output wire w, and Ψ(δw) are the input ciphertexts for Cδ(w). It outputs (Cδ, Ψδ).
+Regarding the computational complexity of EvaluateE(d) :
+Theorem 5. For a circuit C of depth at most d and size s (deﬁned here as the number of wires), the computational complexity of applying EvaluateE(d) to C is dominated by at most s · · d applications of EncryptE and at most s · d applications of EvaluateE to circuits in DE (Γ), where is as in Deﬁnition 4.
+As mentioned above, if E is KDM-secure, we can shorten the public key to include pk and and an encryption of sk under pk, a “self-loop” rather than an acyclic chain of encrypted secret keys.3 This scheme is fully homomorphic, with security following from KDM-security, and correctness following from correctness of the above scheme.
+3. AN INITIAL CONSTRUCTION
+Our goal now is to construct an encryption scheme that is bootstrappable with respect to a universal set of gates Γ – e.g., where Γ includes NAND and the trivial gate. Here, we describe an initial attempt. In Section 4, we describe some tweaks to this construction and ﬁnd that the decryption complexity is still too large to permit bootstrappability. We ﬁnally achieve bootstrappability in Section 5.
+3.1 The Initial Construction, Abstractly
+We start by describing our initial attempt simply in terms of rings and ideals; we bring in ideal lattices later. In our initial scheme E , we use a ﬁxed ring R that is set appropriately according to a security parameter λ. We also use a ﬁxed basis BI of a ideal I ⊂ R, and an algorithm IdealGen(R, BI ) that outputs public and secret bases BpJk and BsJk of some (variable) ideal J, such that I + J = R – i.e., I and J are relatively prime. (Actually, BsJk can be a basis of a (fractional) ideal that contains J, rather than of J.) We assume that if t ∈ R and BM is a basis for ideal M ⊂ R, then the value t mod BM is unique and can be computed eﬃciently – i.e., the coset t + M has a unique, eﬃciently-computable “distinguished representative” with respect to the basis BM . We use the notation R mod BM to denote the set of distinguished representatives of r + M over r ∈ R, with respect to the particular basis BM of M . We also use an algorithm Samp(x, BI , R, BJ ) that samples from the coset x + I.
+In the scheme, Evaluate takes as input a circuit C whose gates perform operations modulo BI . For example, an AddBI gate in C takes two terms in R mod BI , and outputs a third term in R mod BI , which equals the sum of the ﬁrst two terms modulo I.
+KeyGen(R, BI ). Takes as input a ring R and basis BI of I. It sets (BsJk, BpJk) ←R IdealGen(R, BI ). The plaintext space P is (a subset of) R mod BI . The public key pk includes R, BI , BpJk, and Samp. The secret key sk also includes BsJk.
+3Initially, we used E ∗ (with the self-loop) and tried to prove KDM-security. Canetti [15] proposed the acyclic, leveled approach to make this unnecessary.
+
+Encrypt(pk, π). Takes as input the public key pk and plaintext π ∈ P. It sets ψ ← Samp(π, BI , R, BpJk) and outputs ψ ← ψ mod BpJk.
+Decrypt(sk, ψ). Takes as input the secret key sk and a ciphertext ψ. It outputs
+π ← (ψ mod BsJk) mod BI
+Evaluate(pk, C, Ψ). Takes as input the public key pk, a circuit C in some permitted set CE of circuits composed of AddBI and MultBI gates and a set of input ciphertexts Ψ. It invokes Add and Mult, given below, in the proper sequence to compute the output ciphertext ψ. (We will describe CE when we consider correctness below. If desired, one could use diﬀerent arithmetic gates.)
+Add(pk, ψ1, ψ2). Outputs ψ1 + ψ2 mod BpJk.
+Mult(pk, ψ1, ψ2). Outputs ψ1 × ψ2 mod BpJk.
+Now, let us consider correctness, which is a highly nontrivial issue in this paper. The following deﬁnitions provide structure for our analysis.
+To begin, we observe that the scheme is actually using two diﬀerent circuits. First, Evaluate takes a mod-BI circuit C as input. This circuit is implicitly applied to plaintexts. Second, Evaluate applies a circuit related to C, which we call the generalized circuit, to the ciphertexts; this circuit uses the ring operations (not modulo I).
+Definition 6 (Generalized Circuit). Let C be a modBI circuit. We say generalized circuit g(C) of C is the circuit formed by replacing C’s AddBI and MultBI operations with addition ‘+’ and multiplication ‘×’ in the ring R.
+Here are a few more deﬁnitions relevant to Theorem 6 below, which concerns correctness.
+Definition 7 (XEnc and XDec). Let XEnc be the image of Samp. Notice that all ciphertexts output by Encrypt are in XEnc + J. Let XDec equal R mod BsJk, the distinguished representatives of cosets of J wrt the secret basis BsJk.
+Definition 8 (Permitted Circuits). Let
+CE = {C : ∀(x1, . . . , xt) ∈ XEnct, g(C)(x1, . . . , xt) ∈ XDec}
+In other words, CE is the set of mod-BI circuits that, when generalized, the output is always in XDec if the inputs are in XEnc. (The value t will of course depend on C.) If CE ⊆ CE , we say that CE is a set of permitted circuits.
+Definition 9. ψ is a valid ciphertext wrt E public key pk and permitted circuits CE if it equals Evaluate(pk, C, Ψ) for some C ∈ CE , where each ψ ∈ Ψ is in the image of Encrypt.
+Theorem 6. Assume CE is a set of permitted circuits containing the identity circuit. E is correct for CE – i.e., Decrypt correctly decrypts valid ciphertexts.
+Proof. For Ψ = {ψ1, . . . , ψt}, ψk = πk + ik + jk, where πk ∈ P, ik ∈ I, jk ∈ J, and πk + ik ∈ XEnc, we have
+Evaluate(pk, C, Ψ) = g(C)(Ψ) mod BpJk ∈ g(C)(π1 + i1, . . . , πt + it) + J
+
+172
+
+If C ∈ CE , we have g(C)(XEnc, . . . , XEnc) ∈ XDec; so,
+Decrypt(sk, Evaluate(pk, C, Ψ))
+= g(C)(π1 + i1, . . . , πt + it) mod BI
+= g(C)(π1, . . . , πt) mod BI
+= C(π1, . . . , πt)
+as required.
+The bottom line is that we have proven that E is correct for permitted circuits, and our goal now is to maximize this set. The permitted circuits are deﬁned somewhat indirectly; they are the circuits for which the “error” g(C)(x1, . . . , xt) of the output ciphertext is small (i.e., lies inside XDec) when the input ciphertexts are in the image of EncryptE . When we begin to instantiate the abstract scheme with lattices and give geometric interpretations of XEnc and XDec, the problem of maximizing CE will have a geometric ﬂavor.
+3.2 Security of the Abstract Construction
+For an abstract “instantiation” of Samp that we describe momentarily, we provide a simple proof of semantic security based on the following abstract problem.
+Definition 10 (Ideal Coset Problem (ICP)). Fix R, BI , algorithm IdealGen, and an algorithm Samp1 that efﬁciently samples R. The challenger sets b ←R {0, 1} and (BsJk, BpJk) ←R IdealGen(R, BI ). If b = 0, it sets r ←R Samp1(R) and t ← r mod BpJk. If b = 1, it samples t uniformly from R mod BpJk. The problem: guess b given (t, BpJk).
+Basically the ICP asks one to decide whether t is uniform modulo J, or whether it was chosen according to a known “clumpier” distribution induced by Samp1.
+To get a proof based on the ICP, deﬁne Samp as follows. Let s ∈ I be such that the ideal (s) is relatively prime to J. (Assume for now that such an s can be eﬃciently generated.)
+Samp(x, BI , R, BpJk). Run r ←R Samp1(R). Output x + r× s.
+Obviously, the output is in x + I since s ∈ I. The value s could be a ﬁxed parameter wired into the algorithm Samp, or generated dynamically from BI and BpJk according to a prescribed distribution.
+Theorem 7. Suppose that there is an algorithm A that breaks the semantic security of E with advantage when it uses Samp. Then, there is an algorithm B, running in about the same time as A, that solves the ICP with advantage /2.
+Proof. The challenger sends B a ICP instance (t, BpJk). B sets s, and sets the other components of pk in the obvious way using the ICP instance. When A requests a challenge ciphertext on one of π0, π1 ∈ P, B sets a bit β ←R {0, 1} and sends back ψ ← πβ + t × s mod BpJk. A sends back a guess β , and B guesses b ← β ⊕ β .
+If b = 0, we claim that B’s simulation is perfect; in particular, the challenge ciphertext has the correct distribution. When b = 0, we have that t = r + j, where r was chosen according to Samp1 and j ∈ J. So, ψ ← πβ + t × s = πβ + r × s mod BpJk; the ciphertext is thus well-formed. In this case A should have advantage , which translates into an advantage of for B.
+If b = 1, then t is uniformly random modulo J. Since the ideal (s) is relatively prime to J, t × s is uniformly random
+
+modulo J, and consequently ψ is a uniformly random element of R mod BpJk that is independent of β. In this case A’s advantage is 0. Overall, B’s advantage is /2.
+
+3.3 Background on Ideal Lattices
+
+Let R = Z[x]/f (x), where f (x) ∈ Z[x] is monic and of
+
+degree n. We view an element v ∈ R both as a ring element
+
+and as a vector – speciﬁcally, the coeﬃcient vector v ∈ Zn.
+
+The ideal (v) generated by v directly corresponds to the
+
+lattice generated by the column vectors {v × xi mod f (x) :
+
+i ∈ [0, n − 1]}; we call this the rotation basis of the ideal
+
+lattice (v). Generally speaking, an ideal I ⊂ R need not be
+
+principal – i.e., have a single generator – and a basis BI of I
+
+need not be a rotation basis. R corresponds to the ideal (1)
+
+or (e1), and to Zn. The Hermite normal form (HNF) of a
+
+lattice I is an upper triangular basis that can be eﬃciently
+
+computable from any other basis of I, making it well-suited
+
+to be a public key [39]. The index [R : I] equals | det(BI )|;
+
+since this is invariant, we refer to det(I).
+
+As required by our abstract scheme, for any basis BI of
+
+an ideal I ⊆ R, the term t mod BI is uniquely deﬁned as
+
+the vector t ∈ P(BI) such that t − t ∈ I, where P(BI )
+
+is the half-open parallelepiped P(B) ← {
+
+n i=1
+
+xibi
+
+:
+
+xi
+
+∈
+
+[−1/2, 1/2)}. The vector t mod BI is eﬃciently computable
+
+as t − B · B−1 · t , where · rounds the coeﬃcients of a
+
+vector to the nearest integer. We deﬁne the length BI of
+
+a basis to be max{ bi : bi ∈ BI }.
+
+Cryptographic work on ideal lattices includes NTRU [25]
+
+and more recent work [41, 32, 33, 48, 49].
+
+3.4 The Initial Construction, Concretely
+When we implement the abstract construction using a polynomial ring and ideal lattices as described in Section 3.3, the sets XEnc and XDec become subsets of Zn. We recharacterize these sets geometrically as follows.
+
+Definition 11 (rEnc and rDec). Let rEnc be the smallest value such that XEnc ⊆ B(rEnc), where B(r) is the ball of radius r. Let rDec be the largest such that XDec ⊇ B(rDec).
+Now, let us deﬁne a set of permitted circuits CE as follows:
+CE = {C : ∀(x1, . . . , xt) ∈ B(rEnc)t, g(C)(x1, . . . , xt) ∈ B(rDec)}
+CE is deﬁned like the maximal set CE of permitted circuits in Deﬁnition 8, but we have replaced XEnc and XDec with B(rEnc) and B(rDec). Clearly, CE ⊆ CE . (At several points later in the paper, we narrow our set of permitted circuits again so as to enable a less complex decryption algorithm.)
+For ﬁxed values of rEnc and rDec, what is CE ? This is a geometric problem, and we can bound the Euclidean length
+g(C)(x1, . . . , xt) by bounding the lengths of u + v and u × v in terms of u and v . For addition, this is easy: using the triangle inequality, we have u + v ≤ u + v for u, v ∈ R. For multiplication, we can prove that u × v ≤ γMult(R) · u · v , where γMult(R) is some factor that is dependent only on the ring R. (See [32] for a diﬀerent deﬁnition of the expansion factor for multiplication.) The following theorem characterizes the “error expansion” that a circuit can cause based on the circuit’s depth.
+
+Theorem 8. Suppose rE ≥ 1 and that circuit C’s additive fan-in is γMult(R), multiplicative is 2, and depth is at most
+
+log log rD − log log(γMult(R) · rE) Then, C(x1, . . . , xt) ∈ B(rD) for all x1, . . . , xt ∈ B(rE).
+
+173
+
+Proof. For a d-depth circuit, let ri be an upper-bound on the Euclidean norm of the values at level i, given that rd = rE. By the triangle inequality, an addition (or subtraction) gate at level i outputs some v ∈ R such that v ≤ γMult(R)· ri. A multiplication gate at level i outputs some v ∈ R such that v ≤ γMult(R) · ri2. In either case, ri−1 ≤ γMult(R) · ri2, and thus r0 ≤ (γMult(R) · rE)2d . The result follows.
+
+An (oversimpliﬁed) bottom line from Theorem 8 is that, to maximize the depth of circuits that E can correctly evaluate (see Theorem 6), we should minimize γMult(R) and rEnc, and maximize rDec. Most of the remainder of this subsection consists of proposals toward this goal.
+First, though, we observe that semantic security places a limit on how large we can take rDec/rEnc. In concrete terms, the ICP becomes (roughly): decide whether t is within a small distance (less than rEnc) of the lattice J (according to a distribution determined by Samp1), or is uniformly random modulo J. This is a fairly natural decisional version of the closest vector problem, though we are unaware of an equivalent problem mentioned in the literature. Certainly rDec < λ1(J), the latter being the length of the shortest nonzero vector in J. On other hand, we cannot let λ1(J)/rEnc be too large (e.g., 2n); otherwise, lattice reduction techniques, such as LLL [28, 5, 57], make it feasible to recover the J-vector closest to t, which breaks the ICP. However, given known attacks, this problem is infeasible for a 2nc approximation factor when c < 1. Overall, the ratio rDec/rEnc can also be sub-exponential. When rDec = 2nc1 and γMult(R) · rEnc = 2nc2 , then Theorems 6 and 8 imply that the scheme can correctly evaluate circuits of depth (c1−c2) log n.
+Regarding γMult(R), there are many f for which γMult(R) is only polynomial in n:
+
+Theorem 9. Let R = Z[x]/f (x) and suppose f (x) =
+
+xn − h(x) where h(x) k ≥ 2. Then, γMult(R)
+
+has√degree ≤ 2n · (1
+
+at +
+
+most 2n · (
+
+n − (n − 1)/k for (k − 1)n f )k).
+
+As an example,
+
+f (x)
+
+=
+
+xn±1 achieves
+
+γMult(R)
+
+=
+
+√ n.
+
+Aside
+
+from Theorem 9, we do not specify how to choose R; let us
+
+assume it is chosen so that γMult(R) is polynomial in n.
+
+Regarding rEnc, recall that XEnc ⊆ B(rEnc) is the image
+
+of Samp, where our security proof (Theorem 7) holds when
+
+Samp(x, BI , R, BpJk) runs r ← Samp1(R) and outputs x + r × s, where s ∈ I and the ideal (s) is relatively prime to J.
+
+For simplicity, suppose that I is the principal ideal (s). Let
+
+be an upper bound on the length of r, drawn according to
+
+Samp1. We have √
+rEnc = max{ x + r × s } ≤ n · BI + n · · BI
+
+Toward minimizing rEnc, we can choose s to be short – e.g.,
+use s = 2 · e1. The size of is a security issue. We need it to be large enough so that the min-entropy of t mod BpJk in the ICP is large; taking to be polynomial in n suﬃces.
+Overall, we can take rEnc to be polynomial in n. We note
+that, even in this case, the plaintext space may be as large
+as [R : I] = det(I), which can be exponential in n.
+Now, rDec, as the radius of the largest sphere centered at 0 that is circumscribed by BsJk, obviously depends crucially on the secret basis. The important property of BsJk is its shape – i.e., we want the parallelepiped P(BsJk) to be “fat” enough to contain a large sphere. This property is easier to formalize in terms of the inverse matrix (BsJk)−1, whose transpose is a basis (or independent set) of the fractional
+
+ideal J−1. (The fractional ideal J−1 contains the elements in Q[x]/f (x) that, when multiplied by any element in J, the product is in R.)
+Lemma 1. Let B be a lattice basis and B∗ = (B−1)T . Let r be the radius of the largest sphere, centered at 0, circumscribed by P(B) (permitting tangential overlap). Then, r = 1/(2 · B∗ ). In particular,
+rDec = 1/(2 · ((BsJk)−1)T )
+Suppose t < r; then each coeﬃcient of B−1 · t has magnitude at most 1/2.
+Proof. Each coeﬃcient of B−1 · t is an inner product of t with a column vector of B∗, and therefore has magnitude at most t · B∗ < 1/2. This implies B−1 · t = 0, and thus t = (t mod B), and thus t ∈ P(B). Let v be the longest vector in B∗, and let x be parallel to v. Then, B−1 · x = 0 – i.e., x = P(B) – when | v, x | > 1/2 ⇔
+x > 1/(2 · B∗ ).
+It is easy to imagine ad hoc ways of instantiating IdealGen – e.g., one could generate a random vector v and simply set BsJk to be the rotation basis of v, and set BpJk to be the HNF of (v). Very roughly speaking, if v is generated as a vector that is very “nearly parallel” to e1 (i.e., the vector (1, 0, . . . , 0)), then the rotational basis will have rDec within a small factor of v /2. This method can be made to ensure that rDec is within a polynomial factor of λ1(J).
+On the other hand, one may prefer to generate J according to a “nice” average-case distribution that permits a worstcase / average-case reduction [1, 2, 53]. This is a technical issue that we tackle in a separate work. We stress that our analysis below regarding the decryption circuit does not rely on any of the concrete proposals in this subsection – e.g., the analysis does not require I to be a principal ideal.
+4. BOOTSTRAPPABLE YET?
+Here, we describe two “tweaks” to the scheme to lower the decryption complexity in preparation for bootstrapping; we label the tweaked scheme E2. Next, we analyze the decryption complexity (and ﬁnd that it is too large). However, some of the analysis applies to the ﬁnal scheme.
+We separate E2 from E1 because the former already improves upon previous work, irrespective of bootstrapping. The Boneh-Goh-Nissim (BGN) pairing-based cryptosystem [11] was the ﬁrst to permit eﬃcient evaluation of quadratic formulas that may have an arbitrary number of monomials. However, BGN has a small plaintext space – log λ bits for security parameter λ. E1 allows both greater multiplicative depth in the circuit (while allowing essentially an arbitrary number of additions) and also a larger plaintext space.
+4.1 Some Tweaks to the Initial Construction
+In each of the following tweaks, we slightly narrow our set of permitted circuits CE . Recall from Section 3.4 that E1’s deﬁnition of CE used B(rEnc) and B(rDec).
+Tweak 1: Redeﬁne the set of permitted circuits CE , replacing B(rDec) with B(rDec/2).
+Purpose: To ensure that ciphertext vectors are closer to the lattice J than they strictly need to be, so that we will need less “precision” to ensure the correctness of decryption.
+
+174
+
+Recall that Decrypt computes (ψ mod BsJk) mod BI , where ψ mod BsJk = ψ − BsJk · (BsJk)−1 · ψ . If we permitted the coeﬃcients of (BsJk)−1 · ψ to be very close to half-integers, we would need high precision to ensure correct rounding. However, after Tweak 1, we have the following lemma:
+Lemma 2. If ψ is a valid ciphertext after Tweak 1, then each coeﬃcient of (BsJk)−1 · ψ is within 1/4 of an integer.
+Proof. Observe that ψ ∈ B(rDec/2)+J. Let ψ = x+j for x ∈ B(rDec/2) and j ∈ J. We have (BsJk)−1 · ψ = (BsJk)−1 · x + (BsJk)−1 · j, where the former term has coeﬃcients of magnitude at most 1/4 by Lemma 1 and the latter is an integer vector.
+Per Theorem 8, the new maximum evaluation depth of the scheme after Tweak 1 is log log(rDec/2) − log log(γMult(R) · rEnc), which is less than the original amount by only a subconstant additive factor.
+Tweak 2 is more technical and less “essential” than the ﬁrst tweak. It replaces matrix-vector multiplications with ring multiplications. This is nice, but the two computations are essentially equally parallelizable, and their circuits have essentially the same depth. So, really, this tweak is primarily useful for reducing the public key size and the per-gate computation during bootstrapping in our ultimate scheme.
+Tweak 2: From BI and BsJk, compute a short vector vJsk ∈ J−1 such that there exists u ∈ 1+I with u×(vJsk)−1 ∈ 1+I. Also, redeﬁne CE again, now using B(2·rDec/(n1.5 ·γMult(R)2 ·
+BI )). Purpose: To modify Decrypt from ψ − BsJk · (BsJk)−1 · ψ mod BI to the simpler expression ψ − vJsk × ψ mod BI , where vJsk ∈ Q[x]/f (x).
+To use both tweaks, we need to reduce the radius of the sphere in Tweak 2 by an additional factor of 2.
+Tweak 2 requires us to reduce the permitted distance of ciphertexts from the J-lattice much more than Tweak 1. Still, it does not aﬀect our maximum evaluation depth very much when γMult(R) and BI are polynomial in n, and rDec/rEnc is super-polynomial.
+The following two lemmas say that we can perform Tweak 2 eﬃciently and that it has the expected eﬀect – i.e., the new Decrypt equation works correctly.
+Lemma 3. From BI and BsJk, we can compute in polynomial time a vector vJsk ∈ J−1 and a vector u ∈ 1 + I such that u × (vJsk)−1 ∈ 1 + I. Moreover, vJsk ≤ (n/2) · γMult(R) ·
+((BsJk)−1)T · BI .
+Lemma 4. Suppose ψ is a valid ciphertext after Tweak 2 which decrypts to π. Then, π = ψ − vJsk × ψ mod BI .
+4.2 Decryption Complexity of Tweaked Scheme
+To decrypt, we compute
+(ψ − BsJk1 · BsJk2 · ψ ) mod BI
+where ψ ∈ Zn, BsJk1 ∈ Zn×n, BsJk2 ∈ Qn×n, and BI is a basis of an ideal I of R = Z[x]/f (x). From Tweak 1, we have the promise that the coeﬃcients of BsJk2 · ψ are all within 1/4 of an integer. Optionally, Tweak 2 ensures that BsJk1 is the identity matrix and BsJk2 is a rotation matrix. We split the decryption computation into the following sequence of steps: Step 1: Generate n vectors with sum BsJk2 · ψ
+
+Step 2: From the n vectors x1, . . . , xn, generate integer vectors y1, . . . , yn+1 with sum xi . Step 3: Compute π ← ψ − BsJk1 · ( yi) mod BI
+In Step 1, to obtain the n vectors, we perform the multiplications associated to the inner products associated to the matrix-vector multiplication; we do not discuss this step in detail, since (we will ﬁnd that) Step 2 is already too expensive to permit bootstrappability.
+Regarding Step 2, recall that Evaluate takes as input circuits with mod-BI gates – i.e., arithmetic gates whose inputs and outputs are in R mod BI . However, in general “base-BI ,” it is unclear how to handle the carries needed for adding the vectors in Step 2 without resorting to highdegree polynomials that require more multiplicative depth that our initial construction can evaluate. To handle this complication, we use the plaintext space P = {0, 1} mod BI , regardless of the underlying ideal I. We emulate boolean operations, where carries are constant-depth. (This plaintext space restriction is unnecessary if we use the initial construction without bootstrapping.) We have the following lemma.
+
+Lemma 5. For i ∈ [1, t], let ai = (. . . , ai,1, ai,0, ai,−1, . . .) be a real number given in binary representation mod BI with the promise that i ai mod 1 ∈ [−1/4, 1/4]. There is a modBI circuit C for generating t + 1 integers z1, . . . , zt+1 (also represented in binary) whose sum is i ai , such that if the generalized circuit g(C)’s inputs are in B(rin), then its outputs are in B(rout) for:
+
+rout ≤ (γMult(R) · n · BI · (1 + γMult(R) · rin)t · t)polylog(t)
+
+For BI ≤ rin, t ≤ n, and γMult(R) = nΩ(1), we have:
+
+rout ≤ (γMult(R) · rin)t+polylog(t)
+Proof (fragment). Let a∗i be the integer part of ai and let a†i = (ai,−1, ai,−2, . . .) be the fractional part. Let T = log t + 2. Let bi = (a†i,−1, . . . , a†i,−T ). First, we claim that
+a†i = bi . This claim follows from the promise that i a†i is within 1/4 of an integer, and that
+
+j∈[T +1,∞]
+
+a†i − bi =
+
+2−j · ai,−j < 1/4
+
+ii
+
+i
+
+Our t + 1 output integers will be a∗1, . . . , a∗t , bi . Our strategy for computing bi is ﬁrst to compute, for
+
+each j ∈ [1, T ], the binary representation cj of the Hamming
+
+weight of (b1,−j , . . . , bt,−j). Then, we ﬁnish by computing
+
+the sum
+
+T j=1
+
+2−j
+
+· cj
+
+;
+
+this
+
+latter
+
+term
+
+is
+
+much
+
+easier
+
+to
+
+compute than the original term, since it only consists of T
+
+numbers, rather than t.
+
+This strategy is straightforward when I = (2 · e1) and the
+
+plaintext space is {0, 1} mod I. The binary representation
+
+of the Hamming weight of (b1, . . . , bt) is given by
+
+(e2 log t (b1, . . . , bt) mod 2, . . . , e20 (b1, . . . , bt) mod 2)
+where ei(x1, . . . , xt) is the ith elementary symmetric polynomial over x1, . . . , xt. (See Lemma 4 of [14].) These polynomials can be computed in time poly(t), and the fact that rout is exponential in t comes from the fact that the degree of these polynomials is upper bounded by t. There are minor complications when I = (2 · e1) (omitted).
+
+175
+
+Unfortunately, Step 2 uses t = n, implying rDec/rEnc ≥ rout/rin ≥ 2n, and therefore the above analysis cannot show that the initial construction is both bootstrappable and secure. However, Lemma 5 will be relevant to our ﬁnal scheme, as will the following lemma regarding Step 3:
+Lemma 6. Using a constant depth circuit having polynomial fan-in AddBI gates and constant fan-in MultBI gates, we can compute ψ − BsJk1 · ( yi) mod BI from a binary representation (using the bits {0, 1} mod BI ) of the terms of the expression.
+The proof of Lemma 6 involves converting the binary representation of the terms to a more “natural” mod-BI representation, at which point the computation is trivially obviously constant depth. As a toy example for intuition, suppose we have mod-13 gates, where the numbers 0, . . . , 12 are represented by 13 diﬀerent “frequencies” (not in terms of a binary representation), and Add13 and Mult13 perform addition and multiplication modulo 13 “automatically.” To obtain the natural representation of r mod 13 as one of the 13 frequencies given the binary representation ...b1b0 (each bit in {0, 1} mod 13), we precompute the aj ← 2j mod 13 and output Add13(..., Mult13(a1, b1), Mult13(a0, b0)). This takes constant depth even if r has a polynomial number of bits using polynomial-fan-in Add13 gates. Essentially the same considerations apply in the proof of Lemma 6. The simplest case is where I = (2) and the conversion is unnecessary.
+5. SQUASHING THE DEC. CIRCUIT
+The circuit complexity of decryption in E2 is too high to permit bootstrapping. The culprit is Step 2 – i.e., adding n numbers. Here, we describe how transform the scheme so that Decrypt adds only a sub-linear quantity of numbers. Importantly, this transformation does not aﬀect the set of permitted circuits at all. However, the transformation does induce an additional hardness assumption. By choosing parameters appropriately, the scheme becomes bootstrappable.
+5.1 The Transformation, Abstractly
+At a high level, our transformation works by splitting the initial decryption algorithm into two phases – an initial computationally intensive preprocessing phase performed without the secret key (by the encrypter), followed by a computationally lightweight phase using the secret key (by the decrypter). In short, the encrypter preprocesses its own initial ciphertext, leaving less work for the decrypter to do. Interestingly, this two-phase approach to decryption is precisely what one ﬁnds in server aided cryptography.
+In detail, let E ∗ be an initial encryption scheme (which concretely will become E2). From E ∗, we construct a modiﬁed scheme E that uses two new algorithms, SplitKeyE and ExpandCTE , that will remain abstract for now.
+KeyGenE (λ). Runs (pk∗, sk∗) ←R KeyGenE∗ (λ) and (sk, τ ) ←R SplitKeyE (sk∗, pk∗). The secret key is sk. The public key pk is (pk∗, τ ).
+EncryptE (pk, π). Runs ψ∗ ← EncryptE∗ (pk∗, π). It then sets ψ to include ψ∗ and the output of ExpandCTE (pk, ψ∗). (ExpandCTE makes heavy use of tag τ .)
+DecryptE (sk, ψ). Uses sk and the expanded ciphertext to decrypt more eﬃciently. DecryptE (sk, ψ) should work whenever DecryptE∗ (sk∗, ψ∗) works.
+
+AddE (pk, ψ1, ψ2). Extracts (ψ1∗, ψ2∗) from (ψ1, ψ2), computes ψ∗ ← AddE∗ (pk∗, ψ1∗, ψ2∗), and outputs ψ which includes ψ∗ and the output of ExpandCTE (pk, ψ∗). MultE (pk, ψ1, ψ2) is analogous.
+
+The security of the transformation relies on the following problem, which is completely abstract at this point.
+
+Definition 12 (SplitKey Distinguishing Problem).
+The challenger sets (sk∗, pk∗) ←R KeyGenE∗ and b ←R {0, 1}. If b = 0, it sets (sk, τ ) ←R SplitKey(sk∗, pk∗). If b = 1, it
+sets (sk, τ ) ←R SplitKey(⊥, pk∗), where ⊥ is a special symbol. The problem: guess b given (τ, sk∗, pk∗).
+
+Theorem 10. Suppose that there is an algorithm A that breaks the semantic security of E above with advantage . Then, there exist algorithms B0 and B1, running in about the same time as A, such that either B0’s advantage against the SplitKey Distinguishing Problem or B1’s advantage against the semantic security of E ∗ is at least /3.
+
+5.2 The Transformation, Concretely
+Let (sk∗, pk∗) be an E2 key pair. Let γset(n) and γsubset(n) be functions, where the former is ω(n) and poly(n) and the latter is ω(1) and o(n). Here are the concrete instantiations SplitKeyE , ExpandCTE , and DecryptE used to construct E3.
+sSifkpt∗lhitoeKrel⊥aytE.t(eIsrfk,t†ih,tpeskfeo∗tr)sm. vTeJsrka,∗kiet←seax0st.rinaIpcttuostutsthkpe†u,vtwesch(tsiockrh, τvm)Jsk,a∗wyfhbreoermeei:tshke∗r;
+
+• τ is a set of γset(n) vectors t1, . . . , tγset(n) that are uniformly random in J−1 mod BI , except there exists
+a subset S ⊆ {1, . . . , γset(n)} of cardinality γsubset(n) such that i∈S ti ∈ vJsk∗ + I.
+
+• sk is a matrix γsubset(n) × γset(n) matrix M of 0’s and 1’s, where Mij = 1 iﬀ j is the ith member of S.
+ExpandCTE (pk, ψ∗). Outputs ci ← ti × ψ∗ mod BI for i ∈ [1, γset(n)]. These terms are represented in binary using {0, 1} mod BI , as in E2.
+
+DecryptE (sk, ψ). Takes as input the secret key sk and a ciphertext ψ. It performs the following steps:
+
+Step 0: Set the vectors wij ← Mij · cj
+
+Step 1: Set the vectors xi ←
+
+wγset (n)
+
+j=1
+
+ij
+
+Step 2: From γsubset(n) vectors x1, . . . , xn, generate integer
+
+vectors y1, . . . , yγsubset(n)+1 with sum
+
+xi .
+
+Step 3: Compute π ← ψ − ( yi) mod BI
+
+a
+
+SplitKeyE splits vJsk∗ hidden sparse subset
+
+into τ , which whose sum is
+
+is a vJsk∗
+
+set of vectors with modulo I, and sk,
+
+which is a set of incidence matrix encoding the subset. To
+
+generate τ , one may, for example, just set t1, . . . , tγset(n)−1
+
+to be uniformly random vectors in J−1 ∩ P(BI ). Then, one
+
+sets tγset(n) ← vJsk∗ −
+
+γsubset (n)−1 i=1
+
+ti
+
+mod
+
+BI .
+
+Then one
+
+permutes the vectors.
+
+In DecryptE , Steps 2 and 3 are as in E2 (Section 4), with the crucial diﬀerence that Step 2 adds only γsubset(n) vec-
+
+tors. In Steps 0 and 1, DecryptE sets xi to be the γsubset(n) “relevant” vectors in {ci} – i.e., the ones associated to the
+
+subset. Correctness should be clear.
+
+Without Tweak 2, we could have instead used a γset(n)-
+
+sized set of matrices with a hidden γsubset(n)-sized subset whose sum is related to (BsJk)−1. This would have resulted in a larger public key.
+
+176
+
+5.3 Bootstrapping Achieved
+
+We analyzed Steps 2 and 3 in Section 4.2. It is obvious
+
+that Step 0 requires only constant depth. We claim that
+
+Step 1 requires only constant depth, but why? Comput-
+
+ing
+
+wγset (n)
+
+j=1
+
+ij
+
+is
+
+very
+
+cheap
+
+because,
+
+in
+
+the
+
+set
+
+{wij
+
+:
+
+j ∈ [1, γset(n)}, there is only one nonzero vector. There-
+
+fore, when we add the vectors, no expensive carry opera-
+
+tions are required; we simply “XOR” the vectors together
+
+using polynomial-fan-in AddBI operations, using constant depth. At last, we have the following theorem.
+
+Theorem 11. The scheme E3 is bootstrappable when
+
+γsubset(n) ≤
+
+log(rDec/m) α · 2c · log(γMult(R) · rEnc)
+
+where m arises from the re-deﬁnition of CE in the Tweaks (m = 2 when just Tweak 1 is used), α > 1 is chosen so that
+(α − 1) · γsubset(n) is greater than the polylog(γsubset(n)) term coming from Lemma 5, and c is a constant represent-
+ing the depth needed in a circuit having AddBI gates with γMult(R) = nΩ(1) fan-in and MultBI gates with constant fanin to sequentially perform DecryptE Steps 0, 1, 3, and 4, and a NAND gate.
+
+Proof. As in the proof of Theorem 8, for a c-level circuit, if the inputs to the generalized circuit are in B(r), the outputs are in B((γMult(R)·r)2c ). Combining with Lemma 5, we have that if the inputs to our generalized NAND-augmented decryption circuit are in B(rEnc), the output is in
+
+(γMult(R)
+
+·
+
+r )2c ·(γsubset(n)+polylog(γsubset(n)))
+Enc
+
+The result follows when this value is at most rDec/m.
+
+For example, suppose γMult(R) · rEnc is polynomial in n, and rDec = 2nC for C < 1. In this case, γsubset(n) can be polynomial in n (but sub-linear). The constant c is not very large, though in practice one would want to optimize it beyond what we have done.
+5.4 On the New Hardness Assumption
+Concretely, the SplitKey Distinguishing Problem becomes:
+Definition 13 (SplitKey DP, concrete version). Let γset(n) and γsubset(n) be functions as above, and BI a basis of an ideal I. The challenger sets (sk∗, pk∗) ←R KeyGenE∗ and b ←R {0, 1}, where sk∗ includes the secret vector vJsk∗ ∈ R. If b = 1, it sets vJsk∗ ← 0. It sets τ to be a set of γset(n) vectors t1, . . . , tγset(n) that are uniformly random in J−1 mod BI subject to the constraint that there exists a subset S ⊆ {1, . . . , γset(n)} of cardinality γsubset(n) such that
+i∈S ti ∈ vJsk∗ +I. The problem: guess b given (τ, sk∗, pk∗).
+This problem is related to the following problem, which has been analyzed in connection with server-aided cryptography [34, 51, 44, 38, 43], and which should not be confused with the low-density knapsack problem [45].
+
+Definition 14 (Sparse Subset Sum Problem (SSSP)). Let γset(n) and γsubset(n) be functions as above. Let q be a positive integer. The challenger sets b ←R {0, 1}. If b = 0 it generates τ as a set of γset(n) integers {a1, . . . , aγset(n)} in [−q/2, q/2] that are uniformly random, except that there
+
+exists a subset S ⊆ {1, . . . , γset(n)} of cardinality γsubset(n) such that i∈S ai = 0 mod q. If b = 1, it sets the elements without the constraint. The problem: guess b given τ .
+Known attacks on the SSSP[51, 44, 38, 43] are feasible only for limited choices of parameters. Some of these [51] (and previous related results [58, 17]) essentially amount to a time-space tradeoﬀ whose complexity is γset(n)O(γsubset(n)); these only require us to take γsubset(n) = ω(1). Nguyen and Shparlinski [43] present a lattice-based cryptanalysis of the SSSP that provably succeeds with advantage at least
+1 − (γsubset(n)γset(n)+2 · α)/q
+where α is a term that is greater than 1. The attack breaks down when γset(n) exceeds log q.
+Though we omit details, current attacks against our concrete version SplitKey DP begin to break down when γset(n) exceeds log det(IJ). The intuition is that, once γset(n) is suﬃciently large, there will be exponentially many subsets in τ (not necessarily sparse) whose vector sum is congruent to vJsk∗ ; lattice reduction techniques have trouble extracting the sparse subset from among the many subset solutions.
+
+6. PERFORMANCE
+
+Our scheme relies on two assumptions. The ﬁrst assump-
+
+tion underlies the security E1 and its approximation factor is
+
+mildly impacted by the tweaks of E2. The second arises from
+
+the addition of τ to the public key. Interestingly, the two as-
+
+sumptions counterbalance each other: increasing γsubset(n)
+
+seems to make the second problem harder, but at the ex-
+
+pense of increasing the approximation factor in the ﬁrst
+
+problem, making the ﬁrst problem easier.
+
+Using a crude analysis, the breaking time for the second
+
+problem using known attacks is roughly 2 .γsubset(n) (We
+
+ignore constants and logarithmic factors in the exponent.)
+
+The approximation factor for the ﬁrst problem is also roughly
+
+2 .γsubset(n) Using the rule of thumb that a lattice prob-
+
+lem for approximation factor 2k takes time about 2n/k, the
+
+breaking time for the √ﬁrst problem is roughly 2 .n/γsubset(n)
+
+Setting
+
+γsubset
+
+(n)
+√
+
+←
+
+n maximizes the minimal breaking
+
+time at about 2 n. To make this breaking time truly expo-
+
+nential in the security parameter λ, we need n ≈ λ2.
+
+For each gate, we evaluate the circuit DE homomorphi-
+
+cally. (Actually, there is a tradeoﬀ here, since a “gate” can
+
+be taken to be a “normal circuit” of depth greater than 1.)
+
+Though it is a shallow circuit, the computational complex-
+
+ity of DE itself in E3 (not evaluated homomorphically in
+
+the encryption scheme) is quite high (but poly(λ)), primar-
+
+ily due to the large unary representation of the secret key in
+
+E3. The fact that decryption is performed homomorphically, with ciphertext elements in R mod BpJk being used instead of plaintext elements in R mod BI , multiplies the complexity
+
+by another factor that is quasi-linear in n · γsubset(n), since
+
+roughly log det(IJ) ≈ n · log rDec/rEnc ≈ n · γsubset(n) bits
+
+of precision are needed, but again this is polynomial in λ.
+
+Two optimizations are: 1) one can reduce the size of the E3
+
+secret key substantially by allowing a modest increase in the
+
+depth of the decryption circuit, and 2) the homomorphic de-
+
+cryption circuit can take the ciphertext bits as input directly
+
+[15] (rather than the encrypted ciphertext bits). Making the
+
+full scheme practical remains an open problem (though E1
+
+is quite practical for shallow circuits).
+
+177
+
+7. CIRCUIT PRIVACY
+We omit full details due to lack of space, but mention that one can construct an algorithm RandomizeCTE for our E2 that can be applied to ciphertexts output by EncryptE2 and EvaluateE2 , respectively, that induces equivalent output distributions. The circuit privacy of E2 immediately implies the (leveled) circuit privacy of our (leveled) fully homomorphic encryption scheme.
+The idea is simple: to construct a random encryption ψ of π from a particular encryption ψ of π, we simply add an encryption of 0 that has a much larger random “error” vector than ψ – super-polynomially larger, so that the new error vector statistically obliterates all information about ψ’s error vector. This entails another re-deﬁnition of CE .
+8. ACKNOWLEDGMENTS
+We thank Boaz Barak, Dan Boneh, Ran Canetti, Shaﬁ Goldwasser, Iftach Haitner, Yuval Ishai, Tal Rabin, Yael Tauman Kalai, Salil Vadhan, and Brent Waters for very helpful discussions.
+9. REFERENCES
+[1] M. Ajtai. Generating hard instances of lattice problems (extended abstract). STOC ’96, pp. 99–108.
+[2] M. Ajtai and C. Dwork. A public key cryptosystem with worst-case / average-case equivalence. STOC ’97, pp. 284–293.
+[3] J.H. An, Y. Dodis, and T. Rabin. On the security of joint signature and encryption. Eurocrypt ’02, pp. 83–107.
+[4] F. Armknecht and A.-R. Sadeghi. A new approach for algebraically homomorphic encryption. Eprint 2008/422.
+[5] L. Babai. On Lov´asz’s lattice reduction and the nearest lattice point problem. Combinatorica 6 (1986), 1–14.
+[6] D. Barrington. Bounded-width polynomial-size branching programs recognize exactly those languages in NC1. STOC ’86, pp. 1–5.
+[7] D. Beaver. Minimal-latency secure function evaluation. Eurocrypt ’00, pp. 335–350.
+[8] J. Benaloh. Veriﬁable secret-ballot elections. Ph.D. thesis, Yale Univ., Dept. of Comp. Sci., 1988.
+[9] J. Black, P. Rogaway, and T. Shrimpton. Encryption-scheme security in the presence of key-dependent messages. SAC ’02, pp. 62–75.
+[10] M. Blaze, G. Bleumer, and M. Strauss. Divertible protocols and atomic proxy cryptography. Eurocrypt ’98, pp. 127–144.
+[11] D. Boneh, E.-J. Goh, and K. Nissim. Evaluating 2-DNF formulas on ciphertexts. TCC ’05, pp. 325–341.
+[12] D. Boneh, S. Halevi, M. Hamburg, and R. Ostrovsky. Circular-Secure Encryption from Decision Diﬃe-Hellman. Crypto ’08, pp. 108–125.
+[13] D. Boneh and R. Lipton. Searching for Elements in Black-Box Fields and Applications. Crypto ’96, pp. 283–297.
+[14] J. Boyar, R. Peralta, and D. Pochuev. On the Multiplicative Complexity of Boolean Functions over the Basis (∧, ⊕, 1). Theor. Comput. Sci. 235(1), pp. 43–57, 2000.
+[15] R. Canetti. Personal communication, 2008. [16] R. Canetti, H. Krawczyk, and J.B. Nielsen. Relaxing
+chosen-ciphertext security. Crypto ’03, pp. 565–582. [17] D. Coppersmith and G. Seroussi. On the minimum distance of
+some quadratic residue codes. IEEE Trans. Inform. Theory 30 (1984), 407–411. [18] W. van Dam, S. Hallgren, and L. Ip. Quantum Algorithms for Some Hidden Shift Problems. SIAM J. Comput., v. 36., no. 3, pp. 763–778, 2006. [19] I. Damgard and M. Jurik. A Length-Flexible Threshold Cryptosystem with Applications. ACISP ’03, pp. 350–356. [20] T. ElGamal. A Public-Key Cryptosystem and a Signature Scheme Based on Discrete Logarithms. Crypto ’84, pp. 469–472. [21] M. Fellows and N. Koblitz. Combinatorial cryptosystems galore! Contemporary Mathematics, v. 168 of Finite Fields: Theory, Applications, and Algorithms, FQ2, pp. 51–61, 1993. [22] S. Goldwasser and D. Kharchenko. Proof of plaintext knowledge for the Ajtai-Dwork cryptosystem. TCC 2005, pp. 529–555. [23] S. Goldwasser and S. Micali. Probabilistic encryption and how to play mental poker keeping secret all partial information. STOC ’82, pp. 365–377. [24] S. Halevi and H. Krawczyk. Security under key-dependent inputs. ACM CCS ’07.
+
+[25] J. Hoﬀstein, J. Silverman, and J. Pipher. NTRU: A Ring Based Public Key Cryptosystem. In Proc. of ANTS ’98, LNCS 1423, pages 267–288.
+[26] Y. Ishai and A. Paskin. Evaluating Branching Programs on Encrypted Data. TCC ’07.
+[27] A. Kawachi, K. Tanaka, K. Xagawa. Multi-bit cryptosystems based on lattice problems. PKC ’07, pp. 315–329.
+[28] A.K. Lenstra, H.W. Lenstra, L. Lov´asz. Factoring polynomials with rational coeﬃcients. Math. Ann. 261(4) (1982) 515–534.
+[29] F. Levy-dit-Vehel and L. Perret. A Polly Cracker system based on satisﬁability. In Coding, Crypt. and Comb., Prog. in Comp. Sci. and App. Logic, v. 23, pp. 177–192.
+[30] L. Ly. A public-key cryptosystem based on Polly Cracker, Ph.D. thesis, Ruhr-Universit¨at Bochum, Germany, 2002.
+[31] L. Ly. Polly two – a new algebraic polynomial-based public-key scheme. AAECC, 17(3-4), 2006.
+[32] V. Lyubashevsky and D. Micciancio. Generalized compact knapsacks are collision resistant. ICALP ’06.
+[33] V. Lyubashevky and D. Micciancio. Asymptotically eﬃcient lattice-based digital signatures. TCC ’08.
+[34] T. Matsumoto, K. Kato, and H. Imai. Speeding up secret computations with insecure auxiliary devices. Crypto ‘88, pp. 497–506.
+[35] U. Maurer and D. Raub. Black-Box Extension Fields and the Inexistence of Field-Homomorphic One-Way Permutations. Asiacrypt ’07, pp. 427–443.
+[36] C.A. Melchor, G. Castagnos, and P. Gaborit. Lattice-based homomorphic encryption of vector spaces. ISIT ’08, pp. 1858–1862.
+[37] C.A. Melchor, P. Gaborit, and J. Herranz. Additive Homomorphic Encryption with t-Operand Multiplications. Eprint 2008/378.
+[38] J. Merkle. Multi-round passive attacks on server-aided RSA protocols. ACM CCS ’00, pp. 102–107.
+[39] D. Micciancio. Improving Lattice Based Cryptosystems Using the Hermite Normal Form. CaLC ’01, pp. 126–145.
+[40] D. Micciancio. Improved cryptographic hash functions with worst-case / average-case connection. STOC ’02, pp. 609–618.
+[41] D. Micciancio. Generalized compact knapsacks, cyclic lattices, and eﬃcient one-way functions from worst-case complexity assumptions. FOCS ’02, pp. 356–365.
+[42] D. Naccache and J. Stern. A New Public-Key Cryptosystem Based on Higher Residues. ACM CCS ’98.
+[43] P.Q. Nguyen and I. Shparlinski. On the Insecurity of Some Server-Aided RSA Protocol. Asiacrypt ’01, pp. 21–35.
+[44] P.Q. Nguyen and J. Stern. The Beguin-Quisquater server-aided RSA protocol from Crypto ‘95 is not secure. Asiacrypt ‘98, pp. 372–379.
+[45] A.M. Odlyzko. The rise and fall of knapsack cryptosystems. In Crypt. and Comp. Num. Th., Proc. Sympos. Appl. Math., vol. 42, AMS, 1990, pp. 75–88.
+[46] T. Okamoto and Uchiyama. A New Public-Key Cryptosystem as Secure as Factoring. Eurocrypt ’98, pp. 308–318.
+[47] P. Paillier. Public-Key Cryptosystems Based on Composite Degree Residuosity Classes. Eurocrypt ’99, pp. 223–238.
+[48] C. Peikert and A. Rosen. Eﬃcient collision-resistant hashing from worst-case assumptions on cyclic lattices. TCC ’06, pp. 145–166.
+[49] C. Peikert and A. Rosen. Lattices that Admit Logarithmic Worst-Case to Average-Case Connection Factors. STOC ’07, pp. 478–487.
+[50] C. Peikert and B. Waters. Lossy Trapdoor Functions and Their Applications. STOC ’08, pp. 187–196.
+[51] B. Pﬁtzmann and M. Waidner. Attacks on protocols for server-aided RSA computation. Eurocrypt ’92, pp. 153–162.
+[52] M. Prabhakaran and M. Rosulek. Homomorphic Encryption with CCA Security. ICALP ’08.
+[53] O. Regev. On Lattices, Learning with Errors, Random Linear Codes, and Cryptography. STOC ’05, pp. 84–93.
+[54] R. Rivest, L. Adleman, and M. Dertouzos. On data banks and privacy homomorphisms. In Foundations of Secure Computation, pp. 169–180, 1978.
+[55] R. Rivest, A. Shamir, and L. Adleman. A method for obtaining digital signatures and public-key cryptosystems. In Comm. of the ACM, 21:2, pages 120–126, 1978.
+[56] T. Sander, A. Young, and M. Yung. Non-interactive cryptocomputing for NC1. FOCS ’99, pp. 554–567, 1999.
+[57] C.P. Schnorr. A Hierarchy of Polynomial Time Lattice Basis Reduction Algorithms. Theoretical Computer Science, 53(2-3):201–224, 1987.
+[58] D.R. Stinson. Some baby-step giant-step algorithms for the low hamming weight discrete logarithm problem. Mathematics of Computation, vol. 71, no. 237, pages 379–391, 2001.
+
+178
+
+
