@@ -1,0 +1,1202 @@
+A Computational Interpretation of Dolev-Yao Adversaries
+Jonathan Herzog
+Laboratory for Computer Science, Massachusetts Institute of Technology
+Abstract
+The Dolev-Yao model is a simple and useful framework in which to analyze security protocols, but it assumes that the adversary is extremely limited. We show that it is possible for the results of this model to remain valid even if the adversary is given additional power. In particular, we show that there exist situations in which Dolev-Yao adversary can be viewed as a valid abstraction of all realistic adversaries. We do this in a number of steps:
+(1) We summarize the strong assumptions placed on the Dolev-Yao adversary as a non-malleability property of public-key encryption in the computational model, an alternate framework with a very powerful adversary.
+(2) We re-derive and discuss the indistinguishability property of Abadi and Rogaway [2] in the public-key setting, and show that it is satisﬁed by computational encryption secure against the chosen-ciphertext attack.
+(3) We show that any encryption scheme that satisﬁes the indistinguishability property also satisﬁes our (more natural) non-malleability property.
+
+1 Introduction
+
+How can we tell if a cryptographic protocol is secure? Phrased another way, how can we be sure that a given protocol meets a given security goal? Before we can analyze a protocol we need to choose a model : a collection of assumptions and proof methods.
+The computational model, for example, is well known. The messages of a protocol are assumed to be bit-strings from some distribution and the adversary
+Email address: jherzog@mit.edu (Jonathan Herzog).
+
+Preprint submitted to Elsevier Science
+
+22 March 2004
+
+is assumed to be an arbitrary algorithm. The cryptographic primitives are assumed to be algorithms (or tuples of algorithms) that satisfy some asymptotic property even in the presence of an arbitrary adversary.
+To prove a protocol secure in this model, one would use a reduction from the protocol to the underlying primitive. That is, one would show that if there exists an adversary with a signiﬁcant chance of successfully attacking the protocol, then it can be used to construct an adversary with a signiﬁcant chance of breaking some cryptographic primitive. If the protocol uses encryption, for example, then one would reduce the security of the protocol to the security of the encryption scheme. Thus, an attack that can successfully break the protocol can be transformed into an attack that can successfully break the encryption scheme. Similarly, if the protocol is based on signatures, the one would show that an attack on the protocol can be transformed into one that can forge a signature. By doing so, one can conclude that if the underlying cryptographic primitives (encryption, signatures) are secure then the protocol must be secure also. (See [5] for an example.)
+This is a fairly strong model for analysis. The only assumption placed on the adversary is that it is eﬃcient: executing in probabilistic polynomial time (PPT). 1 This assumption is fairly weak, giving the model a solid and meaningful grounding in complexity theory. On the other hand, this model is extremely diﬃcult to use. Reductions tend to be fairly tedious to design, and must be produced ‘by hand’ for each protocol.
+Fortunately, there are alternate models such as the Dolev-Yao model [7]. In this setting, messages are assumed to be elements of some abstract algebra, and encryption is an abstract operation on that algebra. The adversary is assumed to be a speciﬁc (albeit non-deterministic) state machine, and the only way for the adversary to produce new messages is to perform certain operations on messages it already “knows”.
+This model has an extremely nice feature: simplicity. Because the computation model is symbolic and the adversary is restricted, it is possible to explicitly represent all of the adversary’s possible behaviors in a compact way. General theorems can be proven about the limits of the adversary’s powers, and it is relatively easy to show the adversary’s goals to be outside its range of possible behaviors. This simplicity allows a great deal of automation. Although the problem of protocol security is undecidable in general [8], it is decidable for an important sub-class of protocols [24]. Furthermore, several automated tools have been successfully used. (See [14,23,26] for typical examples. Also see [16] for a recent survey of the ﬁeld.)
+1 That is, it has access to an inﬁnite tape of random bits and executes in time polynomial in the length of its (non-random) input.
+2
+
+However, this model also has a drawback: the Dolev-Yao adversary is actually quite weak. Although it can pick from among the allowed operations non-deterministically, the set of allowed operations is ﬁxed and quite small. It is unclear whether security against this restricted adversary implies security against more realistic adversary models. It is also unclear how security statements from the Dolev-Yao model transfer to the computational model.
+It seems that one must choose between the simplicity of the Dolev-Yao model and the solid grounding of the computational model. However, is this choice necessary? Are the two models irreconcilable? In particular, is it necessarily true that Dolev-Yao proofs of security will have no computational meaning?
+This is a large question, and in this paper we only discuss one small part: the adversary. In particular, we show that the use of suﬃciently strong primitives from computational cryptography forces an equivalence of sorts between the Dolev-Yao adversary and all computational adversaries. That is, we do four things:
+• We describe the Dolev-Yao model, and extract a natural computational security condition that summarizes its strong assumptions regarding the adversary (Sections 3 and 4).
+• We investigate a previous eﬀort in this area [2] that related, in the symmetrickey setting, the passive Dolev-Yao adversary to the passive computational one. In particular, this eﬀort showed that if two Dolev-Yao messages are indistinguishable to the passive Dolev-Yao adversary, then the natural interpretations of these two messages in the computational setting will be indistinguishable to the passive computational adversary. We translate this result to the public-key setting (Section 5).
+• We show that this indistinguishability property is no more powerful than other, standard deﬁnitions of security from computational cryptography (also Section 5).
+• Lastly, we show that our more natural security condition is no more powerful than the indistinguishability property (Section 6).
+We ﬁnish by discussing avenues for future work (Section 7). First, however, we discuss other eﬀorts in this same area.
+2 Related Work
+The question we discuss has already been partially addressed in work by Abadi and Rogaway ( [1,2], and continued in [10] and [17,18]) which served as a great source of inspiration for this work. In particular, these authors derived and implemented the indistinguishability property that will play such a central
+3
+
+role here. The indistinguishability property we deﬁne and use in this paper is a direct analogue of theirs, translated from the symmetric-encryption setting to that of asymmetric encryption. Because of diﬀerences between these two settings, our indistinguishability property will be stronger than theirs in some places and weaker than theirs in others. More importantly, we will go on to relate our indistinguishability property to the property of malleability. That is, we show that the computational adversary can be prohibited from producing any message that could not also be produced by the Dolev-Yao adversary. The relationship between indistinguishability and non-malleability depends on the setting (see [4] for an examination of this issue). In the purely computational setting, for example, non-malleability is strictly stronger than indistinguishability if the computational adversary only has access to the public key. However, non-malleability and indistinguishability are equivalent against the chosen-ciphertext attack (i.e, when the adversary has constant access to a decryption oracle, as it will in Deﬁnition 12). We will show that indistinguishability implies a weak form on non-malleability in that encryption that satisﬁes our Dolev-Yao indistinguishability property also satisﬁes our Dolev-Yao nonmalleability property. The converse is commonly true in other settings, and is likely to be true here as well. However, this remains an open question for time being.
+Another two related research eﬀorts in this area are those of Backes, Pﬁtzmann and Waidner [3], and Micciancio and Warinschi [19]. In general, these investigations represent protocol executions in two diﬀerent ways: a “real” setting and an “ideal” setting. In the “real” setting, the execution of a protocol is represented as the communication of Turing machines that use computational encryption to create bit-string messages. The two lines of research diﬀer in their representation of the “ideal” setting. Backes et. al. use a ‘database’ that stores all messages and tracks which ones are known by whom. This database allows the adversary to access only those messages it would be able to deduce in the Dolev-Yao paradigm. Micciancio and Warinschi, on the other hand, represent the ideal setting directly as symbolic execution in the Dolev-Yao model. The main results of both eﬀorts state that any behavior that an honest participant can see in the “real” setting could also be seen in the “ideal” setting. Hence, a proof of security in the “ideal” setting will serve as a proof in the “real” setting (modulo negligible probabilities).
+These works are extremely compelling. However, they focus attention onto the behavior of the adversary as a whole. That is, they regard the adversary’s behavior as an unknowable mystery which cannot be broken into component parts. We, on the other hand, regard the behavior of the adversary as a series of message creations, and leverage a statement about a single creation into a statement about the adversary’s behavior as a whole.
+A less similar approach to the same problem is a recent eﬀort to incorporate
+4
+
+polynomial-time indistinguishability into process algebras [12,13,15,20,21]. Process algebras introduce grammars for processes that typically encompass a large number of higher-level programming constructs. They also introduce a number of algebraic rewrite and cancellation laws that allow one to prove two processes equivalent, that their observable behaviors are equivalent, or that the observable behavior of one process is a subset of the observable behavior of another. In this framework, one can prove a given process to be “safe” by showing that its observable behavior is the same as, or a subset of, the observable behavior of an idealized “speciﬁcation” process.
+This idea has recently been expanded to include new types of “equivalent” behavior. In particular, the deﬁnitions of both process and observable behavior have been expanded to include probabilistic behavior. This allows the deﬁnition of “observationally equivalent” to mean “indistinguishable to any polynomial-time environment or distinguisher.” This approach does not provide the tools necessary to prove an original indistinguishability result, but it does allow one to prove that some given indistinguishability result follows from another one. Furthermore, this derivation uses the high-level rewrite and cancellation rules of the algebra rather than direct reductions.
+3 The Dolev-Yao Model
+We begin our work by exploring the powers of the adversary in the Dolev-Yao model. There are actually several variations on the Dolev-Yao model, each tailored to a speciﬁc tool or application. We provide and discuss a generic example which uses public-key encryption. In this setting, messages are assumed to be elements of an algebra A of values. There are four types of atomic messages:
+• Identiﬁers (public, predictable, denoted by I) • Random nonces (private, unpredictable, denoted by R), • Public keys (KP ub), and • Private keys (KP riv)
+Compound messages are created by two deterministic operations:
+• encrypt : KP ub × A → A • pair : A × A → A
+5
+
+We write {|M |}K for enc(K, M ) and M N for pair(M, N ). 2 We require that there be a bijection
+inv : KP ub → KP riv and by K−1 we mean inv (K) when K is a public key and inv −1(K) when K is a private key.
+Although we will consider only public-key encryption in this paper, one could also easily add symmetric encryption to the Dolev-Yao model by introducing a new key type on which the inv operation is the identity function.
+The algebra is assumed to be free: every value has a unique representation.
+In the Dolev-Yao model, there are two kinds of active parties: honest participants and the adversary. The honest participants follow the steps of the protocol without deviation. They can engage in multiple runs of the protocol simultaneously and with diﬀerent parties. Some versions of the model also contain the internal states of honest participants, others do not. We will not consider them in this paper.
+The network is assumed to be completely under the control of the adversary, who can record, delete, replay, reroute, reorder, and completely control the scheduling of messages. This is modeled by letting the adversary be the network: the honest participants send their messages only to the adversary and receive messages only from the adversary. Thus, we can consider each execution of the protocol to be an alternating sequence of adversary messages (qi ∈ A) and environment responses (ri ⊆ A):
+r0 q1 r1 q2 r2 . . . qn−1 rn−1 qn rn
+Typically, each message or response will be accompanied by such auxiliary information as nominal sender, intended receiver, and so forth. We will ignore this auxiliary information in this work. Such issues as scheduling and routing of messages are considered in the Dolev-Yao analysis of a protocol, which will assume that the adversary can choose the recipient and auxiliary information for its messages with total non-determinism. Hence, the Dolev-Yao analysis will capture any strategy chosen by the eﬃcient adversaries of the computational model in choosing the routing information of their messages. In this work, we will focus on the limited non-determinism allowed to the Dolev-Yao adversary in choosing its messages’ contents.
+The main limitation on the choice of message content is that every query qi must be derivable from what is known initially and r0, r1, r2. . . ri−1. The initial
+2 When three or more terms are written together, such as M1 M2 M3, we assume they are grouped to the left. That is, M1 M2 M3 = pair(pair(M1, M2), M3).
+6
+
+knowledge of the adversary includes at least the following:
+(1) the public keys (KP ub), (2) the private keys of subverted participants (KAdv ⊆ KP riv), (3) the identiﬁers of the principals (I), and (4) the nonces the adversary itself generates (RAdv ⊆ R) which are assumed
+to be distinct from all nonces generated by honest participants.
+(Note that the the adversary must receive a set r0 before it sends its ﬁrst message. This message can be thought of as an “initialization” from the environment which provides the adversary with any extra information that might be available to it in a particular setting.)
+The Dolev-Yao model places severe restrictions on what messages are derivable from others. Analyses in this model tend to focus on the structure of protocols. That is, they wish to identify those properties of protocols that exist independently of the encryption schemes used to implement them. Hence, the Dolev-Yao model assumes that the only manipulations the adversary can apply with respect to pairing and encryption are those that must be allowed. The pairing operation must allow pairing and separation, and the encryption operator must allow encryption and decryption (with known keys). Thus, for a given message M to be derivable from a set of messages S, it must be possible to produce it by applying the following operations a ﬁnite number of times:
+• decryption with known or learned private keys, • encryption with public keys, • pairing of two known elements, and • separation of a pair into its components.
+To combine these two intuitions:
+Deﬁnition 1 (Closure) The closure of S, written C[S], is the smallest subset of A such that:
+(1) S ⊆ C[S], (2) I ∪ KP ub ∪ KAdv ∪ RAdv ⊆ C[S], (3) If {|M |}K ∈ C[S] and K−1 ∈ C[S], then M ∈ C[S], (4) If M ∈ C[S] and K ∈ C[S], then {|M |}K ∈ C[S], (5) If M N ∈ C[S], then M ∈ C[S] and N ∈ C[S], and (6) If M ∈ C[S] and N ∈ C[S], then M N ∈ C[S].
+It is the central assumption of the Dolev-Yao model that this closure operation represents the limit of the ability of the adversary to create new messages:
+7
+
+Deﬁnition 2 (Dolev-Yao adversary) Suppose that
+r0 q1 r1 q2 r2 . . . qn−1 rn−1 qn rn
+is a protocol execution in the Dolev-Yao model, where q1, q2,. . . qn ∈ A are messages from the adversary to honest participants and r0, r1,. . . rn ⊆ A are the honest participants’ responses. Then for all i, qi ∈ C[r0 ∪ . . . ∪ ri−1].
+That is, although the Dolev-Yao adversary can choose its messages nondeterministically, it must choose them from within the closure. It is this intuition that we will translate into the computational model.
+4 Relating the Dolev-Yao and Computational Messages
+In this section, we formalize the intuition of Deﬁnition 2 in the language of computational cryptography, using a series of intermediate attempts. Intuitively, we would like to say that it should be hard for the computational adversary to produce a single message outside the closure of its input. Informally:
+Attempt 1 An abstract encryption operator provides weak 3 Dolev-Yao nonmalleability if ∀PPT adversaries A, ∀S ⊆ A, ∀M ∈ (A \ C[S])
+Pr[N ← A(S) : N = M ] is small.
+Here, Pr[A; B; C : P ] indicates the probability of predicate P being true after running experiments A, B and C in series. The notation x ← D indicates x being drawn from distribution D. If D is a set, the uniform distribution is used. If D is an algorithm, we use the distribution over output induced by the distribution of the input and the distribution of D’s random coin ﬂips.
+Although this attempt contains the desired intuition, there are two small problems:
+• It is unclear how a set S of Dolev-Yao messages can be passed as input to a computational adversary, or how a Dolev-Yao message M can be produced as output.
+• It is not clear what a “small” probability is.
+The purpose of this section is to make the above deﬁnition meaningful. Our main tool for doing so will be a mapping from Dolev-Yao messages to their
+3 In Section 7, we will consider stronger formalizations of this same intuition.
+8
+
+computational analogues: probability distributions on bit-strings. The mapping we present here is congruent to that given by Abadi and Rogaway[1,2], adapted to the public-key encryption setting.
+The “encoding” of a message M , written [M]tη, is a probability distribution that depends on four things:
+• The formal message M , • The tape (t) which is an inﬁnite sequence of bits. We assume for conve-
+nience that we have random access to this tape, although this can be easily simulated using a standard tape and some book-keeping. In usage, we will assume that the bits on this tape are random. • A security parameter, which is a natural number η represented in unary. This parameter represents the amount of security present in the system. In encryption schemes, for example, the security parameter can be thought of as the size of keys. • An arbitrary public-key encryption scheme, which in the computational setting is a triple of algorithms: · G is the key generation algorithm, which takes as input a security param-
+eter η, and η bits of randomness. It outputs a public/private key pair. · E is the encryption algorithm, which takes in as input a public key, a
+plaintext string, and η bits of randomness. The output is the ciphertext. We will write E(x, pk ) for the distribution induced by running E (over all choices of randomness) on plaintext x and public key pk . · D is the decryption algorithm, which takes as input a private key and a string. It is required that D(sk , E(pk , x, σ)) = x for all valid key pairs (pk , sk ), all plaintexts x, and all choices of randomness σ ∈ {0, 1}η. Note that the key generation and encryption algorithms are randomized. The randomness used by these algorithms will be polynomial in the security parameter η; we assume without loss of generality that all of these polynomials are the identity polynomial f (η) = η.
+Deﬁnition 3 (Encoding: messages) Let η ∈ N be the security parameter. Let t ∈ {0, 1}ω be a random tape, partitioned into a length-η segment for each nonce and public key in A. Let (G, E, D) be a public-key encryption scheme. Then for any M ∈ A, the encoding of M , written [M]tη, is deﬁned recursively as:
+• If M ∈ R is a nonce, then [M]tη = σM , “nonce” , where σM is the value of the tape partition associated with M .
+• If (M, M −1) is a public/private key pair, then [M]tη = e, “pubkey” and [M −1]tη = d, “privkey” where (e, d) is the output of G(1η, σM ). Note that σM is used for randomness.
+• If M ∈ I is an identiﬁer, then [M]tη is mapped to m, “id” where m is any (short) bit-string uniquely associated with M . That is, we do not care how
+9
+
+identiﬁers are mapped to bit-strings so long as each identiﬁer is uniquely represented. We assume that it is eﬃcient to compute the encoding of a given identiﬁer. • If M = M1 M2, then [M]tη is the mapping from pairs of distributions to distributions given by [M1]tη , [M2]tη , “pair” . • If M = {|M |}K is an encryption, then [M]tη is the mapping from pairs of distributions to distributions given by E [M ]tη , [K]tη , [K]tη , “enc”
+If S ⊆ A, then by [S]tη we mean [s1]tη , [s2]tη , . . . where s1, s2 are the elements of S in some canonical order. By [M]η we mean the distribution
+t ← {0, 1}ω ; m ← [M]tη : m .
+The bits on the tape are used to represent the coin ﬂips used to make atomic elements, and we will later enforce that the tape is ﬁlled with random bits. Compound terms are made via either bit-string concatenation or a computational encryption scheme. Note that the coin ﬂips used by the encryption algorithm are not taken from the tape. Hence, [{|M |}K]tη remains a distribution even if t is ﬁxed.
+There are two properties of computational public-key encryption that our encoding mapping will need to accommodate. First, public-key encryption is not required to hide the key used to encrypt. We make this possible leak of information explicit in the deﬁnition above by explicitly concatenating each ciphertext with the encrypting key.
+Secondly, computational public-key encryption is not generally required to hide the length of the plaintext. For this reason, we need to limit the amount of information about a plaintext that will be revealed by its length. We will assume that the length of a message depends only on the message’s structure, not any of its component values. More formally, let the type tree of a formal message be the same as its parse tree except that each leaf is replaced by its type. We use the same notation for type trees that we do for messages. Thus, the type tree of a message {|A N |}K (where A ∈ I, N ∈ R and K ∈ KP ub) is {|I R|}KPub.
+We assume that the length of a formal message M depends only on TM , the type tree of M , and the security parameter. This is not an unreasonable assumption. The above deﬁnition of the encoding mapping implies that all nonces encode to the same length. The assumption can be trivially enforced for other type trees by padding out to some maximal length. Thus, we will use [M]tη to designate the unique length of encodings of M .
+10
+
+The encoding mapping allows formal messages to be represented as bit-strings, which allows formal messages to be passed to and returned by the computational adversary. This solves the ﬁrst problem with Attempt 1. Because the mapping also introduced the security parameter, we can solve the second problem. A probability is “small” if it is negligible in the security parameter:
+
+Deﬁnition 4 (Negligible) A function f : N → R is negligible if, for any
+
+polynomial
+
+q,
+
+f (η)
+
+≤
+
+1 q(η)
+
+for
+
+all
+
+suﬃciently
+
+large
+
+η.
+
+(The phrase “for all suﬃciently large η” is equivalent to ∃η0. ∀η ≥ η0.)
+
+With these two problems solved, we can re-attempt to translate Deﬁnition 2 into computational terms:
+
+Attempt 2 An encryption scheme (G, E, D) provides weak Dolev-Yao nonmalleability if, when used in [·]tη,
+
+∀ PPT adversaries A, ∀ S ⊆ A, ∀M ∈ (A \ C[S])
+
+∀ polynomials q, ∀ suﬃciently large η :
+
+Pr[ t ← {0, 1}ω ;
+
+s ← [S ∪ KP ub ∪ KAdv ∪ RAdv ∪ I]tη ;
+
+m ← A(1η, s) :
+
+m ∈ supp [M]tη
+
+]
+
+≤
+
+1 q(η)
+
+Here, supp D means the support of distribution D. When the support of a distribution contains one element, we will treat the distribution itself as a singleton set.
+This deﬁnition is still problematic, however, for two technical reasons. First, the input to the adversary might be of inﬁnite length. The set S may be of inﬁnite length. There may be an inﬁnite number of elements in I, RAdv , KP ub and KAdv . If any of these are the case, then the restriction of the adversary to probabilistic polynomial-time is meaningless. No computational encryption scheme would remain secure against an inﬁnite-time adversary. For this reason, we require that S be of ﬁnite size. The sets I, RAdv , KP ub and KAdv might still be inﬁnite, so instead of passing them as input we represent them via oracles:
+• Mtη(x) returns (the encoding of) the identiﬁer of the xth participant. • Rtη(x) returns the (encoding of) the xth nonce in RAdv , • PbKtη(x) returns the public key of principal x, and • PrKtη(x) returns the private key of x of x ∈ [K−1]tη if K−1 ∈ KAdv .
+11
+
+The second problem is that our results rely upon a technical limitation: acyclicity of encryptions. A set of encryptions is acyclic if, when K1 encrypts K2−1 in some element of S, and K2 encrypts K3−1, and so on, this sequence of keys encrypting keys never loops back on itself. More formally:
+Deﬁnition 5 (Acyclic) For an expression M , construct a graph GM where the nodes are the public/private key pairs used in the expression. We draw an edge from p1 → p2 if in M the private key K2−1 associated with pair p2 is encrypted with K1, the public key associated with p1. The expression M is acyclic if the graph GM is acyclic.
+Our results will only hold for acyclic sets S. However, protocols analyzed in the Dolev-Yao model typically operate in one of three ways:
+• Long-term keys are used to encrypt session keys, which themselves never encrypt other keys,
+• The present session key is used to encrypt the next session key, but never the previous, or
+• Keys are never encrypted at all.
+None of these cases will produce cyclic encryptions.
+Thus, we arrive at our ﬁnal security condition:
+Deﬁnition 6 (Dolev-Yao weak non-malleability) An encryption scheme (G, E, D) provides weak Dolev-Yao non-malleability if, when used in [·]tη,
+
+∀ PPT adversaries A, ∀ acyclic ﬁnite S ⊆ A, ∀M ∈ C[S] ,
+
+∀ polynomials q, ∀ suﬃciently large η :
+
+Pr[ t ← {0, 1}ω
+
+s ← [S]tη ;
+
+m
+
+←
+
+AMtη
+
+(·),PbKtη
+
+(·),PrKtη
+
+R(·),
+
+t η
+
+(·)
+
+(1η
+
+,
+
+s)
+
+:
+
+m ∈ supp [M]tη
+
+]
+
+≤
+
+1 q(η)
+
+The main purpose of this section has been to derive this security condition, which directly captures the assumptions of the Dolev-Yao adversary. However, there exist other security conditions that formalize the Dolev-Yao model. We consider one of these in the next section.
+12
+
+5 An Indistinguishability Lemma
+
+In this section, we consider the indistinguishability-based deﬁnitions of DolevYao security originally derived by Abadi and Rogaway [1,2]. Intuitively, the deﬁnition of that paper describes when two formal messages should “look” the same to the formal adversary. A formal adversary has the power to make certain, limited deductions from formal messages; two given formal messages should “look” the same when all possible deductions that can be made about them yield the same results. In particular, the formal adversary of [1,2] is assumed to be unable to distinguish between two diﬀerent encryptions (unless it has the corresponding private key or keys). For example, if the adversary of [1,2] has no other information, the two messages
+
+{|A|}K2 B K1 K1−1 and
+
+{|C D|}K3 B K1 K1−1
+
+should be indistinguishable to it no matter what A, B, C and D are.
+
+The fundamental result of Abadi and Rogaway is that if the encoding algorithm uses suﬃciently strong computational encryption, then two messages indistinguishable to the formal adversary will encode to distributions indistinguishable to the computational adversary. Their result applies to the case of symmetric encryption, and we will here translate it to the case of public-key encryption. This translation will simultaneously strengthen and weaken the result. Indistinguishability in the public-key setting requires a stronger similarity between messages than was necessary in the case of symmetric encryption. However, our results will be able to tolerate the presence of a previously-absent strong decryption oracle.
+
+Let T be a set of keys and suppose that the formal adversary can decrypt with
+regard to them. Then we represent the information that such an adversary can deduce from a formal message by its public-key pattern 4 :
+
+Deﬁnition 7 (Public-key pattern) Let T ⊆ KPub. We recursively deﬁne the function p(M, T ) to be:
+
+• p(K, T ) = K if K ∈ K
+
+• p(A, T ) = A if A ∈ I
+
+• p(N, T ) = N if N ∈ R
+
+• p(N1 N2, T ) = p(N1, T ) p(N2, T )
+
+
+
+•
+
+p({|M |}K
+
+,
+
+T
+
+)
+
+=
+
+ 
+
+{|p(M,
+
+T
+
+)|}K
+
+ 
+
+|TM |
+
+K
+
+if K ∈ T o.w. (where TM is the type tree of M )
+
+4 We will use “pattern” to indicate public-key pattern, as opposed to the stronger, symmetric-key deﬁnition of “pattern” in [2].
+
+13
+
+Then patternpk (M, T ), the public-key pattern of an expression M relative to the set T , is
+p(M, KP ub ∩ C[{M } ∪ T ]). If S ⊆ A is a set of messages, then patternpk (S, T ) is
+p(s1, C[S ∪ T ]), p(s2, C[S ∪ T ]), . . .
+where s1, s2, . . . are the elements of S is some canonical order. The base pattern of a message M , denoted patternpk (M ), is deﬁned to be patternpk (M, ∅), and patternpk (S) is deﬁned to be patternpk (S, ∅).
+The grammar/algebra for patterns is exactly that of messages, with the addition of a new kind of leaf node: |TM | K (a “blob” of type-tree TM under key K) which represents undecipherable encryptions. Unlike the “blobs” of the symmetric-encryption patterns of [1,2], these “blobs” are labeled with K and TM . This is because computational encryption schemes do not necessarily hide either the encrypting key or the plaintext length.
+
+For convenience, we deﬁne a useful relationship between two patterns:
+
+Deﬁnition 8 (Ingredient) If M , M are two patterns, then M is an ingredient of M , written M M , if the parse tree of M is a sub-tree of the parse tree of M .
+
+We note that since messages are special forms of patterns, this relationship can be applied between two messages as well as between a message and a pattern. We also note a relationship between a message and its pattern:
+
+Theorem 9 If M , M are messages and M C[M ].
+
+patternpk (M ), then M ∈
+
+PROOF. Suppose that M patternpk (M ). Consider the same path from root to M in the parse tree of M . Along this path, if an interior node (not itself M ) is in C[M ] then both child nodes are in C[M ]:
+• C[M ] is closed under separation. Hence, if a node is the pair N N and the node is in C[M ], then both N and N are in C[M ].
+• The two children of a node {|N |}K are N and K. Since K ∈ KP ub, K ∈ C[M ] automatically. Furthermore, K−1 ∈ C[M ] as well: if it were not, then this node of M ’s parse tree would have been replaced with |TN | K in the parse tree of patternpk (M ). But |TN | K is not a message and will not contain M in its parse tree. So K−1 ∈ C[M ], and since C[M ] is closed under decryption with keys it contains, N ∈ C[M ].
+Since the root of this path, M itself, is in C[M ] by deﬁnition, it must be the
+14
+
+case that every child of every node above M in the parse tree of M is in the set C[M ]. Hence, M ∈ C[M ] as well.
+
+We can extend the encoding operation to the pattern algebra:
+
+Deﬁnition 10 (Encoding: patterns) Let:
+
+• [ |M | ]tη be any ﬁxed bit-string of length [M]tη such as the all-zero string, and
+• [ |M | K]tη be the the mapping from distributions to distributions given by
+E [ |M | ]tη , [K]tη , [K]tη , “enc” .
+Patterns allow us to state when two messages appear to be the same to the formal adversary: when they have the same pattern. The standard deﬁnition of ‘appears to be the same’ in the world of computational encryption is that of computational indistinguishability. We present a more general deﬁnition, which incorporates the possibility of an oracle:
+
+Deﬁnition 11 (Computational indistinguishability) Suppose that {Dη}η
+
+and
+
+Dη
+
+are two families of distributions indexed by the security parameter.
+η
+
+Then they are computationally indistinguishable with respect to a family of
+
+oracles Ox, written Dη ∼=Ox Dη, if
+
+∀ PPT adversaries A, ∀ polynomials q, ∀ suﬃciently large η :
+
+Pr[d ← Dη : 1 ← AOd(·)(d, η)] − Pr[d ← Dη : 1 ← AOd(·)(d, η)]
+
+≤
+
+1 q(η)
+
+We note that if no oracle access is granted at all, then the above deﬁnition reduces to the standard notion of computational indistinguishability.
+Our intuitive notion is that a message and its pattern should appear to be the same. We formalize this notion by saying that a message and its pattern should encode to computationally indistinguishable probability distributions. To make this formalization completely meaningful, however, we must consider what oracle (if any) the adversary can access. This will be determined by the oracles allowed by the underlying computational encryption scheme.
+A computational public-key encryption scheme provides indistinguishability against the chosen-ciphertext attack 5 (also written CCA-2 secure in the notation of [4]) if no adversary has a chance signiﬁcantly better than random of
+5 See [25], which builds on the work of [22]. See also [6] for a practical implementation.
+
+15
+
+determining accurately whether a ciphertext c is the encryption of message m0 or message m1, even if:
+• the adversary chooses m0 and m1 itself, after seeing the given public key, and
+• the adversary can access a decryption oracle both before choosing the messages and after receiving the ciphertext in question. (The decryption oracle will not decrypt c itself, however.)
+More formally:
+Deﬁnition 12 (Chosen-ciphertext security) A computational public-key encryption scheme (G, E, D) provides indistinguishability under the chosenciphertext attack if
+
+∀ PPT adversaries A, ∀ polynomials q, ∀ suﬃciently large η :
+
+Pr[ (pk , sk ) ← G(1η);
+
+m0, m1 ← AD1(·)(pk ); i ← {0, 1} ;
+
+c ← E(mi, pk ); g ← AD2(·)(c) :
+
+b=g
+
+]
+
+≤
+
+1 2
+
++
+
+1 q(η)
+
+The oracle D1(x) returns D(x, sk ), and D2(x) returns D(x, sk ) if x = c and returns ⊥ otherwise. The adversary is assumed to keep state between the two
+invocations. It is required that m0 and m1 be of the same length.
+
+In the terminology of [1,2], this deﬁnition requires that encryption be messagehiding. It does not, on the other hand, require that it be key-hiding or lengthhiding. It is for this reason that “blobs” in Deﬁnition 7 are labeled with both encrypting key and type-tree (which indicates length of plaintext).
+
+We will assume that the encoding mapping uses CCA-2 secure cryptography. Thus, the oracle we will use in Deﬁnition 11—to show that a message and its pattern produce indistinguishable encodings—will exactly mirror the decryption oracles of Deﬁnition 12. Those oracles will decrypt, with respect to a given public key, anything but a given “challenge” ciphertext. Our oracles will do the same. However, a message and its pattern can be thought of as possibly many diﬀerent “challenge” ciphertexts under possibly many diﬀerent keys. It is simple to deﬁne the keys with respect to which our oracles will decrypt:
+
+Deﬁnition 13 Let M be a pattern. Then M |KPub = {K ∈ KP ub : K M }. If S is a set of messages, then S|KPub = {K ∈ KP ub : ∃M ∈ S s. t. K M }.
+
+16
+
+In addition, the oracle may decrypt with respect to additional keys in some set T . (We use this additional ﬂexibility in the proof of our main theorem.) Due to eﬃciency concerns, however, the set T must be ﬁnite.
+
+It is more diﬃcult to deﬁne the “challenge” ciphertexts which our oracle will
+
+not decrypt. Most directly, they are those encryptions which diﬀer between
+
+[M]tη and
+
+t
+
+pattern pk
+
+(M, T )
+
+.
+η
+
+That
+
+is,
+
+the
+
+challenge
+
+ciphertexts
+
+should
+
+be
+
+those which correspond to “blobs” in the pattern of M relative to the set
+
+of keys T . However, for convenience, we will deﬁne a larger but equivalent
+
+set of challenge ciphertexts which correspond not only to the “blobs” but all
+
+encryptions visible in M to a Dolev-Yao adversary.
+
+Deﬁnition 14 (Visible) Let σ be a bit-string, and τ a set of computational public keys. Then let visτ (σ) be the smallest set so that
+• σ ∈ visτ (σ), • if a, b, “pair” ∈ visτ (σ), then a ∈ visτ (σ) and b ∈ visτ (σ), • if c, k, “enc” ∈ visτ (σ), k ∈ τ , and k is the secret key corresponding to
+k, then D(c, k ) ∈ visτ (σ), and • if c, k, “enc” ∈ visτ (σ), k , “privkey” ∈ visτ (σ), and k is the secret key
+corresponding to k, then D(c, k ) ∈ visτ (σ).
+A bit-string m is a visible element in σ relative to τ if m ∈ visτ (σ).
+Intuitively, x ∈ visτ (σ) iﬀ x is an encoding of X, σ is an encoding of M , τ is an encoding of T and X patternpk (M, T ). That is, a bit-string is a visible element of σ if the adversary can derive it from σ using only DolevYao-style operations using σ and keys in τ . The set visτ (σ) contains every ciphertext which corresponds to a “blob” in patternpk (M, T ). However, it also contains every other ciphertext that has an corresponding analogue in patternpk (M, T ). The decryption oracle will not decrypt these, but this not worrisome: the computational adversary can decrypt these “non-blobs” itself. Just as these encryptions are not “blobbed” in patternpk (M, T ) because the required formal private key is in T or derivable from M , the adversary can decrypt the corresponding computational ciphertext from keys in τ or derivable from σ itself. Thus, we can prohibit the decryption of this more general set without losing generality.
+
+Now that we know the nature of our decryption oracle, we can ﬁnally deﬁne our indistinguishability property between messages and their patterns:
+
+Deﬁnition 15 (Dolev-Yao public-key indistinguishability) A computational encryption scheme provides Dolev-Yao public-key indistinguishability
+
+17
+
+if, when used in [·]tη, for all acyclic formal messages M and ﬁnite T ⊆ KP ub:
+
+[M]η ∼=OMx ,T patternpk (M, T ) η
+
+where OTd ,M (x, pk ) returns ⊥ unless pk is a valid public key and
+• either pk ∈ [K]tη for some K ∈ T , or • pk ∈ [K]tη for some K ∈ (M |KPub \ T ) and x is not in vis[T]tη (d).
+
+(The tape t is assumed to be consistent with that used to form the sample
+
+from [M]η or
+
+pattern pk
+
+(M, T )
+
+.)
+η
+
+In
+
+these
+
+cases,
+
+OTd ,M (x, pk )
+
+returns
+
+D(x, sk )
+
+where sk is the private key corresponding to pk .
+
+In the next section, we will show that Dolev-Yao public-key indistinguishability implies Dolev-Yao weak non-malleability. Before this, however, we show that Dolev-Yao public-key indistinguishability can be satisﬁed by CCA-2 security.
+
+Theorem 16 If (G, E, D) provides indistinguishability under the chosenciphertext attack, then (G, E, D) provides Dolev-Yao public-key indistinguishability.
+
+PROOF.
+
+Suppose that the encoding mapping uses a computational encryption scheme
+
+(G, E, D). Further, suppose that there exists a formal message M , a set of
+
+keys T and a PPT adversary A that can distinguish between a sample from
+
+[M]tη and a sample from
+
+t
+patternpk (M, T ) η (given access to the oracle in
+
+Deﬁnition 15). Then (G, E, D) does not satisfy CCA-2 security.
+
+We prove this by hybrid argument. Since M is acyclic, we can order the keypairs used in the parse tree of M as K1, K2 . . . Kk so that if Ki → Kj in the graph GM , then i ≥ j. That is, the deeper the key in the encryptions, the smaller the number.
+
+We go about the hybrid argument by constructing a number of intermediate patterns between M and patternpk (M, T ). In particular, we construct patterns M0, M1,. . . Mk such that:
+• M0 = M = patternpk M, T ∪ K1−1, K2−1, . . . Kk−1 , • Mi = patternpk M, T ∪ Ki−−11, Ki−−12, . . . Kk−1 , and • Mk = patternpk (M, T ).
+
+18
+
+That is, between Mi and Mi+1 we pick a key K and replace all encryptions with that key with blobs of the appropriate length.
+
+We use this typeface for a running example. Suppose
+M = {|A|}K1 K1−1 K2 {|B|}K3 {|A B|}K2 and
+T = {K3, K4} Assume for now that KAdv = ∅. The pattern of M is
+patternpk (M, T ) = |I| K1 |KP riv| K2 {|B|}K3 |I I| K2
+By using the order on keys suggested by the notation, we can let
+
+M0 = M = {|A|}K1 M1 = |I| K1
+
+K1−1 K2 {|B|}K3 {|A B|}K2 K1−1 K2 {|B|}K3 {|A B|}K2
+
+M2 = |I| K1 |KP riv| K2 {|B|}K3 |I I| K2
+
+M3 = |I| K1 |KP riv| K2 {|B|}K3 |I I| K2
+
+M4 = |I| K1 |KP riv| K2 {|B|}K3 |I I| K2
+
+We will use the hybrid argument on this table.
+
+Now, suppose that and bottoms rows
+
+the distributions [M]η and patternpk (M of our table—are distinguishable. That
+
+,T is,
+
+) —the top
+
+η
+[M]η
+
+∼=OMx ,T
+
+pattern pk
+
+(M, T )
+
+.
+η
+
+Then
+
+we
+
+know
+
+by
+
+a
+
+(standard)
+
+hybrid
+
+argument
+
+that
+
+two consecutive rows are also distinguishable. 6 We continue the hybrid argu-
+
+ment by creating a new table between the two distinguishable rows. Suppose
+
+that Ki is the key being “blobbed” between the two rows. Then there are a ﬁxed number of encryptions being converted to “blobs”. Create a row for each
+
+such encryption, so that two consecutive rows diﬀer only in a single encryption
+
+being replaced with a blob.
+
+For example, if the two rows are
+M1 = |I| K1 K1−1 K2 {|B|}K3 {|A B|}K2
+and M2 = |I| K1 |KP riv| K2 {|B|}K3 |I I| K2
+6 This only follows if the number of rows in the table is polynomial in the security parameter. In this case, however, the number of rows in the table is constant with respect to η.
+
+19
+
+Then we could expand this into the table:
+M1 = |I| K1 K1−1 K2 {|B|}K3 {|A B|}K2 M1.5 = |I| K1 |KP riv| K2 {|B|}K3 {|A B|}K2
+M2 = |I| K1 |KP riv| K2 {|B|}K3 |I I| K2
+Two of these rows must be distinguishable.
+Again, there must exist two consecutive rows R1 and R2 that can be distinguished. Since the rows diﬀer only in the contents of a single encryption and every other part of the row can be created independently, distinguishing between the encoding of two rows reduces to distinguishing between two encryptions.
+Let A be the adversary that can distinguish between the two rows, and let E = {|P |}K be the encryption that is being changed into |TP | K. Then to break the CCA-2 security of the encryption scheme we will distinguish between an encryption of m0 and m1 under public key pk by:
+• letting m0 ← [P]tη, • letting m1 ← [ |TP | ]tη, and • treating pk as the encoding of K.
+More formally:
+• On input pk , select random t ← {0, 1}ω. Then draw p ← [P]tη [pk /K], where [M]tη [x/X, y/Y, . . .] is the same as [M]tη except that x is assumed to be the value for X, y the value for Y , and so on. (If X is an encryption and occurs more than once, then x is used as the value for the instance of X indicated by context. Values for the other instances are still drawn as before.) Note that because M is acyclic, we do not need to know the value [K−1]tη to draw from [P]tη. Return p and [ |TP | ]tη as candidate plaintexts. (Recall that [ |TP | ]tη is a ﬁxed string of the appropriate length, such as the all-zero string.)
+• On input c, an encryption of either [ |TP | ]tη or p, sample s ← [R1]tη [c/P, pk /K]. Note that, since both t and pk were selected randomly, [R1]tη [c/P, pk /K] is the same distribution as [R1]η if c encrypts p. Similarly, [R1]tη [c/P, pk /K] is the same distribution as [R2]η if c encrypts [ |TP | ]tη. Feed (s, 1η) to A.
+• If A makes an oracle call on (x, pk ), we check that pk = [K0]tη for some K0 ∈ M |KPub ∪ T . If not, we return ⊥. If so, we decrypt or not as follows: · If K0 = K, we check that x is not visible in x relative to t = [T]tη. Since x is not visible in s relative to t, and c is visible in s relative to t, x = c. Hence, the decryption oracle D2 in Deﬁnition 12 will happily decrypt x for us.
+20
+
+· If K0 = K, we can produce
+
+K0−1
+
+t η
+
+ourselves
+
+from
+
+the
+
+tape
+
+t.
+
+If
+
+K0 ∈ T ,
+
+we decrypt x with the value so produced. If K0 ∈ M |KPub \ T , we also
+
+check to see if x is visible in s relative to t. We return ⊥ if it is, and
+
+decrypt x if it is not.
+
+Assume in our example that rows M1.5 and M2 can be distinguished by A.
+
+Then P = A B and K = K2. We build the two candidate ciphertexts by
+
+selecting t ← {0, 1}ω. We then select p ← [A B]tη, and return p, [ |I I| ]tη
+
+t
+
+as candidate ciphertexts. When we get c, a value either from |I I| K2 η or
+
+t
+
+{|A B|}K2
+
+,
+η
+
+we
+
+draw
+
+t
+s ← |I| K1 |KP riv| K2 {|B|}K3 {|A B|}K2 η [c/ {|A B|}K2 , pk /K2]
+
+Since either s ∈ supp [M1.5]tη or s ∈ supp [M2]tη, the adversary A will tell us
+
+which one, and this answer will tell us if c encrypts [A B]tη or [ |I I| ]tη.
+
+We simulate A on s: when A requests that we decrypt a string x with
+
+K1−1
+
+t
+, we
+η
+
+make
+
+sure
+
+that
+
+it
+
+isn’t
+
+c, [B]tη,
+
+or
+
+the
+
+bit-strings
+
+in
+
+s
+
+that
+
+repre-
+
+sent |I| K1 and |KP riv| K2. If it is not these four things, we use the tape t
+
+to create the secret key and decrypt x.If A asks us to decrypt something with
+
+K2−1
+
+t
+,
+η
+
+we
+
+check
+
+that
+
+it
+
+is
+
+not
+
+any
+
+of
+
+the
+
+four
+
+ciphertexts
+
+above.
+
+If
+
+it
+
+is
+
+not, then we send it to the decryption oracle provided to us in Deﬁnition 12,
+
+which will decrypt it for us. If A asks us to decrypt with
+
+K3−1
+
+t η
+
+or
+
+K4−1
+
+t
+,
+η
+
+we create the keys from the tape and decrypt any ciphertext.
+
+The answer from A directly corresponds to the plaintext chosen for c, which allows us to distinguish whether it encrypts [ |I I| ]tη or p.
+
+A(s, η) will eventually return an answer that distinguishes between samples from R1 and R2. The answer from A will signify whether c encrypted p or [ |TP | ]tη.
+
+We note as a corollary that the exact analogue of the Abadi-Rogaway result holds: if two messages M and N have the same pattern (with respect to some set T ) then they produce indistinguishable encodings:
+
+Corollary 17 Suppose that M , N are two acyclic messages, T ⊆ A is a set
+
+othfekreeyesx,isatnsdanM[M|KP]ηub∼==OMx N,T
+
+|KP ub . [N ]η .
+
+If
+
+pattern pk
+
+(M, T )
+
+=
+
+pattern pk
+
+(N, T ),
+
+then
+
+21
+
+PROOF. By assumption and Theorem 15, we know that
+
+[M]η ∼=OMx ,T patternpk (M, T ) η = patternpk (N, T ) η ∼=ONx ,T [N]η
+
+Since M |KPub = OMx ,T is the same
+
+N as
+
+|KP ub and the oracle
+
+pOaNxt,tTe.rnTphke(∼=MO,MxT,T)
+
+= patternpk (N, T ), relation is transitive
+
+the (by
+
+oracle hybrid
+
+argument), and so the result follows.
+
+We end by noting that we do not lose generality in this corollary by requiring
+that M |KPub = N |KPub. If M and N have the same pattern but have diﬀerent public keys in their parse trees, then we can simply form M by pairing with
+M every key in M |KPub ∪N |KPub, and similarly for N . Since we add only public keys, patternpk (M , T ) = patternpk (N , T ). However, it is now the case that M |KPub = N |KPub and the corollary holds.
+
+6 Ideal Encryption
+Theorem 18 Suppose that (G, E, D) is a computational public-key encryption scheme that provides Dolev-Yao public-key indistinguishability. Then (G, E, D) provides Dolev-Yao weak non-malleability.
+
+PROOF.
+Suppose that the theorem is false. Then there is an adversary that is able to produce a message outside the closure of its input set:
+
+∃ PPT adversaries A, ∃ acyclic ﬁnite S ⊆ A, ∃M ∈ C[S] ,
+
+∃ polynomials q, for inﬁnitely many η :
+
+Pr[ t ← {0, 1}ω
+
+s ← [S]tη ;
+
+m
+
+←
+
+AMtη
+
+(·),PbKtη
+
+(·),PrKtη
+
+R(·),
+
+t η
+
+(·)
+
+(1η
+
+,
+
+s)
+
+:
+
+m ∈ supp [M]tη
+
+]
+
+≥
+
+1 q(η)
+
+We will construct from this adversary a new adversary A1 that serves as a counter-example to Theorem 15. But ﬁrst, consider the parse tree of M . Suppose that every path from the root of the parse tree to a leaf passes through an element of C[S]. Then it must be that the root message, M , is in C[S] —
+
+22
+
+a contradiction. Hence, there must be some path in the parse tree of M such that no element along that path is in C[S], including the leaf Ml.
+Now, consider the simple, intermediate adversary A2, which operates as follows:
+(1) It ﬁrst chooses a random tape t ← {0, 1}ω. (2) It then uses that tape to sample s ← [S]tη. (3) It simulates the counter-example adversary A on input (1η, s). (4) When A makes an oracle query, A2 responds appropriately. (Because it
+knows the random tape t, it can compute any atomic value it wishes, including those returned by the oracles.) (5) When A responds with m ∈ supp [M]tη, A2 uses this to produce a value ml ∈ [Ml]tη. That is, it progresses down the path in the parse tree of M that leads to Ml: • It starts with a value for [M]tη, and at the root of the parse tree. • If the current node is a pair, M N , then it separates the current bit-
+string value into [M ]tη and [N ]tη. It progresses down the path in the parse tree toward Ml, and keeps the value for the new node as its new current value. • If the current node is an encryption, {|M |}K, it uses the tape t to ﬁnd the value for [K−1]tη. It then uses that to decrypt the current bit-string value to get [M]tη, and progresses down the path in the parse tree toward Ml. (Note: we know that Ml cannot be K, since K ∈ C[S] and we know this to not be the case for Ml.)
+At the end, this adversary will have a value for [Ml]tη. Now, consider what Ml might be:
+• Ml cannot be a compound term, since it is a leaf of the parse tree. • Suppose Ml ∈ I. Then Ml ∈ C[S], no matter what S is—a contradiction. • Suppose Ml ∈ KP ub. Then, as mentioned above, Ml ∈ C[S] always. • Suppose Ml ∈ R. If Ml ∈ RAdv then Ml ∈ C[S]. So, we only need to worry
+about Ml ∈ R \ RAdv . There are two cases: either Ml is in the parse tree of something in S, or it is not. The second case leads to a contradiction. If Ml is not in the parse tree of any element of S, then the input to the adversary is completely independent of the required output. Thus, the adversary in question is able to guess a η-bit random value based only on independent input. The probability of this must be bounded above by 2−η, contradicting our assumption that the probability of creating an element of supp [M]tη (and hence an element of supp [Ml]tη) is non-negligible. • Suppose Ml ∈ KP riv. Then, we proceed similar to above. If Ml ∈ KAdv , then Ml ∈ C[S]. If Ml ∈ KP riv \ KAdv but not in the parse tree of some element of S, the adversary is able to guess a private key based on the corresponding public key, encryptions using the public key, and values independent of the private key. Since we are assuming that the encryption scheme provides
+23
+
+indistinguishability against chosen-ciphertext attacks, the probability of this must be negligible. Again, we ﬁnd a contradiction.
+
+Thus, the only possibility is that Ml is in R \ RAdv or in KP riv \ KAdv , and that Ml is in the parse tree of some element of S. However, it cannot be the case that Ml itself is in S, or that Ml can be produced from S only by separating pairs. (If either of those were true, then Ml would be in C[S] itself, a contradiction.) Thus, Ml must only appear in S in the plaintext of encryptions.
+
+Thus, we have an adversary A2 which takes an element of [S]tη and produces the plaintext to some encryption in S. Granted, A2 created [S]tη itself and knows every secret. Hence A2 does not serve as the counter-example to any-
+thing. However, a simple modiﬁcation to A2 will serve as a counterexample to
+Theorem 15. Let:
+
+
+
+S
+
+=
+
+ 
+
+S
+
+∪
+
+{Ml}
+
+ 
+
+S
+
+∪
+
+Np, {|Np|}Ml−1
+
+if Ml ∈ R (where Np ∈ RAdv ) if Ml ∈ KP riv
+
+Then we will be able to distinguish between [S ]η and patternpk (S , T ) η where T is M |KPub \ S|KPub. (Note that if Ml is a private key, then it is in
+neither C[S] or T . Hence the encryption {|Np|}Ml−1 will become |R| Ml−1 in patternpk (M, T ).)
+
+Consider the adversary A1 that does the following:
+
+(1) It receives as input the value d, which is drawn either from [S ]tη or from
+
+t
+
+patternpk (S , T ) η (for some tape t). It separates d into dS and dtest ,
+
+where dS ∈ [S]tη and either dMl ∈ [Ml]tη if Ml is a nonce, or dMl ∈
+
+tt
+
+Np, {|Np|}Ml−1
+
+or
+η
+
+Np, |R| Ml−1 η if Ml is a private key.
+
+(2) It simulates A on (1η, dS). (We will postpone consideration of any oracle
+
+calls that A makes for one moment.) (3) When A returns m, A1 will attempt to extract the value [Ml]tη from m.
+That is, it recurses down the parse tree of M to Ml, separating pairs and
+
+decrypting encryptions, until it arrives at Ml: • If M = N1 N2 and m = n1, n2, “pair” , then A continues recursively on
+
+n1 or n2 depending on whether N1 or N2 is on the path to Ml. • If M = {|N |}K, m = c, k, “enc” and k ∈ [K]tη, then A1 sends (c, k) to
+the decryption oracle. Will the decryption oracle decrypt? There are
+
+two cases:
+
+· By deﬁnition, K ∈ M |KPub. If K ∈ S|KPub also, then K ∈ T . Hence, the oracle of Deﬁntion 15 will decrypt c.
+
+· If K ∈ S|KPub , then K ∈ S|KPub \ (M |KPub \ S|KPub ). But S|KPub \ (M |KPub \ S|KPub) = S|KPub \ T . Hence, the decryption oracle of
+
+24
+
+Deﬁnition 15 will decrypt c if c is not in vis[T]tη (d). However, could c be visible in d with respect to [T]tη? If it is, then by the deﬁnition of visibility, {|N |}K patternpk (S, T ). In this case, however, T = M |KPub \ S|KPub, and so contains no keys in the parse tree of S. Allowing the adversary to decrypt with respect to T does
+not give it more information about S. Hence, patternpk (S, T ) = patternpk (S). Thus, if {|N |}K patternpk (S, T ) then {|N |}K patternpk (S) and so by Theorem 9 it must be that {|N |}K ∈ C[S]. However, this contradicts the assumption that no node on the path
+from M to Ml is in C[S], and so c cannot be visible in d. Hence,
+the decryption oracle of Deﬁnition 15 will decrypt it.
+Thus, the decryption oracle will always return p, the plaintext of c.
+A1 then moves down the parse tree to the node for N and recursively
+applies this process to p.
+(4) If any of the above conditions fail, then A immediately stops and outputs
+0. Otherwise, A1 will acquire a value ml which may be the encoding of
+Ml. A1 tests this using the string dtest , which it reserved at the beginning.
+If Ml is a nonce, then dtest will be the value for Ml; A can simply test that ml = dtest . If Ml is a private key, then dtest contains a plaintext [Np]tη and an encryption of that plaintext. A1 simply decrypts the encryption with
+ml. If the result should be the same as the other value of dtest . If these
+tests are satisﬁed, then A1 outputs 1. Otherwise, it outputs 0.
+
+A1 will return 1 whenever A produces an element of supp [M]tη. Hence, A1 will
+
+return
+
+1
+
+with
+
+probability
+
+at
+
+least
+
+1 q(η)
+
+given
+
+that
+
+d
+
+is
+
+in
+
+fact
+
+drawn
+
+from
+
+[S]η .
+
+If, on the other hand, d is drawn from
+
+pattern pk
+
+(M, T )
+
+,
+η
+
+then
+
+A
+
+cannot
+
+have
+
+a non-negligible chance of producing a m ∈ supp [M]tη. Since Ml ∈ C[S], it
+
+cannot be that Ml patternpk (S) = patternpk (S, T ).
+
+• If Ml is a nonce, then this implies that the sample d will be entirely inde-
+
+pendent of the actual value for [Ml]tη.
+
+• If Ml is a private key, on the other hand, then d may include encryptions
+
+made using the public key
+
+Ml−1
+
+t
+.
+η
+
+But
+
+the
+
+encryption
+
+provides
+
+indistin-
+
+guishability against chosen-ciphertext attack, so it is infeasible to recover
+
+a private key using only encryptions under the corresponding public key.
+Since d is otherwise independent of [Ml]tη, A cannot have a non-negligible chance of recovering [Ml]tη.
+
+Thus, the probability that A1 will return 1 given that d is sampled from
+t
+patternpk (S, T ) η must be negligible.
+
+Hence, if A has a non-negligible chance of constructing m ∈ supp [M]tη from a sample from [S]tη, then A1 has a non-negligible chance of distinguishing [S ]η
+
+25
+
+from
+
+patternpk (S , T )
+
+,
+η
+
+a
+
+contradiction
+
+of
+
+Theorem
+
+15.
+
+There remains only one last complication: A has access to oracles while operating. In particular, A can request any public key, any private key in KAdv , any identiﬁer, and any nonce in RAdv . How does A1 respond to these oracle calls when it simulates A?
+
+The answer is that we slightly modify the set S to include the information
+needed to respond. In particular, let S|KPub and S|RAdv be deﬁned analogously to S|KPub.Then the set S is will actually be
+
+
+
+S
+
+=
+
+ 
+
+S
+
+∪
+
+S|KP ub
+
+∪
+
+S |KAdv
+
+∪
+
+S |RAdv
+
+∪
+
+{Ml}
+
+ 
+
+S
+
+∪
+
+S|KP ub
+
+∪
+
+S |KAdv
+
+∪
+
+S |RAdv
+
+∪
+
+Np, {|Np|}Ml−1
+
+if Ml ∈ R if Ml ∈ KP riv
+
+When A1 receives the input d it strips oﬀ dS as before and simulates A. When A makes an oracle call, however, A1 can respond:
+
+• If the oracle is being asked for an identiﬁer, A1 computes the representation of that identiﬁer. (As mentioned before, we assume that the encoding of identiﬁers is eﬃciently computable.)
+• If the oracle is being called on an ingredient of S, then the additional information in s contains the needed bit-string.
+• Otherwise, the needed value is a random variable independent of d. A1 can sample from the relevant distribution to produce an indistinguishable value. It then stores the value for future use (and if the value is a key, the corresponding secret or public key also), and returns it.
+
+Since the formal messages we added to S are already in C[S], they do not change the pattern of the original S. Hence, adding them to S does not change the distribution of dS, and A will progress as before.
+
+7 Conclusion and Open Problems
+The primary contribution of this paper is three-fold:
+(1) First, we presented a deﬁnition of Dolev-Yao weak non-malleability, which directly captures the main assumptions of the Dolev-Yao model.
+(2) We then translated the deﬁnition of Dolev-Yao indistinguishability from the secret-key to the public-key setting, and showed that it is satisﬁed by encryption that provides indistinguishability under the chosen-ciphertext attack.
+(3) Lastly, we showed that Dolev-Yao indistinguishability implies Dolev-Yao weak non-malleability.
+26
+
+One obvious extension of this work would be to examine the relationship between Dolev-Yao indistinguishability and non-malleability further. In many settings, non-malleability is either equivalent to or strictly stronger than indistinguishability. The fact that Dolev-Yao indistinguishability implies DolevYao non-malleability is strong evidence for their equivalence in this setting, but the question remains open.
+Another interesting way to extend this work would be to strengthen the deﬁnition of Dolev-Yao non-malleability. The current deﬁnition states, informally, that the adversary has only a negligible chance of “hitting” a given target (i. e., producing an encoding of a given M ). If possible, it would be interesting to ﬁnd an encryption scheme that keeps the adversary from hitting any target:
+Deﬁnition 19 (Strong Dolev-Yao non-malleability) A computational encryption scheme provides strong Dolev-Yao non-malleability if, when used in the [·]tη operation, the adversary cannot create anything outside the closure:
+
+∀ PPT adversaries A, ∀ ﬁnite, acyclic S ⊆ A,
+
+∀ polynomials q, ∀ suﬃciently large η :
+
+Pr[ t ← {0, 1}ω
+
+s ← [S]tη ;
+
+m
+
+←
+
+AMtη
+
+(·),PbKtη
+
+(·),PrKtη
+
+R(·),
+
+t η
+
+(·)
+
+(1η
+
+,
+
+s)
+
+:
+
+∃M ∈ A \ C[S] .m ∈ supp [M]tη
+
+]
+
+≤
+
+1 q(η)
+
+A third way to improve this work would be to remove the requirment that S be acyclic. (This would most likely also remove the same assumption from the results of Abadi and Rogaway [1].)
+Lastly, it would interesting to incorporate into this approach cryptographic operations other than encryption, such as hashes and signatures.
+
+8 Acknowledgments
+A previous, and weaker, form of this paper appeared as part of [9]. I thank my co-authors, Silvio Micali and Moses Liskov, for their permission to publish this extension and for many helpful discussions. Also, I would like to thank Joshua Guttman and Amy Herzog for their unﬂagging support.
+27
+
+References
+
+[1] Mart´ın Abadi and Phillip Rogaway. Reconciling two views of cryptography (the computational soundness of formal encryption). In Jan van Leeuwen, Osamu Watanabe, Masami Hagiya, Peter D. Mosses, and Takayasu Ito, editors, IFIP International Conference on Theoretical Computer Science (IFIP TCS2000), volume 1872 of Lecture Notes in Computer Science, pages 3–22. Springer-Verlag, August 2000.
+
+[2] Mart´ın Abadi and Phillip Rogaway. Reconciling two views of cryptography (the computational soundness of formal encryption). Journal of Cryptology, 15(2):103–127, 2002.
+
+[3] M. Backes, B. Pﬁtzmann, and M. Waidner. A composable cryptographic library with nested operations (extended abstract). In Proceedings, 10th ACM conference on computer and communications security (CCS), October 2003. Full version available at http://eprint.iacr.org/2003/015/.
+
+[4] Mihir Bellare, Anand Desai, David Pointcheval, and Phillip Rogaway.
+
+Relations among notions of security for public-key encryption schemes.
+
+In Krawczyk [11], pages 26–45.
+
+Full version found at
+
+http://www.cs.ucsd.edu/users/mihir/papers/relations.html.
+
+[5] Mihir Bellare and Phillip Rogaway. Entity authentication and key distribution. In D. Stinson, editor, Advances in Cryptology - CRYPTO 1993, volume 773 of Lecture Notes in Computer Science, pages 232– 249. Springer-Verlag, August 1993. Full version of paper available at http://www-cse.ucsd.edu/users/mihir/.
+
+[6] R Cramer and V. Shoup. A practical public key cryptosystem provably secure against adaptive chosen ciphertext attack. In Krawczyk [11], pages 13–25.
+
+[7] D. Dolev and A. Yao. On the security of public-key protocols. IEEE Transactions on Information Theory, 29:198–208, 1983.
+
+[8] N. A. Durgin, P. D. Lincoln, J. C. Mitchell, and A. Scedrov. Undecidability of bounded security protocols. Workshop on Formal Methods and Security Protocols (FMSP’99), July 1999.
+
+[9] Jonathan Herzog, Moses Liskov, and Silvio Micali. Plaintext awareness via key registration. In Dan Boneh, editor, Advances in Cryptology - CRYPTO 2003, volume 2729 of Lecture Notes in Computer Science, pages 548–564. SpringerVerlag, August 2003.
+
+[10] Naoki Kobayashi and Benjamin C. Pierce, editors. Formal Eavesdropping and Its Computational Interpretation, volume 2215 of Lecture Notes in Computer Science. Springer, 2001.
+
+[11] H. Krawczyk, editor. Advances in Cryptology - CRYPTO 1998, volume 1462 of Lecture Notes in Computer Science. Springer-Verlag, August 1998.
+
+28
+
+[12] P. D. Lincoln, J. C. Mitchell, M. Mitchell, and A. Scedrov. A probabilistic poly-time framework for protocol analysis. In Proceedings of the 5th ACM Conference on Computer and Communication Security (CCS ’98), pages 112– 121, November 1998.
+[13] P. D. Lincoln, J. C. Mitchell, M. Mitchell, and A. Scedrov. Probabilistic polynomial-time equivalence and security protocols. In Jeannette M. Wing, Jim Woodcock, and Jim Davies, editors, World Congress on Formal Methods, volume 1708 of Lecture Notes in Computer Science, pages 776–793. Springer, September 1999.
+[14] Gavin Lowe. Breaking and ﬁxing the Needham–Schroeder public-key protocol using FDR. In Margaria and Steﬀen, editors, Tools and Algorithms for the Construction and Analysis of Systems, volume 1055 of Lecture Notes in Computer Science, pages 147–166. Springer–Verlag, 1996.
+[15] P. Mateus, J.C. Mitchell, and A. Scedrov. Composition of cryptographic protocols in a probabilistic polynomial-time process calculus. In Roberto M. Amadio and Denis Lugiez, editors, Proceedings, 14th International Conference on Concurrency Theory, volume 2761 of Lecture Notes in Computer Science, pages 323–345. Springer, 2003.
+[16] Catherine Meadows. Formal methods for cryptographic protocol analysis: Emerging issues and trends. IEEE Journal on Selected Areas in Communication, 21(1):44–54, January 2003.
+[17] Daniele Micciancio and Bogdan Warinschi. Completeness theorems for the Abadi-Rogaway logic of encrypted expressions. Workshop on Issues in the Theory of Security (WITS ’02), January 2002.
+[18] Daniele Micciancio and Bogdan Warinschi. Completeness theorems for the Abadi-Rogaway logic of encrypted expressions. Journal of Computer Security, 12(1):99–129, 2004.
+[19] Daniele Micciancio and Bogdan Warinschi. Soundness of formal encryption in the presence of active adversaries. In Proceedings, Theory of Cryptography Conference, number 2951 in Lecture Notes in Computer Science, pages 133–151. Springer, February 2004.
+[20] J. Mitchell, A. Ramanathan, A. Scedrov, and V. Teague. A probabilistic polynomial-time calculus for analysis of cryptographic protocols (preliminary report). In Proc. 17th Annual Conference on the Mathematical Foundations of Programming Semantics (MFPS 2001), volume 45 of Electronic Notes in Theoretical Computer Science, May 2001.
+[21] J. C. Mitchell, M. Mitchell, and A. Scedrov. A linguistic characterization of bounded oracle computation and probabilistic polynomial time. In 39th Annual Syposium on Foundations of Computer Science (FOCS 1998), pages 725–733. IEEE Computer Society, November 1998.
+[22] M. Naor and M. Yung. Public-key cryptosystems provably secure against chosen ciphertext attacks. In Proceedings of the Twenty Second Annual ACM Symposium on Theory of Computing, pages 427–437, May 1990.
+29
+
+[23] L C Paulson. The inductive approach to verifying cryptographic protocols. Journal of Computer Security, 6:85–128, 1998.
+[24] R. Ramanujam and S. P. Suresh. Tagging makes secrecy decidable with unbounded nonces as well. In Paritosh K. Pandya and Jaikumar Radhakrishnan, editors, Proceedings, Foundations of Software Technology and Theoretical Computer Science (FST TCS 2003), volume 2914 of Lecture Notes in Computer Science, pages 363–374. Springer, 2003.
+[25] Amit Sahai. Non-malleable non-interactive zero knowledge and adaptive chosenciphertext security. In 40th Annual Syposium on Foundations of Computer Science (FOCS 1999), pages 543–553. IEEE Computer Society, October 1999.
+[26] D. Song. Athena, an automatic checker for security protocol analysis. In Proceedings of the 12th IEEE Computer Security Foundations Workshop (CSFW 12), pages 192–202. IEEE Computer Society, June 1999.
+30
+
+

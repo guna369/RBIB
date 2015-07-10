@@ -1,0 +1,1073 @@
+Hardware Synthesis from Term Rewriting Systems
+Computation Structures Group Memo 421A August 20, 1999
+James C. Hoe and Arvind MIT Laboratory for Computer Science
+Cambridge, MA 02139 fjhoe,arvindg@lcs.mit.edu
+In Proceedings of X IFIP International Conference on VLSI (VLSI 99).
+This paper describes research done at the MIT Laboratory for Computer Science. Funding for this work is provided in part by the Defense Advanced Research Projects Agency of the Department of Defense under the Ft. Huachuca contract DABT63-95-C-0150 and by the Intel Corporation. James C. Hoe is supported by an Intel Foundation Graduate Fellowship.
+
+Chapter 1
+HARDWARE SYNTHESIS FROM TERM REWRITING SYSTEMS
+
+James C. Hoe and Arvind
+Laboratory for Computer Science Massachusetts Institute of Technology Cambridge, MA
+{jhoe,arvind}@lcs.mit.edu
+
+Abstract
+
+Term Rewriting System (TRS) is a good formalism for describing concurrent systems that embody asynchronous and nondeterministic behavior in their speciﬁcations. Elsewhere, we have used TRS’s to describe speculative micro-architectures and complex cache-coherence protocols, and proven the correctness of these systems. In this paper, we describe the compilation of TRS’s into a subset of Verilog that can be simulated and synthesized using commercial tools. TRAC, Term Rewriting Architecture Compiler, enables a new hardware development framework that can match the ease of today’s software programming environment. TRAC reduces the time and effort in developing and debugging hardware. For several examples, we compare TRAC-generated RTL’s with hand-coded RTL’s after they are both compiled for Field Programmable Gate Arrays by Xilinx tools. The circuits generated from TRS are competitive with those described using Verilog RTL, especially for larger designs.
+
+Keywords: Term Rewriting Systems, high level description, high level synthesis, TRAC
+
+1. MOTIVATION
+Term Rewriting Systems (TRS’s)[Baader and Nipkow, 1998] have been used extensively to give operational semantics of programming languages. More recently, we have used TRS’s in computer architecture research and teaching. TRS’s have made it possible, for example, to describe a processor with out-oforder and speculative execution succinctly in a page of text[Arvind and Shen, 1999]. Such behavioral descriptions in TRS’s are also amenable to formal veriﬁcation because one can show if two TRS’s “simulate” each other. This paper describes hardware synthesis from TRS’s.
+1
+
+2
+We describe the Term Rewriting Architecture Compiler (TRAC) that compiles high-level behavioral descriptions in TRS’s into a subset of Verilog that can be simulated and synthesized using commercial tools. The TRAC compiler enables a new hardware design framework that can match the ease of today’s software programming environment. By supporting a high-level abstraction in design entry, TRAC reduces the level of expertise required for hardware design. By eliminating human involvement in the lower-level implementation tasks, the time and effort for developing and debugging hardware are reduced. These same qualities also make TRAC an attractive tool for experts to prototype large designs.
+This paper describes the compilation of TRS into RTL via simple examples. Section 2. presents an introduction to TRS’s for hardware descriptions. Section 3. explains how TRAC extracts logic and state from a TRS’s type declaration and rewrite rules. Section 4. discusses TRAC’s strategy for scheduling rules for concurrent execution to increase hardware performance. Section 5. compares TRAC-generated RTL against hand-coded RTL after each is compiled for Field Programmable Gate Arrays (FPGA) using Xilinx Foundation 1.5i synthesis package. Section 6. surveys related work in high-level hardware description and synthesis. Finally, Section 7. concludes with a few brief remarks.
+
+2. TRS FOR HARDWARE DESCRIPTION
+A TRS consists of a set of terms and a set of rewriting rules. The general structure of rewriting rules is:
+patlhs if p ! exprhs
+
+A rule can be used to rewrite a term s if the rule’s left-hand-side pattern patlhs
+
+matches s or a subterm in s and the predicate p evaluates to true. A successful
+
+pattern match binds the free variables of patlhs to subterms of s. When a rule
+
+is applied, the resulting term is determined by evaluating the right-hand-side
+
+expression exprhs in the bindings generated during pattern matching.
+
+In a functional interpretation, a rule is a function which may be expressed
+
+as:
+
+s. case s of
+
+pat
+
+lhs
+
+) )
+
+if s
+
+p
+
+then
+
+exprhs
+
+else
+
+s
+
+The function uses a case construct with pattern-matching semantics in which
+a list of patterns is checked against s sequentially top-to-bottom until the
+ﬁrst successful match is found. A successful match of patlhs to s creates bindings for the free variables of patlhs, which are used in the evaluation of the “consequent” expression exprhs. If patlhs fails to match to s, the wild-card
+
+Hardware Synthesis from Term Rewriting Systems 3
+pattern ‘ ’ matches s successfully and the function returns a term identical to s.
+In a TRS, the effect of a rewrite is atomic, that is, the whole term is “read” in one step and if the rule is applicable then a new term is returned in the same step. If several rules are applicable, then any one of them is chosen nondeterministically and applied. Afterwards, all rules are re-evaluated for applicability on the new term. Starting from a specially-designated starting term, successive rewriting progresses until the term cannot be rewritten using any rule.
+
+Example 1 (GCD): Euclid’s Algorithm for ﬁnding the greatest common divisor (GCD) of two integers may be written as follows in TRS notation:
+
+GCD Mod Rule
+Gcd(a, b) if (a b)^(b6= 0) ! Gcd(a?b, b)
+GCD Flip Rule
+Gcd(a, b) if a<b ! Gcd(b, a)
+
+The terms of this TRS have the form Gcd(a,b), where a and b are positive
+
+integers. The answer is the ﬁrst sub-term of Gcd(a,b) when Gcd(a,b) cannot
+
+be reduced any further. For example, the term Gcd(2,4) can be reduced by ap-
+
+!plying the Flip and Mod rules to produce the answer 2: Gcd(2,4) Gcd(4,2)
+
+! Gcd(2,2) ! Gcd(0,2) ! Gcd(2,0)
+
+2
+
+TRS’s for hardware description are often nondeterministic (“not conﬂuent” in the programming language parlance) and restricted so that the terms cannot grow. The latter restriction guarantees that a system described by our TRS’s can be synthesized using a ﬁnite amount of hardware. The nondeterministic aspect of TRS’s has a strong ﬂavor of modeling distributed algorithms as state-transition systems. (See for example [Manna and Pnueli, 1991, Lamport, 1994, Lynch, 1996, Chandy and Misra, 1988]). The focus of this paper, however, is on automatic synthesis rather than on formal veriﬁcation of an implementation against a speciﬁcation.
+In the rest of this section we will describe the TRS notation accepted by TRAC. It includes built-in integers, booleans, common arithmetic and logical operators, non-recursive algebraic types and a few abstract datatypes such as arrays and FIFO’s. Other user-deﬁned abstract datatype, with both sequential and combinational functionalities, can be included in synthesis by providing an interface declaration and its implementation.
+
+4
+
+2.1 SIMPLE TYPES
+The language accepted by TRAC is strongly typed, that is, every term has a type speciﬁed by the user. The complete list of allowed type declarations are:
+
+TYPE :: STYPE ] CPRODUCT ] ABSTRACT
+CPRODUCT :: CNk(TYPE1, ..., TYPEk) where k > 0
+ABSTRACT :: Array[STYPEidx] STYPE
+] Fifo STYPE
+] ArrayCAM [STYPEidx] STYPEkey, STYPE ] FifoCAM STYPEkey, STYPE
+We begin by describing simple types (STYPE), which include built-in inte-
+ger, product and algebraic (disjoint) union types. Product types are designated
+by a constructor name followed by one or more elements. An algebraic union
+is made up of two or more disjuncts. A disjunct is syntactically similar to a
+product except a disjunct may have zero elements. An algebraic union with
+only zero-element disjuncts is also known as an enumerable type. Product and
+algebraic unions can be composed to construct an arbitrary type hierarchy, but
+no recursive types are allowed.
+
+STYPE :: Bit[N ]
+
+] PRODUCT
+
+] ALGEBRAIC
+
+PRODUCT ALGEBRAIC
+
+:: ::
+
+kCNk(STYPE1, ..., STYPEk)
+DISJUNCT DISJUNCT
+
+where
+
+k
+
+>
+
+0
+
+k] DISJUNCT ALGEBRAIC
+
+DISJUNCT :: CNk(STYPE1, ..., STYPEk) where k 0
+
+The TRS in Example 1 should be accompanied by the type declaration:
+
+Type GCD = Gcd(NUM, NUM) Type NUM = Bit[32]
+
+Example 2 (GCD2): We give another implementation of GCD to illustrate some modularity and types issues. Suppose we have the following TRS to implement the mod function.
+kType VAL = Mod(NUM, NUM) Val(NUM)
+Type NUM = Bit[32]
+
+Hardware Synthesis from Term Rewriting Systems 5
+
+Mod Iterate Rule
+Mod(a, b) if a b ! Mod(a?b, b)
+Mod Done Rule
+Mod(a, b) if a<b ! Val(a)
+Using this deﬁnition of mod, GCD can be written as follows:
+
+Type GCD2 = Gcd2(VAL, VAL)
+6 !GCD2 Flip&Mod Rule Gcd2(Val(a), Val(b)) if b=0 Gcd2(Val(b), Mod(a, b))
+
+2
+
+2.2 ABSTRACT TYPES
+Abstract datatypes are deﬁned by their interfaces only and are included to facilitate hardware description and synthesis. An interface can be classiﬁed as either combinational or state-transforming. We discuss array, FIFO and content addressable memory abstract datatypes next.
+Array is used to model register ﬁles and memories, and has only two operations deﬁned in its interface. Syntactically, if a is an Array then a[idx] represents a combinational “read” operation which gives the value stored in the idx’th location, and a[idx:=v], a state-transforming “write” operation gives a new Array identical to a except location idx has been updated to value v. We only support Array of STYPE with an enumerable index type.
+Fifo buffers provide the primary means of communication between different modules and pipeline stages. The two main state-transforming operations on Fifo’s are enqueuing and dequeuing. Enqueuing element e to q appears as enq(q,e) while dequeuing the ﬁrst element from q appears as deq(q). An additional state-transforming interface clr(q) clears the contents of the Fifo. The combinational operation ﬁrst(q) gives the value of the ﬁrst element in q. In the description phase, Fifo is abstracted to have a bounded but unspeciﬁed size. A rule that makes use of Fifo interfaces has an implied predicate condition that tests whether the Fifo is not empty or not full, as appropriate. We also support access to other Fifo entries with appropriate projection functions. Fifo entries are also restricted to be of STYPE.
+ArrayCAM is similar to Array except its data ﬁelds are subdivided into a key ﬁeld and a normal-data ﬁeld. The same is true for FifoCAM and Fifo.
+The content-associative lookup interface cam(a,key) returns true if an entry with a matching key ﬁeld is found. The content-associative lookup interface camidx(a,key) returns the index of an entry with a matching key ﬁeld whereas camdata(a,key) returns the data ﬁeld. The value of camidx(a,key) and camdata(a,key) are undeﬁned when cam(a,key) is false.
+
+6
+As can be seen from the deﬁnition of TYPE, abstract datatypes are not allowed in algebraic disjuncts. Thus, only a complex product type can have elements of abstract types.
+2.3 RULE SYNTAX
+Syntactically, a rule is composed of a left-hand-side pattern and a right-handside expression. The predicate and where bindings are optional. The where bindings on the left-hand-side can require pattern matching. Any failure in
+matching PATi to EXPi in the where bindings also deems the rule inapplicable. The expression on the right-hand-side, exprhs, can also have where bindings,
+but RHS where bindings can be made only to simple variables and do not involve pattern matching. In the following ‘ ’ represents the “don’t care” symbol.
+RULE :: LHS ! RHS
+LHS :: PATlhs [if EXPp] [where PAT1=EXP1, ..., PATn=EXPn] PAT :: ] variable ] constant ] CN0( ) ] CNk(PAT1, ..., PATk) RHS :: EXPrhs [where variable1=EXP1, ..., variablen=EXPn] EXP :: ] variable ] constant ] CN0( ) ] CNk(EXP1, ..., EXPk)
+] Prim-Op (EXP1, ..., EXPk)
+Prim-Op :: Arithmetic ] Logical ] Array-Access ] FIFO-Access
+The type of PATlhs must be either CPRODUCT or ALGEBRAIC. In addition, each rule must have PATlhs and EXPrhs of the same type. This restriction,
+together with non-recursive type declaration, guarantees that the size of every term is ﬁnite and the size does not change by applying the rewriting rules. In Example 2, VAL is an ALGEBRAIC type with two disjuncts, Val and Mod. It is because of this type declaration that the Mod Done Rule does not violate the type discipline - both sides of the rule have the type, VAL.
+Example 3 (Single-Cycle RISC Processor): The state of an unpipelined, simple RISC processor is described by its program counter (PC), register ﬁle (RF) and memory (MEM). This information is captured in the following type declaration:
+
+Hardware Synthesis from Term Rewriting Systems 7
+
+Type Type
+
+PROC PC
+
+= =
+
+PBrito[Ncs](PC,
+
+RF,
+
+MEM)
+
+Type VAL = Bit[N ]
+
+Type RF = Array VAL[RNAME]
+Type RNAME = Reg0( ) k Reg1( ) k Reg2( ) k . . . . Regm( )
+
+Type MEM = Array INST[PC]
+
+Type INST = Loadc(RNAME,VAL)
+k Loadpc(RNAME) k Add(RNAME,RNAME,RNAME) k Sub(RNAME,RNAME,RNAME) k Bz(RNAME,RNAME) k Load(RNAME,RNAME) k Store(RNAME,RNAME)
+
+The processor we synthesized in Section 5. has four 32-bit general purpose
+registers, i.e. N =32, m=4. The behavior of the 7 instructions — move PC to
+register, load immediate, register-to-register addition and subtraction, branch if zero, memory load and store — can be speciﬁed as a TRS by giving a rewrite rule for each instruction. The following rule conveys the execution of the Add instruction.
+
+Procs(pc, rf , mem)
+where Add(rd ,r1,r2)=mem[pc]
+! Procs(pc+1, rf [rd:=(rf [r1]+rf [r2])], mem)
+
+2
+
+Example 4 (Pipelined RISC Processor): The processor in Example 3 can be pipelined by introducing FIFO’s as pipeline-stage buffers and by systematically splitting each rule into local rules for various pipeline stages. For example, in a two-stage pipeline design, the processing of an instruction can be broken down into separate fetch and execute steps. We model buffers between pipeline stages as a Fifo of an unspeciﬁed but ﬁnite size. In a behavioral description, it is convenient if the operation of each stage can be described without reference to other stages. FIFO buffers provide this isolation; most pipelined design rules dequeue an input from one FIFO and enqueue the result into another FIFO. In the synthesis phase these FIFO buffers are replaced by a ﬁxed-depth FIFO or simply registers, and ﬂow control logic ensures that a rule does not ﬁre if the destination FIFO is full.
+Here, we introduce the pipeline buffer BS in the declaration of the PROCp
+term.
+
+8
+
+Type PROCp = Procp(PC, RF, BS, MEM)
+Type BS = Fifo ITEMP Type ITEMP = Loadc(RNAME,VAL)
+k Loadpc(RNAME) k Add(RNAME,VAL,VAL) k Sub(RNAME,VAL,VAL) k Bz(VAL,VAL) k Load(RNAME,ADDR) k Store(ADDR,VAL)
+The Add and Bz instruction rules are split into Fetch and Execute stage rules:
+
+Fetch Rule
+! Procp(pc, rf , bs, mem)
+Procp(pc+1, rf , enq(bs,mem[pc]), mem)
+Add Rule
+Procp(pc, rf , bs, mem)
+where Add(rd ,r1,r2) = ﬁrst(bs)
+! Procp(pc, rf [rd:=(rf [r1]+rf [r2])], deq(bs), mem)
+Branch-Taken Rule
+Procp(pc, rf , bs, mem)
+if rf [rc]=0 where Bz(rc,ra) = ﬁrst(bs)
+! Procp(rf [ra], rf , clr(bs), mem)
+Branch-Not-Taken Rule
+6Procp(pc, rf , bs, mem) if rf [rc]=0 where Bz(rc,ra) = ﬁrst(bs)
+! Procp(pc, rf , deq(bs), mem)
+
+Notice the Fetch rule is always ready to ﬁre. At the same time one of the
+
+execute stage rules may be ready to ﬁre as well. This is the ﬁrst example we
+
+have seen where more than one rule can be enabled on a given state. Even
+
+though according to TRS semantics, only one rule should be ﬁred in each step,
+
+we will see that our compiler tries to ﬁre as many rules in parallel as possible
+
+while maintaining correct TRS execution semantics. Without parallel ﬁring of
+
+rules we won’t get the pipelining effect we want.
+
+Since there is a race to update the pc between the Fetch and the Branch Taken
+
+rules, the above rules can exhibit nondeterministic behavior. Speciﬁcation of
+
+microprocessors and cache-coherence protocols often entails nondeterminism,
+
+even though a given realization is usually completely deterministic. Our com-
+
+piler can handle such nondeterministic TRS’s.
+
+2
+
+In addition to the TRS-to-RTL compilation to be described in Sections 3. and 4., we are developing source-to-source TRS transformations that can
+
+Hardware Synthesis from Term Rewriting Systems 9
+achieve the kind of pipelining described in Example 4. The dependence between the rules has to be analyzed carefully to ensure the correctness of all such transformations. Presently, human intervention is required to guide the transformation process at the high level. It is also possible to automatically derive the rules for a superscalar version of the pipelined processor in Example 4 [Arvind and Shen, 1999].
+2.4 INPUT AND OUTPUT
+Traditionally a TRS describes a closed system, but we are experimenting with new notations and semantics to support description of a system with input and output (I/O) ports. In an approach that only requires minimal deviation from a standard TRS, the designer assigns I/O speciﬁc semantics to terms using source code annotations. For example, a wrapper to start and terminate a GCD computation can be given as:
+Type TOP = Top(MODE, NUMI, NUMI, NUMO, GCD)
+Type MODE = iport Load( ) k Run( )
+Type NUMI = iport NUM Type NUMO = oport NUM
+GCD Start Top(Load( ), x, y, , )
+! Top( , , , 0, Gcd(Val(x), Val(y)))
+GCD Done Top(Run( ), , , , Gcd(Val(ans), Val(0)))
+! Top( , , , ans, )
+Ignoring the I/O annotations ( iport and oport ), the type declaration
+and rules can be interpreted exactly as before. In fact, the combinational logic generated by TRAC is the same irrespective of I/O annotations. The ﬁrst rule states as long as the ﬁrst subterm of TOP is Load( ), the GCD term can be rewritten using the second and third subterms of TOP. The second rule states if the ﬁrst subterm of TOP is Run and the GCD computation is done (when the second subterm of GCD is 0), then copy the ﬁrst subterm of GCD to the fourth subterm of TOP.
+The only effect of annotating the fourth subterm of TOP as an oport is
+that TRAC will attach wires to the output of the registers in that subterm and make their content externally visible through an output port. Conversely, the
+effect of annotating a term as an iport is that the wires normally connected
+to the output of the registers in that term are redirected to an input port instead.
+A rule cannot rewrite a term labeled as an iport since the value of the
+term does not correspond to any internal register. From the TRS perspective,
+
+10
+an iport term may change unexpectedly, but atomically, without any rule
+application. By driving the appropriate values on the input ports corresponding to the
+ﬁrst three subterms of TOP, a new GCD computation is started. Asserting signals corresponding to Run( ) at the input port enables GCD to execute to completion, and at which point, the answer appears on the output port as a consequence of the GCD Done rule.
+
+3. BASIC SYNTHESIS STRATEGY
+Although TRS’s provide great ﬂexibility in specifying hierarchically organized state and state transitions, a TRS, where recursive types are not allowed
+!and rules are required to have the same type on both sides of , can only
+describe a ﬁnite state machine (FSM). TRAC maps a TRS to a synchronous FSM by
+
+Mapping TRS terms to storage elements (e.g., registers, register ﬁles and other abstract datatypes)
+Mapping TRS rules to combinational logic that generates next state values and enable signals for storage elements.
+
+In this section we ﬁrst describe a functional interpretation of each rule and then derive an “action on state” view of the same rule. The latter view is the starting point for hardware synthesis.
+
+3.1 FUNCTIONAL INTERPRETATION OF A RULE: AND FUNCTIONS
+
+In a functional interpretation, a rule of the form
+
+pat lhs
+
+!
+
+if expp where pat1 = explhs;1, ..., patn = explhs;n exprhs
+
+where var 1 = exprhs;1, ..., var m = exprhs;m
+!is a function of typeof(patlhs) typeof(patlhs), and returns a term identical to
+
+the input term if the rule is not applicable. If the rule is applicable, the return
+
+value is a new term based on the evaluation of exprhs using the bindings created
+
+during pattern matching.
+
+Hardware Synthesis from Term Rewriting Systems 11
+
+rule =
+
+s. case s of
+patlhs ) )case explhs;1 of
+pat 1 ...
+caspeaet nxip)flhes;xnpopf then
+let
+var 1 = exprhs;1, ..., var m = exprhs;m
+in
+else exprhs
+s
+)s
+...
+)s )s
+
+This function can be broken down into its two components: and . The function determines a rule’s applicability to a term and has the type,
+!typeof(patlhs) Boolean. The function, on the other hand, determines the
+new term in case evaluates to true.
+= s. case s of
+patlhs ) )case explhs;1 of
+pat 1 ...
+caspea)et nxpf)alhlssee;nxpopf
+...
+) false ) false
+
+= s. let
+patlhs = s pat1 = explhs;1, ..., patn = explhs;n var 1 = exprhs;1, ..., var m = exprhs;m
+in
+exprhs
+
+12
+
+GCD2
+
+VAL
+
+Tag Mod
+
+Val
+
+NUM
+
+NUM
+
+NUM
+
+VAL
+
+Tag Mod
+
+Val
+
+NUM
+
+NUM
+
+NUM
+
+Figure 1.1 A graph representation of the GCD2 type structure from Example 2. NUM is treated as a type alias for Bit[32].
+
+Using and , an equivalent functional representation of a rule is rule = s. if (s) then (s) else s
+
+3.2 A RULE AS A STATE TRANSFORMER
+In the architectural context, terms represent state, and rules deﬁne how the state can be transformed. If we restrict ourselves to synchronous circuits then each rule “reads” the state at the beginning of the clock cycle and if it can ﬁre, it modiﬁes the state at the end of the same clock cycle. In this “actions on state” view of a rule, one needs to update only those parts of the state that actually change. If two rules are enabled simultaneously and affect disjoint parts of the state then it is possible to execute both rules in the same clock cycle. After discussing the hardware to execute one rule in this section, we will return to the issue of concurrent ﬁrings in the next section.
+Mapping Terms to Storage Elements: A term can be represented as a tree based on its type. For example, the tree representation of GCD2 is shown in Figure 1.1. Algebraic types have an extra branch, Tag, where a register of width
+dlog2de records which of the d disjuncts the term belongs to. An ALGEBRAIC
+node has a branch for each of the disjuncts, but, at any time, only the branch whose tag matches the content of the tag register holds meaningful data. As an example we have shaded the active portions of the tree corresponding to Gcd(Val(2), Mod(4, 2)) in Figure 1.1.
+We can assign an unique name to each storage element based on its path (also known as projection) from the root. For example, the name for the second
+
+Hardware Synthesis from Term Rewriting Systems 13
+
+(from the left) NUM storage implied by a
+
+register in term can
+
+Figure 1.1 would be represented as
+
+baes“ePt roofj1<.Mporodj.,PRroEj2G”[.NT]h>e
+
+pairs. For example the storage elements of GCD2 are represented by the set
+
+f g<<<<PPPPrrrroooojjjj1122....TMTMaaooggdd,,..RRPPEErrooGGjj11[[,,11RR]]>>EE,,GG<<[[33PP22rr]]oo>>jj12,,..VV<<aaPPll..rrPPoorrjj12oo..jjMM11,,ooRRddEE..PPGGrr[[oo33jj2222]],,>>RR,,EEGG[[3322]]>>,
+
+As an optimization, registers on different disjuncts of an ALGEBRAIC node can share the same physical register. In Figure 1.1, the registers aligned horizontally are mappable to the same register. This idea can be expressed as allowing multiple pathnames to be associated with a single register state element. In a type structure that includes Array and other abstract datatypes, nodes corresponding to the abstract datatypes appear at the leaves of the tree.
+The value embedded in the storage elements of a term can be represented in
+a similar manner using a set of <proj, value> pairs. For example the values
+of storage elements of Gcd(Val(2), Mod(4, 2)) are represented by the set
+f<<PPrroojj12..TTaagg,, VMaol>d>, <, <PProrjo1j.2V.Mal.oPdr.oPj1ro, j21>, 4, >, <Proj2.Mod.Proj2, 2>g
+
+The procedure extract-state(s,proj) to extract the values of storage elements
+
+from term s is deﬁned below. Initially it is called with an empty projection
+
+. Since we propose to use this function only at compile time, we assume the
+
+representation of a term includes its type structure.
+
+extract-state(s,proj )=
+
+case s of
+Bit[N] ) f<proj, s>g )CPRODUCT: CNk(s1, ..., sk)
+
+)extract-state(s1,proj.Proj1) ... extract-state(sk ,proj.Projk)
+ALGEBRAIC: CNk(s1, ..., sk)
+
+extract-state(s1,proj.CNk.Proj1) ...
+Array: e)xtrfa<ctp-srtoajt.eA(srrka,yp,ros>j.Cg Nk.Projk) Fifo: ) f<proj.Fifo, s>g
+
+f<proj.Tag, CNk>g
+
+Rules as Actions on Storage Elements: Because a rule’s patlhs and exprhs
+are required to have the same type, the term resulting from a rewrite must have
+the same storage structure as the initial term. In other words, beginning with
+a TRS’s starting term and its storage elements, successive rewrite operations
+never add or delete any storage elements. To implement a TRS, TRAC generates a state structure that is extracted from the starting term, and the rules are
+
+14
+
+implemented as combinational logic that updates the content of the storage elements.
+The pattern matching on the left-hand-side of a rule (the function) essentially tests the values of some of the storage elements. can also include combinational functions from the interface of abstract datatypes. for the Flip&Mod rule of Example 2 will look like the following:
+^= (Proj1.Tag(state) = Val) (Proj2.Tag(state) = Val) ^ 6(Proj2.Val.Proj1(state) = 0)
+
+The right-hand-side of a rule (or ) can be viewed as specifying actions on the storage elements of the input term. The actions can be represented in a set
+of <proj, action> pairs. Possible actions include setting a register to a value
+(set(v)) or invoking an abstract datatype’s state-transforming interface. The of the Flip&Mod rule in Example 2 can be viewed as the following set of
+actions:
+f g<<<PPPrrrooojjj122...TTMaaoggd,,.ssPeertto((VMj2ao,ls)d]e)>t>(b,,<)<>PPrroojj12..VMaol.Pd.rPorj1o,j1s,est(ebt()a>)>, ,
+
+Recall, a and b refer to some subterms in the initial term s as established by the pattern matching semantics. In cirucit implementation, a and b refer to the initial values of the corresponding storage elements.
+stoetb(NeVoVatlia)c>lew, wthheietnhlteohfuits-thraaufnfleedci-stsiiandpgeptolhifcetahobeulert.cuolTemhreue.qsuwTihreeucssat,nhiefdeﬁatrecslotemttahpgeirlaeecrgtiicsoatnenr<d(ePPtrreoocjjt11t..hTTaaatgga),
+storage element is assigned the same value as its original content, it can delete that particular action. In general, the necessary actions when a rule ﬁres are
+
+?extract-state( (s), ) extract-state(s, )
+
+?where ‘ ’ represents the set difference. In practice, instead of dynamically
+testing for equality between the next and current state values of a register to eliminate actions, TRAC statically eliminates actions in which a register is updated by a value coming from itself and when a register is updated by the same value that it must have for to be satisﬁed.
+In another example, consider the pipelined processor of Example 4, whose storage elements are
+
+f<Proj1
+
+,
+
+pc><, P<rPorj3o.jF2.iAfor,rbays,>r,f
+
+>, <Proj4.Array,
+
+mem>g.
+
+Hardware Synthesis from Term Rewriting Systems 15
+The Add rule speciﬁes the following actions on this state:
+f<Proj2.Array, array-update(rd,rf [r1]+rf [r2])> <Proj3.Fifo, deq( )>g
+In general, a rule can be applied to a subterm of a whole term. In these cases, extract-state(s,proj) is called by a projection, relative to the whole term, that corresponds to the subterm. Furthermore, a rule can be applied to many parts of a term. In these cases, a rule’s logic is instantiated multiple times, once for each state sub-structure where the rule is to be applied. In an alternative interpretation, a subterm-applicable rule needs to be lifted to the same type as the TRS’s starting term prior to analysis. The effect of applying the lifted rule to the whole term is the same as applying the original rule to the subterm within the whole term. A subterm rule may be applicable to multiple positions in the whole term. A separate lifted version must be created for each possible application. For example, the Mod Done rule from GCD2 in Example 2 could be applicable to both the ﬁrst and second subterms of a GCD2 term. The two lifted versions of the Mod Done rule are:
+! Gcd2(Mod(a, b), t) if a<b Gcd2(Val(a), t)
+and
+! Gcd2(t, Mod(a, b)) if a<b Gcd2(t, Val(a))
+
+3.3 CIRCUIT SYNTHESIS
+
+The and functions for the two GCD rules, GCD Mod and GCD Flip,
+
+in Example 1 are given below. A valid starting term for this TRS has the
+
+form Gcd(x, y) where x and y are postive integers. This starting term implies
+the set of storage elements: f<Proj1, REG[32]>, <Proj2, REG[32]>g. For
+
+conciseness, we refer to these registers as a and b in the following deﬁnitions:
+
+Mod F lip
+
+= =
+
+a b ^ b6=0
+a<b
+
+Mod;a = set(a ? b)
+
+F lip;a = set(b)
+
+F lip;b = set(a)
+
+For hardware synthesis we break down into actions on individual storage
+
+elements as speciﬁed above. Therefore, for each storage element e affected by
+a rule R, R;e gives its next state value. R is the latch-enable signal of all the
+affected registers. Two state transition circuits corresponding to the two GCD
+
+rules, considered indenpendently, is ﬁrst shown in Figure 1.2.
+
+16
+
+δ Mod,a
+
+πMod
+ce
+a
+
+b
+ce
+
+δ Mod,a =0
+
+Mod Rule
+
+δFlip,a
+
+πFlip
+ce
+a
+
+δFlip,b
+
+πMod
+
+δFlip,b
+
+b
+ce πFlip
+
+δFlip,a
+
+Flip Rule
+
+Figure 1.2 FSM for a TRS with only one rule.
+
+πMod πFlip +πMod
+
+δ Mod,a
+
+ce
+a
+
+δFlip,a
+
+πFlip
+
+δFlip,b δ Mod,a
+
+δFlip,b
+
+b
+ce πFlip
+
+δFlip,a
+
+=0
+
+πFlip πMod
+
+Figure 1.3 Circuit for computing Gcd(a, b) from Example 1.
+
+πFlip
+
+The ﬁnal circuit is arrived by combining the two circuits. In these cases,
+
+both rules affect the storage element a but only one of them can actually ﬁre in a
+
+given state. When merging the actions from rules with mutally-exclusive ﬁring
+conditions ( ), the ﬁnal latch enable is simply the logical-OR of their ﬁring
+
+conditions (e.g., Mod + F lip in this example), and the next state values are
+
+chosen from all of the ’s using a multiplexer where a rule’s enables its own
+
+. A sample update circuit that merges ’s from two mutually-excluisve rules
+
+is illustrated as circuit A in Figure 1.4. Figure 1.3 shows the FSM generated
+
+by combining the and from both GCD rules.
+
+However, in general, several ’s could be asserted, i.e., several rules could be
+
+applicable. In the simplest solution, a new set of disjoint triggers
+be generated using a round-robin priority encoder fed by 1; :::;
+
+1; :::;
+n. ’s,
+
+n can
+which
+
+are mutually exclusive, globally replace ’s at all multiplexers and at all latch
+enable OR-gates. A sample update circuit that merges ’s from two possibly
+
+conﬂicting rules is illustrated as circuit B in Figure 1.4. This arbitration is
+
+simple and correct, but the circuit is inefﬁcient and allows only one rewrite per
+
+cycle.
+
+Hardware Synthesis from Term Rewriting Systems 17
+
+ππ21 latch enable
+π1 π2
+δ1 δ
+δ2
+
+ππ21
+
+RR Priority Encoder
+
+ϕ1 ϕ2
+
+ϕ1 ϕ2
+
+δ1 δ
+δ2
+
+latch enable
+
+(A) Conflict Free
+
+(B) Conflicting
+
+ππ21 latch enable π2 π1
+δ1 δ
+δ2
+
+ππ21
+
+Static Priority Encoder
+
+ϕ1 ϕ2
+
+ϕ1 ϕ2
+
+δ1 δ
+δ2
+
+latch enable
+
+(C) Sequential Composition Rule 1 <πRule 2
+
+(D) Dominating
+
+Figure 1.4 Circuits for combining two rules’ actions on the same state element.
+
+TRAC does not synthesize any state structures for abstract datatypes. When an abstract datatype is used in a TRS, TRAC instantiates the corresponding Verilog module in the RTL and makes appropriate connections to the interfaces. The user or the library is expected to provide a Verilog module in RTL for each abstract datatype. A state transforming interface has an implied signal driving by (or ) to enable the state changes when the corresponding rule is ﬁred.
+4. EXPLOITING PARALLELISM
+According to TRS semantics, if multiple rules can simultaneously become applicable on a given term s, one of the rules is chosen nondeterministically and applied atomically to rewrite s to s’. Next, a new round of rewriting is started from scratch on s’. When a TRS exhibits such nondeterminism, multiple behaviors are allowed. Using a scheduler based on a round-robin priority encoder as discussed in Section 3.3, TRAC implements one of the allowed behaviors in a deterministic circuit that ﬁres one rule per clock cycle.
+
+18
+
+If the simultaneously applicable rules involve mutually disjoint parts of the term, then these rules can be executed in any sequence successively to reach the same ﬁnal term. In this scenario, although the semantics of a TRS speciﬁes a sequential and atomic term rewriting, a hardware implementation can exploit the underlying parallelism and execute the rules concurrently in the same clock cycle. In general it is not safe to allow two arbitrary applicable rules to execute in the same clock cycle because executing one of them can alter the value of the or the function of the other. This section formalizes the conditions for simultaneous rule execution and suggests a scheduling that improves hardware performance by ﬁring multiple rules in the same clock cycle when allowed.
+
+4.1 TRANSPARENCY
+
+The minimum condition for allowing two simultaneously applicable rules to ﬁre in the same clock cycles is captured by the -transparent relationship.
+
+Deﬁnition 1 ( -transparent)
+
+) RRule 1 is -transparent
+s2( 1( ))
+
+to
+
+rule
+
+R2,
+
+denoted
+
+as
+
+R1
+
+<
+
+R2, if 8s: s1( )^
+
+s2( )
+
+This condition states that if two rules ever become applicable on the same
+term and R1< R2, then ﬁring R1 ﬁrst does not prevent R2 from ﬁring on the re-
+sulting term. Firing in the reverse order may not necessarily be allowed, unless
+a stronger condition of mutual-transparency (or -conﬂict-free) is satisﬁed.
+
+Deﬁnition 2 ( -conﬂict-free)
+Rules R1 and R2 are -conﬂict-free if (R1 < R2) ^ (R2 < R1)
+
+Given two rules where R1< R2, there are two basic approaches to allow
+
+both rules to ﬁre in the same clock cycle. The ﬁrst approach cascades the com-
+
+bsRtia1nt.aetIienolneemaffleelcnottg,si,wcaefnrdaormRe c2trhieesaattiwpnpogliraeudcleotsomstpuhoceshiettfefhearcuttliReve1wsihtsaeatreeppalfiteedr
+
+ﬁrst to the attempting
+
+physical to apply
+
+s . if 1(s) then if 2(s) then 2( 1(s)) else 1(s)
+else if 2(s) then 2(s) else s
+Arbitrary cascading does not always improve circuit performance since cascading combinational logic may lead to a longer cycle time, especially when several rules are composed. In a synchronous design, if the clock period increases, every rule ﬁring is penalized, even when at most one rule can ﬁre.
+In a more practical approach, the input to the combinational logic from all rules are driven directly by state elements. Two transparent rules are allowed to execute in the same clock cycle only if the correct resulting state can be constructed from independent evaluation of the same current state.
+
+Hardware Synthesis from Term Rewriting Systems 19
+
+4.2 PARALLEL COMPOSIBILITY
+
+Two rules that do not affect the same storage elements are parallel composible, provided allowing them to execute concurrently on the same state produces a behavior that corresponds to at least one ordering of rule-execution in TRS.
+
+Deﬁnition 3 (Parallel-Composible Transparency)
+
+PCRule(RR11
+
+is
+<
+
+PC-transparent to
+R2) ^ 8s:( s1( )
+
+^rule2(Rs)2),
+
+)deno2t(ed1a(ss)R) 1=<P
+
+C(Rs;2,1i(fs);
+
+s2( ))
+
+Deﬁnition 4 (Parallel Composition)
+
+PC(s, s1, s2) = case s of
+Bit v )
+
+?if s1 = s2 then s1
+velse if s1 = then s2 velse if s2 = then s1
+else
+CNk(:::) )
+
+if s1 = s2 then s1
+nelse if s1 = then s2 nelse if s2 = then s1
+^else if (Tag(s1) =CNk) (Tag(s2) = CNk) then
+PC s ; ;CNk( (Proj1( ) Proj1(s1) Proj1(s2)), ..., PC s ; ;(Projk( ) Projk(s1) Projk(s2))
+?else
+
+FAirfroayfn)a ) 81 i n: a[i:= PC(a[i],s1[i],s2[i])]
+
+^if ^if
+
+(s1 is chop
+(s2 is chop
+
+sufﬁx of f )
+preﬁx( chop
+sufﬁx of f )
+preﬁx( chop
+
+(f is preﬁx of s(uffﬁxi(ssp1r;efﬁ)x;so2f sufﬁx(s2; f );s1
+
+s2)
+)
+s1)
+)
+
+then then
+
+?else
+
+Essentially what this deﬁnition says is that, if both rules R1 and R2 want
+
+to update a register, then they must produce the same value. In the case of
+
+an array, if the two rules update different elements of the array, then parallel
+
+composition will work assuming the array has multiple write ports. In the
+
+case of a FIFO, if one rule enqueues and the other dequeus then they can be
+
+combined to execute in the same cycle.
+Note R1 <P C R2 does not imply that the outcome is conﬂuent. Consider
+
+the following two rules that operate on four registers:
+
+RR12::
+
+F(1,r B,r C,r D) F(r A,1,r C ,r D)
+
+! !
+
+F(1,r B,1,r D) F(0,1,r C ,1)
+
+20
+
+Now consider the starting term F(1,1,r
+abfeteFr(R0,21,irsCF,(10),1an,1d,1R).1Owniltlhneooltohnegr ehranﬁdrei.f
+
+C ,r
+R2
+
+D). The effect of executing R1
+is executed ﬁrst the result would
+
+For two rules to be conﬂuent we need the following stronger condition.
+
+Deﬁnition 5 (Conﬂict-free)
+Rules R1 and R2 are conﬂict-free if (R1 <P C R2) ^ (R2 <P C R1)
+If two rules are parallel composible, the ’s do not collide and no special merging circuit is required to arbitrate their actions on the affected storage elements.
+
+4.3 SEQUENTIAL COMPOSIBILITY
+
+Even if two rules do affect some common state, by carefully prioritizing the
+
+effect of the
+R2), a legal
+
+two rules such that the effects of outcome can still be constructed
+
+R2 overrides R1 (in case R1 <
+from simultaneous evaluation of
+
+the two rules on the same current state.
+
+Deﬁnition 6 (Sequentially-Composible Transparency)
+
+SCRule(RR11
+
+is
+<
+
+SC-transparent to
+R2) ^ 8s:( s1( )
+
+^rule2(Rs)2),
+
+d)eno2t(ed1a(ss)R) 1=<SC(Rs;2,1i(fs);
+
+s2( ))
+
+Sequential composition that implements the priotization is deﬁned as
+
+Deﬁnition 7 (Sequential Composition)
+
+SC(s, s1, s2) =
+
+case s of
+) )CBiNtifvks(:2:=:)ifsst2h=envst1hen s1 else s2 ^else if (Tag(s1) =CNk (Tag(s2) = CNk) then
+SC s ; ;CNk( (Proj1( ) Proj1(s1) Proj1(s2)), ..., SC s ; ;(Projk( ) Projk(s1) Projk(s2))
+
+FAirfreoalsyfen)sa2 ) 81 i n: a[i:= SC(a[i],s1[i],s2[i])]
+
+^if ^if
+
+(s1 is chop
+(s2 is chop
+
+sufﬁx of f )
+preﬁx( chop
+sufﬁx of f )
+preﬁx( chop
+
+ss((uuffffﬁﬁxxii((sssspp12rr;;eeffﬁﬁ))xx;;ssoo21ff ))ss21))
+
+then then
+
+?else
+
+If R1 and R2 are sequentially composible (R1< R2), then prioritized 1
+and 2 can be generated. However, instead of applying them globally, they are
+
+Hardware Synthesis from Term Rewriting Systems 21
+
+only used to If a register
+
+replace is only
+
+1 and affected
+
+2 at state by either
+
+elements that are
+R1 or R2 then
+
+affected can be
+
+by both rules. used directly.
+
+Circuit (C) in Figure 1.4 illustrates the update circuit for this case.
+
+4.4 DOMINANCE
+
+Deﬁnition 8 (Dominance)
+
+Rule(RR12
+
+dominates rule
+< R2) ^ 8s:(
+
+^ )R1(1s,)deno2te(sd)a)s R1
+
+<D
+2( 1
+
+(Rs)2),
+
+if
+=
+
+s2( )
+
+If two rules, R1 and R2 are conﬂicting, but R2 dominates R1, we can
+
+include this information in the priority encoder when generating ’s for global
+
+replacement of their ’s. If 1 and 2 are both asserted on a cycle, instead
+
+of using a fair round-robin priority encoder, the encoder would statically give
+^:priority to 2. For a two rule circuit, 2= 2 and 1= 1 2. Circuit (D) in
+
+Figure 1.4 illustrates the update circuit for this case.
+
+4.5 SCHEDULING FOR SIMULTANEOUS FIRING
+
+To conclude this section, we describe a scheduler that is currently imple-
+
+Cmented in TRAC that makes use of conﬂict-free ( F ) relationships. In general,
+
+Can exact test for F relationship between two arbitrary rule instances is ex-
+
+^pensive (Finding an s such that i(s) CTRAC performs several conservative tests
+
+j(s) is
+to ﬁnd
+
+like solving
+as many F
+
+SAT ). Instead,
+relationships as
+
+possible. First, two rule instances that read and write non-overlapping parts of
+Cthe systems are F . If two rule instances do not rewrite the same registers, and
+
+if none of the registers affected by the of one is used by the and of the
+Cother, and vice versa, then the two rules are F since this condition is stronger Cthan the requirement for F . Lastly, TRAC symbolically analyzes pairs of ’s
+
+to conservatively determine when a pair can never be satisﬁed simultaneously
+and thus are CF by default.
+
+TRAC makes use of certain axioms when analyzing the conﬂict relationships
+
+between rules that reference abstract datatype interfaces. For example,
+
+(a[idx :=v])[idx ]=v
+6((a[idx:=v])[idx’:=v])[idx]=v if idx = idx’
+
+deq(enq(q,e)) = enq(deq(q),e) if q is not empty ﬁrst(q) = ﬁrst(enq(q,e)) if q is not empty
+
+Based on the analysis above and taking into account the properties of FIFO
+Cbuffers, it can be shown that the rules of Example 4 are F except for the Fetch
+and the Branch-Taken rule. However, it can be shown that the Branch-Taken
+rule dominates the Fetch rule in the sense that the effect of applying the Branch-
+
+22
+Taken rule after the Fetch rule is the same as not applying the Fetch rule at all
+i.e., ( BzN (s) = BzN ( F etch(s))). Thus, instead of arbitrating between these
+two rules, the compiler gives priority to the Branch-Taken rule.
+CAfter TRAC has establish F relationships between as many rule instances
+as possible, a graph of rule instances can be constructed by adding an edge
+Cbetween each non- F pairs. Scheduling groups is formed by partitioning the
+graph into connected components. Different groups never interfere and can be scheduled independently. For each group, a round-robin priority encoder can
+be used to map to for arbitration. For a small group, an n n look-up
+table can be computed off-line to encode to where more than one can be
+Casserted if the rules of the asserted ’s are F .
+5. PERFORMANCE EVALUATION
+TRAC generates RTL Verilog that can be synthesized to a variety of technologies by commercial tools like Synopsys and Xilinx hardware compilers. In this paper, we evaluate the quality of the TRAC-generated RTL’s against hand-coded RTL when compiled for Xilinx FPGA’s.
+Synthesis of the GCD Circuit: Both Example 1 and 2 are compiled to RTL by TRAC. The compile time is less than 2 sec on a 166MHz PowerPC604e. As a reference, our colleague, Daniel L. Rosenband, provided a hand-optimized Verilog RTL for GCD that uses only two 32-bit registers, a single subtracter, and simple boolean logic gates. The three RTL’s are compiled for XC4010XL-09 FPGA using Xilinx Foundation 1.5i tools. We report the number of ﬂipﬂops and the overall utilization of the FPGA. In addition to the maximum clock frequency, we also report the number of clock cycles needed to compute GCD(53857 10957,91159 10957).
+
+Version
+
+FF Util. Freq. Elapse (bit) (%) (MHz) (cyc)
+
+Example 1
+
+64
+
+20
+
+44.2
+
+54
+
+Example 2
+
+102
+
+38
+
+31.5
+
+104
+
+Hand RTL
+
+64
+
+16
+
+53.1
+
+54
+
+The RTL generated by TRAC from Example 2 is signiﬁcantly worse than the hand-coded RTL because the input TRS maps to a sub-optimal hardware structure. TRAC does not have the same ingenuity that allowed our colleague to realize the high-level transformations that lead to the smaller and simpler circuit of the hand-optimized RTL. However, the necessary information to achieve the same high-level transformation can be expressed at the TRS level. Given Example 1, TRAC produces an RTL that is structurally similar to the
+
+Hardware Synthesis from Term Rewriting Systems 23
+hand-coded version and compiles to within 25% of the hand-written RTL in terms of circuit size and 17% in terms of circuit speed.
+
+Synthesis of the Unpipelined Microprocessor: Hand-optimization can often produce much more efﬁcient implementations than machine compilation on small designs. However, as the problem size increases, the pay-back of hand optimizations diminishes while the effort required increases dramatically. This is evident in the synthesis of the simple microprocessor from Example 3. The TRAC generated RTL and a hand-coded Verilog RTL of the unpipelined processor, when targeting an XC4013XL-08 FPGA, are comparable both in size and speed.
+
+Version
+
+FF Util. Freq. (bit) (%) (MHz)
+
+Example 3 161 60 % Hand RTL 160 50 %
+
+40.0 41.0
+
+6. RELATED WORK
+A behavioral description refers to specifying a component by its input/output behavior without implementation or structural details. In industry, such descriptions are given typically in a sequential language like the behavioral portion of Verilog. Another approach is to extend or adapt a popular software language. Transmorgaﬁer-C[Galloway, 1995] and HardwareC[HardwareC, 1990] compile hardware from a source language based on C. In these systems, some constructs in C are overloaded to convey hardware related information such as clocking and registered storage. In the Programmable Active Memory (PAM) project, Vuillemin, et al. synthesize from an RTL in C++ syntax[Vuillemin et al., 1996]. Algorithms described in data-parallel C languages have been used to program an array of FPGA’s in Splash 2 [Gokhale and Minnich, 1993] and CLAy[Gokhale and Gomersall, 1997]. Sequential C and Fortran programs have been parallelized to target an array of simple conﬁgurable hardware structures[Babb et al., 1999]. The TRS-based behavioral descriptions are different from these approaches because on one hand TRS terms convey structural information about the hardware, but on the other hand, TRS rules can embody a set of behaviors, including concurrency and nondeterminism. This is not possible to express in any sequential language. TRS also offers a well-understood formalism which is useful in veriﬁcation.
+More related to TRS are hardware description languages that have been developed in the context of formal speciﬁcation and veriﬁcation. TRS is perhaps closest to Lamport’s TLA’s. Windley uses the speciﬁcation language from the HOL[HOL, 1997] theorem proving system to describe a pipelined
+
+24
+processor[Windley, 1995]. Matthews et al. have developed the Hawk language to create executable speciﬁcations of processor micro-architectures[Matthews et al., 1998]. However, none of these systems has been used in synthesis to the best of our knowledge. With a somewhat different motivation, Communicating Sequential Processes have been applied to hardware-software co-design by Gupta et al.[Gupta and de Micheli, 1993] and Thomas et al.[Thomas et al., 1993].
+7. CONCLUSION
+When applied in conjunction with reconﬁgurable technologies, TRAC can drastically lower the entry cost of taking on a hardware project by people who are not hardware designers by training. Compilers like TRAC have the potential to close the traditional distinction of hardware and software by creating a continuum of trade-offs between development cost and performance. We anticipate the day when all computers are shipped with a FPGA next to the CPU, and developers are just as ready to program the FPGA for a performance critical application as they would program the processor today.
+Acknowledgments
+This paper describes research done at the MIT Laboratory for Computer Science. Funding for this work is provided in part by the Defense Advanced Research Projects Agency of the Department of Defense under the Ft. Huachuca contract DABT63-95-C-0150 and by the Intel Corporation. James C. Hoe is supported by an Intel Foundation Graduate Fellowship.
+References
+[Arvind and Shen, 1999] Arvind and Shen, X. (1999). Design and veriﬁcation of processors using term rewriting systems. IEEE Micro Special Issue on Modeling and Validation of Microprocessors.
+[Baader and Nipkow, 1998] Baader, F. and Nipkow, T. (1998). Term Rewriting and All That. Cambridge University Press.
+[Babb et al., 1999] Babb, J., Rinard, M., Moritz, C. A., Lee, W., Frank, M., Barua, R., and Amarasinghe, S. (1999). Parallelizing applications into silicon. In Proceedings of the IEEE Workshop on FPGAs for Custom Computing Machines ’99, Napa Valley, CA.
+[Chandy and Misra, 1988] Chandy, K. M. and Misra, J. (1988). Parallel Program Design: A Foundation. Addison-Wesley.
+[Galloway, 1995] Galloway, D. (1995). The Transmogriﬁer C hardware description language and compiler for FPGAs. In Proceedings of IEEE Workshop on FPGAs for Custom Computing Machines, pages 136–144, Napa Valley, CA.
+
+Hardware Synthesis from Term Rewriting Systems 25
+[Gokhale and Gomersall, 1997] Gokhale, M. and Gomersall, E. (1997). High level compilation for ﬁne grained FPGAs. In Proceedings of the IEEE Workshop on FPGAs for Custom Computing Machines ’97, Napa Valley, CA.
+[Gokhale and Minnich, 1993] Gokhale, M. and Minnich, R. (1993). FPGA computing in a data parallel C. In Proceedings of IEEE Workshop on FPGAs for Custom Computing Machines, pages 94–101, Napa Valley, CA.
+[Gupta and de Micheli, 1993] Gupta, R. and de Micheli, G. (1993). Hardwaresoftware cosynthesis for digital systems. IEEE Design and Test of Computers, pages 29–41.
+[HardwareC, 1990] HardwareC (1990). HardwareC – A Language for Hardware Design. Stanford University.
+[HOL, 1997] HOL (1997). The HOL System Tutorial, Version 2. SRI International, University of Cambridge.
+[Lamport, 1994] Lamport, L. (1994). The temporal logic of actions. ACM Transactions on Programming Languages and Systems, 16(3).
+[Lynch, 1996] Lynch, N. (1996). Distributed Algorithms. Morgan Kaufmann.
+[Manna and Pnueli, 1991] Manna, Z. and Pnueli, A. (1991). The Temporal Logic of Reactive and Concurrent Systems: Speciﬁcation. Springer-Verlag.
+[Matthews et al., 1998] Matthews, J., Launchbury, J., and Cook, B. (1998). Microprocessor speciﬁcation in Hawk. In Proceedings of the 1998 International Conference on Computer Languages, Chicago, IL.
+[Thomas et al., 1993] Thomas, D. E., Adams, J. K., and Schmit, H. (1993). A model and methodology for hardware-software codesign. IEEE Design and Test of Computers, pages 6–15.
+[Vuillemin et al., 1996] Vuillemin, J., Bertin, P., Roncin, D., Shand, M., Touati, H., and Boucard, P. (1996). Programmable active memories: Reconﬁgurable systems come of age. IEEE Transactions on VLSI, 4(1):56–69.
+[Windley, 1995] Windley, P. J. (1995). Verifying pipelined microprocessors. In Proceedings of the 1995 IFIP Conference on Hardware Description Languages and their Applications (CHDL).
+
+
