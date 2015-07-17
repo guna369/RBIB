@@ -1,0 +1,1750 @@
+Information and Computation 205 (2007) 917–965
+
+www.elsevier.com/locate/ic
+
+Nominal rewritingୋ
+Maribel Fernández *, Murdoch J. Gabbay
+King’s College London, Department of Computer Science, Strand, London WC2R 2LS, UK
+Received 11 November 2005; revised 5 December 2006 Available online 22 December 2006
+Abstract
+Nominal rewriting is based on the observation that if we add support for -equivalence to ﬁrst-order syntax using the nominal-set approach, then systems with binding, including higher-order reduction schemes such as -calculus ÿ-reduction, can be smoothly represented. Nominal rewriting maintains a strict distinction between variables of the object-language (atoms) and of the meta-language (variables or unknowns). Atoms may be bound by a special abstraction operation, but variables cannot be bound, giving the framework a pronounced ﬁrst-order character, since substitution of terms for variables is not capture-avoiding. We show how good properties of ﬁrst-order rewriting survive the extension, by giving an efﬁcient rewriting algorithm, a critical pair lemma, and a conﬂuence theorem for orthogonal systems. © 2006 Elsevier Inc. All rights reserved.
+Keywords: Binders; -Conversion; First and higher-order rewriting; Conﬂuence
+
+1. Introduction
+This is a paper about rewriting in the presence of -conversion. ‘Rewriting’, or in full ‘the framework of Term Rewriting Systems’ (TRS), is a framework for specifying and reasoning about
+ୋ This work has been partially funded by EPSRC (Grants EP/C517148/1 “Rewriting Frameworks” and EP/D501016/1 “CANS”).
+∗ Corresponding author. E-mail addresses: Maribel.Fernandez@kcl.ac.uk (M. Fernández), Murdoch.Gabbay@gmail.com (M.J. Gabbay).
+0890-5401/$ - see front matter © 2006 Elsevier Inc. All rights reserved. doi:10.1016/j.ic.2006.12.002
+
+918 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+logic and computation. Usually, if the reader’s favourite formal system can be described by syntax trees (also called terms), then any notion of dynamics (deduction and evaluation for example) can probably be captured by a suitable collection of rewrite rules. For example (we are more formal later):
+(1) Assume constants S and K, and a binary term-former ◦ which we write inﬁx. Then the rewrite rules
+
+((S ◦ X ) ◦ Y ) ◦ Z → (X ◦ Y ) ◦ (X ◦ Z ) and (K ◦ X ) ◦ Y → X
+deﬁne a rewrite system for combinatory algebra (or combinatory logic) [6]. X , Y , and Z are unknowns, which can be instantiated to any term. So from this rewrite system we may deduce (K ◦ S) ◦ K → S and indeed (K ◦ X ) ◦ Y → X . (2) Assume constants very, damn, and whitespace, and rewrite rules
+
+very → damn and damn → whitespace.
+
+This implements a rewrite system due to Mark Twain.1
+
+However, in the presence of binding, a notion of rewriting on pure abstract syntax trees is not as
+useful as we might like. For example, here are informal descriptions of the - and Á-reduction rules of the untyped -calculus [6]
+
+x·s → y·s[x→y], if y ̸∈ fv(s),
+
+x·(sx) → s,
+
+if x ̸∈ fv(s).
+
+Note the freshness side-conditions on the right: fv(s) denotes the set of free variables of s. The ÿ-reduction rule ( x·s)t → s[x→t] raises some issues too: we need to deﬁne the capture-
+avoiding substitution s[x→t], and this involves more freshness side-conditions. These rules introduce nondeterminism and make rewriting conditional. Experience also shows
+that they are difﬁcult to reason about and pose speciﬁc implementation problems.
+One answer is to take rules creating these issues, for example , as equalities on terms. We say that ‘names and binding are relegated to the meta-level’. A lot of effort has gone into developing systems along these lines. Combinatory Reduction Systems (CRS) [31], Higher-order Rewrite Systems (HRS) [33], Expression Reduction Systems (ERS) [30,29], and the rewriting calculus [14,15], combine
+ﬁrst-order rewriting with a notion of bound variable, and rewriting rules work on -equivalence
+classes of terms. In these systems the -calculus can be deﬁned as a particular rewrite system with
+one binder: -abstraction. Several notions of rewriting modulo an equational theory have been de-
+veloped to formally study rewriting in the presence of equalities, but none that can deal speciﬁcally
+with -equivalence (where equivalence classes of terms are inﬁnite).
+
+1 Substitute “damn” every time you are inclined to write “very”; your editor will delete it and the writing will be just as
+
+it should be.
+
+– Mark Twain
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+919
+
+Another approach is to bite the bullet and specify everything to do with , ÿ, Á, and so on, completely explicitly. To make this more manageable, substitution is introduced as a term-former, which does at least make reasoning on these equivalences susceptible to term-level inductions on syntax and so on. Explicit substitution systems have been deﬁned for the -calculus (e.g. [1,32,16]) and more generally for higher-order rewrite systems (e.g. [35,9]) with the aim of specifying the higher-order notion of substitution as a set of ﬁrst-order rewrite rules. In most of these systems variable names are replaced by de Bruijn indices to make easier the explicitation of -conversion, at the expense of readability. Explicit substitution systems that use names for variables (see, for example [23,8]) either restrict the rewriting mechanism to avoid cases in which -conversion would arise (for instance using weak reduction, or closed reduction) or use Barendregt’s convention (all bound variables in a term have fresh names, different from the free variables; and this property is assumed to be maintained by reduction) to avoid addressing the problem of -conversion.
+In this paper we present a framework for rewriting based on a different way of slicing these issues. We maintain a strict distinction between object-level variables (we write them a, b, c and call them atoms), which can be abstracted but behave similarly to constants (whence the ‘nominal’, for ‘name’ in “nominal rewriting systems”, henceforth abbreviated to NRS)—and metalevel variables (we write them X , Y , Z and may call them unknowns), which are ﬁrst-order in that there are no binders for them and substitution does not avoid capture of free atoms (we may refer to our system as ‘ﬁrst-order’, as opposed to higher-order systems which quotient terms up to -equivalence, and for which substitution is capture-avoiding and may involve ÿ-reductions). Our approach is based on the work reported in [24,36,41]. We deal with -equality using a small logic for deriving a relation ‘are -equivalent’, in a syntax-directed manner (this gives us the great beneﬁt that we can reason by induction on syntax and/or on the derivation that two terms are -equivalent); we deal with the freshness side-conditions mentioned above by introducing an explicit freshness relation between atoms and unknowns, written as a#X (read “a is fresh for X ”; in fact, we write a#t where t is any term, but this is derived by simple structural induction). Then, as we shall see, ÿ-, Á- and other similar reduction rules can be easily deﬁned, as rewrite rules.
+We can see nominal terms as ﬁrst-order terms, with a deﬁnition of -equality which explicitly supports our intuitive notions of ‘meta-variable’ and ‘freshness condition’. It combines many of the conveniences of higher-order techniques (smooth handling of ÿ- and similar reduction rules) with the syntax-directed simplicity of ﬁrst-order techniques (a simple notion of substitution, decidable uniﬁcation).
+Consistent with previous work on nominal logic and uniﬁcation [24,36,41], we call atoms the names that can be bound and reserve the words variable and unknown for the identiﬁers that cannot be bound (known as variables and metavariables respectively in CRSs and ERSs, or bound and free variables in HRSs). We leave implicit the dependencies between variables and names as it is common practice in informal presentations of higher-order reductions. More precisely, variables in NRSs have arity zero, as in ERSs (but unlike ERSs, substitution of atoms for terms is not a primitive notion in NRSs). For example, the ÿ-reduction rule and the Á-expansion rule of the -calculus are written as
+
+app( ([a]M), N) → subst([a]M , N),
+
+a#X ⊢ X
+
+→ ([a]app(X , a)),
+
+920 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+where the substitution in the ÿ-rule is a term-former, which has to be given meaning by rewrite rules.
+To summarise, the main contributions of this paper are:
+(1) We formulate a notion of rewriting on nominal terms which behaves as ﬁrst-order rewriting but uses matching modulo -equality. We deal with -equality without introducing metasubstitutions and ÿ-reductions in our meta-language (in contrast with standard notions of higher-order rewriting, which rely on meta-substitutions and/or ÿ-reductions in the substitution calculus). Consequently in some cases we need freshness assumptions in terms and rewrite rules; these will be taken into account in the matching algorithm. We use nominal matching [41] to rewrite terms. Selecting a nominal rewrite rule that matches a given term is an NP-complete problem in general [13]. However, by restricting to closed rules we can avoid the exponential cost: nominal matching is polynomial in this case. Closed rules are, roughly speaking, rules which preserve abstracted atoms during reductions; in particular, closed rules do not contain free atoms, hence their name. CRSs, ERSs, and HRSs impose similar conditions on rules, by deﬁnition (ERSs impose a condition on the substitution used to match a left-hand side, which corresponds to our notion of closed rules). Closed rules are very expressive2 : see [21] for an encoding of CRSs using closed nominal rules. Translations between CRSs, HRSs, and ERSs have already been deﬁned (see [37]).
+(2) We prove a Critical Pair Lemma which ensures that closed nominal rewriting rules which do not introduce critical pairs are locally conﬂuent, and a conﬂuence result for orthogonal systems (i.e. NRSs where rules have linear left-hand sides without superpositions). Similar results have been proved for CRSs and HRSs (see [31,33]).
+Related work. First-order rewriting systems and the -calculus provide two useful notions of terms and reduction, and both formalisms have been used as a basis to develop speciﬁcation and programming languages. However, in both cases the expressive power is limited (although for different reasons): ﬁrst-order rewrite systems do not provide support to deﬁne binding operators, and there are useful operations which cannot be encoded in the -calculus (see for instance [5], where it is shown that the rules for surjective pairing cannot be encoded in the -calculus). These observations motivated the search for more general formalisms combining the power of ﬁrst-order term rewriting with the binding capabilities of the -calculus. Our work can be seen as part of this effort. In the rest of the introduction we will compare nominal rewrite systems with the rewrite systems with binders that have been deﬁned previously.
+(1) Algebraic -calculi, which can be typed [10,11,28,3,4] or untyped [18], combine the ÿ-reduction rule of the -calculus with a set of term rewriting rules. They use capture-avoiding substitution in ÿ-reductions, and ﬁrst-order matching and substitution for term rewriting rules. They are more expressive than either the -calculus or ﬁrst-order rewriting, but it was observed
+2 An argument could be made that they are the correct notion of nominal rewrite rule, though we have a weaker well-behavedness condition we call uniformity, which is also relevant.
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+921
+
+that properties of the latter formalisms are not automatically inherited by the combination. The papers cited above use types, or syntactical conditions in the rewrite rules, or both, to characterise subsystems that preserve conﬂuence or termination for instance. Algebraic -calculi can be deﬁned as nominal rewrite systems, but as for the -calculus, the notion of capture-avoiding substitution has to be explicitely deﬁned using nominal rewrite rules. (2) Higher-order rewriting systems (e.g. CRSs [31], HRSs [33], ERSs [30,29], and HORSs [37]) extend ﬁrst-order rewriting to include binders using higher-order substitutions and higher-order matching. In contrast with algebraic -calculi (which use ﬁrst-order matching), binders are allowed in left-hand sides of higher-order rewrite rules. NRSs are related to these since nominal rules may also have binders in left-hand sides, however, nominal rewriting does not use higher-order matching; instead, it relies on nominal matching (which takes care of -equality). Although there is no ‘ofﬁcial’ deﬁnition of higher-order rewrite rule, it is generally acknowledged that CRSs, ERSs and HRSs (although using different presentations) deﬁne a canonical higher-order rewrite format (see [31]). The subclass of closed NRSs is also canonical in this sense, and general NRSs are even more expressive (we will give examples). (3) Although NRSs were not designed as explicit substitution systems, they are at an intermediate level between standard higher-order rewriting systems and their explicit substitution versions (e.g. [35,9]), which implement in a ﬁrst-order setting the substitution operation together with
+-conversions using de Bruijn indices. Compared with the latter, NRSs are more modular: a higher-order substitution is decomposed into a ﬁrst-order substitution and a separate notion of -equality (a design idea borrowed from Fresh-ML [38]). Also, from a (human) user point of view, it is easier to use systems with variable names than systems with indices. The disadvantage is that nominal rewriting is not just ﬁrst-order rewriting, therefore we cannot directly use all the results and techniques available for ﬁrst-order rewriting. However, nominal rewriting turns out to be sufﬁciently close to ﬁrst-order rewriting that it shares many of its desirable and convenient properties: efﬁcient matching, a critical pair lemma, and a conﬂuence result for orthogonal systems. (4) Hamana’s Binding Term Rewriting Systems (BTRS) [27] also extend ﬁrst-order rewriting to include binders and -equality, but use a de Bruijn notation. The main difference with nominal rewriting is that BTRSs use a containment relation that indicates which free atoms occur in a term (as opposed to a freshness relation which indicates that an atom does not occur free in a term). Not surprisingly, the notions of renaming and variants play an important rôle in BTRSs, as do swappings and equivariance in NRSs. In other words, when free atoms occur in rules, we have to consider all the (inﬁnite) variants that can be obtained by renaming the free atoms. Selecting a rewrite rule that matches a given term is then NP, but we have characterised a class of NRSs for which matching is efﬁcient and we conjecture BTRS-matching is efﬁcient in this case too. (5) NRSs, with their use of freshness contexts in rules, could be seen as a form of conditional rewriting systems (see [7]), albeit with matching modulo . Takahashi’s -calculus with conditional rules [39] is a closely related formalism: it is a higher-order rewriting framework in the sense that rules may include binders (there is a distinction between object-level and metalevel variables). As in NRSs, substitution of metavariables for terms is not capture-avoiding, but terms are deﬁned as -equivalence classes of trees, and capture-avoiding substitution is a
+
+922 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+primitive notion. The requirement that rule schemes are closed under capture-avoiding substitution means that only closed NRSs can be expressed. On the other hand, the conditions on the rewrite rules in conditional -calculus systems are arbitrary (not just freshness predicates as in NRSs). We discuss in Section 9 extensions of NRS which can deal with more general contexts in rules.
+This paper is an updated and extended version of [21]. In [19] we develop a more general notion of nominal term, and we develop a type system in [20].
+Overview of the paper. Section 2 presents nominal signatures, terms and substitutions. In Section 3 we deﬁne -equivalence of nominal terms and give an algorithm to check it, which is used as a basis to design a uniﬁcation algorithm in Section 4. Rewriting is deﬁned in Section 5. In Section 6 we deﬁne uniform systems (a class of nominal rewriting systems which are well behaved with respect to -equivalence), and prove the Critical Pair Lemma for uniform rules. In Section 7 we prove that orthogonality is a sufﬁcient condition for conﬂuence of uniform rewriting. A further restriction on rewrite rules is used in Section 8 to obtain an efﬁcient implementation of nominal rewriting. In Section 9 we brieﬂy discuss some extensions of nominal rewriting (with sorts, and with more expressive contexts for rewrite rules). We conclude the paper in Section 10.
+2. Nominal terms
+2.1. Signatures and terms
+A nominal signature is a set of term-formers typically written f (though we do try to give them suggestive names in examples). For instance, a nominal signature for a fragment of ML has term-formers
+app lam let letrec
+and a nominal signature for the -calculus is given by
+in out par rep
+In order to deﬁne operations over the syntax of ML for instance, we will need:
+• The notion of a term containing unknown terms represented by variables which can be instantiated, so that we can represent a schema of rewrites by a single rewrite rule. We call these (meta-level) unknowns.
+• The notion of an object-level variable symbol of the ML language, so that we can directly represent the variable structure of the object-language, and deﬁne variable lookup, open terms, patterns, and -abstractions. We call these (object-level) variable symbols or atoms.
+Of course, we would need the same if we wanted to model ﬁrst-order logic, the -calculus, or any other syntactic system which mentions variable symbols.
+Fix a countably inﬁnite set X of term variables X , Y , Z; these represent meta-level unknowns. Also, ﬁx a distinct countably inﬁnite set A of atoms a, b, c, n, x; these represent object-level variable
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+923
+
+symbols. Consistent with later notation for terms, we write a ≡ a and X ≡ X to denote syntactic identity of unknowns and atoms. We assume that , X and A are pairwise disjoint.
+A swapping is a pair of atoms, which we write (a b). Permutations are lists of swappings, generated by the grammar:
+
+::= Id | (a b) .
+
+We usually omit the last Id when we write the list of swappings that deﬁne a permutation. We call Id the identity permutation. We call a pair of a permutation and a variable X a moderated variable and write it ·X . We say that is suspended on X . We may write −1 for the permutation obtained by reversing the list of swappings in . For example if = (a b)(b c) then −1 = (b c)(a b). We denote by ◦ ′ the permutation containing all the swappings in followed by those in ′.
+Remark. ·X represents an unknown term X in which some atoms must be renamed (e.g. by some -equivalence taking place elsewhere in the term)—but because we do not yet know what X is,
+the renaming sits suspended outside. When we come to deﬁne substitution of terms for unknowns [X →s], we shall see that permutations ‘unsuspend’ and go into s. For example, using the notation we introduce in a moment, ( ·X )[X →(Y , Y )] ≡ ( ·Y , ·Y ).
+Deﬁnition 1. Nominal terms, or just terms for short, are generated by the grammar
+
+s, t ::= a | ·X | (s1, . . . , sn) | [a]s | (f t).
+Terms are called, respectively, atoms, moderated variables (or just variables for short), tuples, abstractions, and function applications.
+Note that X is not a term, but Id·X is. We abbreviate Id·X as X when there is no ambiguity. In the clause for tuples we call n the length of the tuple. If n = 0 we have the empty tuple (). We omit the brackets when n is 1, if there is no ambiguity. If f is applied to the empty tuple we may write f () as just f .
+We write V(t) for the set of variables occuring in t. Ground terms are terms without variables, that is V(t) = ∅. A ground term may still contain atoms, for example a is a ground term and X is not.
+An abstraction [a]t is intended to represent t with a bound, as in the syntax a·t (from the -calculus) and a·P (from the -calculus). Accordingly we call occurrences of a abstracted (or bound) and unabstracted occurrences unabstracted (or free). We do not work modulo -conversion of abstracted atoms, so syntactic identity ≡ is not modulo -equivalence; for example, [a]a ̸≡ [b]b. -Equivalence ≈ is a logical notion constructed on top of ≡ using a notion of context which we shall deﬁne soon.
+Example 2. Recalling the signature for ML mentioned previously, the following are nominal terms (and the last one is ground):
+
+app(lam([a]a), X ) (lam([a]lam([b]a)), Y ) let([a]a, a).
+
+We deﬁne the following sugar:
+
+• Sugar app(s, t) to s t. • Sugar lam([a]s) to [a]s.
+
+924 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+• Sugar let([a]s, t) to let a = t in s. • Sugar letrec([f ]([a]t, s)) to let fa = t in s.
+There is nothing to stop us writing app([a]s) if we like, because we have, for simplicity, introduced no notion of arity or sort system. We discuss this later in Section 9, see also [20].
+2.2. Substitution and swapping
+Substitutions (of variables for terms) are used to instantiate unknowns and to represent matching or uniﬁcation solutions. In systems with binders, substitution is not so easy to deﬁne because it should avoid capture of bound variables, so -conversions may be needed. -conversion is in turn traditionally deﬁned by using a ‘simpler’ kind of substitution—renaming, that is, substitution of atoms by atoms—where an atom is replaced by a fresh one. Instead of using renamings, nominal techniques deﬁne -equivalence and freshness using swappings. Intuitively, a swapping (a b) is a special kind of ﬁrst-order substitution which replaces simultaneously a by b and b by a in the syntax of the term, suspending on variables. Swappings have better commutation properties (with substitutions and with -equivalence) than renamings—no side conditions are required. We will return to this point later.
+As discussed ·X represents an unknown term with some swappings waiting to happen. This is reﬂected in the deﬁnition of the action of permutations and substitutions on terms below, denoted
+·t and t[X →s], respectively.
+Deﬁnition 3 (Permutation). The action of a permutation on a term t is deﬁned by induction on the number of swappings in
+Id·t = t (a b) ·t = (a b)·( ·t),
+where (a b)·a = b (a b)·b = a (a b)·c = c
+(a b)·( ·X ) = ((a b) ◦ )·X (a b)·ft = f(a b)·t (a b)·[n]t = [(a b)·n](a b)·t (a b)·(t1, . . . , tn) = ((a b)·t1, . . . , (a b)·tn).
+Here, a, b, c, n are any pairwise different atoms.
+For example, (a b)· [a] [b]abX = [b] [a]ba(a b)·X . Note that although (a b) and (b a) are different swappings, they have the same action on terms.
+We will show (see Lemma 19) that two permutations with the same action are logically undistinguishable.
+Deﬁnition 4 (Substitution). A substitution is generated by the grammar
+::= Id | [X →s] .
+We write substitutions postﬁx and write ◦ for composition: t( ◦ ′) ≡ (t ) ′.
+a[X →s] ≡ a (ft)[X →s] ≡ f(t[X →s]) ([a]t)[X →s] ≡ [a](t[X →s]) (t1, . . . , tn)[X →s] ≡ (t1[X →s], . . . , tn[X →s]) ( ·X )[X →s] ≡ ·s ( ·Y )[X →s] ≡ ·Y
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+acts on terms elementwise in the natural way
+
+925
+
+tId ≡ t t[X →s] ≡ (t[X →s]) .
+
+Remark. There is no primitive notion of substitution of a term for an atom in nominal rewriting, since some languages have variables which do not represent terms (e.g. the -calculus, which only has variable-for-variable renaming, or a language with global state which may have location variables and a notion of generating new location variables, but no notion of replacing one location by another). Various different kinds of substitution on atoms can be efﬁciently implemented by rewrite rules—but substitution of terms for unknowns X , Y , Z is primitive since we need it to express matching and thus rewriting.
+Note that t[X →s] really does replace every X in t by s in a completely unimaginative way—in particular ([a]t)[X →s] ≡ [a](t[X →s]) does not avoid capture of a in s by the abstraction—except for the clause ( ·X )[X →s] ≡ ·s, where a suspended permutation becomes ‘active’ and acts on s. Permutations act top-down and accumulate on moderated variables whereas substitutions act on the variable symbols in the moderated variables. These observations are the core of the next lemma.
+Lemma 5. Substitution and permutation commute: ·(s ) ≡ ( ·s) .
+Proof. By induction on s: the property is trivial for atoms since they are not affected by substitutions. For moderated variables the property follows directly from the deﬁnition of substitution. The cases of tuples and function applications are easily dealt with by the induction hypotheses. The only interesting case is abstraction: ( ·[a]s) ≡ ([ ·a]( ·s)) by Deﬁnition 3, and ([ ·a] ·s) ≡ [ ·a](( ·s) ) by Deﬁnition 4. Now by induction we obtain [ ·a] ·(s ) which is ·[a](s ) by Deﬁnition 3.
+Remark . In contrast with the Substitution Lemma [6], in the lemma above we do not need to compose substitutions and there are no free variable side-conditions.
+
+3. Alpha-equivalence
+The notion of ‘fresh variable’ plays an important rôle in the deﬁnition of -equivalence. We will introduce a freshness predicate # and an alpha-equality predicate ≈ :
+• a#t intuitively means that if a occurs in t then it must do so under an abstractor [a]−. For example, a#b, and a#[a]a but not a#a. We sometimes write a, b#s instead of a#s, b#s.
+• s ≈ t intuitively means that s and t are -equivalent.
+Syntactic equality s ≡ t is a structural (rather than logical) fact. Intuitively, in the absence of unknowns a#s and s ≈ t are also structural facts—to check a#s for example we just check that every a in s occurs under an abstractor. However, in the presence of unknowns both predicates may depend on assumptions a#X about what will get substituted for the unknowns (the simplest example: we may derive a#X if we assume . . . a#X ). Formally, we deﬁne # and ≈ by a logical system. We use # in the deﬁnition of ≈ , which expresses the ‘freshness side-conditions’ mentioned in the introduction.
+
+926 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+Deﬁnition 6. Constraints are generated by the grammar
+
+P , Q, C ::= a#t | s ≈ t
+
+and speciﬁed by a system of natural-deduction rules as follows (a, b are any pair of distinct atoms):
+
+a#b (#ab)
+
+a#s a#fs (#f)
+
+a#s1 · · · a#sn a#(s1, . . . , sn)
+
+(#tup)
+
+a#[a]s (#absa)
+
+a#s a#[b]s (#absb)
+
+−1·a#X a# ·X (#X).
+
+To deﬁne ≈ we use the difference set of the two permutations
+
+ds( , ′) d=ef n ·n =/ ′·n .
+
+In the rules deﬁning ≈ below, ds( , ′)#X denotes the set of constraints: {n#X | n ∈ ds( , ′)}.
+
+a≈
+
+(≈ a)
+a
+
+ds( , ′)#X ·X ≈ ′·X (≈ X)
+
+s1 ≈ t1 · · · (s1, . . . , sn) ≈
+
+sn ≈ tn (t1, . . . , tn)
+
+(≈
+
+tup)
+
+s≈ t
+
+fs ≈
+
+(≈ f)
+ft
+
+s≈ t [a]s ≈ [a]t (≈ absa)
+
+(b a)·s ≈ t b#s [a]s ≈ [b]t .(≈ absb)
+
+Remark. Rule (≈ absb) is equivalent to a rule with premisses s ≈ (a b)·t, a#t (this will be shown later).
+Example 7 . We can derive a#((a b)·X , (b c)·Y ) from assumptions a#Y , b#X , using the fact that (b c)·a ≡ a.
+
+b#X a#(a b)·X
+a#((a
+
+(#X)
+
+a#Y a#(b c)·Y
+
+b)·X , (b c)·Y
+
+(#X)
+)
+
+.(#tup)
+
+We can also derive a#(X , [a]Y ) from a#X , and a#f a from a#a:
+
+a#X a#[a]Y (#absa)
+a#(X , [a]Y )
+
+(#tup)
+
+a#a a#fa (#f).
+
+Also, we can deduce (a b)·X ≈ X from assumptions a#X and b#X , and we also have as expected [a]a ≈ [b]b and, using sugar from Example 2, we can prove [f ] [x]fxX ≈ [x] [f ]xfX provided f #X and x#X (assuming f and x are atoms)
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+927
+
+Here, we use the fact that ds((a b), Id) = {a, b}. We recall that [f ] [x]f(xX ) is actually lam([f ]lam([x]app(f , app(x, Id·X )))), where lam is applied to a tuple with one element. We write several rules used together as .(rule1,rule2,...,)
+Deﬁnition 8. We call constraints of the form a#a and a#X reduced, and write , ∇, for sets of reduced constraints, we may call them contexts. If there are no constraints of the form a#a in we say it is consistent.
+Intuitively, an assumption a#a can never be true; we could add a rule in the system to reﬂect this fact
+a#a for any P P
+See [19] for a presentation with this rule. On the other hand, a#X might be true if we instantiate X sensibly (to b, say, but not to a).
+Deﬁnition 9 (Problems and entailment). A set Pr of constraints will be called a problem. We write ⊢ Pr when proofs of P exist for all P ∈ Pr, using the derivation rules above and elements of the
+context as assumptions. We say that entails Pr. If ⊢ P because P ∈ we say trivially entails P , or that the derivation is trivial.
+Remark. In contrast with higher-order systems, here -equivalence is axiomatised instead of being built into the syntactic equality. This might seem inefﬁcient, because to decide -equivalence in the front end (the syntax we use to reason about terms) we must do an explicit proof. However, we are free in nominal rewriting, as with any other framework, to choose the back end (the underlying representation) wisely so it is efﬁcient for the manipulations we intend to carry out. When we deﬁne nominal matching later, we will build the -equivalence into the matching algorithm; but by making the calculation of -equivalence explicit in the front end, we lost nothing and gain useful proof principles.
+
+928 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+3.1. An algorithm to check constraints
+
+The rules above decompose syntax and the part above the line in a rule is always strictly simpler
+
+than the part below the line. This is not completely obvious for the second rule for abstractions
+
+(b
+
+a)·s≈ [a]s≈
+
+t b#s [b]t
+
+until
+
+we
+
+recall
+
+that
+
+(b
+
+a)·s
+
+is
+
+not
+
+itself
+
+a
+
+term
+
+but
+
+sugar
+
+for
+
+a
+
+term
+
+with
+
+b
+
+swapped
+
+with
+
+a and (if there are unknowns X in s), (b a) suspended on X . The depth of this term is strictly less than
+
+that of [a]s. Based on this observation, we give below an algorithm to check the validity of freshness
+
+and -equality constraints. We refer to [12] for a description of an efﬁcient implementation.
+
+The algorithm is speciﬁed as a set of simpliﬁcation rules acting on problems. We will later extend
+
+it to solve matching problems involving left-hand sides of rewrite rules; in anticipation we use l in
+
+the simpliﬁcation rules for ≈ .
+
+Deﬁnition 10 (Simpliﬁcation rules for problems). Here a, b denote any pair of distinct atoms, ·X denotes a moderated variable, and f a term-former.
+
+a#b, Pr a#fs, Pr a#(s1, . . . , sn), Pr a#[b]s, Pr a#[a]s, Pr
+a# ·X , Pr
+
+⇒ Pr ⇒ a#s, Pr ⇒ a#s1, . . . , a#sn, Pr ⇒ a#s, Pr
+⇒ Pr ⇒ −1·a#X , Pr
+
+̸≡ Id
+
+a ≈ a, Pr (l1, . . . , ln) ≈ (s1, . . . , sn), Pr
+fl ≈ fs, Pr [a]l ≈ [a]s, Pr [b]l ≈ [a]s, Pr ·X ≈ ′·X , Pr
+
+⇒ Pr ⇒ l1 ≈ s1, . . . , ln ≈ sn, Pr ⇒ l ≈ s, Pr ⇒ l ≈ s, Pr ⇒ (a b)·l ≈ s, a#l, Pr ⇒ ds( , ′)#X , Pr
+
+These rules deﬁne a reduction relation on problems: We write Pr ⇒ Pr′ when Pr′ is obtained from Pr by applying a simpliﬁcation rule, and we write ⇒∗ for the transitive and reﬂexive closure of ⇒.
+These rules ‘run the derivation rules in reverse’, in no particular order. In view of the example derivations above, we leave the reader to check that the following hold:
+
+a#(X , [a]Y ) ⇒∗ a#X a#fa ⇒∗ a#a a#((a b)·X , (b c)·Y ) ⇒∗ b#X , a#Y ,
+
+and that the following hold:
+
+(a b)·X ≈ X ⇒∗ a#X , b#X [a]a ≈ [b]b ⇒∗ {} [f ] [x]f(xX ) ≈ [x] [f ]x(fX ) ⇒∗ x#X , f #X.
+
+Intuitively, if a constraint can be reduced to the emptyset (as in the second example for ≈ above) then it holds. If after simplifying a problem as much as possible, still some constraints remain, then
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+929
+
+we will need those as assumptions to derive the constraints in the problem. We will formalise these observations below.
+
+Lemma 11. The relation that Pr1 ⇒∗ Pr3 and Pr2
+
+⇒ is conﬂuent (i.e. ⇒∗ Pr3) and strongly
+
+if Pr ⇒∗ Pr1 and Pr normalising (i.e. the
+
+⇒∗ Pr2 then simpliﬁcation
+
+there exists Pr3 such process terminates).
+
+Proof. By Newman’s Lemma [34] we need only show termination, because the simpliﬁcation rules do not overlap (there are no critical pairs). The rules form a hierarchical system in the sense of [22], from which it follows that if the ﬁrst group of rules is terminating (it is, since the rules decrease the size of the problem, deﬁned as the multiset of sizes of individual constraints) and non-duplicating (it is, since no terms are duplicated) and does not use in the right-hand side any symbol deﬁned in the second group (i.e. equality ≈ ; it does not), then if the rules for the equality symbol satisfy the general recursive scheme, then the whole system is terminating. The general recursive scheme requires that recursive calls in right-hand sides use strict subterms of the left-hand side arguments, and this is the case (permutations are ignored).
+
+As a consequence, the simpliﬁcation rules deﬁne a function from problems to their unique normal forms. We write ⟨Pr⟩nf for the normal form of Pr, and ⟨P ⟩nf for ⟨{P }⟩nf , i.e. the result of simplifying it as much as possible.
+The following technical properties are direct corollaries of conﬂuence of ⇒:
+
+Corollary 12. ⟨Pr ∪ Pr′⟩nf = ⟨Pr⟩nf ∪ ⟨Pr′⟩nf , and as a corollary if Pr ⊆ Pr′ then ⟨Pr⟩nf ⊆ ⟨Pr′⟩nf . Proof. The algorithm for determining ⟨Pr ∪ Pr′⟩nf works elementwise on the elements of Pr ∪ Pr′, and is conﬂuent by Lemma 11.
+
+We will say that an equality constraint u ≈ v is reduced when one of the following holds:
+
+• u and v are distinct atoms. For example a ≈ b is a reduced equality. • u and v are applications with different term-formers (e.g. ft ≈ gs). • u and v are two different variables. So ·X ≈ ′·Y is reduced, but ·X ≈ ′·X is not, for any
+and ′. • u and v have different term constructors at the root. For example [a]s ≈ (t, t′), X ≈ ft, and
+a ≈ ·X , are all reduced equalities.
+
+Recall from §3 that we call a freshness constraint a#s reduced when it is of the form a#a or a#X (i.e. when s ≡ a or s ≡ X ). We call the ﬁrst inconsistent and the second consistent.
+Say a problem Pr is reduced when it consists of reduced constraints, and inconsistent when ⟨Pr⟩nf contains an inconsistent element—so Pr is inconsistent if and only if ⟨Pr⟩nf is, if and only if a#a ∈ ⟨Pr⟩nf for some a.
+Lemma 13. Pr is reduced if and only if Pr = ⟨Pr⟩nf .
+Proof. We check the simpliﬁcation rules above, and the deﬁnition of a reduced constraint, and see that a simpliﬁcation rule applies to a constraint if and only if that constraint is not reduced.
+
+930 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+Corollary 14 (Characterisation of normal forms).
+(1) ⟨a#s⟩nf is a context , as deﬁned in Section 3. need not be consistent. For example, ⟨a#a⟩nf = {a#a} is an inconsistent context.
+(2) ⟨s ≈ t⟩nf is of the form ∪ Contr ∪ Eq, where is a set of consistent reduced freshness constraints (that is, a consistent context), Eq is a set of reduced equality constraints, and Contr is a set of inconsistent reduced freshness constraints. Any of , Contr, and Eq, may be empty.
+(3) ⟨Pr⟩nf is of the form ∪ Contr ∪ Eq which is as above.
+Proof. Direct consequence of the previous lemma. So now we know Pr simpliﬁes to a unique normal form ⟨Pr⟩nf , and we have a good idea of the
+structure of ⟨Pr⟩nf . The rest of this subsection addresses the question: How do logical entailment ⊢ Pr and ⟨Pr⟩nf
+interact? Lemma 15
+(1) Assume Pr ⇒∗ Pr′. Then ⊢ Pr if and only if ⊢ Pr′. (2) ⊢ Pr if and only if ⊢ ⟨Pr⟩nf .
+Proof
+(1) There are 12 simpliﬁcation rules which could have been applied in a step Pr ⇒ Pr′ so there are precisely 12 cases to consider. Each corresponds precisely to one of the 12 syntax-directed derivation rules deﬁning the entailment relation. The result follows by induction on the number of steps in the simpliﬁcation Pr ⇒∗ Pr′.
+(2) An immediate consequence of the ﬁrst part.
+Lemma 16. If is consistent and ⊢ Pr then Pr is consistent and moreover if it is in normal form then it does not contain equality constraints. Proof. By a simple induction on derivations. Theorem 17. Write ⟨Pr⟩nf = ∪ Contr ∪ Eq as described by Corollary 14. ⊢ Pr if and only if Contr and Eq are empty. Proof. By Lemma 15, ⊢ Pr if and only if ⊢ , Contr, Eq. The result now follows easily by Lemma 16 because is consistent (see Corollary 14). Corollary 18. Let and be consistent contexts, and Pr and Pr′ be any problems.
+(1) Correctness of the algorithm: ⊢ Pr if and only if ⟨Pr⟩nf = (that is, Contr and Eq are empty) and ⊢ .
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+931
+
+(2) Cut: if ⊢ and , ⊢ , then ⊢ . (This is, of course, a form of Cut rule.) In particular, if and are both consistent and ⊢ and ⊢ , then ⊢ .
+(3) If ⊢ Pr and , ⟨Pr⟩nf ⊢ Pr′, then ⊢ Pr′.
+
+Proof
+(1) Suppose ⊢ Pr. By Theorem 17, ⟨Pr⟩nf = and by Lemma 15, ⊢ . Conversely if ⟨Pr⟩nf = and ⊢ , by the same results ⊢ Pr.
+(2) Suppose ⊢ . By the ﬁrst part of this result, ⊢ C for each C ∈ . Now we can paste into the derivation of ⊢ to obtain a derivation of ⊢ as required.
+(3) By the previous two parts.
+
+3.2. Properties of # and ≈
+
+The following lemma indicates that use of permutations is extensional, in the sense that lists of swappings denoting the same permutation, are logically indistinguishable. Lemma 19. Suppose ∇ is a context. If ds( , ′) = ∅ then:
+(1) ∇ ⊢ ·a#t ⇐⇒ ∇ ⊢ ′·a#t. (2) ∇ ⊢ a# ·t ⇐⇒ ∇ ⊢ a# ′·t. (3) ∇ ⊢ ·s ≈ t ⇐⇒ ∇ ⊢ ′·s ≈ t. (4) ∇ ⊢ s ≈ ·t ⇐⇒ ∇ ⊢ s ≈ ′·t.
+
+Proof. We consider the four logical equivalences in turn:
+
+(1) We observe simply that ds( , ′) = ∅ precisely when ·a = ′·a always, so ·a ≡ ′·a and there is nothing more to prove.
+(2) We work by induction on the derivation of a# ·t from ∇. Note that because of the syntax-directed nature of the derivation rules, this is equivalent to working by induction on the syntax of t. We consider just a few cases. • Suppose the derivation concludes in (#X), so ∇ ⊢ a# ·X and −1·a#X ∈ ∇. By the same observation as before (i.e. ds( , ′) = ∅), −1·a ≡ ′−1·a and we are done. • Suppose the derivation concludes in (#absa) so ∇ ⊢ a# ·([b]s) and ·b ≡ a. Since ′·b ≡ a we use (#absa) to build a derivation of ∇ ⊢ a# ′·[b]·s. • Suppose the derivation concludes in (#absb) so ∇ ⊢ a# ·([b]s), ·b ≡ b′ ̸≡ a, and ∇ ⊢ a# ·s is derivable. By inductive hypothesis ∇ ⊢ a# ′·s is derivable, and we continue as in the previous case.
+(3) We work by induction on the derivation of ∇ ⊢ ·s ≈ t. Again, we consider only a few cases.
+• Suppose the derivation concludes in (≈ X), so we conclude ∇ ⊢ ◦ ·X ≈ ′·X from ∇ ⊢ a#X for every a ∈ ds( ◦ , ′). We now observe that ds( ◦ , ′) = ds( ′ ◦ , ′) so we can write a derivation concluding in ∇ ⊢ ′ ◦ ·X ≈ ′·X , from the same hypotheses.
+• Suppose the derivation concludes in (≈ a). It sufﬁces to observe that ·b = ′·b always.
+
+932 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+• Suppose the derivation concludes in (≈ absa), so we conclude ∇ ⊢ [ ·a] ·s ≈ [ ·a]t and ∇ ⊢ ·s ≈ t is also derivable. By inductive hypothesis ∇ ⊢ ′·s ≈ t and since ′·a = ·a we can extend this derivation with (≈ absa) to derive ∇ ⊢ [ ′·a] ′·s ≈ [ ·a]t.
+• Suppose the derivation concludes in (≈ absb), so we conclude ∇ ⊢ [ ·a] ·s ≈ [b]t, where b ̸≡ ·a, and ∇ ⊢ (b ·a) ◦ ·s ≈ t and ∇ ⊢ b# ·s are also derivable. We now observe that ds((b ·a) ◦ , (b ′·a) ◦ ′) = ∅ (trivially, since ds( , ′) = ∅ and ·a = ′·a), and the result follows by the inductive hypothesis and by part 2 of this result.
+(4) Much as for the previous case.
+For example, the lemma above allows us to replace −1 ◦ with Id since ds( −1 ◦ , Id) = ∅. Given a derivable judgement ∇ ⊢ P , we can:
+(1) instantiate unknowns (∇ ⊢ P maps to ∇ ⊢ P in a suitable formal sense), and (2) permute atoms (∇ ⊢ P maps to ∇ ⊢ ·P ).
+We show that derivability is preserved by both. Note that for the case of permutation we only permute atoms in the conclusion P , not in the assumptions ∇.3
+In the rest of this section we assume that we are working with a consistent context unless stated otherwise, in other words, we consider derivations ∇ ⊢ Pr where ∇ is a consistent context. Lemma 20
+(1) If ∇ ⊢ a#t then ∇ ⊢ ·a# ·t. Similarly if ∇ ⊢ s ≈ t then ∇ ⊢ ·s ≈ ·t. This can be restated as follows: ∇ ⊢ Pr if and only if ∇ ⊢ ·Pr, where here the action of is pointwise on all terms mentioned in Pr.
+(2) ∇ ⊢ a# ·t if and only if ∇ ⊢ −1·a#t, and similarly ∇ ⊢ ·s ≈ t if and only if ∇ ⊢ s ≈ −1·t (This turns out to be particularly useful.).
+Proof. The ﬁrst part is by routine induction on derivations. We consider a few cases:
+• Suppose the derivation concludes in (#X), so ∇ ⊢ a# ·X is derivable. It follows that −1·a#X ∈ ∇. It is now easy to construct a derivation of ∇ ⊢ ·a# ◦ ·X , using (#X).
+• Suppose the derivation concludes in (#absb), so ∇ ⊢ a#[b]s is derivable. By the inductive hypothesis ∇ ⊢ ·a# ·s is derivable, and we can also extend its derivation with (#absb).
+• Suppose the derivation concludes in (≈ absa), so ∇ ⊢ [a]s ≈ [a]t is derivable. By inductive hypothesis ∇ ⊢ ·s ≈ ·t, and so
+∇ ⊢ ·[a]s ≡ [ ·a] ·s ≈ [ ·a] ·t ≡ ·[a]t.
+3 The intuition is that in Deﬁnition 6 (#X) makes it clear that a#X if and only if ′·a# ′·X , and Deﬁnition 3 makes it clear that permutations commute through all term-formers. Also note that renamings (possibly non-injective functions from atoms to themselves, e.g. ‘replace a by b’) do not satisfy these useful properties; it is essential to use swappings.
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+933
+
+• Suppose the derivation concludes in (≈ absb), so ∇ ⊢ [a]s ≈ [b]t is derivable.4 By assumption ∇ ⊢ (b a)·s ≈ t and ∇ ⊢ b#s are derivable. By inductive hypothesis
+
+∇ ⊢ ◦ (b a)·s ≈ ·t and ∇ ⊢ ·b# ·s
+
+are derivable. Now it is a fact that ds( ◦ (b a), ( ·b ·a) ◦ ) = ∅. Therefore, by Lemma 19
+
+∇ ⊢ ( ·b ·a) ◦ ·s ≈ ·t and ∇ ⊢ ·b# ·s,
+
+are derivable, and so using (≈ absb) we obtain
+
+∇ ⊢ ·[a]s ≡ [ ·a] ·s ≈ [ ·b] ·t ≡ ·[b]t
+
+as required.
+
+For the second part, we simply observe that ds(Id, −1 ◦ ) = ∅ and use Lemma 19 and the ﬁrst part.
+We use this technical lemma in Lemma 22 below (a converse to this lemma is also true, see Lemma 34).
+Lemma 21. If ∇ ⊢ a#s for each a ∈ ds( , ′), then ∇ ⊢ ·s ≈ ′·s.
+Proof. We work by induction on the syntax of s for all and ′.
+
+(1) Suppose s ≡ c for some atom c. Now either c ∈ ds( , ′) or not; if c ∈ ds( , ′) then ∇ ⊢ c#c contradicting our assumption that ∇ is consistent. Otherwise, ·c ≡ ′·c and there is nothing to prove.
+(2) If s ≡ 1·X we observe by group theory that ds( ◦ 1, ′ ◦ 1) = ds( , ′), and we can use (#X). (3) Suppose s ≡ [a]s′. Observe that either a ∈ ds( , ′) or not.
+(a) In the ﬁrst case we construct a derivation as follows:
+
+ds(( ′·a ·a)◦ , ′)#s
+
+∇⊢( ′·a ·a)◦ ·s≈ ′·s
+∇ ⊢ [ ·a] ·s ≈ [
+
+∇⊢ ′·a#
+′·a] ′·s
+
+·s
+
+(≈
+
+absb)
+
+To explain the right-hand branch of the proof, we must do some basic group theory. Since ·a ̸≡ ′·a, also a ̸≡ ( −1 ◦ ′)·a, so ′·a ̸≡ ( ′ ◦ −1 ◦ ′)·a, and ﬁnally
+
+( ◦ −1 ◦ ′) · a ̸≡ ( ′ ◦ −1 ◦ ′) · a.
+
+Thus, −1 ◦ ′·a ∈ ds( , ′) and ∇ ⊢ −1 ◦ ′·a#s is derivable. Using the previous lemma ∇ ⊢ ′·a# ·s is derivable as required.
+
+4 In [41] the result which ‘did’ this case (Theorem 2.11) was proved by simultaneous induction with transitivity of ≈ . We do not need this, because we use Lemma 19. Lemmas 2.7 and 2.8 in [41] have more-or-less the same content, but the mention of equality in 2.8 makes it a little harder to use and forces the simultaneous induction.
+
+934 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+Concerning the left-hand branch, we observe that the top line is not a real derivation rule but represents a use of the induction hypothesis, having veriﬁed (by some more basic group theory) that
+ds(( ′·a ·a) ◦ , ′) = ds( , ′) \ {a}.
+(b) In the second case (a ̸∈ ds( , ′)) we write b ≡ ·a ≡ ′·a and construct a derivation as follows:
+(Here the topmost horizontal line actually represents a derivation which by Lemma 21 exists.) (4) Other cases are similar and simpler.
+Lemma 22. Suppose ∇ and ∇ are consistent. If ∇ ⊢ a#t then ⟨∇ ⟩nf ⊢ a#(t ). Similarly if ∇ ⊢ s ≈ t then ⟨∇ ⟩nf ⊢ (s ) ≈ (t ). More gen-
+erally, if ∇ ⊢ Pr then ⟨∇ ⟩nf ⊢ Pr . Proof. We work by induction on the derivation of ∇ ⊢ a#t or ∇ ⊢ s ≈ t. We consider a few cases:
+• Suppose the derivation concludes with (#X) so ∇ ⊢ a# ·X . It follows that −1·a#X ∈ ∇. By Lemma 15 ⟨( −1·a#X ) ⟩nf ⊢ ( −1·a#X ) . Also, by Corollary 12 ⟨ −1·a#X ⟩nf ⊆ ⟨∇ ⟩nf . Therefore ⟨∇ ⟩nf ⊢ −1·a#X . By Lemma 20 ⟨∇ ⟩nf ⊢ a# ·(X ) and by Lemma 5 ·(X ) ≡ ( ·X ) , and the result follows.
+• Suppose the derivation concludes with (#absb) so ∇ ⊢ a#[b]t and ∇ ⊢ a#t are derivable. By inductive hypothesis ⟨∇ ⟩nf ⊢ a#t is derivable. We also observe that [b](t ) ≡ ([b]t) and the result follows.
+• Suppose the derivation concludes with (≈ X) so ∇ ⊢ a#X for each a ∈ ds( , ′) and ∇ ⊢ ·X ≈ ′·X is derivable.
+By inductive hypothesis ⟨∇ ⟩nf ⊢ a#X for each a ∈ ds( , ′). We now use the preceding technical lemma. • Suppose the derivation concludes with (≈ absb) so ∇ ⊢ [a]s ≈ [b]t, ∇ ⊢ (b a)·s ≈ t, and ∇ ⊢ b#s are derivable. We can use the inductive hypothesis directly, once we recall Lemma 5 and observe that ((b a)·s) ≡ (b a)·(s ).
+Lemma 23
+(1) If ∇ ⊢ n#s and ∇ ⊢ s ≈ t then ∇ ⊢ n#t. (2) If ∇ ⊢ s ≈ t and ∇ ⊢ t ≈ u then ∇ ⊢ s ≈ u.
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+935
+
+Proof. For the ﬁrst part (#) we work by induction on the syntax of s:
+
+• If s ≡ ·X then by the syntax-directed nature of the rules for deriving ∇ ⊢ s ≈ t, we see that the derivation must conclude in (≈ X) so t ≡ ′·X and ∇ ⊢ a#X for every a ∈ ds( , ′). Now suppose ∇ ⊢ n# ·X . By Lemma 20, ∇ ⊢ −1·n#X . If n ̸∈ ds( , ′) then ∇ ⊢ ′−1·n#X and by Lemma 20, ∇ ⊢ n# ′·X . If n ∈ ds( , ′) then also ′−1·n ∈ ds( , ′) so by the argument above, ∇ ⊢ ′−1·n#X and by Lemma 20, ∇ ⊢ n# ′·X .
+• If s ≡ [a]s′ then there are two possibilities:
+(1) t ≡ [a]t′ and the derivation concludes in (≈ absa). Then either n ≡ a and we are done, or we can use the inductive hypothesis.
+(2) t ≡ [b]t′ and the derivation concludes in (≈ absb). Then ∇ ⊢ (b a)·s ≈ t. We now work by cases according to whether n = a, n = b, or n =/ a, b, using Lemma 20.
+(3) If s ≡ (s1, . . . , sn) then again by the syntax-directed nature of the rules, the derivation must conclude in (≈ tup) so t ≡ (t1, . . . , tn) and we use the inductive hypothesis.
+(4) Other cases are similar.
+
+For the second part (≈ ), we sketch the proof semi-formally, but it can very easily be made completely formal in the style of the ﬁrst part. We work by induction on the size of s (permutations are not counted in the size):
+
+• If ∇ ⊢ ·X ≈ ′·X ≈ ′′·X , the result follows by easy calculations to verify that ds( , ′′) ⊆ ds( , ′) ∪ ds( ′, ′′).
+• If ∇ ⊢ [a]s′ ≈ [a]t′ ≈ [a]u′ then it must be that ∇ ⊢ s′ ≈ t′ ≈ u′ and we use the inductive hypothesis.
+• If ∇ ⊢ [a]s′ ≈ [b]t′ ≈ [b]u′ then ∇ ⊢ (b a)·s′ ≈ t′, b#s′, t′ ≈ u′. By the inductive hypothesis ∇ ⊢ (b a)·s′ ≈ u′ and the result follows.
+• If ∇ ⊢ [a]s′ ≈ [a]t′ ≈ [b]u′ then ∇ ⊢ s′ ≈ t′, (b a)·t′ ≈ u′, b#t′. By the inductive hypothesis and using Lemma 20, ∇ ⊢ (b a)·s′ ≈ u′ and by the previous part, ∇ ⊢ b#s′. The result follows.
+• If ∇ ⊢ [a]s′ ≈ [b]t′ ≈ [c]u′ then
+∇ ⊢ (b a)·s′ ≈ t′, b#s′, (c b)·t′ ≈ u′, c#t′.
+It follows by induction that ∇ ⊢ (c b) ◦ (b a)·s′ ≈ u′. Now ds((c b) ◦ (b a), (c a)) = {b} and ∇ ⊢ b#s′, so by Lemma 21 (the technical lemma above),
+∇ ⊢ (c a)·s′ ≈ (c b) ◦ (b a)·s′ ≈ u′
+Now by inductive hypothesis we may complete the proof. • Other cases are simple.
+
+Fix a consistent context ∇ and say ≈ is an equivalence relation when it is reﬂexive, transitive and symmetric (as usual). Say ≈ is a congruence when it is an equivalence relation such that if s ≈ t then fs ≈ ft, [a]s ≈ [a]t, (· · · s · · ·) ≈ (· · · t · · ·), and ·s ≈ ·t.
+
+936 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+Theorem 24. ≈ is an equivalence relation and a congruence in a consistent context. Proof. Transitivity is by the previous lemma. Reﬂexivity is by an easy induction on syntax. Symmetry is slightly non-trivial.
+We work by induction on the maximum of the sizes of s and t proving that if ∇ ⊢ s ≈ t then ∇ ⊢ t ≈ s. Mostly this is easy, but (≈ absb) causes difﬁculty because of its asymmetry. Suppose ∇ ⊢ [a]s ≈ [b]t is derived by (≈ absb), so also ∇ ⊢ (b a)·s ≈ t and ∇ ⊢ b#s. By Lemma 19 also ∇ ⊢ (a b)·s ≈ t, and by Lemma 20 ∇ ⊢ s ≈ (a b)·t. We now use the inductive hypothesis to deduce ∇ ⊢ (a b)·t ≈ s, and also Lemma 23 and Lemma 20 to deduce ∇ ⊢ a#t. The result now follows.
+Congruence is by induction: suppose ∇ ⊢ s ≈ t. Then:
+• ∇ ⊢ (u1, . . . , uk−1, s, uk+1, . . . , un) ≈ (u1, . . . , uk−1, t, uk+1, . . . , un) using (≈ tup). • ∇ ⊢ [a]s ≈ [a]t using (≈ absa). • ∇ ⊢ ·s ≈ ·t by Lemma 21.
+If P is a freshness constraint a#u or equality constraint u ≈ v, write P [X →s] for a#u[X →s] or u[X →s] ≈ v[X →s], respectively. Corollary 25. Suppose is consistent and ⊢ s ≈ t. Then:
+(1) ⊢ P [X →s] is derivable if and only if ⊢ P [X →t] is derivable. (2) , ⟨P [X →s]⟩nf ⊢ Q is derivable if and only if , ⟨P [X →t]⟩nf ⊢ Q is derivable.
+Proof
+(1) The case of P ≡ u ≈ v follows by the previous theorem. The case of P ≡ a#u follows again by the previous theorem, and by part 1 of Lemma 23.
+(2) Observe that , ⟨P [X →s]⟩nf ⊢ P [X →s] by Lemma 15. Using the ﬁrst part of this result, , ⟨P [X →s]⟩nf ⊢ P [X →t]. Now suppose , ⟨P [X →t]⟩nf ⊢ Q. Then using Corollary 18 and the observation in the previous paragraph, we conclude that , ⟨P [X →s]⟩nf ⊢ Q.
+So equality is ‘an equality’ with respect to the simple logic given by #, ≈ , and ⊢.
+4. Uniﬁcation
+4.1. Deﬁnitions
+As usual uniﬁcation is about ﬁnding some substitution making two terms s and t equal; however, now the notion of equality is our ‘logical’ notion of ≈ . Deﬁnition 26 (Uniﬁcation problems). A uniﬁcation problem Pr is a problem as previously deﬁned but replacing equality constraints s ≈ t by uniﬁcation constraints s ?≈? t.
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+937
+
+We recall from Corollary 14 that ⟨s ≈ t⟩nf is of the form ∪ Contr ∪ Eq where is a consistent freshness context, Contr is a set of inconsistent freshness constraints, and Eq is a set of reduced equalities. For example, ⟨[a]X ≈ [b]Y ⟩nf = {b#X , (b a)·X ≈ Y }. Intuitively, a solution to [a]X ?≈? [b]Y is any substitution such that (b a)·X ≈ Y , and such that b#X .
+Deﬁnition 27 (Solution). A solution to a uniﬁcation problem Pr is a pair ( , ) of a consistent context and a substitution such that:
+
+(1) ⊢ Pr′ where Pr′ is obtained from Pr by changing uniﬁcation predicates into equality predicates and Pr′ is the problem obtained by applying the substitution to the terms in Pr′.
+(2) X ≡ X for all X (we say the substitution is idempotent).
+
+If there is no such ( , ) we say that Pr is unsolvable. Write U(Pr) for the set of uniﬁcation solutions to Pr.
+The condition of idempotence is not absolutely necessary, but it is technically convenient and since our algorithms (see the next subsection) generate only idempotent solutions, we lose nothing.
+Solutions in U(Pr) can be compared using the following relation (we will show it is actually an ordering).
+Deﬁnition 28 . Let 1, 2 be consistent contexts, and 1, 2 substitutions. Then ( 1, 1) ≤ ( 2, 2) when there exists some ′ such that
+
+for all X , 2 ⊢ X 1 ′ ≈ X 2 and 2 ⊢ 1 ′.
+
+If we want to be more speciﬁc, we may write ( 1, 1) ≤ ′ ( 2, 2).
+
+Lemma 29. ≤ deﬁnes a partial order on U(Pr), call it the instantiation ordering.
+
+Proof. Reﬂexivity is trivial. For transitivity, suppose ( (writing slightly informally)
+
+1,
+
+1)
+
+≤
+
+′ 1
+
+(
+
+2,
+
+2)
+
+≤
+
+′ 2
+
+(
+
+3,
+
+3). Then we know
+
+2⊢
+
+1
+
+1′, X 1
+
+′ 1
+
+≈
+
+X2
+
+and
+
+3⊢
+
+2
+
+2′ ,
+
+X
+
+2
+
+′ 2
+
+≈
+
+X 3.
+
+Since
+
+3 is consistent,
+
+2
+
+′ 2
+
+is
+
+consistent
+
+by
+
+Lemma
+
+16.
+
+Since
+
+2 is consistent,
+
+1
+
+′ 1
+
+is
+
+consistent
+
+by
+
+the same result. We also know
+
+⟨
+
+2
+
+′ 2
+
+⟩nf
+
+⊢
+
+1
+
+′ 1
+
+′ 2
+
+,
+
+X1
+
+′ 1
+
+′ 2
+
+≈
+
+X2
+
+′ 2
+
+by Lemma 22. Finally, we use Corollary 18 and Theorem 24 to deduce
+
+3⊢
+
+1
+
+′ 1
+
+2′ ,
+
+X1
+
+′ 1
+
+′ 2
+
+≈
+
+X3
+
+as required.
+
+A least element of a partially ordered set is one which is related to (we generally say less than or equal to) every other element of the set.
+
+938 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+Deﬁnition 30. A principal (or most general) solution to a problem Pr is a least element of U(Pr).
+
+4.2. Principal solutions
+
+We will now show that every solvable uniﬁcation problem has a principal solution. The algorithm is derived from the simpliﬁcation rules from the previous section, enriched with instantiating rules, labelled with substitutions. The conditions in the instantiating rules are usually called occurs check.
+
+·X ?≈? u, Pr X →⇒−1·u Pr[X → −1·u] u ?≈? ·X , Pr X →⇒−1u Pr[X → −1·u]
+
+(X ̸∈ V(u)), (X ̸∈ V(u)).
+
+Note that the instantiating rules above apply also in the case Pr = ∅. Also note that we do not solve freshness constraints by instantiation—for a problem like X ≈ t it is obvious we should instantiate X to t, but there is no obvious most general instantiation making, say, a#X true. This is why we always work in a freshness context.
+The simpliﬁcation and instantiation rules specify a uniﬁcation algorithm: to solve a problem Pr, we will apply the rules until we obtain an irreducible problem. This algorithm is in essence the same
+as [41] although our presentation is slightly different.
+Many different possible reduction paths exist for a given Pr, since it may have many formulae each of which is susceptible to some simpliﬁcation. Neither are reductions necessarily conﬂuent;
+for example,
+
+{a#X , X ?≈? Y } [X →⇒Y ] {a#Y } and {a#X , X ?≈? Y } [Y →⇒X ] {a#X }.
+
+However reductions do always terminate with some normal form, since at each step either a formula becomes smaller, or the number of variables in the problem is reduced by one. Also we shall see later that these normal forms are all equivalent in a natural and useful sense (see Lemma 33).
+It will be useful to syntactically characterise normal forms; for this, we deﬁne reduced uniﬁcation constraints
+Deﬁnition 31. A uniﬁcation problem u ?≈? v is reduced when one of the following holds:
+
+• u and v are distinct atoms. For example a ?≈? b is reduced. • Precisely one of u and v is a moderated variable and the other term mentions that variable (so the
+occurrence check in the instantiating rules fails). For example ·X ?≈? (X , Y ) or (X , Y ) ?≈? ·X , but not ·X ?≈? ′·X or X ?≈? Y . • u and v are applications with different term-formers (e.g. ft ?≈? gs). • u and v have different term constructors at the root and neither is a moderated variable. For example [a]s ?≈? (t, t′).
+
+We may call all reduced uniﬁcation constraints inconsistent.
+
+If Pr reduces to a normal form Pr′ via some sequence of substitutions (Pr′, ).
+
+, write ⟨Pr⟩sol for the tuple
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+939
+
+Lemma 32 (Uniﬁcation normal forms).
+
+• ⟨a#s⟩sol is (⟨a#s⟩nf , Id). • ⟨s ?≈? t⟩sol is a problem of the form ∪ Contr ∪ Eq and a substitution, where is a consistent fresh-
+ness context, Contr is an inconsistent freshness context and Eq is a set of inconsistent uniﬁcation
+constraints. • As a corollary, ⟨Pr⟩sol is a problem of the form ∪ Contr ∪ Eq as above and a substitution.
+
+Proof. Just as in Corollary 14. We check that the simpliﬁcation and instantiating rules are applicable to any non-reduced uniﬁcation or freshness constraint.
+
+Fig. 1. Examples of the uniﬁcation algorithm in action.
+
+940 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+If we write ⟨Pr⟩sol = ( , ) we presume that Pr ⇒∗ with substitution and Contr and Eq are empty. In this case, we may call ( , ) the solution of Pr (soon we shall show it actually is a solution to Pr, in the sense that ( , ) ∈ U(Pr)).
+For example ⟨a#a⟩sol = ({a#a}, Id) and ⟨(X , [b]X , fX ) ?≈? (a, [a]X , gX )⟩sol = ({a#a} ∪ {b ?≈? a, fa ?≈? ga}, [X →a]). More examples are given in Fig. 1; they are a quote from the ‘Quiz’ in [41]. Although the presentation is slightly different, the solutions are equivalent to the ones described in [41].
+We now show that the uniﬁcation algorithm correctly checks whether a problem is solvable or not, and moreover it computes a principal, idempotent solution, if one exists. Thus the particular reduction path does not matter; we make some canonical but arbitrary choice and use it silently henceforth, for example we may talk about ‘the normal form’ of a problem.
+Lemma 33 (Preservation of solutions). If Pr ⇒ Pr′ using a simpliﬁcation rule then U(Pr) = U(Pr′).
+Proof. For simplicity suppose Pr = {P } (i.e. it contains only one problem). Suppose ⊢ P . The derivation is syntax-directed and follows the simpliﬁcation rules (see Deﬁnition 10), so it sufﬁces to check the 12 simpliﬁcation rules. All the cases are trivial, except for the ﬁnal simpliﬁcation rule for freshness and the ﬁnal simpliﬁcation rule for equality.
+
+(1) Suppose Pr = {a# ·X } ⇒ Pr′ = { −1·a#X }. Suppose ⊢ a#( ·X ) . Then we use part 2 of
+
+Lemma 20.
+
+(2)
+
+Suppose Pr = { ·X pose ⊢ ·X ≈
+
+?≈? ′·X
+
+′·X } ⇒ Pr′ = {a1#X , . . . , an#X } where ds( . The result follows by Lemma 34 below.
+
+,
+
+′) = {a1, . . . , an}. Sup-
+
+This result is the converse of Lemma 21. Lemma 34. If ∇ ⊢ ·s ≈ ′·s then ∇ ⊢ a#s for each a ∈ ds( , ′). Proof. By induction on the structure of s.
+
+(1) If s ≡ X then the derivation concludes in (≈ X). The result is immediate.
+
+(2) If s ≡ c then ·c ≡ ′·c so c ̸∈ ds( , ′) and thus any a ∈ ds( , ′) is not the same as c and the
+
+result follows using (#ab).
+
+(3) If s ≡ (t1, . . . , tn) then the derivation must conclude in (≈ tup) and ∇ ⊢ ·ti ≈ ′·ti for 1 ≤ i ≤ n.
+
+By the inductive hypothesis ∇ ⊢ a#(t1, . . . , tn) for each a
+
+∇ ∈
+
+d⊢s(a#, ti′)foursi1n≤g
+
+i≤n (#tup).
+
+and
+
+each
+
+a
+
+∈
+
+ds(
+
+,
+
+′). Finally we deduce
+
+(4) The case s ≡ f(t) is similar.
+
+(5) If s ≡ [c]t then there are two cases:
+
+(a) If ·c ≡ ′·c then the reasoning is much as for tuples above.
+
+(b) If ·c ̸≡ ′·c (i.e. c ∈ ds( , ′)) then the derivation must conclude in (≈ absb), so ∇ ⊢ d′# ·t
+
+and ∇ ⊢ (d′ d)· ·t ≈ ′·t where we set d ≡ ·c and d′ ≡ ′·c.
+
+By the inductive hypothesis ∇ ⊢ a#t for each a ∈ ds((d′ d) ◦ , ′). Now it is a fact that
+
+ds((d′ d) ◦ , ′) is those atoms in ds( , ′) not equal to c or −1· ′·c. Therefore by induc-
+
+tive hypothesis, ∇ ⊢ a#t for each a ∈ ds( , ′) not equal to c or −1· ′·c and using (#absa)
+
+and/or (#absb), we have ∇ ⊢ a#[c]t for the same a.
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+941
+
+We also have ∇ ⊢ −1· ′·c#t by the above and using part 2 of Lemma 20, so ∇ ⊢ a#[c]t for a ≡ −1· ′·c.5 Then, ∇ ⊢ ·c#[c]t by (#absa).
+
+Theorem 35. Let Pr be a uniﬁcation problem, and suppose ⟨Pr⟩sol = ( , ). Then:
+(1) ( , ) ∈ U(Pr). (2) Also ( , ) ≤ ( ′, ′) for all other ( ′, ′) ∈ U(Pr). That is, the solution is also a least or principal
+solution.
+
+Proof. We work by induction on the length of the reduction Pr ⇒∗ ⟨Pr⟩sol .
+• Suppose Pr is in normal form. Then: (1) Trivially Pr = and = Id, and equally trivially ⊢ PrId and Id is idempotent. (2) For any other ( ′, ′) ∈ U (Pr) trivially ′ is such that ′ ⊢ and ′ ⊢ X Id ≈ X for all X .
+• Suppose Pr ⇒ Pr′ by some non-instantiating simpliﬁcation. Then using Lemma 33, we know that U(Pr) = U(Pr′). Both parts of the result follow by induction.
+• Suppose Pr ⇒Â Pr′Â by an instantiating rule. So Pr = { ·X ≈ u} ∪ Pr′ where Â = [X → −1·u] and X ̸∈ V(u). Suppose ⟨Pr′Â⟩sol = ( , ), so that by construction ⟨Pr⟩sol = ( , Â ◦ ). (1) It is easy to see that Â ◦ is idempotent and by the ﬁrst part of the inductive hypothesis ⊢ Pr′Â , that is, ( , Â ◦ ) ∈ U(Pr). (2) Suppose ( ′, ′) ∈ U (Pr). Then ′ ⊢ X ′ ≈ −1·u ′ by part 2 of Lemma 20. By part 1 of the technical lemma which follows (Lemma 36) and using its notation, ( ′, Â ◦ ′′) ∈ U (Pr) where ′′ acts just like ′ only it maps X to X , Â = [X → −1·u], and ′ = Â ◦ ′′. By part 2 Lemma 36, ( ′, ′′) ∈ U (Pr′Â) and by inductive hypothesis ( , ) ≤ ( ′, ′′). By part 4 it follows that ( , Â ◦ ) ≤ ( ′, Â ◦ ′′).
+
+Lemma 36
+
+(1) Suppose ′ is idempotent and X ′ ̸≡ X. Then if ′ ⊢ Pr ′ and ′ ⊢ X ′ ≈ u ′, then ′ ⊢ Pr(Â ◦ ′′) where Â = [X →u] and ′′ acts just like ′, only X ′′ ≡ X. Furthermore, ′ = Â ◦ ′′.
+(2) Continuing the assumptions and notation above, if ( ′, Â ◦ ′′) ∈ U(Pr) and Pr = Pr′ ∪ { ·X ?≈? u}, then ( ′, ′′) ∈ U (Pr′Â).
+(3) For all ′, 1, and 2, if ′ ⊢ Y 1 ≈ Y 2 for all Y , then ′ ⊢ u 1 ≈ u 2 for all u. (‘Two -equivalent substitutions on a single term give two -equivalent terms.’)
+(4) For all , , ′, and ′′, if ( , ) ≤ ( ′, ′′) then ( , Â ◦ ) ≤ ( ′, Â ◦ ′′).
+
+Proof
+
+(1) We observe that X ′ ≈ u ′ ≈ XÂ ′′ and for any other Y , Y ′ ≡ Y ′′. (2) By part 1 of Corollary 25, and using idempotence.
+
+5 This is in ds( , ′), since if · −1· ′·c ≡ ′· −1· ′·c then ′·c ≡ ′· −1· ′·c so ·c ≡ ′·c, and this is not the case.
+
+942 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+(3) By part 1 of Corollary 25. (4) By deﬁnition if ( , ) ≤ ( ′, ′′) then for some , ′ ⊢
+result follows by the previous part of this lemma.
+
+and ′ ⊢ Y ≈ Y ′′ for all Y . The
+
+We conclude with two routine but important results: Lemma 37
+
+(1) If Eq is a non-empty set of inconsistent uniﬁcation constraints then it has no solution. (2) If is an inconsistent context then it has no solution.
+
+Proof . By deﬁnition, a solution to Eq, if it exists, must be of the form ( , ) for some freshness context such that ⊢ Eq , where here we are a bit lax and convert the uniﬁcation problems in Eq into equality problems. Lemma 32 tells us what form Eq can take and we check that each kind of problem corresponds to a reduced equality problem. The second part of Theorem 17 then tells us that ⊢ Eq simply cannot happen.
+Now suppose is an inconsistent context. By Lemma 32 ⟨ ⟩sol = (⟨ ⟩nf , Id). Suppose this is a solution to , so that ⟨ ⟩nf ⊢ and ⟨ ⟩nf is consistent. This is not possible since no derivation rule allows us to derive an inconsistent constraint from a consistent context.
+Corollary 38. Let Pr be a uniﬁcation problem such that ⟨Pr⟩sol = ( ∪ Contr ∪ Eq, ). Then U(Pr) is nonempty if and only if Contr ∪ Eq = ∅.
+Proof . The right-to-left implication follows by Theorem 35. For the left-to-right implication we work by induction on the length of the reduction Pr ⇒∗ ⟨Pr⟩sol .
+• Suppose Pr is in normal form. Then by Lemma 32 Pr = ∪ Contr ∪ Eq. If Contr ∪ Eq is nonempty then by Lemma 37 U(Pr) is empty. Conversely if Contr ∪ Eq is empty, we observe trivially that ⊢ Id and U(Pr) contains ( , Id).
+• Suppose Pr ⇒ Pr′ by some non-instantiating simpliﬁcation. Then using Lemma 34 we know that U(Pr) = U(Pr′). We use the inductive hypothesis.
+• Suppose Pr ⇒Â PrÂ by an instantiating simpliﬁcation, so Pr = { ·X ≈ u} ∪ Pr′ and Â = [X → −1·u]. Suppose ′ ⊢ Pr ′. Then ′ ⊢ PrÂ ′′ where ′′ acts just like ′ only X ′′ ≡ X , and ( ′, ′′) ∈ U(Pr′Â). The result follows by the inductive hypothesis for Pr′Â.
+
+Rewriting needs a notion of matching; we develop a suitable one in §5.2.
+
+5. Rewriting
+5.1. Rewrite rules
+We will deﬁne a notion of rewriting which operates on ‘terms-in-consistent-contexts’: a pair ( , s) of a consistent context and a term, which we write ⊢ s. Then ⊢ s rewrites to ⊢ t—a freshness
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+943
+
+context is ﬁxed. Since in a particular rewriting path the context is ﬁxed, a given context deﬁnes a particular rewrite relation ⊢ − → − which we deﬁne below.
+Deﬁnition 39. A nominal rewrite rule R ≡ ∇ ⊢ l → r is a tuple of
+
+• a consistent context ∇; and • terms l and r such that V(r, ∇) ⊆ V(l).
+
+We now develop a general theory of nominal rewriting; we will see in Section 6 that a uniformity condition on R becomes useful for rewriting to be truly well-behaved. However, the ‘engine’ driving rewriting remains what we now construct.
+Example 40 . In this example we will use the signature of ML and the syntactic sugar deﬁned in Example 2.
+
+(1) a#X ⊢ ( [a]X )Y → X is a form of trivial ÿ-reduction. (2) a#X ⊢ X → [a](Xa) is Á-expansion. (3) Of course a rewrite rule may deﬁne any arbitrary transformation of terms, and may have an
+empty context, for example ∅ ⊢ XY → XX . (4) a#Z ⊢ X [a]Y → X is not a rewrite rule, because Z ̸∈ V(X [a]Y ). ∅ ⊢ X → Y is also not a
+rewrite rule.
+(5) ∅ ⊢ a → b is a rewrite rule. We mention this again below.
+
+We can now write
+(∇ ⊢ l → r){X →s} d=ef ⟨∇{X →s}⟩nf ⊢ l{X →s} → r{X →s}.
+We shall never write the substitution in such detail, but this is how we instantiate rules. Let R range over (possibly inﬁnite) sets of rewrite rules. In rewriting we are used to the intuition that variables represent unknown terms in rewrite
+rules, and the substitution action above is used to generate the rewrite relation. So the two rules a#X ⊢ ( [a]X )Y → X and a#Y ⊢ ( [a]Y )X → Y have different syntax but should generate the same rewrite relation.
+Atoms are not affected by substitution actions, but they can be swapped: Write R(a b) for that rule obtained by swapping a and b in R throughout. For example, if R ≡ b#X ⊢ [a]X → (b a)·X then R(a b) ≡ a#X ⊢ [b]X → (a b)·X . Write R for that rule obtained by applying to the atoms in R according to the swapping action. Also write s for that term obtained by applying to the atoms in s. Call a set of rewrite rules equivariant when it is closed under (−)(a b) for all atoms a and b. In a moment, we shall insist that R be equivariant.
+A simple technical lemma will be useful in Theorem 49, we mention it now:
+Lemma 41. ⊢ ·s ≈ s for any , where X = ·X for each X mentioned in s.
+The proof is by an easy induction on s and can be illustrated by an example: if we take s ≡ (a b)·X and = (a c) then ·s ≡ (a c)(a b)·X and s ≡ (c b)(a c)·X . The suspended permutations are not identical, but their difference set is empty and the result follows.
+
+944 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+Deﬁnition 42. A nominal rewrite system ( , R) consists of:
+
+(1) A nominal signature . (2) An equivariant set R of nominal rewrite rules over .
+
+We may drop and write R for the rewrite system. When we write out the system we (obviously) do not give every possible permutation of variables and atoms. Indeed, given any set of rewrite rules we can always obtain an equivariant one by closing under the permutation action (−)(a b) outlined above (call this the equivariant closure of the set of rules). We shall generally elide this step and equate a (ﬁnite, non-equivariant) set of rewrite rules with its equivariant closure.
+Note that rewrite systems are “metalevel equivariant”, as opposed to the “internal equivariance” of predicates # and ≈ shown in Lemma 20 part 1. In other words, we deﬁne a rewrite system as an equivariant set of rules, whereas we can prove that # and are preserved by permutations.
+
+Example 43. To give a small-step evaluation relation for our fragment of ML (see Examples 2 and 40) we extend it with a term-former for (explicit) substitutions sub which we sugar to t{a→t′}. The rewrite rules:
+
+(Beta)
+
+( [a]X )X ′
+
+→ X {a→X ′}
+
+( app)
+
+(XX ′){a→Y } → X {a→Y }X ′{a→Y }
+
+( var)
+
+a{a→X }
+
+→X
+
+( ) a#Y ⊢ Y {a→X }
+
+→Y
+
+( lam) b#Y ⊢ ( [b]X ){a→Y } → [b](X {a→Y })
+
+deﬁne a system of explicit substitutions for the -calculus with names. We add the following rules:
+
+(Let) let a = X ′ in X → X {a→X ′} (Letrec) letrec fa = X ′ in X →
+X {f →( [a]letrec fa = X ′ in X ′)} ( let) a#Y ⊢ (let a = X ′ in X){b→Y } →
+let a = X ′{b→Y } in X {b→Y } ( letrec) f #Y , a#Y ⊢ (letrec fa = X ′ in X){b→Y } →
+letrec fa = X ′{b→Y } in X {b→Y }.
+
+Example 44. We can deﬁne a signature for ﬁrst-order logic with term-formers ∀, ∃, ¬, ∧, ∨, and rewrite rules to compute prenex normal forms (here we use variables P , Q):
+a#P ⊢ P ∧ ∀[a]Q → ∀[a](P ∧ Q) a#P ⊢ (∀[a]Q) ∧ P → ∀[a](Q ∧ P) a#P ⊢ P ∨ ∀[a]Q → ∀[a](P ∨ Q) a#P ⊢ (∀[a]Q) ∨ P → ∀[a](Q ∨ P) a#P ⊢ P ∧ ∃[a]Q → ∃[a](P ∧ Q) a#P ⊢ (∃[a]Q) ∧ P → ∃[a](Q ∧ P) a#P ⊢ P ∨ ∃[a]Q → ∃[a](P ∨ Q) a#P ⊢ ∃[a]Q) ∨ P → ∃[a](Q ∨ P)
+⊢ ¬(∃[a]Q) → ∀[a]¬Q ⊢ ¬(∀[a]Q) → ∃[a]¬Q.
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+945
+
+We could also add rules
+a#X ⊢ ∀[a]X → X ⊢ ∀[a]X ∧ ∀[a]Y → ∀[a](X ∧ Y ).
+We recapitulate aspects of nominal terms and rules which are unusual with respect to a ﬁrst-order system:
+
+(1) Moderated variables (a b)·X , which let us ‘suspend’ renamings. (2) The unusual term constructor abstraction [a]t. (3) The freshness side-conditions, such as a#X . We use them to avoid accidental variable capture. (4) The -equivalence relation ≈ , which uses all three of the above.
+
+We now deﬁne the process of rewriting.
+
+5.2. Matching problems, and rewriting steps
+
+A rewrite system induces some actual rewrites on the set of terms in its signature. Here’s how: Deﬁnition 45. A matching problem (in context) is a pair
+
+(∇ ⊢ l) ?≈ ( ⊢ s),
+where ∇, are consistent contexts and l, s are nominal terms. The solution to this matching problem, if it exists, is a substitution Â such that:
+
+• •
+
+⟨∇, l? ⊢
+
+≈′.?s⟩sol
+
+=(
+
+′, Â).
+
+• XÂ ≡ X for X ∈ V( , s).
+
+We say that Â solves the matching problem.
+Note that a matching problem can be seen as a particular kind of uniﬁcation problem. The conditions in the deﬁnition above ensure that: ⊢ lÂ ≈ s and ⊢ ∇Â, and so ( , Â) ∈ U(∇, l?≈?s). We can think of the solution to (∇ ⊢ l) ?≈ ( ⊢ s) as being a most general Â such that ( , Â) solves ∇, l?≈?s without instantiating s. For notation and terminology see §4.
+Remark. This is more than just matching modulo -equivalence because we can use ∇ to specify constraints which must be satisﬁed by the matching solution. When the conditions in ∇ are satisﬁed we say the matching is triggered. (Soon, ∇ ⊢ l will be the left-hand side of a rewrite rule ∇ ⊢ l → r, and then we say the rule is triggered.)
+Example 46
+
+(1) (⊢ a) ?≈ (⊢ b) has no solution. (2) (⊢ [a]a) ?≈ (⊢ [b]b) has a solution Â = Id. (3) (⊢[a][b]X ′) ?≈ (⊢[b][a]X ) has solution Â = [X ′→(a b)·X ].
+
+946 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+(4) (a#X ⊢[a]X ) ?≈ (⊢[a]a) has no solution (because the only candidate, [X →a], causes the condition a#X to become inconsistent).
+Say a term has a position when it mentions a distinguished unknown, we usually write it −, precisely once, and with trivial moderation. We let capital letters L, C, P vary over terms with a position. We write C[s] for C[−→s], and [−] when the term C is precisely its unique variable. Since the term C is only of interest inasmuch as − may be substituted for a term, we shall tend to silently assume that − is fresh.
+For example, [a](a, −) has a position, but not (−, −) or (a b)·−.6
+Deﬁnition 47 . Suppose R = ∇ ⊢ l → r is a rewrite rule, s and t are terms, and is a consistent context. We say s rewrites with R to t in the context , and we write ⊢ s →R t when:
+(1) V(R) ∩ V( , s) = ∅ (we can assume this with no loss of generality). (2) s ≡ C[s′] for some position C[−], and term s′, such that Â solves (∇ ⊢ l) ?≈ ( ⊢ s′). (3) ⊢ C[rÂ] ≈ t.
+If C ≡ [−] we say that the rewrite occurs at the root position. Otherwise we may (semi-formally) say that the rewrite occurs at C.
+Given a nominal rewrite system R say that s rewrites to t in a context , and write ⊢ s →R t or just ⊢ s → t, when there is a rule R ∈ R such that ⊢ s →R t.
+The rewrite relation →∗ is the reﬂexive and transitive closure of this relation. A normal form is a term-in-context that does not rewrite.
+We now give some examples of rewrite steps:
+Example 48
+(1) It is easy to show that ∅ ⊢ ( [a]f(a, a)) X →∗ f(X , X )
+in four steps using the rules (Beta) and ( var) of Example 43 together with a rule for the propagation of substitutions under f :
+( f ) f(X , X ′){a→Y } → f(X {a→Y }, X ′{a→Y }).
+In a CRS a similar reduction is done in one step, using a higher-order substitution mechanism which involves some ÿ-reductions. NRSs use ﬁrst-order substitutions and therefore we have to deﬁne explicitly the capture-avoiding substitution mechanism, but in contrast with ﬁrst-order TRSs we do not need to make explicit the -conversions. For instance, rule ( lam) (see Example 43) pushes a substitution under a avoiding capture, as the following rewrite step shows:
+b#Z ⊢ ( [c]Z){a→c} → [b](((b c)·Z){a→c}).
+6 A ‘position’ is, literally, the standard notion of a point in the abstract syntax tree of a term, as deﬁned, for example, in [21]. It is more convenient for us to identify this with the corresponding ‘initial segment’ of a term.
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+947
+
+(2) A pathological but illuminating example of rewriting rule is ∅ ⊢ X → X . Then ∅ ⊢ [a]a → [a]a, but we can also verify that ∅ ⊢ [a]a → [b]b. In general, in the presence of this rule, if ⊢ s ≈ t then ⊢ s → t, for example a, b#X ⊢ X → (a b)·X .
+This will not cause problems in conﬂuence results because they are also deﬁned up to ≈ . (3) If ∅ ⊢ a → b is in an equivariant set of rewrite rules, we have a rewrite step ∅ ⊢ a′ → b′ for
+any pair of different atoms a′ and b′. Our notion of matching does not instantiate, or even permutatively rename, atoms; however, equivariance of the rule system as a whole guarantees
+that if a rule exists then a rule with permutatively renamed atoms is available.
+
+Usually, the one-step rewrite relation generated by a set of rules is deﬁned as the “compatible closure” of a set of rules, that is, the closure of the rewrite rules by context and substitution (see for instance [17]). The deﬁnition of nominal rewriting given above satisﬁes these properties (taking the freshness context of the rule into account), and is also closed under permutation, as the following theorem shows:
+Theorem 49. Assume ⊢ s →R t using the rule R ≡ ∇ ⊢ l → r, then:
+
+(1) ⊢ C[s] →R C[t]. More generally, if ⊢ s →R t and (2) If is consistent and ⊢ , then ⊢ s →R t .
+(3) ⊢ ·s →R ·t.
+
+⊢ C[t] ≈ D, then
+
+⊢ C[s] →R D.
+
+Proof
+
+(1) Intuitively this is obvious, since part 2 of Deﬁnition 47 allows for any context, and part 3 allows
+
+for any -equivalent term on the right.
+
+Formally: since ⊢ s →R t, s ≡ C′[s′] and there exists some Â solving (∇ ⊢ l) ?≈ ( ⊢ s′). That is, ⊢ ∇Â and ⊢ lÂ ≈ s′ and ⊢ C′[rÂ] ≈ t. Then ⊢ ∇Â and ⊢ C[C′[lÂ]] ≈ C[C′[s′]] and ⊢ C[C′[rÂ]] ≈ C[t] ≈ D, using Theo-
+
+rem 24, and the result follows by Deﬁnition 47.
+
+(2) So s ≡ C′[s′] and there exists some Â such that ⊢ ∇Â and ⊢ lÂ ≈ s′ and ⊢ C′[rÂ] ≈ t. Then s ≡ C′′[s′ ] where C′′ is C′ .7
+
+Suppose that is consistent. Then by Lemma 22 we know ⟨ s′ , and ⟨ ⟩nf ⊢ C′′[rÂ ] ≈ t .
+
+⟩nf ⊢ ∇Â , ⟨
+
+⟩nf ⊢ lÂ ≈
+
+Now suppose is consistent and ⊢ . Then is consistent by Lemma 16 and the result
+
+now follows using part 3 of Corollary 18.
+
+(3) So s ≡ C′[s′] and there exists some Â such that ⊢ ∇Â and ⊢ lÂ ≈ s′ and ⊢ C′[rÂ] ≈ t.
+
+Write ( ·Â) for the substitution such that if XÂ ≡ X then X( ·Â) ≡ X , and if XÂ ̸≡ X then
+
+X( ·Â) ≡ ·(XÂ). Note that:
+
+• Because of conditions on disjointness of variables in the matching problem which Â solves,
+
+XÂ ̸≡ X for every X mentioned in R.
+
+7 . . . assuming − ≡ −, which should be the case since we assume − ‘is always fresh enough’ and rename it otherwise.
+
+948 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+• By Lemma 41 it is the case that ⊢ l ( ·Â) ≈ • Similarly ⊢ r ( ·Â) ≈ ·(rÂ). • Similarly ⊢ ∇ ( ·Â). • ⊢ ·s ≈ ·(C′[s′]) ≈ C′′[ ·s′] where C′′ is
+
+·(lÂ). ·C′ with
+
+·− replaced by −.
+
+Then by Lemmas 20 and 5, and Theorem 24 we can deduce that: ·s ≡ C′′[ ·s′] and ( ·Â) is such that ⊢ ∇ ( ·Â) and ⊢ l ( ·Â) ≈ ·s′ and ⊢ C′′[r ( ·Â)] ≈ ·t. This sufﬁces to prove that ⊢ ·s →R ·t.
+
+Another interesting property, closure under ≈ , requires a more restrictive notion of rewrite rule. We come back to this point in Section 6.
+Nominal rewriting systems are more expressive than ﬁrst-order systems, as Examples 43 and 44 show. Some notions are also easier to deﬁne than with standard higher-order formats, as Example 50 shows.
+
+Example 50 . We add to the signature of the -calculus with names (see Example 43) a second
+operator for substitution, csub, representing context substitution. If C and t are terms, we sugar csub(C, t) to C[t]. We introduce a unary operator − to represent ‘a hole’ in a -term. We abbreviate −(t) to −t.
+Intuitively we should think of C[t] as ‘replace − in C by t without avoiding capture’. We take − to be unary in order to allow us to ‘give it support’, since if − were used as a constant then according to our rules for freshness we would always be able to derive a#−. More on this below.
+We formally express our intuitions by the following nominal rewrite rules:
+
+⊢ −Z [X ] → X
+
+⊢ a[X ] → a
+
+⊢ Y [X ] → Y
+
+⊢ ( [a]Y )[X ] → ([a]Y [X ]) ⊢ (Y Y ′)[X ] → Y [X ] Y ′[X ].
+
+Contexts in the -calculus are usually taken to have only one hole. This rewrite system will not check that property, but then again, it does not rely on that property to work.
+An example capturing rewrite sequence is as follows:
+
+( [a]−Z )[a] → [a](−Z [a]) → [a]a.
+It is hard to see how this direct deﬁnition would work in a formalism in which terms are taken to be -equivalence classes.
+Recall that we take − to be unary and not a constant. If we took − as a constant then a#− and b#− are derivable and so is [a]− ≈ [b]−. This is not the -equivalence behaviour we expect of a binder with a hole in its scope and it would lead to incorrect rewrites such as ( [a]−)[b] → [b]b.
+Another solution to this issue is to pick some distinguished variable, call it −, and use that for our hole. Then a#− cannot be derived unless we assume it, because − is a variable. However, we would also have to restrict the instantiation behaviour of the nominal rewriting machinery, to prevent ( [a]a)[b] rewriting to [a]b with the rule ( [a]−)[X ] → [a]X .8
+
+8 So we have yet another kind of hole, similar to the X of nominal rewriting in that it represents an unknown term, but this is one which we expressly do not want to match with any particular term. This idea can be emulated quite effectively in nominal rewriting as we have done, with a unary term-former.
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+949
+
+5.3. Critical pairs and conﬂuence
+Deﬁnition 51. Say a nominal rewrite system is conﬂuent when if ⊢ s →∗ t and ⊢ s →∗ t′, then u exists such that ⊢ t →∗ u and ⊢ t′ →∗ u.
+Conﬂuence is an important property because it ensures unicity of normal forms, a form of determinism. Local conﬂuence is a weaker property, it is deﬁned as ‘joinability of peaks’. More precisely: Deﬁnition 52 . Fix an equivariant rewrite system R, and write ⊢ s → t1, t2 for the appropriate pair of rewrite judgements. A pair ⊢ s → t1, t2 is called a peak. A nominal rewrite system is locally conﬂuent when, if ⊢ s → t1, t2, then u exists such that ⊢ t1 →∗ u and ⊢ t2 →∗ u. We say such a peak is joinable. Deﬁnition 53. Suppose
+
+(1) Ri = ∇i ⊢ li → ri for i = 1, 2 are copies of two rules in R such that V(R1) ∩ V(R2) = ∅ (R1 and
+
+R2 could be copies of the same rule).
+
+(2)
+
+l1
+
+≡ ⊢
+
+∇Li[Âl′1f]osruich=t1h,a2t.
+
+∇1,
+
+∇2,
+
+l′1
+
+?≈?
+
+l2
+
+has
+
+a
+
+principal
+
+solution
+
+(
+
+, Â), so that
+
+⊢ l′1Â ≈ l2Â and
+
+Then call the pair of terms-in-context
+
+⊢ (r1Â, LÂ[r2Â])
+a critical pair. If L = [−] and R1, R2 are copies of the same rule, or if l′1 is a variable, then we say the critical pair is trivial. Example 54. There are several non-trivial critical pairs in Example 43 involving substitution rules. For instance, there is a critical pair between ( ) and ( app), and also between ( ) and ( lam). Deﬁnition 55. We will say that a peak ⊢ s → t1, t2 is an instance of a critical pair ⊢ (r1Â, LÂ[r2Â]) when there is some such that:
+
+• is consistent. •⊢ . • ⊢ (r1Â , LÂ [r2Â ]) ≈ (t1, t2).
+Another way of phrasing this is that
+
+( ⊢ [X1→r1Â, X2→LÂ[r2Â]) ≤ ( ⊢ [X1→t1, X2→t2])
+
+in the instantiation ordering from Deﬁnition 28, for two (suitably fresh) variables X1 and X2. A critical pair is a pair of terms which can appear in a peak of a rewrite of a term-in-context. In
+standard (ﬁrst-order) rewrite systems any instance of a critical pair gives rise directly to a peak for any substitution, but here, an instance of a critical pair only gives rise to a peak for substitutions (continuing the notation above) such that is consistent.
+
+950 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+Non-trivial critical pairs are important in ﬁrst order term rewriting systems because it is sufﬁcient to check their joinability to deduce local conﬂuence. This result extends to nominal rewriting under certain conditions, which we will discuss in the next section.
+6. Uniform rewriting (or: ‘well-behaved’ nominal rewriting)
+Nominal rewriting is elementary (and easy to explain) but sometimes we need more. For example: Lemma 56. It is not necessarily the case that trivial critical pairs are joinable. Proof. It sufﬁces to give counterexamples. Consider the rules (for some term-former f )
+R ≡ ⊢ fb → a and R′ ≡ a#X ⊢ X → [a]X.
+These have a trivial critical pair ⊢ (a, [a]fb) (the term fb rewrites to both). It is not hard to see that these terms are not joinable. The fact that the left-hand side of R′ is a variable is not a problem, the problem is that R ‘creates’ an atom a, which invalidates the freshness context in R′. Rules that create free atoms do not work uniformly in ≈ equivalence classes. For instance, take
+R ≡ ⊢ [b]b → b
+and the term s ≡ [a][b]b. Then s ≈ [b][a]a ≡ s′ and s → [a]b but s′ does not reduce to [a]b. However, rewrite rules ‘in nature’ (see Example 43) seem to belong to a restricted class of uniform
+rules, which display good behaviour. We now characterise this better-behaved class of uniform rules and show it has good properties (see Lemma 61). Deﬁnition 57. Say R is uniform when if ⊢ s →R t then , ⟨a#s⟩nf ⊢ a#t for any a such that ⟨a#s⟩nf is consistent.
+In the judgements of the form , ⟨a#s⟩nf ⊢ a#t below we will always assume that we consider only atoms such that ⟨a#s⟩nf is consistent, or alternatively, we can think that if the freshness context is inconsistent any predicate is derivable, which corresponds to adding a bottom rule to the logical system. Remark. All the example rewrite rules ‘from nature’ cited so far are uniform.
+The deﬁnition of uniformity looks hard to check—do we really have to consider all s and t before we can declare R to be uniform? Fortunately, there is a better way: Lemma 58.
+(1) R ≡ ∇ ⊢ l → r is uniform if and only if ∇, ⟨a#l⟩nf ⊢ a#r for all a. (2) R ≡ ∇ ⊢ l → r is uniform if and only if ∇, ⟨a#l⟩nf ⊢ a#r for all a mentioned in ∇, l, and r, and
+for one fresh a.
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+951
+
+Proof. Suppose R is uniform. It is easy to verify that ∇ ⊢ l →R r (that is, l rewrites with R to r in context ∇). Therefore by assumption, ∇, ⟨a#l⟩nf ⊢ a#r.
+Conversely suppose ∇, ⟨a#l⟩nf ⊢ a#r. Suppose also that ⊢ s →R t, so that:
+
+• There is a substitution Â such that ⊢ ∇Â. • There is a position L such that s ≡ L[s′] and • ⊢ t ≈ L[rÂ].
+
+⊢ s′ ≈ lÂ.
+
+We know ⟨∇Â⟩nf , ⟨a#lÂ⟩nf ⊢ a#rÂ by Lemma 22. Also, since ⊢ ∇Â, using the second part of Corollary 18 also , ⟨a#lÂ⟩nf ⊢ a#rÂ. Then , ⟨a#L[lÂ]⟩nf ⊢ a#L[rÂ] by the technical lemma which follows.
+We then conclude that , ⟨a#L[lÂ]⟩nf ⊢ a#t for any ⊢ t ≈ L[rÂ] by Lemma 23. For the last part, we use equivariance of the deﬁnition of uniform rewriting itself [26,25] to see that if ∇, ⟨a#l⟩nf ⊢ a#r for some a not mentioned in ∇, l, or r, then ∇, ⟨a′#l⟩nf ⊢ a′#r for all other a′ not mentioned in ∇, l, or r.9
+The following result is useful in the proof above.
+Lemma 59. For any l and r, if , ⟨a#l⟩nf ⊢ a#r, then , ⟨a#L[l]⟩nf ⊢ a#L[r].
+Proof. We work by induction on the syntax of L.
+
+• If L = [a]L′ the result is immediate since a#[a](L′[r]) by (#absa). • If L = [b]L′ then we observe that ⟨a#L[l]⟩nf = ⟨a#L′[l]⟩nf , so we may use the inductive hypothesis
+and (#absb). • The other cases are easy.
+
+Remark. Intuitively uniformity means ‘if a is not free in s and s rewrites to t, then a is not free in t’, or more concisely: ‘uniform rules do not generate atoms’. Note that the following deﬁnition is wrong: ∇ ⊢ l → r is ‘uniform’ when ∇ ⊢ a#l implies ∇ ⊢ a#r for all a. The reason is that l and r may contain unknowns, so we must insert assumptions about them, e.g. ⟨a#l⟩nf .
+For instance, ⊢ X → a is trivially ‘uniform’ according to the ‘wrong’ deﬁnition, since ⊢ b#X is derivable for no b.
+As observed in the proof of Lemma 56 the validity of a freshness judgement a#s can be inﬂuenced by changes deep inside s (e.g. as occur in rewriting). With uniform rewriting, this ceases to be a concern:
+Lemma 60. If R is uniform and ⊢ s →R t and ⊢ a#s, then ⊢ a#t.
+
+9 Or, if the reader does not care for this degree of rigour, we can just say “since a was fresh but otherwise arbitrary, clearly ∇, ⟨a#l⟩nf ⊢ a#r holds for any other a”.
+
+952 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+Proof. Suppose ⊢ a#s. By Lemma 16, a#s is consistent. Also by deﬁnition of uniformity , ⟨a#s⟩nf ⊢ a#t. We now use Corollary 18.
+Uniform rewriting is well behaved: Theorem 61. Assume R is uniform.
+
+(1) If ⊢ s →R t and ⊢ s ≈ s′ then ⊢ s′→t does hold (not necessarily with the same rule). (2) In a uniform rewrite system, peaks which are instances of trivial critical pairs are joinable.
+
+Proof
+
+(1) By induction on the structure of s. If the reduction takes place at the root position then the rule applies to s′ too because matching takes ≈ into account. If the reduction is in a strict subterm of s (then s cannot be an atom or a moderated variable), we proceed by induction. The cases of a tuple and function application are trivial, as well as the case in which s ≡ [a]u and s′ ≡ [a]u′. The only interesting case is when s ≡ [a]u, s′ ≡ [b]u′, and ⊢ u → v. Then we know that ⊢ (b a)·u ≈ u′ and ⊢ b#u, hence ⊢ u ≈ (a b)·u′ and ⊢ a#(a b)·u by Lemma 20. By induction, ⊢ (a b)·u′ → v, and by Theorem 49, ⊢ u′ → (a b)·v. Then ⊢ [b]u′ → [b](a b)·v ≈ [a]v (because ⊢ b#u implies ⊢ b#v by Lemma 60).
+(2) Suppose two rules Ri = ∇i ⊢ li → ri for i = 1, 2 have a critical pair
+
+⊢ (r1Â, LÂ[r2Â]).
+
+Then by Deﬁnition 53, Recall also that we call
+
+tlh1 e≡crLit[ilc′1a],l
+
+and pair
+
+( , Â) trivial
+
+is such that when L = [−]
+
+⊢anld′1ÂR≈1,
+
+l2Â, R2 are
+
+and copies
+
+⊢ of
+
+∇1Â, ∇2Â. the same
+
+rule, or l′1 is a variable.
+
+If R1 and R2 are identical, then their rewrites are identical and any peak created by these rules
+
+is trivially joinable.
+
+If R1 and R2 differ and l′1 LÂ[r2Â] or its instances, is was satisﬁable before R2
+
+is a variable, then the only way we might not be able to apply R1 in
+
+if some freshness (see the example
+
+condition on above). For
+
+ul′1niinfo∇rm1 isruunlessa,tLiseﬁmabmleaa6f0terguRa2r, awnhtiecehs
+
+that this cannot happen.
+
+Therefore instances of a trivial critical pair are joinable.
+
+Theorem 62 (Critical pair lemma). If all non-trivial critical pairs of a uniform nominal rewrite system are joinable, then it is locally conﬂuent.
+Proof. Suppose ⊢ s → u1, u2 is a peak. Then:
+
+(1) There exist Ri = ∇i ⊢ li → ri, for i = 1, 2. (2) s may be written as Ci[si], and ui as Ci[ti], for i = 1, 2. (3) There exist solutions i to (∇i ⊢ li, ri)) ?≈ ( ⊢ (si, ti)) for i = 1, 2. Hence
+
+⊢ li i ≈ si, ∇i i.
+
+Now there are two possibilities:
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+953
+
+(1) The distinguished context variable [−] occurs at distinct subtrees of s in C1 and C2. Local conﬂuence holds by a standard diagrammatic argument taken from the ﬁrst-order case (see for instance [2]). We need Theorems 24 and 61 to account for the use of ≈ .
+(2) C2 ≡ C1[D[−]] or C1 ≡ C2[D[−]]. We consider only the ﬁrst possibility. Suppose that C1 ≡ [−], so that C2 ≡ D (the general case follows using Theorems 24 and 49).
+There are now three possibilities:
+
+(1) [−] replaces a variable X in s. This is an instance of a trivial critical pair. If the rules are uniform, joinability of instances of trivial critical pairs follows from the previous lemma.
+(2) D ≡ [−] and R1 and R2 are copies of the same rule. Then t1 ≈ t2 and the peak can be trivially joined.
+(3) Otherwise, this is an instance of a non-trivial critical pair (see Deﬁnition 55). Non-trivial critical pairs are joinable by assumption, and using Theorem 49 we can join their instances.
+
+Remark. As a ﬁrst application of this result, we can deduce that the substitution rules in Example 43 are locally conﬂuent: they are uniform (we will show this in the next section), and the non-trivial critical pairs can be joined.
+Note that if we consider also (Beta) then the system is not locally conﬂuent. This does not contradict the previous theorem, because there is a critical pair between (Beta) and ( app) which is not joinable. The system is locally conﬂuent on ground terms (i.e. terms without variables): the critical pair between (Beta) and ( app) is joinable if we replace the variables by ground terms.
+We will say that an NRS is terminating if all the rewrite sequences are ﬁnite. Using Newman’s Lemma [34], we obtain the following conﬂuence result.
+Corollary 63
+
+(1) If an NRS is terminating, uniform, and non-trivial critical pairs are joinable, then it is conﬂuent. (2) Under the same assumptions, normal forms are unique modulo ≈ .
+
+7. Orthogonal systems
+We now treat a standard conﬂuence criterion in rewriting theory [17,31,33].
+Deﬁnition 64 . A rule R ≡ ⊢ l → r is left-linear when each variable occurring in l occurs only once.
+A uniform nominal rewrite system with only left-linear rules and no non-trivial critical pairs is orthogonal.
+For example, a#X , b#X ⊢ fX → (X , X ) is left-linear but ⊢ (X , X ) → fX is not. The subsystem deﬁning substitution in Example 43 (i.e. the rules) is not orthogonal, because rule generates non-trivial critical pairs. However, if we replace in Example 43 by the rule ⊢ b{a → X } → b we obtain an orthogonal system (less efﬁcient than the original one, since
+
+954 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+substitutions will be pushed all the way to the leaves of the terms even if the concerned variable does not occur in the term). Theorem 65. An orthogonal uniform nominal rewrite system is conﬂuent. The proof occupies the rest of this section. Henceforth, we only consider uniform rewriting.
+We deﬁne a parallel reduction relation ⇒ as follows:
+
+We have used some new notation: ⊢ s →R t means ‘s rewrites to t using R where we have matched the whole of s to the left-hand side of R’. For example if R ≡ a → a then a →R a but not (a, a) →R (a, a).
+Lemma 66
+
+(1) If ⊢ s ⇒ t then ⊢ ·s ⇒ ·t. (2) If ⊢ s ⇒ t then ⊢ C[s] ⇒ C[t].
+(3) If ⊢ s →R t then ⊢ s ⇒ t. (4) If ⊢ s → t then ⊢ s ⇒ t. (5) If ⊢ s ⇒ t then ⊢ s →∗ t. (6) As a corollary, ⊢ s ⇒∗ t if and only if
+
+⊢ s →∗ t.
+
+Proof
+
+(1) By induction on the derivation of ⊢ s ⇒ t. We exploit the syntax-directed nature of the rules; we consider only four cases. (a) If ⊢ a ⇒ t′ then (observing how this can have been derived), it must be that ⊢ a →R t′.
+Then ⊢ ·a →R ·t′ by Theorem 49, and ⊢ ·a ⇒ ·t′ by (atom′).
+(b) If ⊢ ·X ⇒ t′ then it must be that ⊢ ·X →R t′. Then by Theorem 49 ⊢ · ·X →R ·t′ and ⊢ · ·X ⇒ ·t′ by .(var ′)
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+955
+
+(c) If ⊢ ·s ⇒ ·t then ⊢ [ ·a] ·s ⇒ [ ·a] ·t by (abs). We observe that [ ·a] ·s ≡ ·[a]s.
+(d) If ⊢ ·s ⇒ ·t and ⊢ [ ·a] ·t →R ·t′, then ⊢ ·[a]s→ ·t′ by (abs ′). (2) Directly by induction on C. (3) Directly using (reﬂ) and tup′, abs ′, fun′, atom′, and var ′. (4) Using the previous two parts. (5) We work by induction on the derivation of ⊢ s ⇒ t. If the derivation concludes with:
+(a) (reﬂ) then the result is trivial, since →∗ is reﬂexive. (b) (tuple) then we rewrite sequentially in each element of the tuple. (c) (tuple′) then we rewrite as in the last part, and then once at top level. (d) (abs), (abs ′), (fun), or (fun ′), then we reason much as we did for (tuple) and (tuple ′). (e) (atom′) then we know ⊢ a → t so ⊢ a →∗ t. Similarly for (var ′).
+
+Lemma 67 . If the system is uniform and orthogonal then: if ⊢ s ⇒ t and ⊢ s ⇒ t′, then there exists some t′′ such that ⊢ t ⇒ t′′ and ⊢ t′ ⇒ t′′. Hence ⇒ is conﬂuent.
+Proof. By induction on the derivation of ⊢ s ⇒ t. We consider one case. Suppose the derivation ends in (tup). By the syntax-driven nature of de-
+duction there are three possibilities for the last rule in the derivation of ⊢ s ⇒ t′: (tup), (tup ′), and (reﬂ):
+
+(1) If ⊢ s ⇒ t′ has a derivation ending in (tup) then the inductive hypothesis for ⊢ si ⇒ ti and
+
+(2)
+
+If
+
+⊢
+
+si ⊢
+
+s⇒⇒ti′
+
+give us t′ has a
+
+dti′e′ rsiuvcahtiothnaetndin⊢gtiin⇒(tutpi′′′
+
+and ) using
+
+⊢ R
+
+≡ti′
+
+⇒∇ ⊢ti′′l.
+
+We →
+
+use (tup) r, that is
+
+and are done. ⊢ s ⇒ (t1′, .
+
+.
+
+.
+
+,
+
+tn′ )
+
+and ⊢ (t1′, . . . , tn′ ) →R t′, then Â exists such that
+
+⊢ ∇Â, (t1′, . . . , tn′ ) ≈ lÂ, rÂ ≈ t′.
+
+We now proceed as illustrated and explained below:
+
+t6i0oWSntoinÂed,caetephdrpauutlclyeiesst,ohaÂferte⇒ii′n′ndaoÂulnl′c.f-troievvseehrhnlyaeppsosptiahnsegssu,itmshtpeotriceolwonsrseidteed(⊢tu1′,ct.iib., .tli′e, t⇒on′ )f
+
+tt⇒ii′′′. u(sti1′n′,g.
+
+Lemma 66 (→∗=⇒) and Lemma . . , tn′′) takes place in the substitu-
+
+Since rules by (tup)’ for R
+
+a(froerlesfotm-lienesaurbRstsittuiltliaopnpÂli′e).sF: ina⊢ll(yt,1′′w, .e.
+
+.u,sten′′
+
+) →R rÂ′ and therefore ⊢ (t1, Lemma 61 and orthogonality
+
+... to
+
+, tn) ⇒ rÂ′ close with
+
+a rewrite t′ ⇒ rÂ′.
+
+(3) If ⊢ s ⇒ t′ then t′ ≡ s and the diamond can be trivially closed.
+
+The other cases are similar.
+
+956 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+We now come back to our theorem: Proof. If the uniform rewrite system has only left-linear rules and only trivial critical pairs, then ⇒ is conﬂuent by Lemma 67. Since →∗⊆⇒∗ and ⇒∗⊆→∗ by Lemma 66, → is conﬂuent.
+
+8. Closed rewriting (or: ‘efﬁciently computable’ nominal rewriting)
+
+Suppose R ≡ ∇ ⊢ l → r contains atoms and is in a nominal rewrite system. By equivariance that system contains all inﬁnitely many R for all renamings of those atoms. Checking whether s matches R is polynomial [12], but checking whether s matches any R , for all possible , is NP-complete in general [13]. For efﬁciency we are interested in conditions to make this problem polynomial, we consider this now.
+Given a rule R ≡ ∇ ⊢ l → r we shall write R′ ≡ ∇′ ⊢ l′ → r′ where the primed versions of ∇, l, and r, have atoms and variables renamed to be fresh—for R, and possibly also for other atoms occurring in a term-in-context ⊢ s. We shall always explicitly say what R′ is freshened for when this is not obvious.
+For example, a freshened version of (a#X ⊢ X → X ) with respect to itself and to the term-in-context a′#X ⊢ a′ is (a′′#X ′ ⊢ X ′ → X ′), where a′′ ̸≡ a, a′ and X ′ ̸≡ X . If R ≡ a#X ⊢ [a′][a]X → [a′]X then A(R) = {a, a′} and V(R) = {X } and R′ ≡ a′′#X ′ ⊢ [a′′′][a′′]X ′ → [a′′′]X ′.
+We will write A(R′)#V(R) to mean that all atoms occurring in R′ are fresh for each of the variables occurring in R.
+Deﬁnition 68
+
+(1) R ≡ ∇ ⊢ l → r is closed when (∇′ ⊢ (l′, r′)) ?≈ (∇, A(R′)#V(R) ⊢ (l, r))
+has a solution . Here R′ ≡ ∇′ ⊢ (l′, r′) is freshened with respect to R. (2) Given R ≡ ∇ ⊢ l → r and ⊢ s a term-in-context, write
+⊢ s →R c t when , A(R′)#V( , s) ⊢ s →R′ t
+and call this closed rewriting. Here, R′ is freshened with respect to R, ⊢ s, and t (in part 1 of Lemma 69 below we show it does not matter which particular freshened R′ we choose).
+
+In the next few paragraphs we give some examples and make some comments on this deﬁnition. The condition for being closed unpacks to:
+
+• There exists a such that X • ∇, A(R′)#V(R) ⊢ ∇′ . • ∇, A(R′)#V(R) ⊢ l ≈ l′ . • ∇, A(R′)#V(R) ⊢ r ≈ r′ .
+
+≡ X for all X ∈ V(R) and:
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+957
+
+Note that V( , s) = V( , s, t) because of conditions we put on rewrite rules that unknowns cannot just ‘appear’ on the right-hand side. We shall use these to simplify expressions denoting freshness contexts without comment.
+There are two parts to this deﬁnition: closed rules, and closed rewriting. It is possible to do (normal) rewriting with a closed rule, closed rewriting with a (normal) rule, or closed rewriting with a closed rule! The intuition is that a closed rule generates the same rewrites with closed rewriting, as all (inﬁnitely many) renamings of that rule generate with (normal) rewriting. The rest of this section formally develops these intuitions.
+Note also that R′ is freshened also with respect to t; “In closed rewriting, atoms explicitly mentioned in R are not allowed to interact with the atoms of the term being rewritten.” So for example, if R ≡ ∅ ⊢ a → b then a →R b but not a →R c b, because R is freshened to a′ → b′ ﬁrst. Most of this subsection is about making this observation formal, in particular part 2 of Lemma 69 and Theorem 71. Theorem 74 proves this restriction is computationally useful. Lemma 72 adds “and closed R are uniform”, where uniformity is deﬁned and discussed above. For example, the rules in Example 43 are closed. A canonical example of a closed rule is R ≡ a#X ⊢ X → X . Note that Z does not rewrite to Z with R (though a#Z ⊢ Z →R Z). The canonical example of a closed rewrite is Z →R c Z. On the other hand, a → a is not a closed rule, neither are fa → b, fb → b or [a]X → X , but a#X ⊢ [a]X → X is closed. If we think of closed rewriting as being such that the atoms in R are bound to that rule, the assumption A(R′)#V( , s) adds “and for any subsequent instantiations of their unknowns”. This is
+why the rewrite Z →R c Z occurs even though R demands to know that some atom a is fresh for X . It is interesting to note that CRSs rules are closed by deﬁnition, in the sense that left and right-
+hand sides of rules cannot contain free variables (the equivalent of unabstracted atoms). But in the case of CRSs this is a structural fact, whereas here closure is deﬁned as a logical condition. ERSs have a similar requirement, but it is expressed in terms of admissible substitutions. Note also that the notion of closed rewriting was generalised to Horn Clauses by Cheney and Urban [42].
+The following three technical results about renaming atoms will shortly be useful:
+Lemma 69
+
+(1) For ⊢ s and R, if , A(R′)#V( , s) ⊢ s →R′ t for one freshening R′ with respect to R, ⊢ s, and t, then , A(R′′)#V( , s) ⊢ s →R′′ t for all possible freshenings R′′ with respect to R, ⊢ s, and t.
+(2) For any , ⊢ s →R c t if and only if ⊢ s →R c t. (3) R is closed if and only if R is closed.
+
+Proof
+
+(1) Nominal Rewriting is equivariant in atoms; if ⊢ u →S v then Ä ⊢ uÄ →SÄ vÄ for any Ä. Nominal Rewriting is also equivariant in variable names (unknowns), so a similar result holds for them
+though we have not developed the notation to express it.
+
+958 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+If the atoms and variables in R′ are disjoint from , s, and t (if the variables are disjoint from those in and s they must be for those in t, by correctness conditions on rewriting)—then we can create a permutation Ä for atoms and another for unknowns, renaming them any fresh way we like. (2) The particular identity of the atoms in R is destroyed moving to R′. We might as well take R′ fresh for R and also for R . The result is now easy to see using the previous result. (3) The predicate ‘R is closed’ has only one argument: R. Nominal Rewriting is equivariant on atoms, so we can permute them in ‘R is closed’ to obtain ‘R is closed’, without changing the truth value. The reverse implication also holds since is invertible.
+
+Note that closed rewriting considers suggests the choice does not matter
+
+some freshened R′ and that since we do not annotate
+
+the the
+
+aasrsroocwia→tedwnoitthatRio′,nonly⊢wsi→thR cRt.
+
+Part 1 proves this suggestion is correct.
+
+Now we look at some simple examples:
+
+(1) If R ≡ a#X ⊢ X → X , R′ ≡ a′′#X ′ ⊢ X ′ → X ′ and R′′ ≡ a′′′#X ′′ ⊢ X ′′ → X ′′, then if a#X , a′′#X ⊢ s →R′ t then a#X , a′′′#X ⊢ s →R′′ t.
+(2) If R ≡ a#X ⊢ X → X and = (a b) observe that R′ ≡ a′#X ′ ⊢ X ′ → X ′ is a freshening of both R and R with respect to ∅ ⊢ Z. With a different term-in-context or we might need a different choice of atoms and unknowns but there are inﬁnitely many to choose from.
+
+In what follows we may say “we assume R′ is fresh for such-and-such extra terms-in-context” or “this is valid for any suitably fresh R′”; we may also use closure of R to justify closure of R , or closed rewriting with R to justify closed rewriting with R . We are using the lemma above.
+Theorem 70. R is closed if and only if for all ⊢ s, if ⊢ s →R t then ⊢ s →R c t. (R is closed if and only if rewriting implies closed rewriting.)
+Proof. Assume that R is closed and that ⊢ s →R t. For simplicity suppose that the rewrite step is at the root position (the result then follows by induction). So let Â solve (∇ ⊢ (l, r)) ?≈ ( ⊢ (s, t)). Recall exists solving (∇′ ⊢ (l′, r′)) ?≈ (∇, A(R′)#V(R) ⊢ (l, r), because R is closed. By syntactic calculations we see that V(RÂ) ⊆ V( , s). We can use these facts and Lemma 22 to prove that Â solves (∇′ ⊢ (l′, r′)) ?≈ ( , A(R′)#V( , s) ⊢ (s, t)).
+Conversely, assume rewriting with R implies closed rewriting with R. Note the trivial rewrite ∇ ⊢ l →R r, at root position. Therefore by assumption this rewrite is also generated by a freshened R′ in the context ∇ augmented with A(R′)#V(R). From the syntactic similarity of R′ to R it must be this rewrite is also generated using the root position, and by deﬁnition that means we obtain precisely the conditions for closure.
+R ≡ a#X ⊢ X → X is a counterexample to the assertion that closed rewriting implies rewriting for closed R. But the result holds for ground terms:
+Theorem 71. Suppose s is ground and R is closed. Then s →R c t if and only if there exists some such that s →R t.
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+959
+
+Proof. Since s has no variables (it is ground), a freshness context is irrelevant. Then, the deﬁnition
+
+of closed rewriting trivial, we take to
+
+boils down to: be a freshening
+
+s →R c t if and only if s →R′ permutation Ä generating
+
+t. R′
+
+The left-to-right in the deﬁnitions
+
+implication is thus above, as discussed
+
+variable names do not matter.
+
+Conversely suppose s →R t for some . R is closed by Lemma 69 and by the previous theorem
+
+we obtain s →R c t and so s →R c t again by Lemma 69.
+
+We can re-state this result as follows: If R is closed then R captures the rewrites of its equivariance renaming class on ground terms.
+
+Lemma 72. Let R ≡ ∇ ⊢ l → r be a closed rule. Then R is uniform.
+
+(P∇ro′ o⊢f.(Wl′,erm′))u?s≈t sh(∇ow, At(hRa′t)∇#V, ⟨(aR#) l⊢⟩n(fl⊢, r)⟨)a,#hra⟩snfa,
+
+and we know by assumption that, for any freshening solution, write it . Unpacking deﬁnitions,
+
+∇, A(R′)#V(R) ⊢ ∇′ , l ≈ l′ , r ≈ r′ .
+
+∇
+
+,
+
+⟨a#l⟩nf , A(R′)#V(R) We can always take
+
+⊢ a
+
+a#l′ by Lemma 15 freshening such that
+
+and a ̸∈
+
+part 1 of Lemma A(l′), and use the
+
+23. technical
+
+lemma
+
+which
+
+follows
+
+to deduce that ∇, ⟨a#l⟩nf ⊢ a#X ′ for each X ′ ∈ V(l′). By assumption V(r′) ⊆ V(l′) and reversing
+
+our reasoning we obtain ∇, ⟨a#l⟩nf ⊢ a#r as required.
+
+Lemma 73
+
+(1) If , a′#X ⊢ a#s and a′ ̸∈ A(s) then ⊢ a#s. (2) If a ̸∈ A(l′) then ⊢ a#l′ if and only if ⊢ X ′ for every X ′ ∈ V(l′).
+
+Proof. Both parts are proved by appealing to the syntax-directed nature of the rules for #.
+Theorem 74. If a nominal rewrite system is provided as the equivariant closure of a ﬁnite set of closed rules, then
+
+(1) Rewriting equals closed rewriting on ground terms and rewriting is polynomial on ground terms. (2) Closed rewriting is polynomial on all (possibly non-ground) terms.
+Proof. The very ﬁrst part is a consequence of the previous theorem. The algorithm to polynomially derive the closed rewrites of ⊢ s under R for all is to derive
+just the closed rewrites of R. The choice of R′ does not matter because of Lemma 69 part 1.
+The restriction to closed rules gives a powerful notion of rewriting: we showed in [21] that we can simulate CRSs using closed nominal rules. However, there are interesting systems (e.g. the -calculus, see also Example 50) with non-closed (but uniform) rules. We come back to this point in the conclusions.
+
+960 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+9. Sorts and extended contexts
+9.1. Sorts
+Sorts and types are a way of organising terms into useful classes (‘represents a natural number’ is the classic example). Sorts serve to organise terms into ‘the right’ families for term-formers to act on them. They are particularly useful for talking about the abstract syntax of programming languages. Types serve to organise the semantics of terms. As usual, it is important in computer science to distinguish between the syntax 1 + 2, which is the pair 1 and 2, and its meaning, which is 3.
+We now demonstrate how to impose a sorting system on terms. A type system is a fascinating subject (can atoms have type ‘the natural numbers’, and if so what does that mean?); we explore this subject in [20].
+Deﬁnition 75. A sorted nominal signature is:
+(1) A set of sorts of atoms typically written . (2) A set S of base data sorts typically written s. These are names for the domains under consider-
+ation, for example integer, boolean. (3) Term sorts typically written , deﬁned by the following grammar:
+::= | s | × . . . × | [ ] ,
+where 1 × . . . × n is called a product and [ ] an abstraction sort. (4) A set of term-formers f as before, to each of which is now associated an arity 1 → 2.
+If 1 is an empty product, we say that f is O-ary or a constant and we omit the arrow. Example 76. A sorted nominal signature for a fragment of ML has one sort of atoms: , one sort of data: exp, and term-formers with arities as follows:
+var : → exp, app : exp × exp → exp, lam : [ ]exp → exp, let : exp × [ ]exp → exp,
+letrec : [ ](([ ]exp) × exp) → exp.
+This example, derived from [40], illustrates clearly how sorts indicate binding scope. Partition unknowns into countably inﬁnite sets of variables of sort for each . Similarly parti-
+tion atoms into countably inﬁnite sets of atoms of sort . Even in the sorted context we may drop the sorting subscripts where they are obvious or we do not care, as a notational convenience; X and X ′ are still different term variables, for which we have overloaded the symbol X , and similarly for a .
+A swapping is a pair (a b) of atoms of the same sort. Permutations are lists of swappings as before.
+
+Table 1 ca-reduction
+Name
+(Beta) (Var) (App1) (App2) (Lam) (Copy1) (Copy2) (Erase1) (Erase2)
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+Reduction
+
+( x·t)v
+
+x[v/x]
+
+(tu)[v/x]
+
+(tu)[v/x]
+
+( y·t)[v/x]
+
+( (
+
+y ,z xy ,z x′
+
+·t)[v/x] ·t)[v/x]
+
+( x·t)[v/x]
+
+( x′ ·t)[v/x]
+
+→ca →ca →ca →ca →ca
+→ca
+→ca
+→ca →ca
+
+t[v/x]
+
+v
+
+(t[v/x])u
+
+t(u[v/x])
+
+y ·t [v/x]
+
+t [v/y ][v/z]
+
+y ,z x′
+
+·t[v/x]
+
+t
+
+x′ ·t[v/x]
+
+961
+Condition FV(v) = ∅ x ∈ FV(t) x ∈ FV(u)
+
+Then sorts for terms may be deduced by the following syntax-directed deduction rules:
+
+a:
+
+·X :
+t: [a ]t : [ ]
+
+t1 : 1 · · · tn : n
+
+(t1,
+
+. . . , ttn:) (f 1→ 2
+
+:
+1
+t)
+
+1
+:
+
+×
+2
+
+. .
+
+.
+
+.
+
+×
+
+n
+
+It is not hard to prove the following well-behavedness properties: Lemma 77
+
+(1) If t : and is a permutation then ·t : . (2) If t : and s : ′ then t[X ′ →s] : .
+Proof. The ﬁrst part is by induction on the structure of t. The base case is the observation that if ′·X : then ◦ ′·X : , which is straight from the sorting rules. The second part is by induction on the structure of t. The base case is t ≡ ·X ′. Then t[X ′ →s] ≡ ·s. Since s : ′ by the ﬁrst part, ·s : ′, and we are done.
+9.2. Extending freshness contexts
+
+We will now show that, thanks to the use of contexts, the framework of nominal rewriting can
+be easily adapted to express strategies of reduction. As an example, we will show how to deﬁne
+the system ca of closed reduction for the -calculus [23]. ca-terms are linear -terms with explicit constructs for substitutions, copying and erasing. Reduction on ca is deﬁned in [23] using a set of conditional rule schemes, shown in Table 1, where x, y, z denote variables, and t, u, v denote terms.
+We can formally deﬁne ca using a nominal rewriting system, where we add two new kinds of constraints: •t (read t is closed), with the intended meaning “a#t for every atom a”, and a ∈ t (read a is unabstracted in t), the negation of a#t.
+We extend the deduction and simpliﬁcation rules from Section 3, respectively, with:
+
+962 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+(
+
+⊢ a#t)a∈S ⊢ •t
+
+(•R)
+
+A(t,
+
+)S
+
+•t, Pr ⇒ {a#t}a∈Pr,t, a′#t, Pr.
+
+Here, S is any set of atoms strictly containing the atoms in t and , and a′ ̸∈ A(Pr, t). In effect we need A(t, ) and one fresh atom; if ⊢ a#t for a ∈ A(t, ) a renaming argument gives ⊢ b#t for all other b ̸∈ A(t, ). This is reﬂected in the simpliﬁcation rule, which is more algorithmic and chooses one fresh atom.
+•t is intuitively ∀a. a#t. The rule for closure •t is slightly different from the usual predicate logic rule for ∀ because atoms behave here as constants and not variables. With that in mind the deﬁnitions are quite natural.
+We can extend the deductions with rules including
+
+a ∈ ti a ∈ (t1, . . . , tn)
+
+a∈a
+
+and similarly extend the simpliﬁcation rules. We can extend contexts with these new constraints and use them in ∇s of rewrite rules ∇ ⊢ l → r to control triggering.
+A closed reduction strategy can be speciﬁed, this time as a ﬁnite nominal rewrite system (we only show rules Beta, App1, and App2 ):
+
+(Beta) (App1) (App2)
+
+•V ⊢ ( [x]T)V
+
+→ T [x → V ],
+
+x ∈ T ⊢ (TU)[x → V ] → (T [x → V ])U ,
+
+x ∈ U ⊢ (TU)[x → V ] → T(U [x → V ]).
+
+A theory of nominal rewriting with (general) constraints will be the subject of future work.
+
+10. Conclusions
+The technical foundations of this work are derived from work on nominal logic [36] and nominal uniﬁcation [40]. Our deﬁnition of rewriting is based on a nominal matching algorithm which is derived in a natural way from the uniﬁcation algorithm and from which it inherits good properties, such as most general uniﬁers.
+Our theory stays close to informal practice and to the ﬁrst-order case, while still allowing binding. We achieve this by working with concrete syntax, but up to a notion of equality ≈ which is not just structural identity. It is not -equivalence either: ≈ is actually logical, in the sense that ⊢ s ≈ s′ is something that we deduce using assumptions in . We pay the price that terms, rewrites, and equalities, happen in a freshness context . In practice is ﬁxed and does not seem to behave perniciously.
+Nominal rewriting is more expressive than ﬁrst-order rewriting and standard higher-order formats. Capture-avoiding substitution is not a primitive notion, but it is easy to deﬁne with nominal rules (we can spare the effort of ‘implementing’ -conversion using de Bruijn indices and all the machinery associated to typical explicit substitution systems). It is also possible to deﬁne a nominal rewriting formalism with a primitive notion of substitution of terms for atoms (capture-avoiding).
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+963
+
+Many directions for future work are still open. For instance:
+
+• We have given a sufﬁcient condition for conﬂuence (orthogonality, for uniform systems); weaker conditions (for example, weak orthogonality) should also be considered.
+• We have given a critical pair lemma. Studying Knuth–Bendix style completion procedures is a natural extension of that result for future work.
+• Sort systems exist for nominal terms. We are working on a type system and a semantics which provide an interpretation for terms with variables (usual semantics for -calculus and higher-order rewriting only consider ground terms). If we use term rewriting as a model of computation, termination (or strong normalisation) is an important property. It would be possible to devise sufﬁcient conditions for termination of nominal rewriting using type systems.
+
+Acknowledgments
+We thank James Cheney, Ian Mackie, Andy Pitts, Christian Urban, and Nobuko Yoshida for useful discussions. We are also grateful to the anonymous referees for their comments.
+
+References
+[1] M. Abadi, L. Cardelli, P.-L. Curien, J.-J. Lévy, Explicit substitutions, Journal of Functional Programming 1 (4) (1991) 375–416.
+[2] F. Baader, T. Nipkow, Term Rewriting and All That, Cambridge University Press, Great Britain, 1998. [3] F. Barbanera, M. Fernández, H. Geuvers, Modularity of strong normalization in the algebraic- -cube, Journal of
+Functional Programming 6 (1997) 613–660. [4] F. Barbanera, M. Fernández, Intersection type assignment systems with higher-order algebraic rewriting, Theoretical
+Computer Science 170 (1996) 173–207. [5] H.P. Barendregt, Pairing without conventional constraints, Zeitschrift für mathematischen Logik und Grundlagen
+der Mathematik 20 (1974) 289–306. [6] H.P. Barendregt, The Lambda Calculus: Its Syntax and Semantics (revised ed.), Studies in Logic and the Foundations
+of Mathematics, vol. 103, North-Holland, Amsterdam, 1984. [7] J. Bergstra, J.W. Klop, Conditional rewrite rules: conﬂuence and termination, Journal of Computer and System
+Sciences 32 (3) (1986) 323–362. [8] R. Bloo, K. Rose, Preservation of strong normalisation in named lambda calculi with explicit substitution and garbage
+collection, Computer Science Conference, The Netherlands, 1995. [9] E. Bonelli, D. Kesner, A. Ríos, From higher-order to ﬁrst-order rewriting, in: Proceedings of the 12th International
+Conference of Rewriting Techniques and Applications, Lecture Notes in Computer Science, vol. 2051, Springer, 2001. [10] V. Breazu-Tannen, J. Gallier, Polymorphic rewriting conserves algebraic strong normalization, Theoretical Computer
+Science 83 (1) (1991). [11] V. Breazu-Tannen, J. Gallier, Polymorphic rewriting conserves algebraic conﬂuence, Information and Computation
+82 (1992) 3–28. [12] C. Calves, M. Fernández, Implementing nominal uniﬁcation, in: Proceedings of TERMGRAPH’06, 3rd International
+Workshop on Term Graph Rewriting, ETAPS 2006, Vienna, Electronic Notes in Computer Science, Elsevier, 2006. [13] J. Cheney. The complexity of equivariant uniﬁcation, in: Automata, Languages and Programming, Proceedings of
+the 31st International Colloquium, ICALP 2004, Lecture Notes in Computer Science, vol. 3142, Springer, 2004. [14] H. Cirstea, C. Kirchner, The rewriting calculus – Part I. Logic Journal of the Interest Group in Pure and Applied
+Logics, 9 (2001) 363–399. Also available as Technical Report A01-R-203, LORIA, Nancy (France).
+
+964 M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+[15] H. Cirstea, C. Kirchner, The Rewriting Calculus – Part II. Logic Journal of the Interest Group in Pure and Applied Logics, 9 (2001) 401–434. Also available as Technical Report A01-R-204, LORIA, Nancy (France).
+[16] R. David, B. Guillaume, A -calculus with explicit weakening and explicit substitution, Mathematical Structures in Computer Science 11 (1) (2001) 169–206.
+[17] N. Dershowitz, J.-P. Jouannaud, Rewrite systems, in: J. van Leeuwen (Ed.), Handbook of Theoretical Computer Science: Formal Methods and Semantics, vol. B, North-Holland, 1989.
+[18] D.J. Dougherty. Adding algebraic rewriting to the untyped lambda calculus, in: Proceedings of the 4th International Conference Rewriting Techniques and Applications, Como, Italy, Lecture Notes in Computer Science, vol. 488, Springer, 1991.
+[19] M. Fernández, M.J. Gabbay, Nominal rewriting with name generation: abstraction vs. locality, in: Proceedings of the 7th ACM-SIGPLAN Symposium on Principles and Practice of Declarative Programming (PPDP’05), Lisbon, Portugal, ACM Press, 2005.
+[20] M. Fernández, M.J. Gabbay, Curry style types for nominal terms, in: Proceedings of the International Workshop TYPES 2006, Lecture Notes in Computer Science, Springer, 2007 (in press).
+[21] M. Fernández, M.J. Gabbay, I. Mackie, Nominal rewriting systems, in: Proceedings of the 6th ACM-SIGPLAN Symposium on Principles and Practice of Declarative Programming (PPDP’04), Verona, Italy, ACM Press, 2004.
+[22] M. Fernández, J.-P. Jouannaud, Modular termination of term rewriting systems revisited. Recent Trends in Data Type Speciﬁcation, in: Proceedings of 10th Workshop on Speciﬁcation of Abstract Data Types (ADT’94), Santa Margherita, Italy, Lecture Notes in Computer Science, vol. 906, Springer, 1995.
+[23] M. Fernández, I. Mackie, F.-R. Sinot, Closed reduction: explicit substitutions without alpha-conversion, Mathematical Structures in Computer Science 15 (2) (2005).
+[24] M.J. Gabbay, A.M. Pitts, A new approach to abstract syntax involving binders, in: 14th Annual Symposium on Logic in Computer Science, IEEE Computer Society Press, 1999, pp. 214–224.
+[25] M.J. Gabbay, A.M. Pitts, A new approach to abstract syntax with variable binding, Formal Aspects of Computing 13 (2001) 341–363.
+[26] M.J. Gabbay, A theory of inductive deﬁnitions with alpha-equivalence. Ph.D. Thesis, University of Cambridge, 2001.
+[27] M. Hamana, Term rewriting with variable binding: an initial algebra approach, in: 5th ACM-SIGPLAN International Conference on Principles and Practice of Declarative Programming (PPDP 2003), ACM Press, 2003.
+[28] J.-P. Jouannaud, M. Okada, Executable higher-order algebraic speciﬁcation languages, in: Proceedings, Sixth Annual IEEE Symposium on Logic in Computer Science, IEEE Computer Society Press, 1991, pp. 350–361.
+[29] Z. Khasidashvili, V. van Oostrom, Context sensitive conditional reduction systems, in: Proceedings of SEGRAGRA’95, Electronic Notes in Theoretical Computer Science, 2, 1995.
+[30] Z. Khasidashvili, Expression reduction systems, in: Proceedings of I. Vekua Institute of Applied Mathematics, Tbilisi, vol. 36, 1990, pp. 200–220.
+[31] J.-W. Klop, V. vanOostrom, F. van Raamsdonk, Combinatory reduction systems, introduction and survey, Theoretical Computer Science 121 (1993) 279–308.
+[32] P. Lescanne, From to a journey through calculi of explicit substitutions. in: Proceedings of the 21st ACM Symposium on Principles of Programming Languages (POPL’94), ACM Press, 1994.
+[33] R. Mayr, T. Nipkow, Higher-order rewrite systems and their conﬂuence, Theoretical Computer Science 192 (1998) 3–29.
+[34] M.H.A. Newman, On theories with a combinatorial deﬁnition of equivalence, Annals of Mathematics 43 (2) (1942) 223–243.
+[35] B. Pagano, Des calculs de substitution explicite et de leur application à la compilation des langages fonctionnels, Ph.D. Thesis, Université de Paris, 6, 1998.
+[36] A.M. Pitts, Nominal logic, a ﬁrst order theory of names and binding. Information and Computation, 186 (2003) 165–193. Preliminary version in Proceedings of 4th International Symposium on Theoretical Aspects of Computer Software (TACS 2001), Lecture Notes in Computer Science, vol. 2214, Springer, 2001.
+[37] F. van Raamsdonk, Conﬂuence and normalisation for higher-order rewriting, Ph.D. Thesis, Free University of Amsterdam, 1996.
+
+M. Fernández, M.J. Gabbay / Information and Computation 205 (2007) 917–965
+
+965
+
+[38] M.R. Shinwell, A.M. Pitts, M.J. Gabbay, FreshML: programming with binders made simple, in: 8th ACM SIGPLAN International Conference on Functional Programming (ICFP 2003), Uppsala, Sweden, ACM Press, 2003, pp. 263–274.
+[39] M. Takahashi, -calculi with conditional rules, in: J.F. Groote, M. Bezem (Eds.), Typed Lambda Calculi and Applications, International Conference TLCA’93, Lecture Notes in Computer Science, vol. 664, Springer-Verlag, Berlin, 1993.
+[40] C. Urban, A.M. Pitts, M.J. Gabbay, Nominal uniﬁcation, in: M. Baaz (Ed.), Computer Science Logic and 8th Kurt Gödel Colloquium (CSL’03 & KGC), Vienna, Austria. Proceedings, Lecture Notes in Computer Science, vol. 2803, Springer-Verlag, Berlin, 2003, pp. 513–527.
+[41] C. Urban, A.M. Pitts, M.J. Gabbay, Nominal uniﬁcation, Theoretical Computer Science 323 (2004) 473–497. [42] C. Urban, J. Cheney, Avoiding equivariance in alpha-prolog, in: Proceedings of Typed Lambda Calculus and Ap-
+plications, TLCA 2005, pp. 401–416.
+
+

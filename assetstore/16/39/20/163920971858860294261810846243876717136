@@ -1,0 +1,1205 @@
+Theoretical Computer Science 403 (2008) 285–306
+Contents lists available at ScienceDirect
+Theoretical Computer Science
+journal homepage: www.elsevier.com/locate/tcs
+
+A polynomial nominal unification algorithmI
+Christophe Calvès, Maribel Fernández ⇤
+King’s College London, Department of Computer Science, Strand, London WC2R 2LS, UK
+
+article info
+Article history: Received 28 October 2007 Received in revised form 14 May 2008 Accepted 16 May 2008 Communicated by D. Sannella
+Keywords: Binders
+↵-equivalence
+Nominal syntax Graphs Unification
+
+abstract
+Nominal syntax includes an abstraction operator and a primitive notion of name swapping, that can be used to represent in a simple and natural way systems that include binders.
+Nominal unification (i.e., solving ↵-equality constraints between nominal terms) has
+applications in rewriting and logic programming, amongst others. It is decidable: Urban, Pitts and Gabbay gave a nominal unification algorithm that finds the most general solution to a nominal matching or unification problem, if one exists. A naive implementation of this algorithm is exponential in time; here we describe an algorithm based on a graph representation of nominal terms with lazy propagation of swappings, and show that it is polynomial.
+© 2008 Elsevier B.V. All rights reserved.
+
+1. Introduction
+The nominal approach [9,10] to the representation of systems with binders is characterised by the distinction, at the
+syntactical level, between atoms, which can be abstracted (we use the notation [a]t, where a is an atom and t is a term), and
+variables, which behave like first-order variables but may be decorated with atom permutations. Permutations are generated
+using swappings, e.g. (a b)(c d) is the permutation that swaps a and b, and c and d. Permutations are applied to terms: (a b)·t means swap a and b everywhere in t; for instance, (a b)· [a]a = [b]b, and (a b)· [a]X = [b](a b)·X (we will introduce
+the notation formally in the next section). As shown in the last example, permutations suspend on variables. The idea is that
+when a substitution is applied to X in (a b)·X , the permutation will be applied to the term that instantiates X . Swappings of atoms are one of the main ingredients in the definition of ↵-equivalence for nominal terms.
+Nominal terms [17] can be seen as trees, built from function symbols, tuples and abstraction term-constructors; atoms and variables are leaves. The primitive notion of substitution in nominal terms is simply replacement of variables by terms (i.e., grafting of trees) with propagation of suspended permutations. On nominal terms, we can define by induction a freshness relation a#t (read ‘‘the atom a is fresh for the term t’’) which corresponds to the informal
+notion of a not occurring unabstracted in t. Using freshness and swappings we can inductively define a notion of ↵-
+equivalence of terms. Since t may contain variables, in order to deduce a#t we might need to use assumptions a#X ,
+so freshness is derived in a context of freshness assumptions: we write freshness judgements as ` a#t. The ↵-
+equivalence relation is also defined with respect to a freshness context. For instance, we will see that it is possible to deduce
+a#X, a#Y ` a#f (X, Y , [a]Z) a#X , b#X ` [a]X ⇡↵ [b]X .
+
+I
+⇤
+
+This work has been partially funded by an EPSRC grant (EP/D501016/1 ‘‘CANS’’). Corresponding author. Tel.: +44 2078482499.
+
+E-mail addresses: Christophe.Calves@kcl.ac.uk (C. Calvès), Maribel.Fernandez@kcl.ac.uk (M. Fernández).
+
+0304-3975/$ – see front matter © 2008 Elsevier B.V. All rights reserved. doi:10.1016/j.tcs.2008.05.012
+
+286 C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+Nominal terms are an extension of standard first-order terms; they can be seen as first-order terms with an abstractor
+and an explicit notion of ↵-equivalence. Nominal unification is the problem of deciding whether two nominal terms can be made ↵-equivalent by instantiating their variables. It is a generalisation of the unification problem for first-order terms, and
+has the same applications in rewriting, logic programming, theorem proving, etc. First-order unification is decidable and there are linear algorithms to solve first-order equations, see [1] for a survey.
+On the other hand, higher-order unification, which solves equations involving binders modulo ↵- and -equivalence, is
+undecidable in general. Urban, Pitts and Gabbay showed that nominal unification is decidable, and gave an algorithm which finds the most general solution to a nominal unification problem, if one exists [17]. Variants of this algorithm are used in
+Fresh-ML [14], ↵-Prolog [5,16], ↵-kanren [2] and C↵ML [12]. However, naive implementations based on tree representations
+of terms are exponential. In [3] we described an implementation of the nominal unification algorithm using graphs. In this paper, we define nominal graphs, give a nominal unification algorithm based on these graphs, and prove that nominal unification is polynomial in time and space.
+To simplify the description, we split the algorithm into two phases: In the first phase, the ⇡↵-constraints are simplified
+and a substitution is generated together with a set of freshness constraints that should be satisfied (if there is a solution for the problem). In the second phase, the freshness constraints are checked for satisfiability. We give separate proofs of complexity for each phase, and to simplify the proofs, the first phase is subdivided into a normalisation part (where constraints are simplified) and a resolution part (where normalised constraints are solved). It is possible to combine the normalisation and resolution phases (indeed, this is done in our implementation, which is available from www.dcs.kcl.ac.uk/staff/maribel/CANS) but we prefer to present them separately for the sake of clarity.
+Although we show in this paper that nominal unification is polynomial in time and space, we do not give a minimal bound. Unification of higher-order patterns [8], a related problem, is linear [13], and so is nominal matching [4]. The minimal bound for nominal unification is still unknown; we plan to work on this open problem in future.
+This paper is organised as follows: In Section 2 we define the main notions of nominal syntax that will be needed in the rest of the paper, and we recall the transformation rules given by Urban, Pitts and Gabbay [17] to solve nominal unification problems. Section 3 describes a graph representation of nominal terms. In Section 4 we give a graph-rewriting algorithm
+to solve ⇡↵-constraints together with a complexity analysis, and in Section 5 we present an algorithm to check freshness
+constraints and analyse its cost. Section 6 gives a polynomial upper bound for the cost in time of the complete algorithm. Finally, we conclude the paper in Section 7.
+2. Background
+In this section we recall the syntax of nominal terms, define nominal unification problems and give transformation rules to solve them (we refer the reader to [17,6] for more details).
+2.1. Nominal syntax
+Let ⌃ be a denumerable set of function symbols f , g, . . . ; X be a denumerable set of variables X , Y , . . . (representing meta-level unknowns); and A be a denumerable set of atoms a, b, c, . . . (representing object-level variable symbols). We assume that ⌃, X and A are pairwise disjoint.
+A swapping is a pair of atoms (not necessarily distinct), which we write (a b). Permutations ⇡ are lists of swappings,
+generated by the grammar
+⇡ ::= Id | (a b) ⇡ .
+We call Id the identity permutation. We call a pair of a permutation ⇡ and a variable X a suspension and write it ⇡ ·X . We say that ⇡ is suspended on X . We write ⇡ 1 for the permutation obtained by reversing the list of swappings in ⇡ . We denote by ⇡ ⇡ 0 the permutation containing all the swappings in ⇡ followed by those in ⇡ 0 (i.e., it is the append of the two
+lists of swappings).
+Nominal terms, or just terms for short, over ⌃, X, A are generated by the grammar:
+s, t ::= a | ⇡ ·X | (s1, . . . , sn) | [a]s | f t.
+In other words, nominal terms are trees built from atoms, suspensions (we will often call them just variables), tuples,
+abstractions, and function applications. For example, the term [a]a can be used to represent the identity function of the
+-calculus. We refer the reader to [17,6] for more examples of nominal terms.
+We can apply permutations and substitutions on terms, denoted ⇡ ·t and t[X 7! s] respectively. The application of a permutation to a term is defined by induction: Id·t = t and ((a b) ⇡ )·t = (a b)·(⇡ ·t), where
+(a b)·a = b (a b)·b = a (a b)·c = c if c 62 {a, b} (a b)·(⇡ ·X) = ((a b) ⇡ )·X (a b)·(f t) = f (a b)·t (a b)·[c]t = [(a b)·c](a b)·t
+(a b)·(t1, . . . , tn) = ((a b)·t1, . . . , (a b)·tn)
+and a, b, c range over atoms.
+
+C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+
+287
+
+If ⇡ is a permutation, its support is the set of atoms that change when the permutation is applied. More precisely: supp(⇡ ) = {a | a 6= ⇡ ·a}.
+A substitution is generated by the grammar
+
+::= Id | [X 7! s] .
+We write substitutions postfix and write for composition of substitutions: t(
+of a term t by a substitution by induction as follows:
+
+0) = (t ) 0. We define the instantiation
+
+tId = t t[X 7! s] = (t[X 7! s])
+
+where
+a[X 7! s] = a (ft)[X 7! s] = f (t[X 7! s]) ([a]t)[X 7! s] = [a](t[X 7! s]) (t1, . . . , tn)[X 7! s] = (t1[X 7! s], . . . , tn[X 7! s]) (⇡ ·X)[X 7! s] = ⇡ ·s (⇡ ·Y )[X 7! s] = ⇡ ·Y .
+
+Note that permutations act top-down and accumulate on variables whereas substitutions act on variables.
+
+Remark 1. Although X is not a term, Id·X is, and in the remainder of the paper we will often abbreviate it as X when there
+is no ambiguity.
+
+The predicate # specifies a freshness relation between atoms and terms, and ⇡↵ denotes alpha-equivalence. Constraints have the form: a#t or s ⇡↵ t. A set Pr of constraints will be called a problem. Intuitively, a#t means that if a occurs in t then it must do so under an abstractor [a]-. For example, a#b, and a#[a]a but not a#a. We sometimes write a, b#s instead
+
+of a#s, b#s, or more generally A#s to denote {a#s | a 2 A}. Intuitively, s ⇡↵ t means that s and t are ↵-equivalent. In the absence of unknowns, a#s and s ⇡↵ t are structural properties, for instance, to check a#s we just check that every a in s
+
+occurs under an abstractor. However, in the presence of unknowns both predicates may depend on assumptions a#X about
+
+what will get substituted for the unknowns.
+
+using # in the definition
+permutations, that is, {a
+
+of ⇡↵ | ⇡ ·a
+
+. Below a, 6= ⇡ 0·a}.
+
+b
+
+are
+
+Formally, we define # and ⇡↵
+any pair of distinct atoms, and
+
+inductively, by a
+ds(⇡ , ⇡ 0) denotes
+
+system of axioms the difference set
+
+and rules, of the two
+
+(#ab)
+a#b
+
+a#s
+(#f )
+a#fs
+
+a#s1 · · · a#sn (#tup)
+a#(s1, . . . , sn)
+
+a#[a]s (#absa)
+
+a#s
+a#[b]s (#absb)
+
+⇡ -1·a#X a#⇡ ·X (#X )
+
+a ⇡↵ a (⇡↵a)
+
+ds(⇡ , ⇡ 0)#X ⇡ ·X ⇡↵ ⇡ 0·X (⇡↵X )
+
+s1 ⇡↵ t1 (s1, . . . , sn)
+
+··· ⇡↵
+
+sn ⇡↵ tn (t1, . . . , tn)
+
+(⇡↵ tup)
+
+s fs
+
+⇡↵ ⇡↵
+
+t ft
+
+(⇡↵f )
+
+s
+[a]s
+
+⇡↵ ⇡↵
+
+t
+[a]t
+
+(⇡↵ absa)
+
+(b
+
+a)·s [a]s
+
+⇡↵ ⇡↵
+
+t b#s
+[b]t
+
+(⇡↵ absb).
+
+For example, we can derive (a b)·X ⇡↵ X from assumptions a#X and b#X , and we also have as expected [a]a ⇡↵ [b]b:
+
+a, b#X (a b)·X ⇡↵ X (⇡↵X )
+
+b
+
+⇡↵ b (⇡↵a) [a]a ⇡↵ [b]b
+
+b#a
+
+(#ab) (⇡↵ absb).
+
+2.2. Checking and solving constraints
+We give below an algorithm to check constraints, which is specified by a set of simplification rules acting on problems
+where a, b denote any pair of distinct atoms.
+
+288 C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+
+Simplification rules on problems:.
+
+a#b, Pr =) Pr
+
+a#fs, Pr =) a#s, Pr
+
+a#(s1, . . . , sn), Pr =) a#s1, . . . , a#sn, Pr a#[b]s, Pr =) a#s, Pr
+
+a#[a]s, Pr =) Pr
+
+a#⇡ ·X , Pr =) ⇡ -1·a#X , Pr
+
+⇡ 6= Id
+
+a ⇡↵ a, Pr =) Pr
+
+(l1, . . . , ln) ⇡↵ (s1, . . . , sn), Pr =) l1 ⇡↵ s1, . . . , ln ⇡↵ sn, Pr
+
+fl ⇡↵ fs, Pr =) l ⇡↵ s, Pr
+
+[a]l ⇡↵ [a]s, Pr =) l ⇡↵ s, Pr
+
+⇡[·bX]l⇡⇡↵↵⇡[a0·]Xs,,
+
+Pr Pr
+
+=) =)
+
+d(as(b⇡)·,l⇡⇡0)↵#sX,,aP#rl., Pr
+
+These rules define a reduction relation on problems: We write Pr =) Pr0 when Pr0 is obtained from Pr by applying a
+simplification rule. The algorithm to check constraints is defined as follows: Given a problem Pr, we apply the rules until we get an irreducible problem. If only a set of constraints of the form a#X are left, then the original problem is valid in the
+context , and this will be written as ` Pr. Note that a problem such as X ⇡↵ a is therefore not valid since it is irreducible.
+However, X can be made equal to a by instantiation; we say that this constraint can be solved.
+A most general solution to a problem Pr is a pair ( , ) obtained using an algorithm derived from the simplification
+rules above, enriched with instantiating rules, labelled with substitutions:
+
+⇡ ·X ⇡↵ u, Pr u ⇡↵ ⇡ ·X , Pr
+
+X 7!=)⇡ -1 ·u X 7!=)⇡ -1 u
+
+Pr[X 7! ⇡ -1·u] Pr[X 7! ⇡ -1·u]
+
+if X 62 V (u) if X 62 V (u).
+
+The conditions X 62 V (u) in the instantiating rules indicate that the rules can only be applied if the variable X does not occur
+in u. This is usually called occur check. We obtain in this way a correct and complete nominal unification algorithm. We refer to [6,17] for more details and
+examples.
+
+3. Nominal unification problems as directed acyclic graphs
+A direct implementation of the unification algorithm above, using trees to represent terms, is exponential. For instance, the problem:
+X1 ⇡↵ (X2, X2) Y1 ⇡↵ (Y2, Y2)
+... Xn 1 ⇡↵ (Xn, Xn) Yn 1 ⇡↵ (Yn, Yn)
+Xn ⇡↵ a Yn ⇡↵ a X1 ⇡↵ Y1
+which does not involve abstraction, requires a number of reduction steps that is exponential in the size of the problem. For first-order unification problems, there are linear-time unification algorithms that represent terms as directed acyclic
+graphs. However, it is well-known that these algorithms cannot be generalised to higher-order problems (i.e. unification of
+-terms modulo ↵ and ); higher-order unification is undecidable. In the case of unification modulo ↵ no linear algorithm
+is known, but we will show that using a representation of problems as directed acyclic graphs we can obtain a polynomial algorithm.
+First of all, we extend the syntax of nominal terms to include permutations applied to arbitrary terms (not just variables). We add to the grammar given in Section 2.1 the case:
+t ::= ⇡ ·t.
+This is because we will deal with permutations in a lazy way: permutations will suspend always, unless performing the permutation is necessary to trigger a simplification rule in a problem. Since there is no confusion, we call nominal terms with lazy permutations just terms, and permutations suspended on terms will still be called suspensions.
+We will define a recursive function to transform terms, and more generally problems, into graphs. Nodes are represented
+by circles, annotated by a constructor. The term-constructors are: abstraction [], tuple (), functions f , permutations ⇡ , permutation application •, variables X , atoms a and sets of atoms A. In addition we use two constructors for freshness and ↵-equality: #, ⇡↵, and a node Pr which is the root of the problem. The constructors [], #, ⇡↵, • are binary, f is unary,
+
+C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+
+289
+
+X , ⇡ , a are 0-ary, and (), Pr have variable arity, equal to the number of elements in the tuple and the number of constraints
+in the problem, respectively. We will often overload the notation, by using a node annotated with a term t, as in the following diagram:
+
+to denote the root node of the subgraph representing t. In the same way, we sometimes annotate a node with a constraint Pi to denote the root of the subgraph representing the constraint. Definition 2. The graph representation of a term, and more generally a problem, is inductively defined by:
+• a:
+• f t:
+
+• (t1, . . . , tn):
+
+• [a]t:
+
+• ⇡ ·t:
+
+In particular, the graph representing ⇡ ·X has two leaves labelled by ⇡ and X . • A # t, where A is a set of atoms:
+
+• t ⇡↵ u:
+
+290 C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+• Pr = P1, . . . , Pn, where each Pi is a constraint:
+In this case, we fix an arbitrary ordering on the constraints P1, . . . , Pn, to obtain a unique representation.
+After transforming a problem into a graph as above, we identify the leaves that are annotated with the same label (in particular, all the nodes annotated with the same atom, or with the same variable, are shared).
+Having a root node Pr for a problem is not essential, but it will be useful when we define garbage-collection on graphs. The graph representation of a nominal problem, as defined above, is a nominal graph (see Definition 4). Nominal graphs are directed acyclic graphs, they can be seen as termgraphs [11], that is, trees where subterms may be shared.
+We will also include ? nodes to represent unsolvable constraints, and nodes to represent solutions (substitutions).
+Remark 3. Definition 2 specifies a function that transforms a nominal problem into a graph. This function is linear in the size of the problem. Definition 4 (Nominal Graph). A nominal graph is a set N of nodes labelled with constructors (i.e., term constructors, and
+#, ⇡↵, ?, , Pr), together with a set E ✓ N ⇥ N of edges, such that if n is a node decorated with a symbol of arity m, then there are m outcoming edges for n (i.e., it has m children). If e = (n1, n2) 2 E, we say that e is an incoming edge for n2, and
+outcoming for n1. The edges connected to each node are ordered, and we will call the points of attachment ports. A root is a node without incoming edges. Different nodes may have the same decoration, however, leaves with the same label are identified (they are the same
+node).
+Example 5. The nominal graph representing the term [a](a b)·X is:
+and the nominal graph representing the problem [a]a ⇡↵ [b]b, (a b)·X ⇡↵ X is:
+Note that we have fixed an arbitrary order for the constraints above. The root of a graph representing a problem is labelled
+by Pr, and its children have roots labelled by ⇡↵ or #. We will say that the root of the ith constraint is the ith root of the
+problem. To implement the nominal unification algorithm, we will reduce the graph representing the problem, using a set of
+graph-rewriting rules.
+Definition 6 (Graph-Rewriting Rule). A graph-rewriting rule is a pair of nominal graphs, written l ) r, where leaves may be labelled by (graph) metavariables s, t, . . . , and where l has exactly one root. All the metavariables occurring in r must
+also occur in l, and we will also assume that each metavariable occurs at most once in l. A graph-rewriting rule may have several roots on the right-hand side; rules with multiple roots on the right-hand side
+will be used in Section 4.
+
+C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+Example 7. The following is a graph-rewriting rule, using a metavariable t.
+
+291
+
+To apply a graph-rewriting rule l ) r to a graph G, we first create a copy of r and add it to G, and then pointers towards
+the instance of l in G are redirected towards the copy of r. Occurrences of metavariables in r are replaced by a pointer to the corresponding subgraph in G (thus, they are shared). Other pointers are not affected. If a node is no longer needed (i.e. there is no path from the root node) we garbage-collect it.
+We now define graph reduction more precisely:
+Definition 8 (Graph Reduction). The one-step reduction relation generated by a graph-rewriting rule l ) r is defined as a set of pairs G ) G0 generated as follows:
+When a subgraph g in G matches the left-hand side l of a rule (that is, g can be obtained by replacing the metavariables in l by graphs; we say that g is a redex), G0 is obtained by:
+(1) Adding to G a copy of the right-hand side r, where the metavariables t in r are replaced by pointers to the corresponding instance of t in g.
+(2) Redirecting all the pointers to the root of g towards the root of r (the pointers are duplicated if r has more than one root, or erased if r is empty); in the special case in which r is just a metavariable t, then pointers to the root of g are updated to point directly to the instance of t in g. The use of a rule with multiple roots on the right-hand side is only permitted if the parent nodes of g have variable arity.
+(3) Nodes that have no incoming edges are erased (garbage-collected), except for the node Pr (the root of the problem). In particular, the root of g will be garbage-collected since all pointers to it are redirected, but the other nodes in g may still be of use.
+Example 9. The rule in Example 7 can be applied to the graph of Id·[a]X (below we assume there are incoming edges H
+and O):
+
+since we can identify an instance of the left-hand side in this graph (replacing t by the graph representing [a]X ). After one step of rewriting we obtain the graph representation of [a]X :
+where the nodes • and Id have been garbage-collected, and the pointer H has been updated, so that it points to the instance
+of t (O is not affected). The following sections specify a correct and complete graph-rewriting algorithm to solve nominal problems. We first
+consider ⇡↵ constraints in Section 4, and show how the graph representing a set of ⇡↵ constraints can be reduced to ? if there is no solution, or to a graph representing a substitution and set of freshness constraints. Section 5 then deals
+with freshness constraints: we specify an algorithm to transform a set of freshness constraints into an equivalent freshness context. We will show that both algorithms are polynomial in time and space.
+
+292 C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+4. A graph-rewriting algorithm to solve ⇡↵ constraints We will present an algorithm to solve ↵-equality constraints using three kinds of graph-rewriting rules: normalisation
+rules to simplify the graph representing the problem (eliminating trivial constraints, identity permutations, etc), ⇡↵-rules to solve equality constraints, and neutralisation of permutations to propagate lazy permutations in case no ⇡↵-rule can
+be applied. In what follows, we assume that we start with a graph representing a nominal problem and we only consider graphs that
+are obtained by reduction of the initial graph. We show below that all the graph-rewriting rules we will define transform the graph into a graph representing an equivalent problem. 4.1. Normalisation of the graph
+Definition 10. A skeleton node is a node labelled by a term constructor that is not • or a permutation. A value node is either
+an atom, a set of atoms, or unit (i.e., a 0-ary tuple). Skeleton nodes are therefore value nodes, variables, abstractions, tuple constructors and function nodes. For example, in
+the graph representing the term ⇡ ·a, there is only one skeleton node, which is the one labelled by a.
+The following function W will be used to distinguish suspensions on variable nodes from other suspensions, ignoring permutations.
+Definition 11 (Weight). The function W : N ! {0, 1} assigns a weight (0 or 1) to each node n. It is defined by cases on n: • If n is a variable, W (n) = 0. • If n is neither a variable nor an •, W (n) = 1. • If n is • and it is the root of a subgraph as shown below, then W (n) = W (t).
+The computation of the weight of a node can be done in polynomial time in the size of the graph, since in the worst case it requires the traversal of a path in the graph (and the graph is acyclic).
+To reduce the graph we apply a set of normalisation rules, which are partitioned into three groups: simplification, ordering, and compacting. Simplification rules.
+• Rule Id-Perm eliminates identity permutations:
+Note that when applying this rule, no node is created since t was already present on the left-hand side. According to
+Definition 8, all pointers to the • node in the left are redirected towards the node t, and the • node is garbage-collected.
+The node Id will be garbage-collected if there are no other pointers to it. It is clear that this rule preserves all the solutions of the problem, but notice that in the case in which t is a variable,
+we are replacing Id·X by X , which strictly speaking is not a term. We could impose a condition that the rule applies only
+when t is not a variable, but in practice it is better to use the rule also with variables and take this fact into account when we read the problem represented by the graph (see Section 4.1.1).
+• Rule Apply-Perm applies permutations on value nodes. We give below a rule scheme which encompasses three kinds of
+rules (one for each kind of value node, see Definition 10):
+if t is a value node.
+
+C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+
+293
+
+Note that, according to Definition 8, when we reduce a graph using Apply-Perm, all pointers to the • node are redirected towards the node ⇡ ·t, and the • node is garbage-collected. The node ⇡ instead may have other pointers to it (it will only
+be erased if there are no pointers to it). This rule preserves the solutions of the problem, since it replaces a suspended permutation by its result.
+Ordering rules.
+• Rule Order-Unif puts the heaviest side of an equation on the right, using the notion of weight defined above (see Defini-
+tion 11):
+
+if W (s) > W (t)
+Only the edges of the graph are affected by this rule, no nodes need to be created or erased.
+Clearly, solutions are preserved since ⇡↵ is commutative. • Rule Order-Perm moves permutations towards the right-hand side of equations:
+
+if W (s)  W (t) and s is a skeleton node. In other words, this rule transforms a constraint of the form ⇡ ·s ⇡↵ t into s ⇡↵ ⇡ 1·t, which is equivalent
+(see [17,6]). Compacting rules.
+• Rule Consec-Perm composes consecutive permutations:
+if t is a skeleton node. If there are more than two consecutive permutations, the condition in this rule ensures that they are composed bottomup (because t cannot be an application of permutation). 4.1.1. Properties To obtain a graph representation of a nominal unification problem, in what follows we assume that the translation
+function described in Definition 2 is used, with a further optimisation: suspensions of the form Id·X may simply be
+represented as a node labelled by X . Proposition 12 (Correctness of Normalisation). The normalisation rules are correct; more precisely: if a graph G representing a unification problem Pr reduces to a graph G0, then
+(1) G0 is the representation of a problem Pr0 (except that a term Id·X may be represented simply by a node X ); and
+(2) Pr0 is equivalent to Pr. Proof. (1) We consider each normalisation rule in turn. Since the translation function from problems to graphs is inductive,
+we obtain the problem Pr0 associated to G0 by replacing in Pr the subproblem corresponding to the left-hand side of the
+rule by the problem represented by the right-hand side. The only special case is Id-Perm, which may replace Id·X by X .
+
+294 C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+
+(2) The normalisation rules can be justified as follows:
+
+• Id-Perm and Apply-Perm are correct by definition of permutation (see Section 2.1).
+
+• Order-Unif is correct because ⇡↵ is commutative.
+
+• •
+
+Order-Perm is justified by the equivalence: ⇡ Consec-Perm is justified by the fact that ⇡ ·(⇡
+
+·0·st⇡) a↵ntd
+
+, (⇡
+
+s
+
+⇡⇡↵0)·⇡t
+
+1 ·t .
+represent
+
+the
+
+same
+
+nominal
+
+term.
+
+⇤
+
+To show that the normalisation rules are terminating (i.e., reduction sequences are finite), we introduce the notion of position in the graph.
+
+Definition 13 (Positions). A position in a graph G representing a unification problem Pr is a string of integers. We use ⇤ to denote the empty string, which will be associated to the root of the graph, and use the notation p.i to denote the string containing all the elements of p followed by i. The node at position p in G, written G|p, is defined as follows:
+• G|⇤ is the root of the problem, the only node labelled by Pr. • G|i is the ith root, that is, the root of the ith constraint. • G|p.i is the node attached to the ith port of the node G|p.
+The weight of a position is the weight of the node at that position.
+Due to sharing, the same node may be associated to several positions as the following example illustrates.
+
+Example 14. In the graph G representing the problem
+[a]a ⇡↵ [b]b, (a b)·X ⇡↵ X
+given in Example 5, the node at position 2 is labelled by ⇡↵ (that is, G|2 is the root of the second ⇡↵ constraint), and the node at position 2.2 (i.e., the second child of the node ⇡↵ at position 2) is labelled by the variable X . Since X is shared, this node is also at position 2.1.2.
+All the normalisation rules, except Order-Unif , preserve the weight of positions; more precisely:
+Proposition 15. Let G be a nominal graph, p a position in G, and G0 the graph obtained by applying a normalisation rule l =) r different from Order-Unif on G. If G0|p exists, and p corresponds to a position that exists in both l and r, then W (G|p) = W (G0|p).
+Proof. By inspection of the rules. The weight of a node at a position p on the left-hand side is the same as the one in position
+p on the right-hand side. ⇤
+Intuitively, this property says that the graph positions that survive reduction, that is, the positions that are on the leftand right-hand sides of the rule, maintain their weight, except when Order-Unif is used.
+We will now show that the rewrite system defined by the simplification, ordering and compacting rules is terminating. Unfortunately we cannot use a simple interpretation based on sizes, because the rule Consec-Perm, although having a left-
+hand side which is bigger than the right-hand side, may increase the size of the graph. Indeed, this rule creates a node ⇡ ⇡ 0,
+and the nodes on the left-hand side may be shared, so cannot be erased. We will define the following patterns, which include the left-hand sides of the rules above and some additional graphs that will be useful to define a decreasing measure:
+• Pattern Apply-Perm:
+
+• Pattern Consec-Perm:
+
+• Pattern Order-Unif :
+
+C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+
+• Pattern Order-Perm-Left:
+
+where W (s) > W (t)
+
+• Pattern Order-Perm-Right:
+
+where W (s)  W (t)
+
+295
+
+where W (s) > W (t)
+
+We associate to each pattern a number of points:
+
+Apply-Perm
+
+: 1 point
+
+Consec-Perm
+
+: 1 point
+
+Order-Unif
+
+: 1 point
+
+Order-Perm-Left : 3 points
+
+Order-Perm-Right : 3 points
+
+and to each node n in a graph the sum of the points of all the patterns that match the subgraph rooted by n (a subgraph may match several patterns). More precisely:
+
+Definition 16 (Reduction matched by the subgraph
+
+Points). Let with root n
+
+G be in G.
+
+a graph and
+RedPts(G) =
+
+nPa node in G. Let RedPts(G, n2G RedPts(G, n).
+
+n)
+
+be
+
+the
+
+sum
+
+of
+
+the
+
+points
+
+of
+
+patterns
+
+Proposition 17. For any node n in a graph G, RedPts(G, n)  4.
+
+Proof. Let n be the root of a subgraph that matches a pattern. If n is a • node, it may only match Apply-Perm and Consec-Perm: 2 points. If n is a ⇡↵ node it may match Order-Perm-Left, or Order-Unif and Order-Perm-Right, so 4 points at most. Otherwise, n matches no pattern so has zero points. ⇤
+
+Proposition 18. Let G be a graph and G0 be the graph obtained by applying a normalisation rule on G. RedPts(G0) < RedPts(G).
+
+Proof. Let n be the root of a subgraph that matches a rule; we say that n is the node on which the rule is applied. We consider each rule in turn:
+
+• Apply-Perm and Id-Perm: n is deleted, and the value node ⇡ ·t created by Apply-Perm has zero points. RedPts() may have changed for some nodes: Let n0 be a node of G0 and G (so n0 6= n). Either n0 was not affected by the rewrite step, or it is a node
+
+in a position belonging both to the left- and right-hand sides. Apply-Perm and Id-Perm preserve the weights of those positions
+
+(Proposition 15), and pattern conditions depend only on weight conditions so a condition is satisfied after the application of
+
+the rule if and only if it was satisfied before. If a pattern is matched by n0 in G0 so it was in G. So RedPts(G0, n)  RedPts(G, n),
+
+hence RedPts(G0) < RedPts(G) (because n has points and n is not in G0).
+
+•
+
+Order-Unif: (because of
+
+wneiignhGt 0cocnadnintoiotnms)a. tIcthmtahtechpeastttehrenspaAtpteprlny-OPredremr-PorerCmo-nLseefct-iPnerGm0 if(baencdauosnelyitifisit⇡m↵a)t,cahnedd
+
+Order-Perm-Right Order-Perm-Right
+
+in G and it matched Order-Unif in G. So RedPts(G0, n) = RedPts(G, n) 1. The rule neither deletes nor creates any node, the
+
+subgraph of the other nodes is the same, and so are the points. Thus, RedPts(G0) = RedPts(G) 1.
+
+296 C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+
+• Order-Perm: n cannot match any pattern in G0, but in G it matched the pattern Order-Perm-Left. Nodes • and ⇡ 1 are
+
+created, with at most 2 points. The subgraph of the other nodes remains unchanged, so do the points. Hence, RedPts(G0) 
+
+RedPts(G) 3 + 2 = RedPts(G) 1.
+
+• Consec-Perm: n matches only the pattern Apply-Perm in G0 (not Consec-Perm because t is a skeleton node) and it matched
+
+the patterns Apply-Perm and Consec-Perm in G. The rule Consec-Perm preverves weights, so conditions satisfied in G0 are
+
+also satisfied in G. Let Order-Perm-Right, so
+
+n0 be a parent of n, it was in G. If n0 is a
+
+if
+•
+
+n is an ⇡↵ node and matches patterns Order-Unif and Order-Perm-Left, or
+node, and matches Consec-Perm or Apply-Perm, so it was in G. Otherwise n
+
+matches nothing. Other subgraphs are not modified. Hence RedPts(G0) = RedPts(G) 1. ⇤
+
+As a corollary, we obtain the termination property for reduction:
+
+Corollary 19. The graph-rewriting system defined by the simplification, ordering and compacting rules is terminating. The
+normalisation process terminates in at most RedPts(G) steps.
+
+We can give an upper bound on RedPts(G), that is, a bound on the number of reduction steps needed to compute a normal
+form (i.e., an irreducible graph):
+
+Proposition 20. RedPts(G)  2Nb(G, •) + 4Nb(G, ⇡↵) where Nb(G, •) is the number of • nodes in G and Nb(G, ⇡↵) is the number of ⇡↵ nodes in G.
+
+Proof. • nodes have at most 2 points, ⇡↵ nodes at most 4, other nodes have no points. ⇤
+
+Corollary 21. The number of normalisation steps for a graph G representing a nominal problem is at most 2Nb(G, •) + 4Nb (G, ⇡↵).
+
+We will now compute a bound on Nb(G, •). This will be needed to evaluate the cost of the unification algorithm. First we
+introduce some notation:
+
+Ddaanneendf•io⇡nntieo↵tsidnotehon.de2es2se.tinWofGea,ldalnethndeoPtpoeorbtrsty•sskA,o↵pf(psG(k)Ged)leetthnoeontsenesot tdohefes•s(nreoetsdopef.sa⇡ilnl↵tthnheoedpgeorsar)tpsihnoGGf s,(kPsoeolrNetstbso(kn,G↵,n(G•o))dde=sena|Aonptdep⇡s(Gt↵h)e|n)os, ePdtoeorstfisnaskl(GlGtth)he(arpteoasrprte.sPaootfrtastskc⇡he↵lee(dtGot)no)
+
+Proposition 23. Let G be a normal form of a graph representing a problem Pr. Then Nb(G, •) = |App(G)|  |Portssk,↵(G)|.
+
+Proof. Let f :
+can show that
+
+Pf oirstss•suk,r↵je!ctivAepaps(Gfo)llboewtsh:eEfaucnhct•ionnodtheant
+
+for each port in Ports•sk,↵(G) returns the
+has at least one parent (otherwise it is
+
+• node attached to it. We
+garbage-collected); let np
+
+be a parent of n, then np is not an • node (otherwise we would have two consecutive applications of permutations, which
+
+contradicts the fact that G n is attached. Then p is in
+
+Pisorints•snk,o↵r(mGa)lafnodrmf ()p. T)h=usn, .nTphisereeiftohreer
+
+|aAspkpe(lGe)to| n=n|oImde(fo)r|a⇡|↵Ponrotds•sek.,↵L(eGt)p|
+
+be
+
+
+the port of np
+Portssk,↵ (G)|.
+
+to which
+⇤
+
+Note that in the unification algorithm it is not necessary to reduce the full graph to normal form. In fact, in our
+implementation we normalise locally, reducing only the subgraphs that are relevant for the application of an ⇡↵ rule. The
+local normalisation process terminates too, and it has a smaller cost.
+
+4.2. ⇡↵-rules
+
+We will now solve ↵-equality constraints using ⇡↵-rules which apply to normalised graphs. Before giving the rules, it is
+useful to characterise graphs in normal form.
+
+Proposition 24. The normal forms of graphs representing nominal terms are the graph representation of terms generated by the following grammar:
+
+Tnf ::= ⇡ ·(Tnf .cons|Tnf .var ) | Tnf .np
+
+Tnf .np ::= Tnf .cons | Tnf .val | Tnf .var
+
+Tnf .cons Tnf .val
+
+::= ::=
+
+f (Tnf ) a | ()
+
+|
+
+(Tn1f
+
+,
+
+.
+
+.
+
+.
+
+,
+
+Tnnf
+
+)
+
+|
+
+[a]Tnf
+
+Tnf .var ::= X
+
+Tnf .npvar ::= Tnf .cons | Tnf .val.
+
+⇡ 6= Id n 6= 0
+
+Here nf stands for normal form, np for non-permutation, cons for term-constructor, val for value, var for variable and npvar for
+not variable-or-permutation.
+
+Proof. A normal form is irreducible, so it cannot contain Id, consecutive permutations, or permutations acting on value
+nodes. ⇤
+
+Proposition 25. The normal forms of ⇡↵-constraints are generated by: GR⇡↵ nf ::= (Tnf .var ⇡↵ Tnf ) | (Tnf .npvar ⇡↵ (⇡ · | ✏)Tnf .npvar ).
+
+C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+
+297
+
+Proof. By inspection of the rules: A constraint in normal form is irreducible, so its left-hand side cannot be a permutation application. If we have a variable on the right-hand side (possibly with one permutation) then we must have a variable on the left-hand side. Note that we can have at most one application of a permutation on the right-hand side (otherwise the
+rule Consec-Perm would apply). ⇤
+
+Definition 26. Two term nodes n1 and n2 are incompatible if it is impossible to unify a graph rooted by n1 with a graph rooted by n2.
+In other words, two nodes n1, n2 are incompatible if they are labelled by two different, non-variable, term constructors
+(e.g., different atoms a, b; an atom and an abstraction; two different function symbols; a function and an abstraction;
+etc.). We divide the rules into two groups: simplification and propagation rules. Simplification rules have priority.
+⇡↵-simplification rules.
+• Rule Id-Unif erases trivial equations:
+
+• Rule ?-Unif detects failure due to incompatibility:
+if s and t are incompatible
+• Rule Same-Term solves equations where both sides involve the same term s, with a suspended permutation on the right-
+hand side:
+
+Note that supp(⇡ ) may be empty; we deal with freshness constraints later. ⇡↵-propagation rules. Each application of a propagation rule will be combined with the meta rule Redirect:
+if no node in t has s as a child. Here P is any parent node of s. The aim of this rule is to move all the pointers to the left-hand side of the equation (except the pointer from the root of
+the equation) towards the right-hand side. The idea is that if s ⇡↵ t, then we can replace any occurrence of s by t. However, this operation should not create a cycle; in other words, if s and t are ↵-equivalent then s cannot be a subterm of t. We call
+the latter a generalised occur check.
+
+298 C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+If Redirect cannot be applied because a node in t has s as a child, then the equation has no solution, and we rewrite it
+to ?:
+if a node in t has s as a child (generalised occur-check).
+We will assume that each time an ⇡↵-propagation rule R has been selected to be applied to an equation, the Redirect rule
+is applied before applying R. Note that the Redirect rule does not change the terms s and t, only pointers to s are redirected
+to an ↵-equivalent term.
+The propagation rules are:
+• Rule Subst:
+There is no need to perform an occur check in the rule Subst, since it is done by Redirect. Recall that once this rule is selected to be applied, all pointers to X in the left are redirected to t by the Redirect rule
+(provided X does not occur in t), which corresponds to applying the substitution [X 7! t] in the graph. • Rule Fct-Unif :
+
+• Rule Abs-Unif-Same:
+
+• Rule Abs-Unif-Diff :
+
+if a 6= b
+
+• Rule Tpl-Unif :
+
+C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+
+299
+
+Here if the tuple has arity 0, the right-hand side is empty (i.e., the constraint is eliminated). Notice that the rules Abs-Unif-Diff and Tpl-Unif rewrite a constraint into a set of constraints. The graph on the right-hand side has two roots in the case of Abs-Unif-Diff , and may have zero or more roots in the case of Tpl-Unif . According to the definition of graph rewriting, in a reduction step using one of these rules, each pointer to the root of the redex is replaced
+by a set of pointers to the roots on the right-hand side. Since the parent node of ⇡↵ is Pr, which has a variable arity, these
+rules are well-defined.
+Before showing that the ⇡↵-simplification and ⇡↵-propagation rules are sound, we introduce a rule to deal with
+suspended permutations that prevent the application of the rules above. 4.3. Computing permutations: Neutralisation
+In order to be able to match the left-hand side of an ⇡↵-rule, we may need to (partially) compute a permutation in a
+normalised graph. We will do this in a lazy way, moving the permutation down the term only the minimum that is needed
+to match an ⇡↵-rule. However, due to sharing, such propagations have to be computed carefully. Consider the following
+example:
+where M represents any node pointing towards •. If we apply directly ⇡ on t, we obtain:
+which is incorrect (f t becomes f ⇡ ·t). However, since t = ⇡ 1·(⇡ ·t), we can apply ⇡ on t and redirect parents of • towards (⇡ ·t) and parents of t towards (⇡ 1·(⇡ ·t)) as follows:
+
+300 C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+Fig. 1. Graphs where neutralisation may be applied.
+This is the basis of the neutralisation rule defined below.
+Definition 27 (Neutralisation Rule). Let n be a non-leaf node. The Neutralisation of ⇡ ·n is defined by:
+
+The neutralisation rule will only be applied to ⇡ ·t when it occurs immediately below an ⇡↵ node, as shown in Fig. 1 below. This rule is used only to trigger the application of an ⇡↵-rule in a normalised graph, by bringing a term constructor up to match the left-hand side of an ⇡↵-rule.
+
+In the graph shown in Fig. 1, if no ⇡↵ rule can be applied, the neutralisation rule applies. It is easy to see that after applying this rule, the node ⇡↵ will point to s and to the root of t.
+
+Proposition 28. If G is a graph representing a nominal problem, and G normalises to G0, then either there are no ⇡↵ nodes in G0 or an ⇡↵- rule can be applied, possibly preceded by an application of Neutralisation.
+
+Proof. Suppose the graph G0 contains an ⇡↵ node. By Proposition 25, this node is the root of a subgraph G00 representing a
+
+constraint s ⇡↵ t, and we can distinguish two cases:
+
+If t is not of the form ⇡ ·v, then using Propositions 24 and 25 we
+
+form If
+
+G(i0.0ei.s, Ga00gmraapthchaessdtehpeicleteftd-hinanFdigs.id1e(noof taent⇡ha↵t-rsualne)d.
+
+t
+
+must
+
+be
+
+can check different,
+
+that there otherwise
+
+is an ⇡↵ rule for each
+the graph would not
+
+kind of normal be normalised
+
+since rule Same-Term applies) then after applying neutralisation, ⇡↵ will point to s and to the root of t, and again using
+
+Proposition 25 we can check that the graph can be reduced by an ⇡↵-rule. ⇤
+
+Proposition 29 (Correctness of ⇡↵ Rules). When applied to a normalised graph representing a nominal problem, all the ⇡↵ rules,
+as well as Neutralisation, preserve the solutions.
+
+Proof. First notice that the ⇡↵-simplification rules deal with ’simple’ equations (constraints of the form t ⇡↵ t, which
+are trivially solvable and can be eliminated; equations between incompatible terms, which have no solution and thus are
+replaced by ?; and equations of the form t ⇡↵ ⇡ ·t, which have solutions only if the atoms affected by ⇡ are fresh in t). It is easy to see that the ⇡↵-propagation rules follow the format of the rules given in Section 2. The only interesting case is Subst, which replaces the ⇡↵ node by a node representing a substitution, or by ? (depending on the result of the occur
+check). In the first case, the meta-rule Redirect performs the substitution by updating the relevant pointers. Rule Redirect
+generates ? only if the equation has no solution. ⇤
+
+4.4. Putting all together
+In the first phase of the algorithm to solve nominal unification problems, we solve ⇡↵ constraints in the graph representation of the problem, using Normalisation rules, ⇡↵-rules, and the Neutralisation rule. We deal with freshness constraints
+in the second phase of the algorithm. More precisely, the first phase of the algorithm can be described as follows: we start
+by normalising the graph G0 representing the initial nominal problem and then we apply cycles of ⇡↵-rules followed by normalisation, until no ⇡↵ constraints are left (if necessary, we use the Neutralisation rule before applying an ⇡↵-rule). The
+
+C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+
+301
+
+algorithm is given below in pseudo-code:
+⇡↵ algorithm:
+
+Normalise G
+while G has at leat one ⇡↵ node do if G is irreducible for ⇡↵-rules then
+Apply Neutralisation on G end if
+Apply an ⇡↵-rule on G
+Normalise G end while
+If at any point ? is generated, we raise an exception since this means that the problem has no solution. Below we show that the algorithm above terminates and all the ⇡↵ nodes are eventually eliminated, obtaining ? or the
+graph representation of a substitution and a set of freshness constraints. We analyse the cost of the algorithm in terms of number of iterations, and reduction steps.
+
+4.4.1. An upper bound on the number of iterations We use a measure based on the arities of nodes (note that the number of nodes does not necessarily decrease with each
+rule application, because of sharing and because rule Tpl-Unif creates several ⇡↵ nodes).
+
+DefRinesiStiiozen(G3)0.=LePt Gn2bGeRaesnSoizme(inn)a,lwgrhaeprhe
+
+and n a node in G.
+ResSize(n) is defined
+
+by:
+
+8 <0 ResSize(n) = :2 ⇥ arity(n)
+arity(n)
+
+if n is a •, , # node
+if n is a tuple node otherwise.
+
+For example, ResSize(⇡↵) = 2, ResSize(?) = 0.
+
+Remark 31. ResSize(n) depends only on n (not G). Proposition 32. Let G be a graph and G0 be the graph obtained by applying an ⇡↵-rule on G. Then ResSize(G0) < ResSize(G).
+
+Proof. Let n be the root of the subgraph on which the rule is applied, we consider each rule:
+
+•
+
+Id-Unif , ?-Unif , Subst, Same-Term Therefore ResSize(G0)  ResSize(G)
+
+delete n (that is, an ⇡↵-node ResSize(n) = ResSize(G) 2.
+
+of
+
+arity
+
+2),
+
+and
+
+create
+
+only
+
+nodes
+
+of
+
+null
+
+ResSize().
+
+• Fct-Unif , Abs-Unif-Same and Abs-Unif-Diff only create nodes of null ResSize. They do not erase the two roots (f or [], resp.)
+
+because there may be other pointers to these nodes. Let l (resp. r) be the left (resp. right) child of n. Redirect, which is
+
+combined with each rule, transforms parents of l into parents of r so that after applying the rule l becomes useless and is
+
+garbage-collected. Note that
+ResSize(G0) < ResSize(G).
+
+ResSize(l)
+
+>
+
+0,
+
+except
+
+if
+
+l
+
+is
+
+a
+
+0-ary
+
+function,
+
+in
+
+which
+
+case
+
+the
+
+⇡↵ -node
+
+n
+
+is
+
+erased.
+
+Hence
+
+•
+
+Tpl-Unif : Let m be
+⇡↵-nodes but as in
+
+the the
+
+arity of the tuple. If m = 0 then the ⇡↵-node n is
+previous case the left tuple-node (l) becomes useless
+
+erased. Otherwise, this rule creates m
+and so is erased. ResSize(G0) = ResSize(G)
+
+1
++
+
+(m 1) ⇤ ResSize(n) ResSize(l) = ResSize(G) + 2m 2 2m = ResSize(G) 2. ⇤
+
+Proposition 33. Let G be a graph and G0 be the graph obtained by applying a normalisation or neutralisation rule on G. Then
+ResSize(G0)  ResSize(G).
+
+Proof. For each rule, only nodes of null ResSize are created. ⇤
+
+Proposition 34. There are at most ResSize(G0) iterations of the while-loop.
+Proof. Normalisation rules do not increase ResSize(G), and neither does Neutralisation, by Proposition 33. Also, ⇡↵-rules decrease ResSize(G) by Proposition 32, and by Proposition 28 one of these rules is applicable in each iteration of the whileloop, hence ResSize(G) decreases. ⇤
+As a corollary of Proposition 32 we can also deduce that the ⇡↵-rules terminate on their own (but in the algorithm we apply only one step of ⇡↵-reduction in each iteration of the while-loop).
+
+302 C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+
+4.4.2. An upper bound on the number of normalisation steps
+Using Proposition 21, we know that in each iteration of the while-loop there are at most 2Nb(G, •) + 4Nb(G, ⇡↵)
+normalisation steps. We will now compute an upper bound which depends only on the initial graph G0.
+Definition 35. MaxArity(G) = max{arity(n)|n 2 G}. Proposition 36. Let G be a nominal graph and G0 be the graph obtained by applying a normalisation, ⇡↵, or neutralisation rule
+on G. Then
+(1) MaxArity(G0)  MaxArity(G), and (2) |Portssk(G0)|  |Portssk(G)|.
+
+Proof. For the first part: note that each node on the right-hand side of a rule has an arity which is less than or equal to the arities of the nodes on the left-hand side. The second part is a consequence of the fact that rules do not create skeleton
+nodes. ⇤
+
+Proposition 37. Let G0 be the initial graph representing a problem, and G a reduced version of G0 at any moment in the algorithm.
+Nb(G, ⇡↵)  Nb(G0, ⇡↵) + Nb(G0, ()) ⇥ MaxArity(G0) = K↵. Proof. The only rule that adds ⇡↵ nodes in the graph is Tpl-Unif . It consumes a tuple node (denoted by ()) and creates at most MaxArity(G0) ⇡↵-nodes. No rule creates tuple nodes, hence at most Nb(G0, ()) ⇥ MaxArity(G0) ⇡↵ nodes can be created. ⇤
+
+Proposition 38. Let G be a normalised graph.
+Nb(G, •)  |Portssk(G0)| + 2K↵. Proof. By Proposition 23, we know that in a normalised graph, Nb(G, •)  |Portssk,↵(G)| = |Portssk(G)| + |Ports↵(G)|. Now using Proposition 36 and 37 we deduce Nb(G, •)  |Portssk(G0)| + 2K↵. ⇤ Proposition 39. Let G be a normalised graph. By applying an ⇡↵-rule and/or Neutralisation, at most MaxArity(G0) + 1 •-nodes
+are created.
+
+Proof. By inspection of the rules we see that at most MaxArity(G)+1 nodes are created, and using Proposition 36 we deduce that MaxArity(G) + 1  MaxArity(G0) + 1. ⇤
+
+Proposition 40. At any step in the iteration:
+
+(1) (2)
+
+NLebt(|GG,|•d)enot|ePothrtessski(zGe 0o)f|t+he
+
+2K↵ +
+graph.
+
+MaxArity(G0
+
+)
+
++
+
+1
+
+=
+
+K•.
+
+|G|  K↵ + 2K• + ResSize(G0) + Nb(G0, sk) = K||.
+
+Proof. (1) In each iteration, we start with a normalised graph G and apply at most one ⇡↵-rule (possibly with an application
+
+of Neutralisation), before normalising again. Since G is normalised, by Proposition 40 Nb(G, •)  |Portssk(G0)| + 2K↵, and
+
+by applying a neutralisation and ⇡↵ rule, at most (MaxArity(G0) + 1) •-nodes are created (by Proposition 39). There are
+
+(2)
+
+then at most |Portssk(G0)| + 2K↵ + MaxArity(G0) + 1 •-nodes.
+We count the number of nodes of each kind: #-nodes and -nodes
+
+are
+
+only
+
+created
+
+by
+
+⇡↵
+
+-rules,
+
+one
+
+at
+
+a
+
+time,
+
+hence
+
+Nb(G, #) + Nb(G, )  ResSize(G0). Since every permutation is attached to a •-node, Nb(G, ⇡ )  Nb(G, •). Hence:
+
+|G| = Nb(G, ⇡↵) + (Nb(G, #) + Nb(G, )) + Nb(G, sk) + Nb(G, •) + Nb(G, ⇡ )  K↵ + ResSize(G0) + Nb(G0, sk) + 2K•. ⇤
+
+The constant KN defined in the proposition below is an upper bound on the number of normalisation steps in each iteration of the algorithm.
+Proposition 41. There are at most 2K• + 4K↵ = KN normalisation steps in each iteration of the while-loop. Proof. By Proposition 21, when we normalise the graph in each iteration of the while-loop there are at most 2Nb(G, •) + 4Nb(G, ⇡↵) steps, hence (by Propositions 37 and 40) we obtain an upper bound: 2K• + 4K↵ = KN. ⇤
+We have therefore an upper bound for the number of iterations, and the number of normalisation steps, which shows that the algorithm is indeed terminating. Below we will analyse the cost of each operation, in order to establish the complexity of the algorithm, but we can already show its correctness.
+Proposition 42 (Soundness and Completeness of ⇡↵-Solving). The algorithm defined above is sound and complete.
+Proof. Consequence of Propositions 12 and 29, together with Propositions 41 and 34, which entail the termination of the
+loop. ⇤ At the end of the first phase of the unification algorithm no ⇡↵-constraints remain, and provided that ? has not been
+generated, the second phase can start. At this point, the only children of the node Pr will be either # nodes or nodes
+introduced by the ⇡↵ rules.
+
+C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+
+303
+
+4.4.3. Cost of the rules
+Let A0 be the set of atoms in the initial problem. A permutation ⇡ is implemented as an AVL tree of pairs (a, ⇡ (a)) for a 2 supp(⇡ ).
+The algorithm does not introduce new atoms in the problem, so at each step there are at most |A0| atoms in G, and in particular in permutations in G. Thus, applying ⇡ to a requires searching the value ⇡ (a) in ⇡ ’s AVL, which can be done in O(log(|A0|)).1 Inversion and union of permutations are also O(|A0| ⇥ log(|A0|)).
+Below we calculate the cost of applying each normalisation rule:
+• Rule Apply-Perm: Since we use AVLs to represent permutations, computing ⇡ ·t for a value node t has a cost O(log(|A0|)). • Rule Id-Perm eliminates identity permutations, its cost is constant: O(1) • Rule Order-Unif also has a constant cost: O(1) • Rule Order-Perm involves the computation of the inverse of a permutation. This can be done in O(|A0| ⇥ log(|A0|)) with
+AVLs.
+• Rule Consec-Perm composes consecutive permutations. Again the cost is O(|A0| ⇥ log(|A0|)) with AVLs as permutations.
+Hence, applying a normalisation rule is at most in O(|A0| ⇥ log(|A0|)). We now turn our attention to ⇡↵ rules. First note that some of these rules require a redirection of all parents of a node to another node. This operation is linear in the number of parents, so linear in |G|. The generalised occur check (i.e., checking whether a node in t has s as a child, see below) is also linear in the size of t, therefore linear in |G|.
+
+if no node in t has s as a child (generalised occur-check),
+otherwise the right-hand side is ?.
+Cost: at most |G|
+• Rule Id-Unif erases trivial equations, its cost is constant: O(1) • Rule ?-Unif detects incompatibility failure, again its cost is constant: O(1) • Rule Same-Term requires the computation of the support of ⇡ . The cost is O(|A0| ⇥ log(|A0|)) with permutations as AVLs. • Rule Subst creates a substitution, its cost is constant: O(1) • Rules Fct-Unif , Abs-Unif-Same and Abs-Unif-Diff involve simple pointer operations, with constant cost O(1). • Rule Tpl-Unif has a cost proportional to the number of elements in the tuple: O(arity of the tuple), that is
+O(MaxArity(G0)).
+Hence, the cost of applying an ⇡↵ rule is at most O(max(|G| + MaxArity(G0), |A0| ⇥ log(|A0|)))  O(|G| + MaxArity(G0) + |A0| ⇥ log(|A0|)).
+Note that MaxArity(G0)  K|| and |G| is bounded by K||, therefore the cost is at most O(|A0| ⇥ log(|A0|) + K||).
+Finally, we consider an application of the Neutralisation rule:
+
+Cost: O(|G| + MaxArity(G0) + |A0| ⇥ log(|A0|)) The application of an ⇡↵ rule or Neutralisation is in O(|G| + MaxArity(G0) + |A0| ⇥ log(|A0|)), hence again it is O(|A0| ⇥ log(|A0|) + K||). Proposition 43. This phase is O(ResSize(G0) ⇥ (K|| + KN ⇥ |A0| ⇥ log(|A0|))).
+1 We follow the notations of [15], to which we refer the reader for a definition of O.
+
+304 C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+Proof. For each iteration, by Proposition 41, there are at most KN steps of normalisation, each one in O(|A0| ⇥ log(|A0|)). In addition, one ⇡↵-rule is applied, and at most one neutralisation step, each in O(|A0| ⇥ log(|A0|) + K||). The cost of an iteration is then O(KN ⇥ |A0| ⇥ log(|A0|) + 2(|A0| ⇥ log(|A0|) + K||), or, simplifying, O(KN ⇥ |A0| ⇥ log(|A0|) + K||).
+Because there are, by Proposition 34, at most ResSize(G0) iterations, the loop is in O(ResSize(G0) ⇥ (K|| + KN ⇥ |A0| ⇥ log(|A0|))). The normalisation phase before entering the loop is also O(KN ⇥ |A0| ⇥ log(|A0|)) and hence does not change the complexity of the algorithm. ⇤
+
+5. Freshness constraints
+
+The algorithm to solve nominal problems has two phases, as mentioned above. The first phase deals with ⇡↵ constraints,
+as described in the previous section. Assuming the problem has a solution, at the end of the first phase we are left with a set of freshness constraints of the form A#t (where A is a set of atoms, see rule Same-Term in Section 4.2) and a substitution of
+the form [Xi 7! ti]i2I . We describe in this section an algorithm to check that a set of atoms is fresh in a term t. The idea is to
+traverse the graph representing the term, and annotate term nodes with the set of atoms for which freshness has already been checked (to avoid repeated computations).
+
+Definition 44 (Annotated Terms). Given a graph representing a term t, we annotate each term node by a set of atoms, and
+denote the set of atoms attached to the node n by ⇠ (n). Initially, all term nodes are annotated with the empty set of atoms.
+
+Definition 45. Let G be the graph representing a problem Pr. Let G0 be the subgraph representing a freshness constraint A#t
+
+and G00 the graph representing t where n is its root node.
+
+One step of freshness checking for G0 is defined by the following rule:
+
+(fresh)
+
+A#n
+
+)
+
+⇢ freshl(A
+
+\
+
+⇠
+
+(n)
+
+#
+
+n)
+
+with side effect ⇠ (n) := ⇠ (n) [ A
+
+where the function freshl is defined as follows (we assume A 6= ;):
+
+freshl(; # n)
+
+=;
+
+freshl(A # f (n))
+
+= A#n
+
+freshl(A # (ni)i=1...m) = (A # ni)i=1...m
+
+freshl(A # [a]n)
+
+= (A \ a) # n
+
+freshl(A # ⇡ ·n)
+
+= ⇡ 1(A) # n
+
+freshl(A # X ) freshl(A # a)
+
+= =
+
+A⇢;#!
+
+X a
+
+62
+
+A
+
+? a 2 A.
+
+Note that when freshl is applied to A # X we generate a new constraint A #! X which will be part of the solution to the problem.
+Definition 46. Let G be the graph representation of a nominal problem Pr. Assume G0 is the graph obtained after running
+the first phase of the algorithm and G0 does not contain ?. The algorithm to check freshness constraints simply applies the rule (fresh) defined above until the graph is irreducible.
+
+Proposition 47 (Irreducible Forms). Irreducible graphs do not contain # nodes. Only freshness constraints of the form A #! X may remain.
+Proof. If there is a # node, rule (fresh) can be applied. ⇤
+
+Proposition 48. The freshness check is correct.
+
+Proof. The rule (fresh) memorises the freshness information that has already been checked (or is being checked), to prevent
+checking multiple times that the same atom is fresh in the same term. Formally, checking A # t is equivalent to checking
+(a # t)a2A. So checking A # t, B # t is equivalent to checking (A \ B) # t, (A \ B) # t, (B \ A) # t, (B \ A) # t. Although we have the constraint (B \ A) # t twice, we only need to check it once, so we do A # t, (B \ A) # t.
+The definition of freshl follows the inductive definition of the freshness predicate (see Section 2). When the propagation
+reaches a variable (A # X ) we save this resolved constraint as A #! X so that (fresh) can no longer be applied. ⇤
+Proposition 49. The freshness check terminates in at most 2 ⇥ |G| ⇥ |A0| steps of rewriting.
+Proof. We compute the maximum number of steps by counting the number of times that an atom is checked for freshness
+in a given term node in this phase. Note that if A = ; or if we have already checked all atoms in A, i.e. A \ ⇠ (n) = ;, the constraint is simply removed. Let |G|tn be the number of term nodes in G, term nodes are never created in this phase. Thanks to annotations there is for each term node n at most |A0| steps of (fresh) on n where A \ ⇠ (n) 6= ; so |A0| ⇥ |G|tn application of (fresh) where A \ ⇠ (n) 6= ;. An empty set can either be created in the previous phase, or be generated by freshl(A # [a]n); hence there are at most Nb(G, #) + |A0| ⇥ |G|tn applications of (fresh) where A \ ⇠ (n) = ;. Therefore, we have at most Nb(G, #) + 2 ⇥ |A0| ⇥ |G|tn  2 ⇥ |A0| ⇥ |G| steps of rewriting. ⇤
+
+C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+
+305
+
+Before considering the cost of the freshness check, we can state the following property, which is a direct consequence of Propositions 42 and 48:
+Proposition 50. The algorithm to solve nominal problems by
+(1) transforming the problem into a graph;
+(2) applying the first phase to eliminate ⇡↵ constraints;
+(3) applying the second phase to eliminate freshness constraints;
+is sound and complete.
+
+5.1. Cost
+
+We now analyse the complexity of the second phase in the algorithm (freshness checking). We start by analysing the
+
+cost of freshl for each case:
+
+freshl(; # n)
+
+: O(1)
+
+freshl(A # f (n))
+
+: O(1)
+
+freshl(A # (ni)i=1...m) : O(m)
+
+freshl(A # [a]n)
+
+: O(log(|A0|)) since sets are represented as AVL trees
+
+freshl(A # ⇡ ·n)
+
+: O((|A0| ⇥ log(|A0|))2); we discuss this case below
+
+freshl(A # X )
+
+: O(1)
+
+freshl(A # a)
+
+: O(log(|A0|)) due to the use of AVL trees.
+
+The cost of freshl(A # ⇡ ·n) is due to the computation of ⇡ 1 in O(|A0| ⇥ log(|A0|)) and the application of ⇡ 1 to A in O(|A0| ⇥ log(|A0|)) too. Proposition 51. Freshness checking is O(|G| ⇥ |A0|3 ⇥ log(|A0|)2).
+
+Proof. A rewrite step of (fresh) consists of one step of freshl and the update of ⇠ (n), which is a union of sets and can be done in O(|A0| ⇥ log(|A0|)). We deduce that each step of rewriting with these rules is at most in O((|A0| ⇥ log(|A0|))2). Since there are at most 2 ⇥ |G| ⇥ |A0| steps of rewriting by Proposition 49, the result follows. ⇤
+
+6. Total cost in time for the unification algorithm
+An upper bound on the total cost of the unification algorithm can be obtained by adding the cost of the phase of resolution
+of ⇡↵ constraints and the phase of freshness checking.
+Proposition 52. The following is an upper bound for the unification algorithm:
+O(ResSize(G0) ⇥ (K|| + KN ⇥ |A0| ⇥ log(|A0|)) + K|| ⇥ |A0|3 ⇥ log(|A0|)2). Proof. The input graph G for the freshness algorithm is the output of the ⇡↵ resolution algorithm, hence |G|  K||. The result is then obtained by adding the two bounds (see Propositions 43 and 51). ⇤
+To simplify the formula above, we use the following properties:
+Proposition 53. (1) ResSize(G0) = O(|G0| ⇥ MaxArity(G0)) (2) K↵ = O(|G0| ⇥ MaxArity(G0)) (3) K• = O(|G0| ⇥ MaxArity(G0)) (4) K|| = O(|G0| ⇥ MaxArity(G0)) (5) KN = O(|G0| ⇥ MaxArity(G0)). Proof. (1) For each node n in G0, ResSize(n)  2MaxArity(G0) then ResSize(G0)  2|G0| ⇥ MaxArity(G0). (2) K↵ = Nb(G0, ⇡↵) + Nb(G0, ()) ⇥ MaxArity(G0)
+ |G0| + |G0| ⇥ MaxArity(G0) = O(|G0| ⇥ MaxArity(G0)). (3) K• = |Portssk(G0)| + 2K↵ + MaxArity(G0) + 1.
+|Portssk(G0)|  |G0| ⇥ MaxArity(G0) because the arity of each node is less than or equal to MaxArity(G0). (4) K|| = K↵ + 2K• + ResSize(G0) + Nb(G0, sk) and each element in the addition is bounded by O(2|G0| ⇥ MaxArity(G0)). (5) KN = 2K• + 4K↵ and again each element in the addition is bounded by O(2|G0| ⇥ MaxArity(G0)). ⇤
+Proposition 54 (Cost in Time for the Unification Algorithm). The following is also an upper bound for the unification algorithm:
+O(K 4 ⇥ log2(K )) where K = |G0| ⇥ MaxArity(G0). Proof. Consequence of Propositions 52 and 53, using the fact that |A0|  |G0|  K . ⇤
+
+306 C. Calvès, M. Fernández / Theoretical Computer Science 403 (2008) 285–306
+7. Conclusions
+We described a polynominal-time algorithm to solve unification problems modulo ↵-equivalence, using nominal techniques. Unification modulo ↵-equivalence has numerous applications, in particular, in type systems [7] and in the design
+of programming languages that provide constructs for declaring and manipulating abstract syntax trees involving names
+and binders (e.g., ↵-Prolog [5,16], ↵-kanren [2], see also [8]).
+To simplify the cost analyses we have taken large polynomial upper bounds. In practice, an implementation based on graph rewriting will not apply the rules blindly. Indeed, our implementation follows a strategy which gives priority to local
+transformations (e.g. we normalise locally before applying the ⇡↵ rules). There is still scope for optimisations.
+It is not known whether a linear-time nominal unification algorithm exists; unification of higher-order patterns [8] (a related problem) is linear [13] and so is nominal matching [4]. More work remains to be done to establish the exact complexity of nominal unification.
+Acknowledgements
+We thank James Cheney, Jamie Gabbay, Andrew Pitts, François Pottier and Christian Urban for the useful discussions on the topics of this paper. We are grateful to the anonymous referees for their suggestions to improve the paper.
+References
+[1] F. Baader, W. Snyder, in: A. Robinson, A. Voronkov (Eds.), Unification Theory, in: Handbook of Automated Reasoning, vol. I, Elsevier Science, 2001, pp. 445–532 (chapter 8).
+[2] W.E. Byrd, D.P. Friedman, ↵-Kanren — A fresh name in nominal logic programming, in: Proceedings of the 8th Workshop on Scheme and Functional
+Programming, 2007. [3] C. Calvès, M. Fernández, Implementing nominal unification, in: Proceedings of TERMGRAPH’06, 3rd International Workshop on Term Graph Rewriting,
+ETAPS 2006, Vienna, in: Electronic Notes in Computer Science, Elsevier, 2006. [4] C. Calvès, M. Fernández, Nominal matching and alpha-equivalence, in: Proceedings of WOLLIC 2008, in: Lecture Notes in Computer Science, Springer,
+2008.
+[5] J. Cheney, ↵-Prolog: An interpreter for a logic programming language based on nomina l logic. Software available from:
+http://homepages.inf.ed.ac.uk/jcheney/programs/aprolog/. [6] M. Fernández, M.J. Gabbay, Nominal rewriting, Information and Computation 205 (2007) 917–965. [7] N. Gauthier, F. Pottier, Numbering matters: First-order canonical forms for second-order recursive types, in: Proceedings of the 2004 ACM SIGPLAN
+International Conference on Functional Programming, ICFP’04, ACM Press, 2004. [8] D. Miller, A logic programming language with lambda-abstraction, function variables, and simple unification, Journal of Logic and Computation 1 (4)
+(1991) 497–536. [9] A.M. Pitts, Nominal logic, a first order theory of names and binding, Information and Computation 186 (2003) 165–193. [10] A.M. Pitts, M.J. Gabbay, A metalanguage for programming with bound names modulo renaming, in: Proceedings of the 5th International Conference
+on Mathematics of Program Construction, MPC2000, Portugal, in: LNCS, vol. 1837, Springer, 2000. [11] D. Plump, Term graph rewriting, in: H. Ehrig, G. Engels, H.-J. Kreowski, G. Rozenberg (Eds.), Handbook of Graph Grammars and Computing by Graph
+Transformation, volume 2: Applications, Languages and Tools, World Scientific, 1999, pp. 3–61 (chapter 1).
+[12] F. Pottier, An overview of C↵ML, in: ACM Workshop on ML, Electronic Notes in Theoretical Computer Science 148 (2) (2006).
+[13] Z. Qian, Unification of higher-order patterns in linear time and space, Journal of Logic and Computation 6 (1996) 315–341. [14] M.R. Shinwell, A.M. Pitts, M.J. Gabbay, FreshML: Programming with binders made simple, in: Eighth ACM SIGPLAN International Conference on
+Functional Programming, ICFP 2003, Sweden, ACM Press, 2003, pp. 263–274. [15] J. Stern, Fondements Mathématiques de l’Informatique, McGraw-Hill, Paris, 1990.
+[16] C. Urban, J. Cheney, Avoiding equivariance in ↵-prolog, in: Proceedings of Typed Lambda Calculus and Applications, TLCA 2005, in: LNCS, Springer,
+2005, pp. 401–416. [17] C. Urban, A.M. Pitts, M.J. Gabbay, Nominal unification, Theoretical Computer Science 323 (2004) 473–497.
+
+

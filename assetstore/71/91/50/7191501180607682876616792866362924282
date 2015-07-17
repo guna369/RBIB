@@ -1,0 +1,2306 @@
+Algorithms 2013, 6, 319-351; doi:10.3390/a6020319
+Article
+Practical Compressed Sufﬁx Trees
+
+OPEN ACCESS
+algorithms
+ISSN 1999-4893 www.mdpi.com/journal/algorithms
+
+Andre´s Abeliuk 1, Rodrigo Ca´novas 2 and Gonzalo Navarro 1,*
+
+1 Department of Computer Science, University of Chile, Santiago 8320000, Chile; E-Mail: aabeliuk@dcc.uchile.cl
+2 NICTA Victoria Research Laboratory, Department of Computing and Information Systems; University of Melbourne, Victoria 3010, Australia; E-Mail: rcanovas@student.unimelb.edu.au
+
+* Author to whom correspondence should be addressed; E-Mail: gnavarro@dcc.uchile.cl; Tel.: +56-2-29784952; Fax: +56-2-26895531.
+
+Received: 18 March 2013; in revised form: 24 April 2013 / Accepted: 26 April 2013 / Published: 21 May 2013
+
+Abstract: The sufﬁx tree is an extremely important data structure in bioinformatics. Classical implementations require much space, which renders them useless to handle large sequence collections. Recent research has obtained various compressed representations for sufﬁx trees, with widely different space-time tradeoffs. In this paper we show how the use of range min-max trees yields novel representations achieving practical space/time tradeoffs. In addition, we show how those trees can be modiﬁed to index highly repetitive collections, obtaining the ﬁrst compressed sufﬁx tree representation that effectively adapts to that scenario.
+Keywords: sufﬁx trees; compressed data structures; repetitive sequence collections; bioinformatics
+
+1. Introduction
+As a result of the sharply falling costs of sequencing, large sequence databases are rapidly emerging, and they will soon grow to thousands of genomes and more. Sequencing machines are already producing terabytes of data per day, at a few thousand dollars per genome, and will cost less very soon (see, e.g., [1]). This raises a number of challenges in bioinformatics, particularly because those sequence databases are meant to be the subject of various analysis processes that require sophisticated data structures built on them.
+
+Algorithms 2013, 6
+
+320
+
+The sufﬁx tree [2–4] is probably the most important of those data structures. Many complex sequence analysis problems are solved through sophisticated traversals over the sufﬁx tree [5]. However, a serious problem of sufﬁx trees, aggravated on large sequence collections, is that they take much space. A naive implementation can easily require 20 bytes per character, and a very optimized one reaches 10 bytes [6]. A way to reduce this space to about 4 bytes per character is to use a simpliﬁed structure called a sufﬁx array [7]. However, sufﬁx arrays do not contain sufﬁcient information to carry out all the complex tasks sufﬁx trees are used for. Enhanced sufﬁx arrays [8] extend sufﬁx arrays so as to recover the full sufﬁx tree functionality, raising the space to about 6 bytes per character in practice. Other heuristic space-saving methods [9] achieve about the same.
+For example, on DNA sequences, each character could be encoded with just 2 bits, whereas the alternatives we have considered require 32 to 160 bits per character (bpc). This is an overhead of 1600% to 8000%! The situation is also a heresy in terms of Information Theory: Whereas the information contained in a sequence of n symbols over an alphabet of size σ is n log σ bits in the worst case, all the alternatives above require Θ(n log n) bits. (Our logarithms are in base 2)
+A solution to the large space requirements is of course resorting to secondary memory. However, using sufﬁx trees on secondary memory makes them orders of magnitude slower, as most of the required traversals are highly non-local. A more interesting research direction, which has made much progress in recent years, is to design compressed sufﬁx trees (CSTs). Those compressed representations of sufﬁx trees are able to approach not only the worst-case space of the sequence, but even its information content (i.e., they approach the space of the compressed sequence). CSTs are composed of a compressed sufﬁx array (CSA) plus some extra information that encodes the sufﬁx tree topology and longest common preﬁx (LCP) information (more details later). The existing solutions can be divided into three categories:
+Explicit topology. The ﬁrst CST proposal was by Sadakane [10,11]. It uses 4n+o(n) bits to represent the sufﬁx tree topology, plus 2n + o(n) bits to represent the LCP values. In addition, it uses Sadakane’s CSA [12], which requires nH0 + O(n log log σ) bits, where H0 is the zero-order entropy of the sequence. This structure supports most of the tree navigation operations in constant time (except, notably, going down to a child, which is an important operation), at the price of Θ(n) bits of space on top of a CSA.
+Sampling. A second proposal was by Russo et al. [13,14]. It is based on sampling some sufﬁx tree nodes and recovering the information on any other node by moving to the nearest sample using sufﬁx links. It requires only o(n) bits on top of a CSA. By using an FM-index [15] as the CSA, one achieves nHk + o(n log σ) bits of space, where Hk is the k-th order empirical entropy of the sequence (a measure of statistical compressibility [16]), for sufﬁciently low k ≤ α logσ n, for any constant 0 < α < 1. The navigation operations are supported in polylogarithmic time (at best Θ(log n log log n) in their paper).
+Intervals. Yet a third proposal was by Fischer et al. [17–19]. It avoids the explicit representation of the tree topology by working all the time with the corresponding sufﬁx array intervals. All the sufﬁx tree navigation is reduced to three primitive operations on such intervals: Next/Previous smaller value and range minimum queries (more details later). The proposal achieves a space/time tradeoff that is between the two previous ones: It reduces the Θ(n) extra bits of Sadakane to o(n), and the superlogarithmic operation times of Russo et al. to O(log n), for any constant 0 < < 1. More precisely, the space is nHk(2 max(1, log(1/Hk)) + 1/ + O(1)) + o(n log σ) bits (for the same k ranges as above).
+
+Algorithms 2013, 6
+
+321
+
+We remark that the space ﬁgures include the storage of the sequence itself, as all modern CSAs are self-indexes, that is, they contain both the sequence and its sufﬁx array.
+For applications, the practical performance of the above schemes is more relevant than the theoretical ﬁgures. The solution based on explicit topology was implemented by Va¨lima¨ki et al. [20]. As expected from theory, the structure is very fast, achieving a few tens of microseconds per operation, but uses signiﬁcant space (about 25–35 bpc, close to a sufﬁx array). This undermines its applicability. Very recently, Gog [21] showed that this implementation can be made much more space-efﬁcient, using about 13–17 bpc. This still puts this solution in the range of the “large” CSTs in the context of this paper.
+The structure based on sampling was implemented by Russo. As expected from theory again, it was shown to achieve very little space, around 4–6 bpc, which makes it extremely attractive when the sequence is large compared with the available main memory. On the other hand, the structure is much slower than the previous one: Each navigation operation takes the order of milliseconds.
+In this paper we present the ﬁrst implementations of the third approach, based on intervals. As predicted by theory once again, we achieve practical implementations that lie between the two previous extremes (too large or too slow) and offer attractive space/time tradeoffs. One variant shows to be superior to the original implementation of Sadakane’s CST [20] in both space and time: It uses 13–16 bpc (i.e., half the space) and requires a few microseconds per operation (i.e., several times faster). A second variant works within 8–12 bpc and requires a few hundreds of microseconds per operation, that is, smaller than our ﬁrst variant and still several times faster than Russo’s implementation. We remark again that those space ﬁgures include the storage of the sequence, and that 8 bpc is the storage space of a byte-based representation of the plain sequence (although 2 bpc is easily achieved on DNA).
+Achieving those good practical results is not immediate, however. We show that a direct implementation of the techniques as described in the theoretical proposal [18] does not lead to the best performance. Instead, we propose a novel solution to the previous/next smaller value and range minimum queries, based on the range min-max tree (RMM tree), a recent data structure developed for succinct tree representations [22,23]. We adapt RMM trees to speed up the desired queries on sequences of LCP values.
+The resulting representation not only performs better than a verbatim implementation of the theoretical proposal, but also has a great potential to handle highly repetitive sequence collections. Those collections, formed by many similar strings, arise in version control systems, periodic publications, and software repositories. They also arise naturally in bioinformatics, for example when sequencing the genomes of many individuals of the same or related species (two human genomes share 99.9% of their sequences, for example). It is likely that the largest genome collections that will emerge in the next years will be highly repetitive, and taking advantage of that repetitiveness will be the key to handle them.
+Repetitiveness is not captured by statistical compression methods nor frequency-based entropy deﬁnitions [16,24] (i.e., the frequencies of symbols do not change much if we add near-copies of an initial sequence). Rather, we need repetition aware compression methods. Although this kind of compression is well-known (e.g., grammar-based and Ziv-Lempel-based compression), only recently there have appeared CSAs and other indexes that take advantage of repetitiveness [24–27]. Yet, those indexes do not support the full sufﬁx tree functionality. On the other hand, none of the existing CSTs is tailored to repetitive text collections.
+
+Algorithms 2013, 6
+
+322
+
+Our second contribution is to present the ﬁrst, and the only to date, fully-functional compressed sufﬁx tree whose compression effectiveness is related to the repetitiveness of the text collection. While its operations are much slower than most existing CSTs (requiring the order of milliseconds), the space required is also much lower on repetitive collections (1.4–1.9 bpc in our mildly repetitive test collections, and 0.6 bpc on a highly repetitive one). This can make the difference between ﬁtting the collection in main memory or having to resort to disk.
+The paper is organized as follows. Section 2 gives the basis of sufﬁx array and tree compression in general and repetitive text collections, and puts our contribution in context. Section 3 compares various LCP representations and chooses suitable ones for our CST. Section 4 proposes the novel RMM-tree based solution for NSV/PSV/RMQ operations and shows it is superior to a verbatim implementation of the theoretical proposal. Section 5 assembles our CST using the previous pieces, and Section 6 evaluates and compares it with alternative implementations. Section 7 extends the RMM concept to design a CST that adapts to repetitive collections, and Section 8 evaluates it. Finally, Section 9 concludes and discusses various new advances [21,28] that have been made on efﬁciently implementing the interval-based approach since the conference publication of our results [29,30].
+2. Related Work and Our Contribution in Context
+Our aim is to handle a collection of texts T1, T2, . . . over an alphabet Σ of size σ. This is customarily represented as a single text T = T1$T2$ . . . concatenating all the texts in the collection. The symbol “$” is an endmarker that does not appear elsewhere. Such a representation simpliﬁes the discussion on data structures, which can consider that a single text is handled.
+2.1. Sufﬁx Arrays and CSAs
+A sufﬁx array over a text T [1, n] is an array A[1, n] of the positions in T , lexicographically sorted by the sufﬁx starting at the corresponding position of T . That is, T [A[i], n] < T [A[i + 1], n] for all 1 ≤ i < n. Note that every substring of T is the preﬁx of a sufﬁx, and that all the sufﬁxes starting with a given pattern P appear consecutively in A, hence a pair of binary searches ﬁnd the area A[sp, ep] containing all the positions where P occurs in T .
+There are several compressed sufﬁx arrays (CSAs) [31,32], which offer essentially the following functionality: (1) Given a pattern P [1, m], ﬁnd the interval A[sp, ep] of the sufﬁxes starting with P ; (2) Obtain A[i] given i; (3) Obtain A−1[j] given j. An important function the CSAs implement is Ψ(i) = A−1[(A[i] mod n) + 1] and its inverse, usually much faster than computing A and A−1. This function lets us move virtually in the text, from the sufﬁx i that points to text position j = A[i], to the one pointing to j + 1 = A[Ψ(i)]. Function Ψ is essential to support sufﬁx tree functionality.
+Most CSAs are self-indexes, meaning that they can also extract any substring of T and thus T does not need to be stored separately. Generally, one can extract any T [i, i + ] using s + applications of Ψ, where s is a sampling parameter that involves spending O((n/s) log n) extra bits of space.
+
+Algorithms 2013, 6
+
+323
+
+2.2. Sufﬁx Trees and CSTs
+A sufﬁx trie is a trie (or digital tree) storing all the sufﬁxes of T . This is a labeled tree where each text sufﬁx is read in a root-to-leaf path, and the edges toward the children of a node are labeled by different characters. The concatenation of the string labels from the root up to a node v is called the path-label of v, π(v). A sufﬁx tree is obtained by “compacting” unary paths in a sufﬁx trie, which means they are converted into a single edge labeled by the string that concatenates the involved character labels. Furthermore, a node v is converted into a leaf (and the rest of its descending unary path is eliminated) as soon as π(v) becomes unique. Such leaf is annotated with the starting position i of the only occurrence of π(v) in T , that is, sufﬁx T [i, n] starts with π(v). If the children of each sufﬁx tree node are ordered lexicographically by their string label, then the sequence of leaf annotations of the sufﬁx tree is precisely the sufﬁx array of T . Figure 1 illustrates a sufﬁx tree and sufﬁx array. Several navigation operations over the nodes and leaves of the sufﬁx tree are of interest. Table 1 lists the most common ones.
+Figure 1. The sufﬁx tree of the text “alabar a la alabarda$”, where the “$” is a terminator symbol. The white space is written as an underscore for clarity, and it is lexicographically smaller than the characters “a”–“z”.
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21
+T: a l a b a r _ a _ l a _ a l a b a r d a $
+
+$
+
+_
+
+bar d
+
+la
+
+21 a
+_ l
+
+l 9
+
+_ a
+4
+
+19 d
+16
+
+7 12
+
+$ _
+
+bar labar r
+
+20 a l_ d _ d
+
+_d
+
+11 8 3 15
+
+1 13
+
+5 17
+
+r
+_ bar 10
+_d 2 14
+
+_d 6 18
+
+SA LCP
+
+21 7 12 9 20 11 8 3 15 1 13 5 17 4 16 19 10 2 14 6 18 0 02 10 1 21 416 1 2 030 0 25 01
+
+Algorithms 2013, 6
+
+324
+
+Table 1. Main operations over the nodes and leaves of the sufﬁx tree.
+
+Operation
+
+Description
+
+Root() Locate(v) Ancestor(v, w) SDepth(v) TDepth(v) Count(v) Parent(v) FChild(v) NSibling(v) SLink(v) SLinki(v) LCA(v, w) Child(v, a) Letter(v, i) LAQS(v, d) LAQT (v, d)
+
+the root of the sufﬁx tree position i such that π(v) starts at T [i], for a leaf v true if v is an ancestor of w string-depth of v, i.e., |π(v)| tree-depth of v, i.e., depth of node v in the sufﬁx tree number of leaves in the subtree rooted at v parent node of v alphabetically ﬁrst child of v alphabetically next sibling of v sufﬁx-link of v, i.e., the node w s.th. π(w) = β if π(v) = aβ for a ∈ Σ iterated sufﬁx-link, i.e., the node w s.th. π(w) = β if π(v) = αβ for α ∈ Σi lowest common ancestor of v and w node w s.th. the ﬁrst letter on edge (v, w) is a ∈ Σ ith letter of v’s path-label, π(v)[i] the highest ancestor of v with string-depth ≥ d the ancestor of v with tree-depth d
+
+The sufﬁx array alone is insufﬁcient to efﬁciently emulate all the relevant sufﬁx tree operations. To recover the full sufﬁx tree functionality, we need two extra pieces of information: (1) The tree topology; (2) The longest common preﬁx (LCP) information, that is, LCP[i] is the length of the longest common preﬁx between T [A[i − 1], n] and T [A[i], n] for i > 1 and LCP[1] = 0 (or, seen another way, LCP[i] is the length of the string labeling the path from the root to the lowest common ancestor node of the ith and (i − 1)th sufﬁx tree leaves). Indeed, the sufﬁx tree topology can be implicit if we identify each sufﬁx tree node with the sufﬁx array interval containing the leaves that descend from it. This range uniquely identiﬁes the node because there are no unary nodes in a sufﬁx tree.
+Consequently, a compressed sufﬁx tree (CST) is obtained by enriching the CSA with some extra data. Sadakane [11] added the topology of the tree (using 4n extra bits) and the LCP data. The LCP data was compressed to 2n bits by noticing that, if sorted by text order rather than sufﬁx array order, the LCP numbers decrease by at most 1: Let PLCP be the permuted LCP array, then PLCP[j + 1] ≥ PLCP[j] − 1. Thus the numbers can be differentially encoded, h[j + 1] = PLCP[j + 1] − PLCP[j] + 1 ≥ 0, and then represented in unary over a bitmap H[1, 2n] = 0h[1]10h[2] . . . 10h[n]1. Then, to obtain LCP[i], we look for PLCP[A[i]], and this is extracted from H via rank/select operations. Here rankb(H, i) counts the number of bits b in H[1, i] and selectb(H, i) is the position of the i-th b in H. Both can be answered in constant time using o(n) extra bits of space [33]. Then PLCP[j] = select1(H, j) − 2j, assuming PLCP[0] = 0.
+Russo et al. [14] get rid of the parentheses, by instead identifying sufﬁx tree nodes with their corresponding sufﬁx array interval. By sampling some sufﬁx tree nodes, most operations can be carried out by moving, using sufﬁx links, towards a sampled node, ﬁnding the information stored in there, and
+
+Algorithms 2013, 6
+
+325
+
+transforming it as we move back to the original node. The sufﬁx link operation, deﬁned in Table 1, can be computed using Ψ and the lowest common ancestor operation [11].
+
+2.3. Re-Pair and Repetition-Aware CSAs
+
+Re-Pair [34] is a grammar-based compression method that factors out repetitions in a sequence. It is
+
+based on the following heuristic: (1) Find the most repeated pair ab in the sequence; (2) Replace all its
+
+occurrences by a new symbol s; (3) Add a rule s → ab to a dictionary R; (4) Iterate until every pair
+
+is unique.
+
+The result of the compression of a text T , over an alphabet Σ of size σ, is the dictionary R and the
+
+remaining sequence C, containing new symbols (s) and symbols in Σ. Every sub-sequence of C can be
+
+decompressed locally by the following procedure: Check if C[i] < σ; if so the symbol is original, else
+
+look in R for rule C[i] → ab, and recursively continue expanding with the same steps.
+
+The dictionary R corresponds to a context-free grammar, and the sequence C to the initial symbols
+
+of the derivation tree that represents T . The ﬁnal structure can be regarded as a sequence of binary trees
+
+with roots C[i].
+
+Gonza´lez and Navarro [35] used Re-Pair to compress the differentially encoded sufﬁx array,
+
+A [i]
+
+=
+
+A[i] − A[i − 1].
+
+They showed that Re-Pair achieves |R| + |C|
+
+=
+
+O(r log
+
+n r
+
+)
+
+on
+
+A
+
+,
+
+r
+
+being
+
+the number of runs in Ψ. A run in Ψ is a maximal contiguous area where Ψ(i + 1) = Ψ(i) + 1.
+
+It was shown that the number of runs in Ψ is r ≤ nHk + σk for any k [36]. More importantly, repetitions in T induce long runs in Ψ, and hence a smaller r [25]. An exact bound has been elusive, but
+
+Ma¨kinen et al. [25] gave an average-case upper bound for r: If T is formed by a random base sequence
+
+of length n n and then other sequences that have m random mutations (which include indels,
+
+replacements, block moves, etc.) with respect to the base sequence, then r is at most n + O(m logσ n) on average.
+
+The RLCSA [25] is a CSA where those runs in Ψ are factored out, to achieve O(r) cells of space.
+
+More precisely, the size of the RLCSA is r(2 log(n/r) + log σ)(1 + o(1)) bits. It supports accesses to A
+
+in time O(s log n), with O((n/s) log n) extra bits for a sampling of A.
+
+2.4. An Interval-Based CST
+
+Fischer et al. [18] prove that bitmap H in Sadakane’s CST is compressible as it has at most 2r runs
+
+of 0’s or 1’s, where r is the number of runs in Ψ as before.
+
+Let z1, z2, . . . , zr be the lengths of the runs of 0’s and o1, o2, . . . , or be the lengths of the runs of 1’s. Fischer et al. [18] create arrays Z = 10z1−110z2−1 . . . and O = 10o1−110o2−1 . . ., with overall 2r 1’s out
+
+of
+
+2n,
+
+and
+
+thus
+
+can
+
+be
+
+compressed
+
+to
+
+2r
+
+log
+
+n r
+
++
+
+O(r)
+
++
+
+o(n)
+
+bits
+
+while
+
+supporting
+
+constant-time
+
+rank
+
+and select [37]. When r is very small it is better to use other bitmap representations (e.g., [38]) requiring
+
+2r
+
+log
+
+n r
+
++
+
+O(r)
+
+bits,
+
+even
+
+if
+
+they
+
+do
+
+not
+
+offer
+
+constant
+
+times
+
+for
+
+rank.
+
+Their other improvement over Sadakane’s CST is to get rid of the tree topology and replace it with
+
+sufﬁx array ranges. Fischer et al. show that all the navigation can be simulated by means of three
+
+operations: (1) The range minimum query RMQ(i, j) gives the position of the minimum in LCP[i, j];
+
+(2) The previous smaller value PSV(i) ﬁnds the last value smaller than LCP[i] in LCP[1, i − 1]; and
+
+Algorithms 2013, 6
+
+326
+
+(3) The next smaller value NSV(i) ﬁnds the ﬁrst value smaller than LCP[i] in LCP[i+1, n]. As examples, the parent of node [i, j] can be computed as [PSV(i), NSV(i) − 1]; the LCA between nodes [i, j] and [i , j ] is [PSV(p), NSV(p) − 1], where p = RMQ(min(i, i ), max(j, j )); and the sufﬁx link of [i, j] is [PSV(Ψ(i)), NSV(Ψ(j)) − 1].
+The three primitives could easily be solved in constant time using O(n) extra bits of space on top of the LCP representation [18] (more recently Ohlebusch et al. [28] showed how to solve them in constant time using 3n + o(n) bits), but Fischer et al. give sublogarithmic-time algorithms to solve them with only o(n) extra bits.
+A ﬁnal observation of interest in that article [18] is that the repetitions found in a differential encoding of the sufﬁx array (i.e., the runs in Ψ) also show up in the differential LCP, since if A values differ by 1 in a range, the LCP areas must also differ by 1. Therefore, Re-Pair compression of the differential LCP should perform similarly as Gonza´lez and Navarro’s sufﬁx array compression [35].
+2.5. Our Contribution
+In this paper we design a practical and efﬁcient CST building on the ideas of Fischer et al. [18], and show that its space/time performance is attractive. This challenge can be divided into (1) How to represent the LCP array efﬁciently in practice; and (2) How to compute efﬁciently RMQ, PSV, and NSV over this LCP representation. For the ﬁrst sub-problem we compare various implementations, whereas for the second we adapt a data structure called range min-max tree [22], which was designed for another problem. We compare the resulting CST with previous ones and show that it offers relevant space/time tradeoffs. Finally, we design a variant of the range min-max tree that is suitable for highly repetitive collections (i.e., with low r value). This is obtained by replacing this regular tree by the (truncated) grammar tree of the Re-Pair compression of the differential LCP array. The resulting CST is the only one handling repetitive collections within space below 2 bpc.
+
+3. Representing Array LCP
+
+The following alternatives were considered to represent LCP:
+
+Sad-Gon Encodes Sadakane’s [11] H bitmap in plain form, using the rank/select implementation of Gonza´lez [39], which takes 0.1n bits on top of the 2n used by H itself. This implementation answers rank in constant time and select in O(log n) time via binary search.
+
+Sad-OS Like the previous one, but using the dense array implementation of Okanohara and
+Sadakane [38] for H. This requires about the same space as the previous one and answers select in time O(log4 r/ log n).
+
+FMN-RRR Encodes H in compressed form as in Fischer et al. [18], that is, by encoding sparse
+
+bitmaps Z and O. We use the compressed representation by Raman et al. [37] as implemented by
+
+Claude [40].
+
+This
+
+costs
+
+0.54n
+
+extra
+
+bits
+
+on
+
+top
+
+of
+
+the
+
+entropy
+
+of
+
+the
+
+two
+
+bitmaps,
+
+2r log
+
+n r
+
++
+
+O(r).
+
+Operation rank takes constant time and select takes O(log n) time.
+
+Algorithms 2013, 6
+
+327
+
+FMN-OS Like the previous one, but instead of Raman et al.’s technique, we use the sparse array
+
+implementation
+
+by
+
+Okanohara
+
+and
+
+Sadakane
+
+[38].
+
+This
+
+requires
+
+2r log
+
+n r
+
++ O(r)
+
+bits
+
+and
+
+solves
+
+select
+
+in time O(log4 r/ log n).
+
+PT Inspired in an LCP construction algorithm [41], we store a particular sampling of LCP valu√es, and compute the others using the sampled ones. Given a parameter v, the sampling requires n+O(n/ v +v) bytes of space and computes any LCP[i] by comparing at most some T [j, j + v] and T [j , j + v]. As we must obtain these symbols using Ψ up to 2v times, the idea is slow.
+
+PhiSpare This is inspired in another construction [42]. For a parameter q, we store in text order an array PLCPq with the LCP values for all text positions q · k. Now assume A[i] = qk + b, with 0 ≤ b < k. If b = 0, then LCP[i] = PLCPq[k]. Otherwise, LCP[i] is computed by comparing at most q + PLCPq[k + 1] − PLCPq[k] symbols of the sufﬁxes T [A[i − 1], n] and T [A[i], n]. The space is n/q integers and the computation requires O(q) applications of Ψ on average.
+
+DAC The directly addressable codes of Ladra et al. [43]. Most LCP values are small (O(logσ n) on average), and thus require few bits. Yet, some can be much larger. Thus we can ﬁx a block length b and divide each number of bits into /b blocks of b bits. Each block is stored using b + 1 bits, the last one telling whether the number continues in the next block or ﬁnishes in the current one. Those blocks are then rearranged to allow for fast random access. There are two variants of this structure, both implemented by Ladra: One with ﬁxed b (DAC), and another using different b values for the ﬁrst, second, etc. blocks, so as to minimize the total space (DAC-Var). Note we represent LCP and not PLCP, thus we do not need to compute A[i].
+
+RP Re-Pair As mentioned, Re-Pair can be used to compress the differential LCP array, LCP [18]. To obtain LCP[i] we store sampled absolute LCP values and decompress the nonterminals since the last sample.
+
+3.1. Experimental Comparison
+
+Our computer is an Intel Core2 Duo at 3.16 GHz, with 8 GB of RAM and 6 MB cache, running Linux version 2.6.24-24. Table 2 lists the collections used for this experiment. They were obtained from the Pizza & Chili site [44]. We also give some information on their LCP values and number of runs in Ψ, which affects their compressibility. We tested the different LCP representations by accessing 100,000 random positions of the LCP array. Figure 2 (left) shows the space/times achieved on the four texts. Only P T and PhiSpare display a space/time tradeoff; in the ﬁrst we use v = 4, 6, 8 and for the second q = 16, 32, 64. Because in various cases we need to access a sequence of consecutive LCP values, we show in Figure 2 (right) the time per cell when accessing 32 consecutive cells. The plots also show solution Naive, which stores LCP values using the number of bits required by the maximum value in the array.
+
+Algorithms 2013, 6
+
+328
+
+Table 2. Data ﬁles used for tests with their size in MB, plus some information on their compressibility.
+
+Collection Size Description
+
+Avg LCP Max LCP Runs (r/n)
+
+dna 100 DNA sequences from Gutenberg Project xml 100 XML from dblp.uni-trier.de proteins 100 Protein sequences from the Swissprot database sources 100 Source code obtained by concatenating ﬁles of the
+Linux-2.6.11.6 and gcc-4.0.0 distributions
+
+28.1 44.5 220.6 625.1
+
+17, 772 1084
+35, 246 307, 871
+
+0.63 0.14 0.59 0.23
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+Figure 2. Space/Time for accessing array LCP. On the left for random accesses and on the right for sequential accesses.
+
+xml.100MB, LCP
+
+xml.100MB, LCP
+
+100 100
+
+Sad-Gon
+
+Sad-Gon
+
+Sad-OS
+
+Sad-OS
+
+FMN-RRR
+
+FMN-RRR
+
+FMN-OS
+
+FMN-OS
+
+PT PT
+
+10
+
+PhiSpare
+
+10
+
+PhiSpare
+
+DAC
+
+DAC
+
+DAC-Var
+
+DAC-Var
+
+RP RP
+
+Naive
+
+Naive
+
+11
+
+Time per operation (microseconds)
+
+0.1 0.1
+
+0.01 0 2 4 6 8 10 12 14 16 18
+Bits per character
+dna.100MB, LCP
+100 Sad-Gon Sad-OS
+FMN-RRR FMN-OS PT
+10 PhiSpare DAC
+DAC-Var RP
+Naive
+1
+
+0.01 0 2 4 6 8 10 12 14 16 18
+Bits per character
+dna.100MB, LCP
+100 Sad-Gon Sad-OS
+FMN-RRR FMN-OS PT
+10 PhiSpare DAC
+DAC-Var RP
+Naive
+1
+
+Time per operation (microseconds)
+
+0.1 0.1
+
+0.01 0 2 4 6 8 10 12 14 16 18
+Bits per character
+
+1000 100 10
+
+proteins.100MB, LCP
+
+Sad-Gon Sad-OS FMN-RRR FMN-OS
+PT PhiSpare
+DAC DAC-Var
+RP Naive
+
+1
+
+0.1
+
+0.01 0 2 4 6 8 10 12 14 16 18 20
+Bits per character
+
+Time per operation (microseconds)
+
+0.01 0 2 4 6 8 10 12 14 16 18
+Bits per character
+
+1000 100 10
+
+proteins.100MB, LCP
+
+Sad-Gon Sad-OS FMN-RRR FMN-OS
+PT PhiSpare
+DAC DAC-Var
+RP Naive
+
+1
+
+0.1
+
+0.01 0 2 4 6 8 10 12 14 16 18 20
+Bits per character
+
+Time per operation (microseconds)
+
+Algorithms 2013, 6
+
+329
+
+Figure 2. Cont.
+
+Time per operation (microseconds) Time per operation (microseconds)
+
+1000 100 10 1
+
+sources.100MB, LCP
+
+Sad-Gon Sad-OS FMN-RRR FMN-OS
+PT PhiSpare
+DAC DAC-Var
+RP Naive
+
+1000 100 10 1
+
+sources.100MB, LCP
+
+Sad-Gon Sad-OS FMN-RRR FMN-OS
+PT PhiSpare
+DAC DAC-Var
+RP Naive
+
+0.1 0.1
+
+0.01 0
+
+0.01
+
+5 10 15 20 25
+
+0
+
+Bits per character
+
+5 10 15 20 25 Bits per character
+
+We use Sadakane’s CSA implementation [12], available at Pizza & Chili, as our CSA, with sampling s = 16. This is relevant because various LCP implementations need to compute A[i] from the CSA.
+A ﬁrst observation is that Fischer et al.’s compression techniques for bitmap H do not compress signiﬁcantly in practice (on non-repetitive collections). The value of r is not small enough to make the compressed representations noticeably smaller (and at times their space overhead over the entropy makes them larger, especially variant FMN-OS).
+These explicit representations of H require only 2.1n bits of space and access LCP in about 10 microseconds. Technique PT is always dominated by them and PhiSpare can achieve less space, but at the price of an unacceptable 10-fold increase in time.
+The other dominant technique is DAC/DAC-Var, which requires signiﬁcantly more space (6n−8n bits) but can access LCP within 0.1–0.2 microseconds. This is because it does not need to compute A[i] to ﬁnd LCP[i]. Its time is even competitive with Naive, while using much less space. Technique RP, instead, does not perform well, doing even worse than Naive in time and space. This shows, again, that (in non-repetitive) collections the value r is not small enough: While the length of the Re-Pair compressed sequence is 30%–60% of the original one, the values require more bits than in Naive because Re-Pair creates many new symbols.
+DAC, DAC-Var and Naive are the only techniques that beneﬁt from extracting consecutive values, so the former stay comparable with Naive in time even in this case. This owes to the better cache usage compared with the other representations, which must access spread text positions to decode a contiguous LCP area.
+For the sequel we will keep only DAC and DAC-Var, which give the best time performance, and FMN-RRR and Sad-Gon, which have the most robust performance at representing H.
+
+4. Computing RMQ, PSV, and NSV
+Once a representation for LCP is chosen, one must carry out operations RMQ, PSV, and NSV on top of it (as they require to access LCP). We ﬁrst implemented verbatim the theoretical proposals of Fischer et al. [18]. For NSV, the idea is akin to the recursive ﬁndclose solution for compressed trees [45]: The array is divided into blocks and some values are chosen as pioneers so that, if a position is not a pioneer, then its NSV answer is in the same block of that of its preceding pioneer (and thus it can be
+
+Algorithms 2013, 6
+
+330
+
+found by scanning that block). Pioneers are marked in a bitmap so as to map them to a reduced array of pioneers, where the problem is recursively solved. We experimentally veriﬁed that it is convenient to continue the recursion until the end instead of storing the explicit answers at some point. The block length L yields a space/time tradeoff since, at each level of the recursion, we must obtain O(L) values from LCP. PSV is symmetric, needing another similar structure.
+For RMQ we apply a recent implementation [46,47] on the LCP array, which does not need to access LCP yet requires 2.44n bits. In the actual theoretical proposal [18] this space is reduced to o(n) bits, but many accesses to LCP are necessary; we did not implement that idea verbatim as it has little chances of being practical.
+The ﬁnal data structure, which we call FMN-NPR, is composed of the structure to answer NSV plus the one for PSV plus the structure to calculate RMQ.
+
+4.1. A Novel Practical Solution
+
+We propose now a different solution, inspired in Sadakane and Navarro’s range min-max (RMM)
+
+tree data structure [22]. We divide LCP into blocks of length L. Now we form a hierarchy of blocks,
+
+where
+
+we
+
+store
+
+the
+
+minimum
+
+LCP
+
+value
+
+of
+
+each
+
+block
+
+i
+
+in
+
+an
+
+array
+
+m[i].
+
+The
+
+array
+
+uses
+
+n L
+
+log
+
+n
+
+bits.
+
+On top of array m, we construct a perfect L-ary tree Tm where the leaves are the elements of m and
+
+each internal node stores the minimum of the values stored in its children. The total space for Tm is
+
+n L
+
+log
+
+n(1
+
++
+
+O(1/L))
+
+bits,
+
+so
+
+if
+
+L
+
+=
+
+ω(log
+
+n),
+
+the
+
+space
+
+used
+
+is
+
+o(n)
+
+bits.
+
+To answer NSV(i), we look for the ﬁrst j > i such that LCP[j] < p = LCP[i], using Tm to ﬁnd it
+
+in time O(L log(n/L)). We ﬁrst search sequentially for the answer in the same block of i. If it is not
+
+there, we go up to the leaf that represents the block and search the right siblings of this leaf. If some of
+
+these sibling leaves contain a minimum value smaller than p, then the answer to NSV(i) is within their
+
+block, so we go down to their block and ﬁnd sequentially the leftmost position j where LCP[j] < p. If,
+
+however, no sibling of the leaf contains a minimum smaller than p, we continue going up the tree and
+
+consider the right siblings of the parent of the current node. At some node we ﬁnd a minimum smaller
+
+than p and start traversing down the tree as before, ﬁnding at each level the ﬁrst child of the current
+
+node with a minimum smaller than p. PSV is symmetric. As the minima in Tm are explicitly stored, the heaviest part of the cost in practice is the O(L) accesses to LCP cells at the lowest levels.
+
+To calculate RMQ(x, y) we use the same Tm and separate the search in three parts: (a) We calculate
+
+sequentially the minimum value in the interval [x, L
+
+x L
+
+− 1] and its leftmost position in the interval;
+
+(b) We do the same for the interval [L
+
+y L
+
+, y]; (c) We calculate RMQ(L
+
+x L
+
+,L
+
+y L
+
+− 1) using Tm. Finally
+
+we compare the results obtained in (a), (b) and (c) and the answer will be the one holding the minimum
+
+value, choosing the leftmost to break ties. For each node in Tm we also store the local position in the
+
+children where the minimum occurs, so we do not need to scan the child blocks when we go down the
+
+tree.
+
+The
+
+extra
+
+space
+
+incurred
+
+is
+
+just
+
+n L
+
+log
+
+L(1 +
+
+O(1/L))
+
+bits.
+
+The
+
+ﬁnal
+
+data
+
+structure,
+
+if
+
+L
+
+=
+
+ω(log
+
+n),
+
+requires o(n) bits and can compute NSV, PSV and RMQ all using the same auxiliary structure. We call
+
+it RMM-NPR.
+
+Algorithms 2013, 6
+
+331
+
+4.2. Experimental Comparison
+We tested the performance of the different NPR implementations by performing 100,000 NSV and RMQ queries at random positions in the LCP array. Figure 3 shows the space/time achieved for each implementation on dna and proteins (the others texts gave very similar results). We consider the four selected LCP representations, which affect the performance because the algorithms have to access the array. The space we plot is additional to that to store the LCP array. We obtained space/time tradeoffs by using different block sizes L = 8, 16, 32. Note that RMQ on FMN-RMQ does not access LCP, so the value of L does not affect it.
+Figure 3. Space/Time for the operations NSV and RMQ. Times for PSV are identical to those for NSV.
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+300 250 200 150 100
+50 0 0
+300 250 200 150 100
+50 0 0
+3 2.5
+2 1.5
+1 0.5
+0 0
+
+dna.100MB, NPR with Sad-Gon LCP
+FMN NSV FMN RMQ RMM NSV RMM RMQ
+
+proteins.100MB, NPR with Sad-Gon LCP
+
+350
+
+FMN NSV
+
+FMN RMQ
+
+300
+
+RMM NSV RMM RMQ
+
+250
+
+Time per operation (microseconds)
+
+200
+
+150
+
+100
+
+50
+
+0
+
+2 4 6 8 10 12
+
+0 1 2 3 4 5 6 7 8 9 10
+
+Bits per character
+
+Bits per character
+
+dna.100MB, NPR with FMN-RRR LCP
+FMN NSV FMN RMQ RMM NSV RMM RMQ
+
+proteins.100MB, NPR with FMN-RRR LCP
+
+350
+
+FMN NSV
+
+FMN RMQ
+
+300
+
+RMM NSV RMM RMQ
+
+250
+
+Time per operation (microseconds)
+
+200
+
+150
+
+100
+
+50
+
+2 4 6 8 10 12 Bits per character
+dna.100MB, NPR with DAC LCP FMN NSV FMN RMQ RMM NSV RMM RMQ
+2 4 6 8 10 12 Bits per character
+
+Time per operation (microseconds)
+
+0 0 1 2 3 4 5 6 7 8 9 10 Bits per character
+proteins.100MB, NPR with DAC LCP 4
+FMN NSV FMN RMQ 3.5 RMM NSV RMM RMQ 3
+2.5
+2
+1.5
+1
+0.5
+0 0 1 2 3 4 5 6 7 8 9 10 Bits per character
+
+Time per operation (microseconds)
+
+Algorithms 2013, 6
+
+332
+
+Figure 3. Cont.
+
+Time per operation (microseconds) Time per operation (microseconds)
+
+3.5 3
+2.5 2
+1.5 1
+0.5 0 0
+
+dna.100MB, NPR with DAC-Var LCP FMN NSV FMN RMQ RMM NSV RMM RMQ
+2 4 6 8 10 12 Bits per character
+
+proteins.100MB, NPR with DAC-Var LCP 4.5
+FMN NSV FMN RMQ 4 RMM NSV RMM RMQ 3.5
+3
+2.5
+2
+1.5
+1
+0.5
+0 0 1 2 3 4 5 6 7 8 9 10 Bits per character
+
+First, it can be seen that RMM-NPR performs well using much less space than FMN-NPR. In addition, solving NSV (and thus PSV) with RMM-NPR structure is signiﬁcantly faster than with FMN-NPR. This holds under all the LCP representations, regardless that times are one order of magnitude higher with representations Sad-Gon and FMN-RRR.
+On the other hand, RMQ is way faster on FMN because it does not need to access LCP at all. It is 2–3 times faster than RMM using DAC or DAC-Var and two orders of magnitude faster than RMM using Sad-Gon or FMN-RRR. This operation, however, is far less common than NSV and PSV when implementing the CST operations, so its impact is not so high. Another reason to prefer RMM-NPR is that it can support a generalized version of NSV and PSV, which allows us to solve operation LAQT on sufﬁx trees without adding more memory, as opposed to FMN-NPR. In the next section we show how a fully-functional CST can be implemented on top of the RMM-NPR representation.
+
+5. Our Compressed Sufﬁx Tree
+Our CST implementation applies our RMM-NPR algorithms of Section 4 on top of some LCP representation from those chosen in Section 3. This solves most of the tree traversal operations by using the formulas provided by Fischer et al. [18], which we do not repeat here. In some cases, however, we have deviated from the theoretical algorithms for practical considerations.
+TDepth: We proceed by brute force using Parent, as there is no practical solution in the theoretical proposal.
+NSibling: There is a bug in the original formula [18] in the case v is the next-to-last child of its parent. According to them, NSibling([vl, vr]) ﬁrst obtains its parent [wl, wr], then checks whether vr = wr (in which case there is no next sibling), then checks whether wr = vr + 1 (in which case the next sibling is leaf [wr, wr]), and ﬁnally answers [vr + 1, z − 1], where z = RMQ(vr +2, wr). This RMQ is aimed at ﬁnding the end of the next sibling of the next sibling, but it fails if we are near the end. Instead, we replace it by the faster z = NSV (vr + 1, LCP[vr + 1]). NSV (i, d) generalizes NSV by ﬁnding the next value smaller or equal to d, and is implemented almost like NSV using Tm.
+
+Algorithms 2013, 6
+
+333
+
+Child: The children are ordered by letter. We need to extract the children sequentially using FChild and NSibling, to ﬁnd the one descending by the correct letter, yet extracting the Letter of each is expensive. Thus we ﬁrst ﬁnd all the children sequentially and then binary search the correct letter among them, thus reducing the use of Letter as much as possible.
+LAQS(v, d): Instead of the slow complex formula given in the original paper, we use NSV (and PSV ): LAQS([vl, vr], d) = [PSV (vl + 1, d), NSV (vr, d) − 1]. This is a complex operation we are supporting with extreme simplicity.
+LAQT (v, d): There is no practical solution in the original proposal. We proceed as follows to achieve the cost of d Parent operations, plus some LAQS ones, all of which are reasonably cheap. Since SDepth(v) ≥ TDepth(v), we ﬁrst try v = LAQS(v, d), which is an ancestor of our answer; let d = TDepth(v ). If d = d we are done; else d < d and we try v = LAQS(v, d + (d − d )). We compute d = TDepth(v ) (which is measured by using d − d Parent operations until reaching v ) and iterate until ﬁnding the right node.
+Table 3 gives a space breakdown for our CST. We give the space in bpc of Sadakane’s CSA, the 4 alternatives we consider for the LCP representation, and the space of our RMM tree (using L = 32 for a “slow” variant and L = 16 for a “fast” variant). The last column gives the total bpc considering the smallest “slow” (using Sad-Gon or FMN-RRR for LCP) and the smallest “fast” (using DAC or DAC-Var) alternatives.
+Table 3. Space breakdown of our compressed sufﬁx tree.
+
+LCP bpc
+
+RMM bpc Total bpc
+
+Collection CSA bpc
+
+Sad-Gon FMN-RRR DAC DAC-Var Slow Fast Slow Fast
+
+dna 5.88 2.10
+
+xml 4.47 2.10
+
+proteins 7.91 2.10
+
+sources
+
+5.20 2.10
+
+3.06 6.29 2.03 9.30 2.59 7.43 2.29 8.23
+
+5.79 1.23 2.47 7.77 1.23 2.47 6.97 1.23 2.47 7.50 1.23 2.47
+
+9.21 7.73 11.24 8.53
+
+14.14 14.71 17.35 15.17
+
+6. Comparing the CST Implementations
+We compare the following CST implementations: Va¨lima¨ki et al.’s [20] implementation of Sadakane’s compressed sufﬁx tree [11] (CST-Sadakane); Russo’s implementation of Russo et al.’s “fully-compressed” sufﬁx tree [14] (FCST); and our best variants. These are called Our CST in the plots. Depending on their LCP representation, they are sufﬁxed with Sad-Gon, FMN-RRR, DAC, and DAC-Var. We do not compare some operations like Root and Ancestor because they are trivial in all the implementations; Locate and Count because they depend only on the underlying CSA (which is mostly orthogonal, thus Letter is sufﬁcient to study it); SLinki because it is usually better to do SLink i times; and LAQS and LAQT because they are not implemented in the alternative CSTs (these two are shown only for ours).
+We typically show space/time tradeoffs for all the structures, where the space is measured in bpc (recall that these CSTs replace the text, so this is the overall space required). The times are averaged
+
+Algorithms 2013, 6
+
+334
+
+over a number of queries on random nodes. We use four types of node samplings, which make sense in different typical sufﬁx tree traversal scenarios: (a) Collecting the nodes visited over 10,000 traversals from a random leaf to the root (used for Parent, SDepth, and Child operations); (b) Same but keeping only nodes with at least 5 children (for Letter); (c) Collecting the nodes visited over 10,000 traversals from the parent of a random leaf towards the root via sufﬁx links (used for SLink and TDepth); and (d) Taking 10,000 random leaf pairs (for LCA). The standard deviation divided by the average is in the range [0.21, 2.56] for CST-Sadakane, [0.97, 2.68] for FCST, [0.65, 1.78] for Our CST Sad-Gon, [0.64, 2.50] for Our CST FMN-RRR, [0.59, 0.75] for Our CST DAC, and [0.63, 0.91] for Our CST DAC-Var. The standard deviation of the estimator is thus at most 1/100th of that.
+
+Parent and TDepth. Figure 4 shows the performance of operations Parent and TDepth. As can be seen, CST-Sadakane is about 5 to 10 times faster than our best results for Parent and 100 times faster for TDepth. This is not surprising given that CST-Sadakane stores the topology explicitly and thus these operations are among the easiest ones. In addition, our implementation computes TDepth by brute force. Note, on the other hand, that FCST is about 10 times slower than our slowest implementation.
+Figure 4. Space/Time trade-off performance for operations Parent and TDepth. Note the log scale.
+
+Time per operation (microseconds)
+
+10000 1000 100 10 1 0.1 5
+10000 1000 100 10 1 0.1 5
+
+dna.100MB, Parent
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 15 Bits per character
+
+20
+
+xml.100MB, Parent
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+25
+
+10 15 20 25 30 Bits per character
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+100000 10000 1000 100 10 1 0.1 0.01 5
+100000 10000 1000 100 10 1 0.1 0.01 5
+
+dna.100MB, TDepth
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 15 Bits per character
+
+20
+
+xml.100MB, TDepth
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+25
+
+10 15 20 25 30 Bits per character
+
+Time per operation (microseconds)
+
+Algorithms 2013, 6
+
+335
+
+Time per operation (microseconds)
+
+Figure 4. Cont.
+
+10000 1000 100 10 1 0.1 5
+10000 1000 100 10 1 0.1 5
+
+proteins.100MB, Parent
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 15 20 Bits per character
+
+25
+
+sources.100MB, Parent
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 15 20 25 30 Bits per character
+
+30 35
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+1e+06 100000
+10000 1000 100 10 1 0.1 0.01 5
+100000 10000 1000 100 10 1 0.1 0.01 5
+
+proteins.100MB, TDepth
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 15 20 Bits per character
+
+25
+
+sources.100MB, TDepth
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 15 20 25 30 Bits per character
+
+30 35
+
+Time per operation (microseconds)
+
+SLink, LCA, and SDepth. Figure 5 shows the performance of operations SLink and LCA, which are the ones most speciﬁc of sufﬁx trees. Figure 6 (left) shows operation SDepth. Those operations happen to be among the most natural ones in Russo’s FCST, which displays a better performance compared with the previous ones. CST-Sadakane, instead, is not anymore the fastest. Indeed, our implementations based on DAC and DAC-Var are by far the fastest ones for these operations, 10 times faster than CST-Sadakane and 100 to 1000 times faster than FCST. Even our slower implementations are way faster than FCST and close to CST-Sadakane times.
+Figure 5. Space/Time trade-off performance for operations SLink and LCA. Note the log scale.
+
+Time per operation (microseconds) Time per operation (microseconds)
+
+10000 1000 100
+
+dna.100MB, SLink
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10000 1000 100
+
+dna.100MB, LCA
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 10
+
+11
+
+0.1 5
+
+10 15 Bits per character
+
+20
+
+0.1 25 5
+
+10 15 Bits per character
+
+20
+
+25
+
+Algorithms 2013, 6
+
+336
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+10000
+1000
+100
+10
+1
+0.1 5
+10000
+1000
+100
+10
+1
+0.1 5
+100000 10000 1000 100 10 1 0.1 5
+
+Figure 5. Cont.
+
+xml.100MB, SLink
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 15 20 Bits per character
+
+25
+
+proteins.100MB, SLink
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+30
+
+10 15 20 Bits per character
+
+25
+
+sources.100MB, SLink
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+30
+
+10 15 20 25 30 35 Bits per character
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+10000 1000 100 10 1 0.1 5
+10000 1000 100 10 1 0.1 5
+10000 1000 100 10 1 0.1 5
+
+xml.100MB, LCA
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 15 20 Bits per character
+
+25
+
+proteins.100MB, LCA
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 15 20 Bits per character
+
+25
+
+sources.100MB, LCA
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 15 20 25 30 Bits per character
+
+30 30 35
+
+Time per operation (microseconds)
+
+Child. Figure 6 (right) shows operation Child, where we descend by a random child from the current node. Our times are signiﬁcantly higher than for other operations, as expected, and the same happens to CST-Sadakane, which becomes comparable with our “large and fast” variants. FCST, on the other hand, is not much affected and becomes comparable with our “small and slow” variant. We note that, unlike other operations, the differences in performance depend markedly on the type of text.
+
+Algorithms 2013, 6
+
+337
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+Figure 6. Space/Time trade-off performance for operations SDepth and Child. Note the log scale.
+
+1000 100
+
+dna.100MB, SDepth
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+100000 10000
+
+dna.100MB, Child
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+Time per operation (microseconds)
+
+10 1000
+
+1 100
+
+0.1 5
+10000 1000 100 10 1 0.1 5
+10000 1000 100 10 1 0.1 5
+10000 1000 100 10 1 0.1 5
+
+10 15 Bits per character
+
+20
+
+xml.100MB, SDepth
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 15 20 Bits per character
+
+25
+
+proteins.100MB, SDepth
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 15 20 Bits per character
+
+25
+
+sources.100MB, SDepth
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 15 20 25 30 Bits per character
+
+25 30 30 35
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+10 5
+10000
+1000
+
+10 15 Bits per character
+
+20
+
+xml.100MB, Child
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+25
+
+100
+
+10 5
+100000
+10000
+
+10 15 20 Bits per character
+
+25
+
+proteins.100MB, Child
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+30
+
+1000
+
+100
+
+10 5
+100000
+10000
+
+10 15 20 Bits per character
+
+25
+
+sources.100MB, Child
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+30
+
+1000
+
+100
+
+10 5
+
+10 15 20 25 30 35 Bits per character
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+Algorithms 2013, 6
+
+338
+
+Letter. Figure 7 (left) shows operation Letter(v, i), as a function of i. This operation depends only on the CSA structure, and requires either applying i − 1 times Ψ, or applying once A and A−1. The former choice is preferred for FCST and the latter in CST-Sadakane. For our CST, using Ψ iteratively was better for these i values, as the alternative takes around 70 microseconds (recall we use Sadakane’s CSA [12]).
+Figure 7. Space/Time trade-off performance for operation Letter and for a full tree traversal. Note the log scale.
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+10000 1000 100 10 1 0.1 0.01 1
+10000 1000 100 10 1 0.1 0.01 1
+10000 1000 100 10 1 0.1 0.01 1
+
+dna.100MB, Letter(i)
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+1000 100
+
+Time per node (microseconds)
+
+10
+
+1
+
+23 parameter i
+
+4
+
+xml.100MB, Letter(i)
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+5
+
+0.1 5
+1000
+100
+
+Time per node (microseconds)
+
+10
+
+1
+
+23 parameter i
+
+4
+
+proteins.100MB, Letter(i)
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+5
+
+0.1 5
+1000
+100
+
+Time per node (microseconds)
+
+10
+
+1
+
+23 parameter i
+
+4
+
+0.1 55
+
+dna.100MB, full traversal
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10 15 Bits per character
+
+20
+
+xml.100MB, full traversal
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+25
+
+10 15 20 Bits per character
+
+25
+
+proteins.100MB, full traversal
+
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+30
+
+10 15 20 25 30 Bits per character
+
+Time per operation (microseconds)
+
+Algorithms 2013, 6
+
+339
+
+Time per operation (microseconds) Time per node (microseconds)
+
+10000 1000 100 10 1 0.1 0.01 1
+
+Figure 7. Cont.
+
+sources.100MB, Letter(i)
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+1000 100
+
+sources.100MB, full traversal
+CST-Sadakane Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+FCST
+
+10
+
+1
+
+23 parameter i
+
+4
+
+0.1 5 5 10 15 20 25 30 35
+Bits per character
+
+A full traversal. Figure 7 (right) shows a basic sufﬁx tree traversal algorithm: the classical one to detect the longest repetition in a text. This traverses all of the internal nodes using FChild and NSibling and reports the maximum SDepth. Although CST-Sadakane takes advantage of locality, our “large and fast” variants are better while using half the space. Our “small and slow” variant, instead, requires a few hundred microseconds, as expected, yet FCST has a special implementation for full traversals and it is competitive with our slow variant.
+LAQS and LAQT . Figure 8 shows the performance of the operations LAQS(v, d) and LAQT (v, d). The times are presented as a function of parameter d, where we use d = 4, 8, 16, 32, 64. We query the nodes visited over 10,000 traversals from a random leaf to the root (excluding the root). As expected, the performance of LAQS is similar to that of Parent, and the performance of LAQT is close to that of doing Parent d times. Note that, as we increase the value of d, the times tend to a constant. This is because, as we increase d, a greater number of queried nodes are themselves the answer to LAQS or LAQT queries.
+Figure 8. Space/Time trade-off performance for operation LAQS(d) and LAQT (d). Note the log scale.
+
+Time per operation (microseconds) Time per operation (microseconds)
+
+100
+
+10
+
+1
+
+0.1 48
+
+16
+
+dna.100MB, LAQs(d)
+Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+
+32 parameter d
+
+64
+
+10000
+
+1000
+
+100
+
+10
+
+1
+
+0.1 48
+
+16
+
+dna.100MB, LAQt(d)
+Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+
+32 parameter d
+
+64
+
+Algorithms 2013, 6
+
+340
+
+Figure 8. Cont.
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+xml.100MB, LAQs(d)
+
+100
+
+Our CST with Sad-Gon Our CST with FMN-RRR
+
+Our CST with DAC
+
+Our CST with DAC-Var
+
+10
+
+1
+
+0.1 48
+
+16
+
+100
+
+32 parameter d
+proteins.100MB, LAQs(d)
+Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+
+10
+
+64
+
+1
+
+0.1 48
+
+16
+
+100
+
+10
+
+32 parameter d
+sources.100MB, LAQs(d)
+Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+
+64
+
+1
+
+0.1 48
+
+16
+
+32 parameter d
+
+64
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+Time per operation (microseconds)
+
+10000
+
+1000
+
+100
+
+10
+
+1
+
+0.1 48
+
+16
+
+10000
+
+1000
+
+100
+
+10
+
+1
+
+0.1 48
+
+16
+
+10000
+
+1000
+
+100
+
+10
+
+1
+
+0.1 48
+
+16
+
+xml.100MB, LAQt(d) Our CST with Sad-Gon Our CST with FMN-RRR Our CST with DAC Our CST with DAC-Var
+32 parameter d proteins.100MB, LAQt(d)
+Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+32 parameter d sources.100MB, LAQt(d)
+Our CST with Sad-Gon Our CST with FMN-RRR
+Our CST with DAC Our CST with DAC-Var
+32 parameter d
+
+64 64 64
+
+Time per operation (microseconds)
+
+Discussion. The general conclusion is that our CST implementation does offer a relevant tradeoff between the two rather extreme existing variants. Our CSTs can operate within 8–12 bpc (that is, at most 50% larger than the plain byte-based representation of the text, and replacing it) while requiring a few hundred microseconds for most operations (the “small and slow” variants Sad-Gon and FMN-RRR); or within 13–16 bpc and carrying out most operations within a few microseconds (the “large and fast” variants DAC/DAC-Var). In contrast, FCST requires only 4–6 bpc (which is, remarkably, as little as half the space required by the plain text representation), but takes the order of milliseconds per operation; and CST-Sadakane takes usually a few tens of microseconds per operation but requires 25–35 bpc, which is close to uncompressed sufﬁx arrays (not to uncompressed sufﬁx trees, though).
+
+Algorithms 2013, 6
+
+341
+
+We remark that, for many operations, our “fast and large” variant takes half the space of CST-Sadakane and is many times faster. Exceptions are Parent and TDepth, where CST-Sadakane stores the explicit tree topology, and thus takes a fraction of a microsecond. On the other hand, our CST carries out LAQS in the same time of Parent, whereas this is much more complicated for the alternatives (they do not even implement it). For Child, where we descend by a random letter from the current node, the times are higher than for other operations, as expected, yet the same happens to all the implementations. We note that FCST is more efﬁcient on operations LCA and SDepth, which are its kernel operations, yet it is still slower than our “small and slow” variant. Finally, TDepth is an operation where all but Sadakane’s CST are relatively slow, yet on most sufﬁx tree algorithms the string depth is much more relevant than the tree depth. Our LAQT (v, d) costs about d times the time of our TDepth.
+7. A Repetition-Aware CST
+We now develop a variant of our RMM representation that is suitable for highly repetitive text collections, and upgrade it to a fully-functional CST for this case. Recall that we need three components: A CSA, an LCP representation, and fast PSV/NSV/RMQ queries on that LCP sequence.
+We use the RLCSA [25] as the base CSA of our repetition-aware CST. We also use the compressed representation of PLCP (i.e., bitmap H) [18]. Since now we assume r n, we use a compressed bitmap representation that is useful for very sparse bitmaps [24]: We δ-encode the runs of 0’s between consecutive 1’s, and store absolute pointers to the representation of every sth 1. This is very efﬁcient in space and solves select1 queries in time O(s), which is the operation needed to compute a PLCP value.
+The main issue is how to support fast operations using the RLCSA and our LCP representation. Directly using the RMM tree structure requires at least 1 bpc (see Figure 3), which is too much when indexing repetitive collections. Our main idea is to replace the regular structure of tree Tm by the parsing tree obtained by a Re-Pair compression of the sequence LCP. We now explain this idea in detail.
+
+7.1. Grammar-Compressing the LCP Array
+
+To solve the queries on top of the LCP array, we represent a part of it in grammar-compressed form.
+
+This will be redundant with our compressed representation of array H, which was already explained.
+
+Following the idea in Fischer et al. [18], we grammar-compress the differential LCP array, deﬁned
+
+as LCP [i] = LCP[i] − LCP[i − 1] if i > 1, and LCP [1] = LCP[1]. This differential LCP array
+
+contains now O(r) areas that are exact repetitions of others, and a Re-Pair-based compression of it
+
+yields
+
+|R|
+
++ |C|
+
+=
+
+O(r log
+
+n r
+
+)
+
+words
+
+[18,35].
+
+We
+
+note,
+
+however,
+
+that
+
+the
+
+compression
+
+achieved
+
+in
+
+this
+
+way
+
+is
+
+modest
+
+[35]:
+
+We
+
+guarantee
+
+O(r
+
+log
+
+n r
+
+)
+
+words,
+
+whereas
+
+the
+
+RLCSA
+
+and
+
+PLCP
+
+representations
+
+require
+
+basically
+
+O(r
+
+log
+
+n r
+
+)
+
+bits.
+
+Indeed,
+
+the
+
+poor
+
+performance
+
+of
+
+variant
+
+RP
+
+in
+
+Section
+
+3
+
+shows
+
+that
+
+the
+
+idea should not be applied directly.
+
+To overcome this problem, we take advantage of the fact that this representation is redundant with H.
+
+We truncate the parsing tree of the grammar, and use it as a device to speed up computations that would
+
+otherwise require expensive accesses to PLCP (i.e., to bitmap H).
+
+Let R and C be the results of compressing LCP with Re-Pair. Every nonterminal i of R expands to a
+
+substring S[1, t] of LCP . No matter where S appears in LCP (indeed, it must appear more than once),
+
+Algorithms 2013, 6
+
+342
+
+we can store some values that are intrinsic to S. Let us deﬁne a relative sequence of values associated to S, as follows: S [0] = 0 and S [j] = S[j] + S [j − 1]. Then, we deﬁne the following variables associated to the nonterminal:
+• mini = min1≤j≤t S [j] is the minimum value in S . • lmini and rmini are the leftmost and rightmost positions j where S [j] = mini, respectively. • sumi = S [t] = 1≤j≤t S[j] is the sum of the values S[j]. • coveri = t is the number of values in S .
+As most of these values are small, we encode them with DACs [43], which use less space for short numbers while providing fast access (rmin is stored as the difference with lmin).
+To reduce space, we prune the grammar by deleting the nonterminals i such that coveri < t, where t will be a space/time tradeoff parameter. However, “short” nonterminals that are mentioned in sequence C are not deleted.
+This ensures that we can skip Ω(t) symbols of LCP with a single access to the corresponding nonterminal in C, except for the short nonterminals (and terminals) that are retained in C. To speed up traversals on C, we join together maximal consecutive subsequences of nonterminals and terminals in C that sum up a total cover < t: We create a new nonterminal rule in R (for which we precompute the variables above) and replace it in C, deleting those nonterminals that formed the new rule and do not appear anymore in C. This will also guarantee that no more than O(t) accesses to LCP are needed to solve queries. Note that we could have built a hierarchy of new nonterminals by recursively grouping t consecutive symbols of C, achieving logarithmic operation times just as with tree Tm [29], but this turned out to be counterproductive in practice. Figure 9 gives an example.
+
+Figure 9. On the left, example of the Re-Pair compression of a sequence T = LCP . We show R in array form and also in tree form. On the right, our RP-NPR construction over T , pruning with t = 4. We show how deep can the symbols of C be expanded after the pruning.
+
+LCP = 0 1 0 3 2 3 3 2 2 3 2 5 4 5 5 5 4 5 4 5 5 5 4 5 4 5 5 T= LCP’ = 0 1 -1 3 -1 1 0 -1 0 1 -1 3 -1 1 0 0 -1 1 -1 1 0 0 -1 1 -1 1 0
+
+RePair
+
+R = C = h -1 h f f
+
+a → (−1, 1) b → (a, 0)
+
+h
+
+f
+
+c → (1, −1) d → (0, a)
+
+g
+
+e
+
+d
+
+b
+
+e → (3, b) 0 c 3 b f → (d, b)
+
+0a
+
+a0
+
+g → (0, c) h → (g, e)
+
+1 -1 a 0
+
+-1 1 -1 1
+
+-1 1
+
+RP-NPR
+
+C = h -1 h f f
+
+ge
+
+db
+
+3b
+
+Rule cover min lmin sum
+b 3 -1 1 0 d 3 -1 2 0 e 4 223 f 6 -1 2 0 g 3 010 h 7 013
+
+Algorithms 2013, 6
+
+343
+
+Finally, sampled pointers are stored to every c-th cell of C. Each sample for position C[c · j], stores:
+• Pos[j] = 1 + 1≤k≤cj−1 coverC[k], that is, the ﬁrst position LCP[i] corresponding to C[c · j]. • Val[j] = 1≤k≤cj−1 sumC[k], that is, the value LCP[i].
+7.2. Computing NSV, PSV, and RMQ
+To answer NSV(i), we ﬁrst look for the rule C[j] that contains LCP[i + 1]: We binary search Pos for the largest j such that Pos[j ] ≤ i + 1 and then sequentially advance on C[cj ..j] until ﬁnding the largest j such that pos = Pos[j] + cj ≤k<j coverC[k] ≤ i + 1. At the same time, we compute
+= Val[j ] + cj ≤k<j sumC[k]. Now, if + minC[j] < LCP[i], it is possible that NSV(i) is within the same C[j]. In this case, we search recursively the tree expansion with root C[j] for the leftmost value to the right of i and smaller than LCP[i]: Let C[j] → ab in the grammar. We recursively visit child a if + mina < LCP[i] and pos + covera ≥ i + 1. If we ﬁnd no answer there, or we had decided not to visit a, then we set = + suma and pos = pos + covera and recursively visit child b if + minb < LCP[i]. Note that if pos ≥ i + 1 we do not need to enter b, but can simply use the value minb and the position pos + lminb for the minimum. If we also ﬁnd no answer inside b, or we had decided not to visit b, we return with no value. On the other hand, if we reach a leaf l during the recursion, we sequentially scan the array LCP[pos, pos + coverl − 1], updating = + LCP[k] and increasing pos. If at some position we ﬁnd a value smaller than LCP[i], we report the position pos. If we return with no value from the ﬁrst recursive call at C[j], it was because the only values smaller than LCP[i] were to the left of i. In this case, or if we had decided not to enter into C[j] because + minC[j] ≥ LCP[i], we sequentially scan C[j + 1, n], while updating = + sumC[k] and pos = pos + coverC[k], until ﬁnding the ﬁrst k such that + minC[k] < LCP[i]. Once we ﬁnd such k, we are sure that the answer is inside C[k]. Thus we enter into C[k] with a procedure very similar to the one for C[j] (albeit slightly simpler as we know that all the positions are larger than i). In this case, as the LCP values are discrete, we know that if + minC[k] = LCP[i] − 1, there is no smaller value to the left of the min value, so in this case we directly answer the corresponding lmin value, without accessing the LCP array. The solution to PSV(i) is symmetric. To answer RMQ(x, y), we ﬁnd the rules C[i] and C[j] containing x and y, respectively. We sequentially scan C[i + 1, j − 1] and store the smallest + minC[k] value found (in case of ties, the leftmost). If the minimum is smaller than the corresponding values + minC[i] and + minC[j], we directly return the value pos + lminC[k] corresponding to position C[k]. Else, if the global minimum in C[i] is equal to or less than the minimum for i < k < j, we must examine C[i] to ﬁnd the smallest value to the right of x − 1. Assume C[i] → ab. We recursively enter into a if pos + covera ≥ x, otherwise we skip it. Then, we update = + suma and pos = pos + covera, and enter into b if pos < x, otherwise we directly consider + minb as a candidate for the minimum sought. Finally, if we arrive at a leaf we scan it, updating and pos, and consider all the values where pos ≥ x as candidates to the minimum. The minimum for C[i] is the smallest among all candidates to minimum considered, and with pos + lminb or the leaf scanning process we know its global position. This new minimum is compared
+
+Algorithms 2013, 6
+
+344
+
+with the minimum of C[k] for i < k < j. Symmetrically, in case k = j contains a value smaller than the minimum for i ≤ j < j, we have to examine C[j] for the smallest value to the left of y + 1.
+7.3. Analysis
+
+For the analysis we will assume that we hierarchically group the terminals and nonterminals of
+
+consecutive symbols in C (by extending the grammar) using a grouping factor of g, although, as
+
+explained, it turned out to be faster in practice not to do so. We will call h the height of the grammar,
+
+which can be made O(log n) by generating balanced grammars [48] (we experiment with balanced and
+
+unbalanced grammars in the next section). We also use sampling steps c to access C and s for the PLCP
+
+representation. We also assume s is the sampling step of the RLCSA, thus accessing one PLCP cell
+
+takes O(s log n) time.
+
+Let us ﬁrst consider operation NSV (and PSV). We spend O(log n + c) time to binary search Pos and
+
+move from C[cj ] to C[j]. If we have to expand C[j], the cost increases by O(h): Note that if we had
+
+entered a, and obtained no answer inside it, then we can directly use minb and thus do not enter b, so we only enter one of the two. At the leaf of the grammar tree of C[j], we may scan O(t) symbols of
+
+LCP using PLCP, which costs O(ts log n). Further, the scanning of C[j + 1, n] takes time O(g log n)
+
+assuming the hierarchical grouping, and the ﬁnal expansion of C[k] takes again O(h + ts log n) time.
+
+Now consider operation RMQ. Again, we spend O(c + log n) time to ﬁnd C[i] and C[j], and then
+
+expand them as before: Only one of the two branches is expanded in each case, so the time is O(h +
+
+ts log n). Finally, we need time O(g log n) to traverse the area C[i + 1, j − 1].
+
+Thus, for all the operations, the cost is O(c + h + (ts + g) log n).
+
+Let r
+
+= |R| + |C|, and recall that r is the number of runs, so n
+
+=
+
+O(r log
+
+n r
+
+)
+
+if
+
+using
+
+Re-Pair.
+
+The sampling parameters involve O((n /c) log n ) bits for the sampling of C, plus O((r/s) log n) for the
+
+sampling of PLCP, plus O((n/s) log n) for the sampling of the RLCSA, plus O((n /g) log n ) for the
+
+new rules created in the hierarchy for C. Parameter t involves in practice an important reduction in |R|,
+
+the set of rules, but this cannot be upper bounded in the worst case unless the grammar is balanced, in
+
+which case it is reduced to O(|R|/t) rules. By choosing c = g = log3 n, s = log2 n, t = log n, and assuming a balanced grammar, the cost of the
+operations simpliﬁes to O(log4 n) and the extra space incurred by the samplings is o(r) + O(n/ log n) bits. This can be reduced to any o(r) + O(n/ logk n), for any constant k, by raising the time complexity to O(logk+3 n).
+
+8. Experimental Evaluation on Repetitive Collections
+
+We used various DNA collections from the Repetitive Corpus of Pizza & Chili [49]. We took DNA collections Influenza and Para, which are the most repetitive ones, and Escherichia, a less repetitive one. These are collections of genomes of various bacteria of those species. We also use Plain DNA, which is plain DNA from PizzaChili, as a non-repetitive baseline. On the other hand, in order to show how results scale with repetitiveness, we also included Einstein, corresponding to the Wikipedia versions of the article about Einstein in German, although it is not a biological collection.
+
+Algorithms 2013, 6
+
+345
+
+Table 4 (left) gives some basic information on the collections, including the number of runs in Ψ (much lower than those for general sequences; see Table 2).
+For the RLCSA we used a ﬁxed sampling that gave reasonable performance: One absolute value out of 32 is stored to access Ψ(i), and one text position every 128 is sampled to compute A[i]. Similarly, we used sampling step 32 for the δ-encoding of the bitmaps Z and O that encode H.
+Table 4. Text size and size of our CST (which replaces the text), both in MB, and number of runs in Ψ. On the right, bpc for the different components, and total bpc of the different collections considered. The NPR structure is the smallest setting between RP-NPR and RPBal-NPR for that particular text.
+
+Collection
+
+Text Size Runs (r/n)
+
+Influenza Para Escherichia Plain DNA Einstein
+
+148 410 108 50 89
+
+0.019 0.036 0.134 0.632 0.001
+
+CST size
+27 67 48 61
+3
+
+RLCSA
+0.77 1.28 2.46 5.91 0.48
+
+(P)LCP
+0.21 0.26 0.92 3.62 0.01
+
+NPR
+0.42 0.36 0.39 0.29 0.14
+
+Total
+1.40 1.90 3.77 9.82 0.63
+
+Table 4 (right) shows the resulting sizes. The bpc of the CST is partitioned into those for the RLCSA, for the PLCP (H), and for NPR, which stands for the data structure that solves NSV/PSV/RMQ queries. For the latter we used t = 256, which offered answers within 2 milliseconds (ms). Note that Fischer et al.’s [18] compression of bitmap H does work in repetitive sequences, unlike what happened in the general case: We reduce the space from 2 bpc to 0.21–0.26 bpc on the more repetitive DNA sequences, for example. Similarly, the regular RMM-tree uses 1–5 bpc, whereas our version adapted to repetitive sequences uses as little as 0.3–0.4 bpc. The good space performance of the RLCSA, compared with a regular CSA for general sequences, also contributes to obtain a remarkable ﬁnal space of 1.4–1.9 bpc for the more repetitive DNA sequences. This value deteriorates until approaching, for plain (non-repetitive) DNA, the same 10 bpc that we obtained before. Thus our data structure adapts smoothly to the repetitiveness (or lack of it) of the collection.
+On the other hand, on Einstein, which is much more repetitive, the total space gets as low as 0.6 bpc. This is a good indication of what we can expect on future databases with thousands of individuals of the same species, as opposed to these testbeds with a few tens of individuals, or with more genetic variation. To give more insight into how the space of our structures evolve as the repetitiveness increases, Figure 10 shows the space used by each component of the index on increasing preﬁxes of collections Influenza and Einstein. It can be seen that, as the we index more of the collection, the space of the different components decreases until reaching a stable point that depends on the intrinsic repetitiveness of the collection (this is reached earlier for Influenza). Note, however, that even in the more repetitive Einstein, the RLCSA stabilizes very early at a ﬁxed space. This space is that of the sufﬁx array sampling, which is related to the speed of computing the contents of sufﬁx array cells (and hence computing LCP values). It is interesting that Ma¨kinen et al. [25] proposed a solution to compress this array that proved impractical for the small databases we are experimenting with, but whose asymptotic properties ensure that will become practical for sufﬁciently large and repetitive collections.
+
+Algorithms 2013, 6
+
+346
+
+Figure 10. Evolution of the space, in bpc, of our structures for increasing preﬁxes of collections Influenza and Einstein.
+
+bpc bpc
+
+Prefixes of Influenza 1.4
+RLCSA PLCP
+1.2 NPR
+1
+0.8
+0.6
+0.4
+0.2
+0 0 2 4 6 8 10 12 14 16 prefix size (1/16th)
+
+Prefixes of Einstein 0.6
+RLCSA PLCP NPR
+0.5
+0.4
+0.3
+0.2
+0.1
+0 0 2 4 6 8 10 12 14 16 prefix size (1/16th)
+
+Let us discuss the NPR operations now. We used a public Re-Pair compressor built by ourselves [50], which offers two alternatives when dealing with symbols of the same frequencies. The basic one, which we will call RP-NPR, stacks the pairs of the same frequency, whereas the second one, RPBal-NPR, enqueues them and obtains much more balanced grammars in practice. For our structure we tested values t = c = 64, 128, 256, 512. We also include the basic regular RMM-tree of the previous sections (but running over our RLCSA and PLCP representations), to show that on repetitive collections our grammar-based version offers better space/time tradeoffs than the regular tree Tm. For this version, RP-RMM, we used values L = 36, 64, 128, 256, 512.
+We measure the times of operations NSV (as PSV is symmetric) and RMQ following the methodology of Section 6: We choose 10,000 random sufﬁx tree leaves (corresponding to uniformly random sufﬁx array intervals [vl, vr] = [v, v], v ∈ [1, n]) and navigate towards the root using operation Parent(vl, vr) = [PSV(vl), NSV(vr) − 1]. At each such node, we also measure the string depth, SDepth(vl, vr) = LCP[RMQ(vl + 1, vr)]. We average the times of the NSV and RMQ queries involved.
+Figure 11 shows the space/time performance of RMM-NPR, RP-NPR, and RPBal-NPR on the repetitive collections. In addition, it shows the number of explicit accesses to LCP made per NPR operation.
+In general the curves for total time and number of LCP accesses have the same shape, showing that in practice the main cost of the NPR operations lies in retrieving the LCP values. In some cases, and most noticeably for RMQ queries on Para using RP-NPR, using more space yields fewer LCP accesses but higher time. This is because the Re-Pair grammars may be very unbalanced, and giving more space to them results in less tree pruning. Thus deeper trees, whose nodes have to be traversed one by one to cover short LCP passages, are generated. RPBal-NPR largely corrects this effect by generating more balanced grammar trees.
+Clearly, RP-NPR and RPBal-NPR dominate the space/time map for all queries. They always make better use of the space than the regular tree of RMM-NPR. RPBal-NPR is usually better than RP-NPR, except on some particular cases, like NSV on Escherichia, where RP-NPR is faster.
+
+Algorithms 2013, 6
+
+347
+
+# of LCP accesses
+
+Time per operation (milliseconds)
+
+# of LCP accesses
+
+Time per operation (milliseconds)
+
+Figure 11. Space/Time performance of NPR operations. The x-axis shows the size of the NPR structure. On the left y-axis the average time per operation (solid lines), and on the right y-axis the average number of LCP accesses per operation (dashed lines). Note the log scale on y for Einstein.
+
+22 20 18 16 14 12 10
+8 6 4 2 0
+0
+14
+12
+10
+8
+
+NSV on Para
+
+RP-NPR RMM-NPR RPBal-NPR
+RP-NPR RMM-NPR RPBal-NPR
+
+0.2 0.4 0.6 0.8 1 1.2 1.4 1.6 1.8
+NSV on Influenza
+RP-NPR RMM-NPR RPBal-NPR
+RP-NPR RMM-NPR RPBal-NPR
+
+400 350 300 250 200 150 100 50 0 2 250
+200
+150
+
+6 100
+4 50
+2
+
+0 0
+20 18 16 14 12 10
+8 6 4 2 0
+0
+14
+12
+10
+8
+6
+4
+2
+
+0 0.2 0.4 0.6 0.8 1 1.2 1.4
+
+NSV on Escherichia
+RP-NPR RMM-NPR RPBal-NPR
+RP-NPR RMM-NPR RPBal-NPR
+
+300 250
+
+200
+
+150
+
+100
+
+50
+
+0 0.2 0.4 0.6 0.8 1 1.2 1.4 1.6 1.8
+
+NSV on Einstein
+
+RP-NPR RMM-NPR RPBal-NPR
+RP-NPR RMM-NPR RPBal-NPR
+
+300 250
+
+200
+
+150
+
+100
+
+50
+
+00 0 0.1 0.2 0.3 0.4 0.5 0.6 0.7
+
+# of LCP accesses Time per operation (milliseconds)
+
+# of LCP accesses Time per operation (milliseconds)
+
+# of LCP accesses Time per operation (milliseconds)
+
+# of LCP accesses Time per operation (milliseconds)
+
+RMQ on Para
+
+25 400
+
+RP-NPR
+
+RMM-NPR
+
+RPBal-NPR
+
+350
+
+RP-NPR
+
+20 RMM-NPR
+
+RPBal-NPR
+
+300
+
+15 250 200
+10 150
+
+100 5
+50
+
+0 0
+14
+12
+10
+8
+
+0.2 0.4 0.6 0.8 1 1.2 1.4 1.6 1.8
+RMQ on Influenza
+RP-NPR RMM-NPR RPBal-NPR
+RP-NPR RMM-NPR RPBal-NPR
+
+0 2
+250
+200
+150
+
+6 100
+4 50
+2
+
+0 0
+22 20 18 16 14 12 10
+8 6 4 2 0
+0
+14
+12
+10
+8
+6
+4
+2
+
+0 0.2 0.4 0.6 0.8 1 1.2 1.4
+
+RMQ on Escherichia
+RP-NPR RMM-NPR RPBal-NPR
+RP-NPR RMM-NPR RPBal-NPR
+
+300 250
+
+200
+
+150
+
+100
+
+50
+
+0 0.2 0.4 0.6 0.8 1 1.2 1.4 1.6 1.8
+
+RMQ on Einstein
+
+RP-NPR RMM-NPR RPBal-NPR
+RP-NPR RMM-NPR RPBal-NPR
+
+300 250
+
+200
+
+150
+
+100
+
+50
+
+00 0 0.1 0.2 0.3 0.4 0.5 0.6 0.7
+
+# of LCP accesses
+
+Time per operation (milliseconds)
+
+# of LCP accesses
+
+Time per operation (milliseconds)
+
+Algorithms 2013, 6
+
+348
+
+The times of our best variants are in the range of a few milliseconds per operation. This is high compared with the times obtained on general sequences. The closest comparison point is Russo et al.’s CST [14] whose times are very similar, but it uses 4–6 bpc compared with our 1.4–1.9 bpc. As discussed, we can expect our bpc value to decrease even more on larger databases. Such a representation, even if taking milliseconds per operation, is very convenient if it saves us from using a disk-based sufﬁx tree. Note also that, on very repetitive collections, we could avoid pruning the grammar at all. In this case the grammar itself would give access to the LCP array much faster than by accessing bitmap H.
+9. Conclusions
+We have presented new practical compressed sufﬁx tree implementations that offer very relevant space/time tradeoffs. This opens the door to a number of practical sufﬁx tree applications, particularly relevant to bioinformatics. We have left the code publicly available at the Pizza & Chili site, to foster its widest dissemination [51].
+Our main idea is to adapt range min-max trees [22] to the problem of solving queries on the LCP array. This has proved to offer an attractive combination of time and space. Moreover, it offers stronger functionality, allowing us to easily implement complex operations like string-level ancestors (LAQS), which are seldom implemented in other CSTs. The second key idea is that, on repetitive collections, one can grammar-compress the differential LCP array and use the grammar tree as a (non-regular) variant of the range min-max tree, whose size depends on the repetitiveness of the text collection. This has yielded the ﬁrst compressed sufﬁx tree that takes full advantage of repetitive collections, offering spaces well below 2 bits per character.
+This is an active and lively research topic, and there has been interesting advances since our ﬁrst publication [29]. Gog [21] developed another LCP representation that falls between DAC/DAC-Var and Sad-Gon/FMN-RRR (recall Section 3). Ohlebusch et al. [21,28] developed a data structure using 3n + o(n) bits that answers the three queries NSV/PSV/RMQ efﬁciently (recall Section 4). Both techniques were combined to build an alternative CST implementing Fischer et al.’s [18] idea, which outperforms our “large and fast” variant based on DAC/DAC-Var. Our “small and slow” variant, instead, still requires less space, and in this aspect is only outperformed by Russo et al.’s [14] CST, which is orders of magnitude slower. Furthermore, our technique is unbeaten when adapted to repetitive collections, which none of the other existing CSTs exploits well. As an example, our adapted range min-max tree uses 0.2–0.3 bpc on these collections, which is at least 10–15 times smaller than the new 3n + o(n) NSV/PSV/RMQ structure of Ohlebusch et al. [28].
+Acknowledgements
+We thank Francisco Claude, Johannes Fischer, Rodrigo Gonza´lez, Juha Ka¨rkka¨inen, Roberto Konow, Susana Ladra, Veli Ma¨kinen, Simon Puglisi, Lu´ıs Russo, and Kunihiko Sadakane for code, help to use it, and discussions. This work was partially funded by the Millennium Institute for Cell Dynamics and Biotechnology (ICDB), Grant ICM P05-001-F, Mideplan, Chile. NICTA is funded by the Australian Government as represented by the Department of Broadband, Communications and the Digital Economy and the Australian Research Council through the ICT Centre of Excellence program.
+
+Algorithms 2013, 6
+
+349
+
+References
+1. MIT Technology Review. Available online: http://www.technologyreview.com/featuredstory/511051/ inside-chinas-genome-factory (accessed on 20 May 2013).
+2. McCreight, E. A space-economical sufﬁx tree construction algorithm. J. ACM 1976, 32, 262–272. 3. Weiner, P. Linear Pattern Matching Algorithms. In Proceedings of the IEEE Symposium on
+Switching and Automata Theory, Iowa City, IA, USA, 15–17 October 1973; pp. 1–11. 4. Apostolico, A. The Myriad Virtues of Subword Trees. In Combinatorial Algorithms on Words;
+Springer-Verlag: Berlin, Germany, 1985; pp. 85–96. 5. Gusﬁeld, D. Algorithms on Strings, Trees and Sequences: Computer Science and Computational
+Biology; Cambridge University Press: Cambridge, UK, 1997. 6. Kurtz, S. Reducing the space requirements of sufﬁx trees. Softw. Prac. Exp. 1999, 29, 1149–1171. 7. Manber, U.; Myers, E. Sufﬁx arrays: A new method for on-line string searches. SIAM J. Comput.
+1993, 22, 935–948. 8. Abouelhoda, M.; Kurtz, S.; Ohlebusch, E. Replacing sufﬁx trees with enhanced sufﬁx arrays.
+J. Discret. Algorithms 2004, 2, 53–86. 9. Munro, I.; Raman, V.; Rao, S. Space efﬁcient sufﬁx trees. J. Algorithms 2001, 39, 205–222. 10. Sadakane, K. Succinct Representations of Lcp Information and Improvements in the Compressed
+Sufﬁx Arrays. In Proceedings of the 13th Annual ACM-SIAM Symposium on Discrete Algorithms (SODA), San Francisco, CA, USA, 6–8 January 2002; pp. 225–232. 11. Sadakane, K. Compressed sufﬁx trees with full functionality. Theory Comput. Syst. 2007, 41, 589–607. 12. Sadakane, K. New text indexing functionalities of the compressed sufﬁx arrays. J. Algorithms 2003, 48, 294–313. 13. Russo, L.; Navarro, G.; Oliveira, A. Fully-Compressed Sufﬁx Trees. In Proceedings of the 8th Latin American Symposium on Theoretical Informatics (LATIN), Rio de Janeiro, Brazil, 7–11 April 2008; pp. 362–373. 14. Russo, L.; Navarro, G.; Oliveira, A. Fully-compressed sufﬁx trees. ACM Trans. Algorithms 2011, 7, doi:10.1145/2000807.2000821. 15. Ferragina, P.; Manzini, G.; Ma¨kinen, V.; Navarro, G. Compressed representations of sequences and full-text indexes. ACM Trans. Algorithms 2007, 3, doi:10.1145/1240233.1240243. 16. Manzini, G. An analysis of the Burrows-Wheeler transform. J. ACM 2001, 48, 407–430. 17. Fischer, J.; Ma¨kinen, V.; Navarro, G. An(other) Entropy-Bounded Compressed Sufﬁx Tree. In Proceedings of the 19th Annual Symposium on Combinatorial Pattern Matching (CPM), Pisa, Italy, 18–20 June 2008; pp. 152–165. 18. Fischer, J.; Ma¨kinen, V.; Navarro, G. Faster entropy-bounded compressed sufﬁx trees. Theory Comput. Sci. 2009, 410, 5354–5364. 19. Fischer, J. Wee LCP. Inf. Process. Lett. 2010, 110, 317–320. 20. Va¨lima¨ki, N.; Gerlach, W.; Dixit, K.; Ma¨kinen, V. Engineering a Compressed Sufﬁx Tree Implementation. In Proceedings of the 6th Workshop on Experimental Algorithms (WEA), Rome, Italy, 6–8 June 2007; pp. 217–228.
+
+Algorithms 2013, 6
+
+350
+
+21. Gog, S. Compressed Sufﬁx Trees: Design, Construction, and Applications. Ph.D. Thesis, University of Ulm, Ulm, Germany, 2011.
+22. Sadakane, K.; Navarro, G. Fully-Functional Succinct Trees. In Proceedings of the 21st Annual ACM-SIAM Symposium on Discrete Algorithms (SODA), Austin, TX, USA, 17–19 January 2010; pp. 134–149.
+23. Arroyuelo, D.; Ca´novas, R.; Navarro, G.; Sadakane, K. Succinct Trees in Practice. In Proceedings of the 11th Workshop on Algorithm Engineering and Experiments (ALENEX), New York, NY, USA, 3 January 2009; pp. 84–97.
+24. Kreft, S.; Navarro, G. Self-Indexing Based on LZ77. In Proceedings of the 22nd Annual Symposium on Combinatorial Pattern Matching (CPM), Palermo, Italy, 27–29 June 2011; pp. 41–54.
+25. Ma¨kinen, V.; Navarro, G.; Sire´n, J.; Va¨lima¨ki, N. Storage and retrieval of highly repetitive sequence collections. J. Comput. Biol. 2010, 17, 281–308.
+26. Claude, F.; Navarro, G. Self-Indexed Text Compression Using Straight-Line Programs. In Proceedings of the 34th International Symposium on Mathematical Foundations of Computer Science (MFCS), Novy Smokovec, Slovakia, 24–28 August 2009; pp. 235–246.
+27. Claude, F.; Farin˜a, A.; Mart´ınez-Prieto, M.; Navarro, G. Compressed q-Gram Indexing for Highly Repetitive Biological Sequences. In Proceedings of the 10th IEEE Conference on Bioinformatics and Bioengineering (BIBE), Philadelphia, PA, USA, 31 May–3 June 2010; pp. 86–91.
+28. Ohlebusch, E.; Fischer, J.; Gog, S. CST++. In Proceedings of the 17th International Symposium on String Processing and Information Retrieval (SPIRE), Los Cabos, Mexico, 11–13 October 2010; pp. 322–333.
+29. Ca´novas, R.; Navarro, G. Practical Compressed Sufﬁx Trees. In Proceedings of the 9th International Symposium on Experimental Algorithms (SEA), Ischia Island, Italy, 20–22 May 2010; pp. 94–105.
+30. Abeliuk, A.; Navarro, G. Compressed Sufﬁx Trees for Repetitive Texts. In Proceedings of the 19th International Symposium on String Processing and Information Retrieval (SPIRE), Cartagena, Colombia, 21–25 October 2012; pp. 30–41.
+31. Navarro, G.; Ma¨kinen, V. Compressed full-text indexes. ACM Comput. Surv. 2007, 39, doi:10.1145/1216370.1216372.
+32. Ferragina, P.; Gonza´lez, R.; Navarro, G.; Venturini, R. Compressed text indexes: From theory to practice. ACM J. Exp. Algorithmics 2009, 13, doi:10.1145/1412228.1455268.
+33. Munro, I. Tables. In Proceedings of the 16th Conference on Foundations of Software Technology and Theoretical Computer Science (FSTTCS), Hyderabad, India, 18–20 December 1996; pp. 37–42.
+34. Larsson, J.; Moffat, A. Off-Line dictionary-based compression. Proc. IEEE 2000, 88, 1722–1732. 35. Gonza´lez, R.; Navarro, G. Compressed Text Indexes with Fast Locate. In Proceedings of the 18th
+Annual Symposium on Combinatorial Pattern Matching (CPM), London, Canada, 9–11 July 2007; pp. 216–227. 36. Ma¨kinen, V.; Navarro, G. Succinct sufﬁx arrays based on run-length encoding. Nord. J. Comput. 2005, 12, 40–66.
+
+Algorithms 2013, 6
+
+351
+
+37. Raman, R.; Raman, V.; Rao, S. Succinct Indexable Dictionaries with Applications to Encoding k-Ary Trees and Multisets. In Proceedings of the 13th Annual ACM-SIAM Symposium on Discrete Algorithms (SODA), San Francisco, CA, USA, 6–8 January 2002; pp. 233–242.
+38. Okanohara, D.; Sadakane, K. Practical Entropy-Compressed Rank/Select Dictionary. In Proceedings of the 9th Workshop on Algorithm Engineering and Experiments (ALENEX), New Orleans, LA, USA, 6 January 2007.
+39. Gonza´lez, R.; Grabowski, S.; Ma¨kinen, V.; Navarro, G. Practical Implementation of Rank and Select Queries. In Proceedings of the posters 4th Workshop on Experimental Algorithms (WEA), Santorini Island, Greece, 10–13 May 2005; pp. 27–38.
+40. Claude, F.; Navarro, G. Practical Rank/Select Queries over Arbitrary Sequences. In Proceedings of the 15th International Symposium on String Processing and Information Retrieval (SPIRE), Melbourne Australia, 10–12 November 2008; pp. 176–187.
+41. Puglisi, S.; Turpin, A. Space-Time Tradeoffs for Longest-Common-Preﬁx Array Computation. In Proceedings of the 19th International Symposium on Algorithms and Computation (ISAAC), Gold Coast, Australia, 15–17 December 2008; pp. 124–135.
+42. Ka¨rkka¨inen, J.; Manzini, G.; Puglisi, S. Permuted Longest-Common-Preﬁx Array. In Proceedings of the 20th Annual Symposium on Combinatorial Pattern Matching (CPM), Lille, France, 22–24 June 2009; pp. 181–192.
+43. Brisaboa, N.; Ladra, S.; Navarro, G. Directly Addressable Variable-length Codes. In Proceedings of the 16th International Symposium on String Processing and Information Retrieval (SPIRE), Saariselk, Finland, 25–27 August 2009; pp. 122–130.
+44. Pizza & Chili Corpus. Available online: http://pizzachili.dcc.uchile.cl (accessed on 20 May 2013). 45. Geary, R.; Rahman, N.; Raman, R.; Raman, V. A simple optimal representation for balanced
+parentheses. Theory Comput. Sci. 2006, 368, 231–246. 46. Fischer, J.; Heun, V. Space-Efﬁcient preprocessing schemes for range minimum queries on static
+arrays. SIAM J. Comput. 2011, 40, 465–492. 47. Konow, R.; Navarro, G. Faster Compact Top-k Document Retrieval. In Proceedings of the 23rd
+Data Compression Conference (DCC), Snowbird, UT, USA, 20 March 2013; pp. 351–360. 48. Sakamoto, H. A fully linear-time approximation algorithm for grammar-based compression.
+J. Discret. Algorithms 2005, 3, 416–430. 49. Pizza & Chili Repetitive Corpus. Available online: http://pizzachili.dcc.uchile.cl/repcorpus
+(accessed on 20 May 2013). 50. Software Page of Gonzalo Navarro. Available online: http://www.dcc.uchile.cl/gnavarro/software
+(accessed on 20 May 2013). 51. Pizza & Chili Corpus. Available online: http://pizzachili.dcc.uchile.cl/cst (accessed on 20 May
+2013).
+c 2013 by the authors; licensee MDPI, Basel, Switzerland. This article is an open access article distributed under the terms and conditions of the Creative Commons Attribution license (http://creativecommons.org/licenses/by/3.0/).
+
+

@@ -1,0 +1,1782 @@
+Noname manuscript No. (will be inserted by the editor)
+Nominal Techniques in Isabelle/HOL
+Christian Urban
+Received: date / Accepted: date
+Abstract This paper describes a formalisation of the lambda-calculus in a HOL-based theorem prover using nominal techniques. Central to the formalisation is an inductive set that is bijective with the alpha-equated lambda-terms. Unlike de-Bruijn indices, however, this inductive set includes names and reasoning about it is very similar to informal reasoning with “pencil and paper”. To show this we provide a structural induction principle that requires to prove the lambda-case for fresh binders only. Furthermore, we adapt work by Pitts providing a recursion combinator for the inductive set. The main technical novelty of this work is that it is compatible with the axiom of choice (unlike earlier nominal logic work by Pitts et al); thus we were able to implement all results in Isabelle/HOL and use them to formalise the standard proofs for Church-Rosser, strong-normalisation of beta-reduction, the correctness of the type-inference algorithm W, typical proofs from SOS and much more. Keywords Lambda-calculus nominal logic work theorem provers.
+1 Introduction We thank T. Thacher Robinson for showing us on August 19, 1962 by a counterexample the existence of an error in our handling of bound variables. S. C. Kleene [17, Page 16]
+When reasoning informally about syntax, issues with binders and alpha-equivalence are almost universally perceived as unimportant and thus mostly ignored. However, errors do arise from these issues as the quotation from Kleene shows. It is therefore desirable to have convenient techniques for formalising informal proofs. In this paper such a technique is described in the context of the lambda-calculus and the theorem prover Isabelle/HOL. However, the techniques generalise to more complex calculi and parts have already been adapted in HOL4, HOL-light and Coq.
+This paper is a revised and much extended version of Urban and Berghofer [32], and Urban and Tasson [36]. Christian Urban Technical University Munich, Germany,E-mail: urbanc@in.tum.de
+
+2
+
+Substitution Lemma: If
+
+and
+
+, then
+
+.
+
+Proof: By induction on the structure of .
+
+Case 1: is a variable.
+
+Case 1.1.
+
+. Then both sides equal
+
+since
+
+.
+
+Case 1.2.
+
+. Then both sides equal , for
+
+implies
+
+Case 1.3.
+
+. Then both sides equal .
+
+Case 2:
+
+. By the variable convention we may assume that
+
+in . Then by induction hypothesis
+
+. and is not free
+
+Case 3:
+
+. . The statement follows again from the induction hypothesis.
+
+Fig. 1 An informal proof of the substitution lemma taken from Barendregt’s book [5]. In second case, the variable convention allows him to move the substitutions under the binder, to apply the induction hypothesis and ﬁnally to pull the substitutions back out from under the binder.
+
+The main point of this paper is to give a representation for alpha-equated lambda-terms that is based on names, is inductive and comes with a structural induction principle where the lambda-case needs to be proved for only fresh binders. Furthermore, we give a structural recursion combinator for deﬁning functions over this set. In practice this will mean that we come quite close to the informal reasoning using Barendregt’s variable convention [5]. An illustrative example of such informal reasoning is Barendregt’s proof of the substitution lemma shown in Fig. 1. In this paper we describe a reasoning infrastructure for formalising such informal proofs with ease. This reasoning infrastructure has been implemented in Isabelle/HOL as part of the nominal datatype package.1
+Our work is based on the nominal logic work by Pitts et al [11, 26]. The main technical novelty is that our work is compatible with the axiom of choice. This is important, because otherwise we would not be able to built in a HOL-based theorem prover a framework for reasoning based on nominal techniques. The reason why the original nominal logic work is incompatible with the axiom of choice has to do with the way how the ﬁnite support property is enforced: FM-set theory is deﬁned in [11] so that every set in the FM-set-universe has ﬁnite support. In nominal logic [26], the axioms (E3) and (E4) imply that every function symbol and proposition has ﬁnite support. However, there are notions in HOL that do not have ﬁnite support, most notably choice functions (see [27, Example 3.4, Page 470]). Here, we will avoid the incompatibility with the axiom of choice by not a priory restricting our discourse to only ﬁnitely supported entities as done previously, rather we will explicitly assume this property whenever it is needed in proofs. One consequence is that we state our basic deﬁnitions not in terms of nominal sets (as done for example in [27]), but in terms of the weaker notion of permutation types—essentially sets equipped with a “sensible” notion of permutation operation.
+The paper is organised as follow: Sec. 2 introduces the basic notions of the nominal logic work adapted to our Isabelle/HOL setting. Sec. 3 ﬁrst reviews alpha-equivalence for lambdaterms and then gives a construction of an inductive set that is bijective with the alpha-equated lambda-terms. Two structural induction principles for this set are derived in Sec. 4. Recent work by Pitts [27] is adapted in Sec. 5 to give a structural recursion combinator for deﬁning
+
+1 Available from
+
+.
+
+3
+functions over the bijective set. Sec. 6 gives examples; related work is mentioned in Sec. 7 and Sec. 8 concludes.
+
+2 Atoms, Permutations and Support
+
+In the lambda-calculus there is a single type of bindable names, here denoted by , whose
+
+elements in the tradition of the nominal logic work we call atoms. While the structure of
+
+atoms is immaterial, two properties need to hold for the type : one has to be able to
+
+distinguishing different atoms and one needs to know that there are countably inﬁnitely
+
+many of them. This can be achieved in Isabelle/HOL by implementing the type
+
+as
+
+natural numbers or strings.
+
+Permutations are ﬁnite bijective mappings from to . They can be represented
+
+as ﬁnite lists whose elements are swappings (i.e. pairs of atoms). In what follows the type-
+
+abbreviation
+
+will stand for the type of permutations, that is
+
+,
+
+and we will write permutations as
+
+with the empty list standing for the identity permutation. The operation of a permutation acting on an atom is deﬁned as:
+
+def
+if def if
+otherwise
+
+(1)
+
+where
+
+is the composition of a permutation followed by the swapping . The
+
+composition of followed by another permutation is given by list-concatenation, written
+
+as , and the inverse of a permutation is given by list reversal, written as .
+
+Our representation of permutations as lists does not give unique representatives: for example, the permutation is “equal” to the identity permutation. We equate the representations of permutations with a relation :
+
+Deﬁnition 1 (Permutation Equality) Two permutations are equal, written
+
+vided
+
+for all atoms .
+
+, pro-
+
+To generalise the notion given in (1) of a permutation acting on an atom, we take ad-
+
+vantage of the overloading mechanism in Isabelle by declaring a constant, written inﬁx as
+
+, with the polymorphic type
+
+. A deﬁnition of the permutation
+
+operation can then be given separately for each type-constructor; for lists, products, unit,
+
+4
+
+sets, functions, options and booleans the deﬁnitions are as follows:
+def def def def def def def def def
+
+(2)
+
+It will save much work later on to not establish properties for each of these permutation operations individually, but reason abstractly over them by requiring that every permutation operation satisﬁes three basic properties:
+
+Deﬁnition 2 (Permutation Type) A type will be referred to as permutation type, written , provided the permutation operation satisﬁes the following three properties:
+(i) (ii) (iii) implies
+
+These properties entail that the permutations operation behaves over permutation types as one expects:
+
+Lemma 1 Assuming and are of permutation type then:
+
+(i) ,
+
+(ii) if and only if
+
+,
+
+(iii)
+
+if and only if
+
+, and
+
+(iv)
+
+if and only if
+
+.
+
+Proof The ﬁrst property holds by Def. 2(i-iii) since
+
+, which can be shown by
+
+an induction over the length of . The second property follows from the ﬁrst. The third is a
+
+consequence of the ﬁrst and second. For the fourth one has to unwind the deﬁnition of the
+
+permutation operation for sets and apply the third property.
+
+Using Isabelle’s axiomatic type-classes [37], it is very convenient to ensure that a type is
+
+a permutation type because most of the routine work can be performed by the type-checking
+
+algorithm of Isabelle: one only has to establish that some “base” types, such as
+
+and
+
+, are permutation types and that type-constructors, such as products and lists, preserve
+
+the property of being a permutation type. More formally we have:
+
+Lemma 2 Given , , and
+
+and , the types , , are also permutation types.
+
+,,
+
+,
+
+Proof All properties follow by unwinding the deﬁnition of the corresponding permutation
+
+operation and routine inductions. The property
+
+uses the fact that
+
+implies
+
+.
+
+5
+
+Note that the permutation operation over a function-type, say
+
+with being a
+
+permutation type, is deﬁned so that for every function we have the equation
+
+(3)
+
+in Isabelle/HOL; this is because we have
+
+by Lem. 1(i) and
+
+by deﬁnition of permutations acting on functions.
+
+The most interesting feature of the nominal logic work is that as soon as one ﬁxes a
+
+“sensible” permutation operation for a type, then the support for the elements of this type,
+
+very roughly speaking their set of free atoms, is ﬁxed as well. The deﬁnition of support and
+
+the derived notion of freshness is:
+
+Deﬁnition 3 (Support and Freshness) The support of , written atoms deﬁned as:
+def
+
+, is the set of
+
+where written
+
+means that the set is inﬁnite.2 An atom is said to be fresh for an ,
+
+, provided
+
+.
+
+Intuitively, this deﬁnition says that is fresh for if and only if
+
+holds for all
+
+but ﬁnitely many . Unwinding this deﬁnition and the permutation operations given in (2),
+
+one can often easily calculate the support for “ﬁnitary” permutation types such as:
+
+(4)
+
+More subtle is the calculation of the support for “inﬁnitary” permutation types such as func-
+
+tions and inﬁnite sets. However, the use of the notion of support, as opposed to the usual
+
+notion of free atoms, is crucial for this work: the bijective set we describe in the next section
+
+includes some functions, and for those it is far from obvious what the deﬁnition of the set
+
+of free atoms should be (the obstacle is to ﬁnd an appropriate deﬁnition for free variables of
+
+functions with type, say
+
+, in terms of the free variables for elements of the type
+
+and ). Contrast this with the deﬁnition of permutation for functions given in (2), which
+
+is deﬁned in terms of the permutation acting on the domain and co-domain of functions. It
+
+will turn out that, albeit slightly unwieldy, Def. 3 coincides exactly with what one intuitively
+
+associates with the set of free atoms for the functions we shall use.
+
+For permutation types the notion of support and freshness have good properties: we ﬁrst
+
+show that the support and the permutation operation commute and that permutation preserve freshness.3
+
+2 In Isabelle/HOL the predicate
+
+is deﬁned as “not a ﬁnite set” with the predicate for a set being
+
+ﬁnite deﬁned inductively starting with the empty set and by adding elements.
+
+3 Pitts gives in [27] a simpler proof for (i), but in a more restricted setting, namely where has ﬁnite
+
+support. Our lemma is more general as we only require to be of permutation type.
+
+6
+
+Lemma 3 For all of permutation type:
+
+(i) ,
+
+(ii) if and only if
+
+, and
+
+(iii)
+
+if and only if
+
+.
+
+Proof The ﬁrst property follows from the calculation:
+def def
+
+def
+
+where holds because the sets
+
+and
+
+have the same number of elements,
+
+and where holds because permutations preserve by Lem. 1(ii) (in)equalities; holds
+
+because commutes with the swapping, that is
+
+for all atoms and
+
+. For the second and third property we have by Lem. 1(iv) that
+
+if and only if
+
+; they then follow from (i) and Lem. 1(i).
+
+Another important property of freshness is the fact that if two atoms are fresh w.r.t. an element of a permutation type then the permutation swapping those two atoms in this element has no effect:
+
+Lemma 4 For all of permutation type, if and then
+
+.
+
+Proof The case
+
+is clear by Def. 2(i,iii) and the fact that
+
+. In the other
+
+case, the assumption implies that both sets and are
+
+ﬁnite, and therefore also their union must be ﬁnite. Hence the corresponding co-set, that is
+
+, is inﬁnite (recall that there are inﬁnitely many atoms). If one
+
+picks from this co-set one element, say , which can be assumed to be different from and ,
+
+one has
+
+and . Thus
+
+. Under the assumptions
+
+, , the permutations
+
+and are equal. Therefore one can
+
+conclude with
+
+by using Def. 2(ii,iii).
+
+A further restriction on permutation types ﬁlters out all those that contain elements with inﬁnite support:
+
+Deﬁnition 4 (Finitely Supported Permutation Types) A permutation type is said to be ﬁnitely supported, written fs , if every element of has ﬁnite support.
+
+We shall write
+
+to indicate that an element from a permutation type has
+
+ﬁnite support. The following holds:
+
+Lemma 5 Given fs , fs and fs , the types , are also ﬁnitely supported permutation types.
+
+,
+
+,
+
+, and
+
+Proof Routine proofs using the calculations given in (4).
+
+7
+The crucial property entailed by Def. 4 is that if an element, say , of a permutation type has ﬁnite support, then there must be a fresh atom for , since there are inﬁnitely many atoms. Therefore we have:
+Proposition 1 If of permutation type has ﬁnite support, then there exists an atom with .
+As a result, whenever we need to have a fresh atom for an of permutation type, we have to make sure that has ﬁnite support. This task can be automatically performed by Isabelle’s axiomatic type-classes for most constructions occurring in informal proofs: Isabelle has to just examine the types of the construction using Lem. 5.
+Prop 1 also implies that for every ﬁnitely supported function a fresh atom exists. However, to determine whether a function has ﬁnite support is more subtle, because not all functions are ﬁnitely supported, even if their domain and codomain are ﬁnitely supported permutation types (see [27, Example 3.4, Page 470]). Introducing a ﬁnitely supported function space and blending it well into Isabelle’s reasoning infrastructure seems impractical for reasons how Isabelle is implemented. So for functions one has to “manually” ensure ﬁnite support, which we shall do in Sec. 5 by introducing a weaker notion that approximates the support of an element from “above”.
+
+3 Constructing a Representation for Alpha-Equated Lambda-Terms
+
+In this section we deﬁne an inductive set that is bijective with the set of alpha-equated lambda-terms. In doing so our goal is to give in Isabelle/HOL a formal implementation of the usual convention (from Barendregt [5, Page 26]) employed explicitly or implicitly in many informal proofs:
+
+CONVENTION. Terms that are -congruent are identiﬁed. So now we
+
+write
+
+, etcetera.
+
+We begin with deﬁning “raw” lambda-terms. They can be deﬁned in Isabelle/HOL with the datatype declaration:
+
+(5)
+
+Given the following permutation operation for lambda-terms
+def def def
+
+(6)
+
+the datatype is a permutation type (routine proof by structural induction). As mentioned
+
+earlier, ﬁxing the permutation operation also ﬁxes the notion of support, which in case of
+
+coincides with the set of all atoms occurring in a lambda-term. Hence is a ﬁnitely
+
+supported permutation type.
+
+The notion of alpha-equivalence for is usually deﬁned as the least congruence of
+
+the equation
+
+involving a renaming substitution and a side-
+
+condition, namely that does not occur freely in . In the nominal logic work, however,
+
+8
+
+Fig. 2 Inductive deﬁnitions for
+
+and
+
+.
+
+atoms are manipulated not by renaming substitutions, but by permutations. This has a num-
+
+ber of technical advantages (compare the technical subtleties of Dowek et al [9] with the
+
+approach in Urban et al [35]), because permutations are bijections on atoms, while renam-
+
+ing substitution might identify some atoms. As a consequence of the bijectivity, a renaming
+
+based on permutations preserves the binding structure. In contrast, applying na¨ıvely a re-
+
+naming substitution one might identify an atom that is bound with one that is free.
+
+Using the permutation operation given in (6), alpha-equivalence for can be deﬁned
+
+in a simple and syntax directed fashion using the relations
+
+and
+
+whose rules are given in Fig. 2. Because of the “asymmetric” rule
+
+, it might be sur-
+
+prising, but:
+
+Proposition 2 The relation is an equivalence relation.
+
+The proof of this proposition is omitted: it can be found in a more general setting in Urban
+
+et al [35]. (We also omit a proof showing that and coincide). In the following,
+
+will stand for the alpha-equivalence class of the lambda-term , that is def
+
+,
+
+and for the set of lambda-terms quotient by .
+
+Next we will deﬁne a set ; inside this set we will subsequently identify (inductively)
+
+a subset, called , that is in bijection with
+
+. Since Isabelle/HOL supports sub-
+
+set types, we can later turn
+
+into a new type. In order to obtain the bijection,
+
+needs to be deﬁned so that it contains elements corresponding, roughly speaking, to alpha-
+
+equated variables, applications and lambda-abstractions—that is to
+
+,
+
+and . Whereas this is straightforward for variables and applications, the lambda-
+
+abstractions are non-trivial: for them we shall use some speciﬁc “partial” functions from
+
+to (by “partial” we mean here functions that return
+
+for undeﬁned values and
+
+for deﬁned ones4). We therefore deﬁne as the Isabelle/HOL datatype:
+
+(7)
+
+where will be used to encode atoms; to encode applications, which are built up by a pair of terms; and to encode an alpha-equivalence class (that is a set) of terms. The
+4 In Urban and Tasson [36] a special error-element was used to stand for undeﬁnedness. However, the approach based on the option-type turned out to be more convenient for building a nominal datatype package in Isabelle/HOL.
+
+permutation operation for is deﬁned over the structure as follows:
+def def def
+
+9
+(8)
+
+using in the last clause the permutations operation for functions given in (2). It is not hard to show that is a permutation type (routine induction over the structure of -terms).
+We mentioned earlier that we are not going to use all functions from to for representing alpha-equated lambda-abstractions, but some speciﬁc functions.5 These functions are of the form:
+def
+(9)
+
+and we will refer to them as abstraction functions; their parameters are an atom and a -
+
+term.
+
+We claim that these functions represent alpha-equivalence classes. To see this, consider
+
+and the corresponding -term
+
+.
+
+The graph of the abstraction function is as follows: the atom is mapped to the term
+
+since the ﬁrst -condition is true. For , the ﬁrst -condition obvi-
+
+ously fails, but also the second one fails, because
+
+; therefore
+
+is mapped to . For all other atoms , we have
+
+and
+
+; conse-
+
+quently these ’s are mapped by the abstraction function to
+
+,
+
+which is
+
+. Clearly, the abstraction function returns
+
+when-
+
+ever the corresponding lambda-term is not in the alpha-equivalence class—in this example
+
+the lambda-term
+
+; in all other
+
+cases, however, it returns an appropriately “renamed” version of
+
+.
+
+To show formally that abstraction functions represent alpha-equivalence classes, we ﬁrst
+
+establish how the permutation operation behaves on those functions and then establish the
+
+conditions under which two such functions are equal:
+
+Lemma 6 All abstraction functions satisfy:
+(i) , and (ii) if and only if either:
+
+or
+
+Proof The ﬁrst property follows from the following calculation:
+5 This is in contrast to “weak” and “full” HOAS [8, 25] which use the full function space for representing lambda-abstractions.
+
+10
+
+def
+
+def
+
+() () ()
+def
+
+where we use in ( ) the fact that
+
+(10)
+
+and in that
+
+; for the facts that
+
+iff
+
+and iff , which can be easily derived from Lemmas 1(ii)
+
+and 3(ii) and the permutation operation on .
+
+For the second property the case
+
+is by a simple calculation using extensionality of
+
+functions. In case
+
+we show ﬁrst the -direction: the following formula holds then by
+
+extensionality of functions:
+
+Instantiating this formula with yields the equation
+
+Next, one distinguishes the cases where
+
+and
+
+, respectively. In the ﬁrst case,
+
+, which by Def. 2 implies
+
+since
+
+;
+
+and obviously
+
+by assumption. In the second case
+
+which gives
+
+a contradiction. The -direction for the case
+
+is similarly by extensionality and a
+
+case-analysis.
+
+Note that, in general, one cannot decide whether two functions from
+
+to
+
+are equal; however for the abstraction functions Lem. 6(ii) provides the means to decide
+
+whether
+
+holds: one just has to consider whether
+
+, which is just like
+
+deciding the alpha-equivalence of two lambda-terms using the relation
+
+given in
+
+Fig. 2. Now it is also clear why abstraction functions represent alpha-equivalence classes:
+
+the condition we derived for the equality between abstraction functions paraphrase the rules
+
+and deﬁning alpha-equivalence for .
+
+The properties in Lem. 6 also help us to calculate the support for abstraction functions,
+
+provided they “abstract” over a ﬁnitely supported -term.
+
+Lemma 7 Given
+
+and being ﬁnitely supported, then
+
+(i) if and only if , and
+
+11
+(ii)
+
+Proof By a simple calculations we have that
+
+because for all and
+
+we have
+
+. Since and are ﬁnitely
+
+supported, must be ﬁnitely supported. Hence
+
+is ﬁnitely supported and by
+
+Prop. 1 there exists an atom with
+
+.
+
+Now we show the direction (i ): using the assumption
+
+and the fact that
+
+(from ), Lem. 4 and 6(i) give
+
+. The right-
+
+hand side is
+
+because
+
+(from ) and
+
+by assumption. Hence by
+
+Lem. 6(ii) we can infer that
+
+. Now
+
+(from ) implies that
+
+;
+
+and moving the permutation to the other side by Lem. 3(ii) gives
+
+. The direction
+
+(i ) is as follows: from ( ), we have that
+
+and therefore by Lem. 3(iii) also
+
+, which implies by Lem. 6(i) that
+
+. From ( ) we also
+
+have and from the assumption ; then Lem. 4 implies that
+
+, and we can
+
+conclude with
+
+.
+
+The second property follows from the ﬁrst: we have and (both from ), and
+
+can use (i) to infer
+
+. Further, from Lem. 3(iii) it holds that
+
+. This
+
+is
+
+by Lem. 6(i). Since
+
+and , Lem. 6(ii) implies that
+
+. Therefore,
+
+.
+
+Note that taking both facts of Lem. 7 together implies the following equation for the support of abstraction functions
+(11)
+
+provided is ﬁnitely supported. Now everything is in place for deﬁning the subset
+three rules:
+
+. It is deﬁned inductively by the
+
+(12)
+
+using in the third rule the abstraction functions given in (9). We note:
+
+Lemma 8 For the set
+
+we have that:
+
+(i) all its elements are ﬁnitely supported, and (ii) it is closed under permutations, that is
+
+implies
+
+.
+
+Proof Both properties follow by routine inductions over the deﬁnition of induction we use the equations
+
+. For the ﬁrst
+
+(13)
+
+where the last follows from (11)— is ﬁnitely supported by induction hypothesis; for the second we use Lem. 6(i).
+
+12
+
+Next, one of the main points of this paper: there is a bijection between This is shown using the following mapping from to :
+def
+def
+def
+
+and the lemma: Lemma 9
+
+if and only if
+
+.
+
+and .
+
+Proof By routine induction over deﬁnition of .
+
+Theorem 1 There is a bijection between
+
+and
+
+.
+
+Proof The mapping needs to be lifted to alpha-equivalence classes (see Paulson [24]). For
+
+this deﬁne
+
+as follows: apply to every element of the set and build the union
+
+of the results. By Lem. 9 this must yield a singleton set. The result of
+
+is then the
+
+singleton. Surjectivity of is shown by a routine induction over the deﬁnition of .
+
+Injectivity of follows from Lem. 9 since
+
+for all
+
+.
+
+We deﬁned
+
+as an inductive subset of and showed that there is a bijection with
+
+. We can now apply standard HOL-techniques and turn the set
+
+into a type
+
+of HOL (see for example the Isabelle tutorial [21, Sec. 8.5.2] or Melham [19, 20] for more
+
+details). The construction we can perform in HOL is illustrated by the following picture:
+
+new isomorphism type
+
+existing type
+
+non-empty subset
+
+We are allowed to introduce the type
+
+by means of identifying a non-empty subset in
+
+the existing type (this type was introduced by the datatype declaration in (7)) and an
+
+isomorphism, which we write here as . The properties of the type
+
+are then given
+
+by the isomorphism and how the subset
+
+is deﬁned. For example we can characterise
+
+term-constructors of the type
+
+as follows:
+
+(14)
+
+with the following “injection” principles and the support behaving as follows:
+
+iff iff iff
+
+(15)
+
+13
+
+(16)
+
+Since by Lem. 8(ii) the permutation operation is closed on the set , we can also lift the permutation operation deﬁned over to the new type so that the following properties hold:
+(17)
+
+We can further show that:
+
+Lemma 10 The type supported.
+
+is a (i) permutation type and (ii) all its elements are ﬁnitely
+
+Proof By routine induction the over deﬁnition of . For (i) we lift the property of being a permutation type to using Lem. 8(ii); for (ii) we use (16).
+
+The crux of constructing the new type lambdas are equal provided
+
+is that we now have an Isabelle/HOL-type where
+
+if and only if either or
+
+(18)
+
+and freshness of a lambda is given by:
+
+if and only if either or
+
+(19)
+
+In effect we have achieved what we set out at the beginning of this section: we have a formal implementation of Barendregt’s convention about identifying alpha-equivalent lambdaterms.
+
+4 Structural Induction Principles
+
+The inductive deﬁnition of the set
+
+given in (12) comes with an induction principle.
+
+From this induction principle we can derive the following structural induction principle for
+
+the type :
+
+(20)
+However, this structural induction principle is not very convenient in practice. Consider again Fig. 1 showing a typical informal proof involving lambda-terms. This informal proof establishes the substitution lemma by considering in the lambda-case only binders that have suitable properties (namely being fresh for , , and ). If one would use for this
+
+14
+proof the induction principle given above, then one would need to show the lambda-case for all , not just the ones being suitably fresh. This would mean one has to rename binders and establish a number of auxiliary lemmas concerning such renamings.
+In this section we will derive an induction principle which allows a similar convenient reasoning as in Barendregt’s informal proof. This induction principle is as follows:
+
+(21)
+where the variable in the conclusion stands for a -term over which the induction is done and the variable stands for the context of the induction. By the context of an induction we mean all free variables of the lemma to be shown by induction, except the variable over which the induction is performed. We also assume that the context is of ﬁnitely supported type. In case of the substitution lemma from Fig. 1, for example, we have
+
+with being the variable over which the induction is done. So in this case, the context would be instantiated with the other free variables in this lemma, namely the tuple
+—which is of ﬁnitely supported type. When it comes to prove the lambda-case, that is
+
+one can assume in (21) that the binder is fresh for
+
+—which is equivalent to
+
+not being equal to and , and not free in and . As we shall see later, with this induction
+
+principle one can formalise Barendregt’s slick informal proof without difﬁculties.
+
+In the following we shall establish a slightly more general version of the induction prin-
+
+ciple given in (21). In the generalised version we require that the induction context is ﬁnitely
+
+supported, but not necessarily has ﬁnitely supported type.
+
+Theorem 2 (Strong Induction Principle) A property , provided for a given
+(i) , (ii) , (iii) (iv)
+hold.
+
+holds for all terms of type , and
+
+Proof By induction over using (20). We strengthen the induction hypothesis by aiming
+
+to prove
+
+. The cases for and are routine. The interesting case is
+
+: we need to show that
+
+, where
+
+by (17). Since by (i) is ﬁnitely supported, and by Lemmas 4 and 10 also and
+
+, we can use Prop. 1 to obtain a with
+
+. From this we can infer
+
+that and , which implies by (18) that
+
+. From the induction hypothesis, which is
+
+, we obtain the
+
+fact
+
+. Then we can use the fact
+
+and (iv), and infer that
+
+holds. Moreover this is by Deﬁnition 2(ii) equal to the fact
+
+. By we can conclude with
+
+.
+
+15
+If we set in Thm. 2 to the identity-function and require that has ﬁnitely supported type, we can discharge condition (i) in and obtain the structural induction principle stated in (21). The advantage of (21) is that Isabelle’s axiomatic type classes can be used to ensure that the induction context is a ﬁnitely supported type, while the induction principle proved in Thm. 2 requires manual reasoning to ensure the ﬁnite support property. However, we will need the more general induction principle in the next section where we derive a recursion combinator for .
+
+5 A Recursion Combinator
+Before we can formalise Barendregt’s proof of the substitution lemma, we need to be able to deﬁne the function of capture-avoiding substitution. This can be done by ﬁrst considering an appropriately deﬁned relation and then showing that this relation behaves like a function. This has been done in Urban and Tasson [36]. However, this way is rather inelegant. More elegant is a deﬁnition by structural recursion.
+It turns out that deﬁning functions by recursion over the structure of alpha-equated lambda-terms is rather subtle. Let us assume we want to deﬁne capture-avoiding substitution by the following three clauses
+if then else
+
+provided
+
+where the side-condition in the lambda-case amounts to the usual condition about
+
+and
+
+not being a free atom in . Then deﬁning it over
+
+results in a total function, while
+
+deﬁning it over “raw” lambda-terms of type results in a partial function. Furthermore,
+
+attempting to deﬁne the functions that return the set of bound names and the immediate
+
+subterms by the clauses
+
+bn bn
+bn
+
+bn bn bn
+
+ist ist
+ist
+
+(22)
+
+results in an inconsistency when deﬁned over , while it can be deﬁned without problems over . The inconsistency with bn and ist arises by the principle of HOL stating that a function has to return the “same ouput” for the “same input”. Since by (18) we have
+
+for all and , we can assume that this equation holds for . Then bn
+
+must be equal to bn
+
+, which implies by the clauses in (22) that must be
+
+equal to giving a contradiction with the assumption
+
+—similar with the function ist.
+
+One way around the problem with the inconsistencies is to derive a recursion combinator
+
+for that includes certain preconditions for binders ensuring no inconsistency can be
+
+derived. For this we will adapt work by Pitts [27] who introduced such preconditions. We
+
+will also adapt his proof establishing the existence of a structural recursion combinator for
+
+. The main difference of our proof is that we give here a direct proof for the existence,
+
+because in our implementation we do not use anywhere the type (Pitts uses to
+
+16
+
+derive a structural induction principle). Another difference is that we derive the recursion combinator without deriving an iteration combinator ﬁrst.6
+While in “every-day” formalisation, Lem. 4 is sufﬁcient in nearly all situations to ﬁnd
+out when an object has ﬁnite support, the reasoning for the recursion combinator includes in several places proof obligations about ensuring that functions have ﬁnite support. And for
+functions one cannot ﬁnd out whether they have ﬁnite support by just looking at their type. In order to automate such proof obligations we use the auxiliary notion of supports [11].
+
+Deﬁnition 5 A set of atoms supports an of permutation type, written provided:
+
+,
+
+This notion allows us to approximate the support of an show that:
+
+Lemma 11 If a set is ﬁnite and
+
+, then
+
+from “above”, because we can .
+
+Proof By contradiction we assume
+
+, then there exists an atom
+
+and . From
+
+follows that for all
+
+we have
+
+. Hence the set
+
+is a subset of , and since is ﬁnite by assumption, also
+
+must be ﬁnite. But this implies that
+
+which gives the contradiction.
+
+Lem. 11 gives us some means to decide relatively easily whether a function has ﬁnite support: one only needs to ﬁnd a ﬁnite set of atoms and then verify whether this set supports the function.
+If the function is given as a lambda-term on the HOL-level, then for ﬁnding a ﬁnite set we use the heuristic of considering the support of the free variables of this functions. This is a heuristic, because it cannot be established as a lemma inside Isabelle/HOL—it is a property about HOL-functions. Nevertheless the heuristic is extremely helpful for deciding whether a function has ﬁnite support. Consider the following two examples:
+
+Example 1 Given a function def
+
+where is a function of type
+
+. We
+
+also assume that has ﬁnite support. The question is whether has ﬁnite support? The
+
+free variables of are and . According to our heuristic we have to verify whether
+
+, which amounts to showing that
+
+To do so we can assume by the deﬁnition of freshness (Def. 3) that
+
+and
+
+and show that
+
+. This equation follows from the calculation that pushes
+
+the swapping inside :
+
+def by (3)
+
+def
+
+where follows because we know that
+
+and , and therefore by Lem. 4 that
+
+(similarly for ).
+
+We can conclude that
+
+is a subset of
+
+, because the latter is ﬁnite
+
+(since has ﬁnite support by assumption and is ﬁnitely supported because the type
+
+is a ﬁnitely supported type). So by Lem. 11, must have ﬁnite support.
+
+6 The difference between a recursion and an iteration combinator is that in the former we can use directly the arguments of the term constructor, while in the latter this can only be achieved via an encoding of the recursion.
+
+17
+
+Example 2 Let def if
+
+then else
+
+—where and are of type
+
+and a -term. The free variables of this HOL-function are and ; so by our heuristic
+
+we need to verify whether
+
+. This holds by the following calculation:
+
+if then else
+
+def if
+
+then else
+
+if then then
+
+if then else
+
+by (10)
+
+where follows by Lem. 4 and the assumption that
+
+and
+
+and are ﬁnitely supported types, must then have ﬁnite support.
+
+. Since
+
+As the examples indicate, by using the heuristic, one can infer from a decision problem involving permutations whether or not a function has ﬁnite support. The important point here is that the decision procedure involving permutations can be relatively easily automated with a special purpose tactic analysing permutations. This seems much more convenient than analysing the support of a function directly.
+A deﬁnition by structural recursion involves in case of the lambda-terms three functions (one for each term-constructor) that specify the behaviour of the function to be deﬁned—let us call these functions , , for the variable-, application- and lambda-case, respectively, and let us assume they have the types:
+
+with being a permutation type. Then the ﬁrst condition Pitts introduced in [27] states that
+—the function for the lambda case—needs to satisfy the freshness condition for binders, or short FCB. We formulate this condition as:7
+
+Deﬁnition 6 (Freshness Condition for Binders)
+
+A function with type
+
+satisﬁes the FCB provided:
+
+As we shall see later on, this condition ensures that the result of is independent of which
+
+particular fresh name one chooses for the binder . The second condition states that the
+
+functions , and all must have ﬁnite support. This condition ensures that we can use
+
+Prop. 1 when choosing a fresh name for the s.
+
+With these two conditions we can derive a recursion combinator, we call it
+
+,
+
+with the following properties:
+
+Theorem 3 (Recursion Combinator) If , and have ﬁnite support and satisﬁes
+
+the FCB, then there exists a recursion combinator
+
+with the properties:
+
+provided
+7 We use a different version of the FCB than actually introduced by Pitts. We shall show later that our version and one that closely resembles his are interderivable.
+
+18
+
+To give a proof of this theorem we start with the following inductive relation, called
+
+and which has type
+
+where, like above, is assumed to be a permutation type:
+
+(23)
+
+We shall show next that the relation
+
+deﬁnes a function in the sense that for
+
+all lambda-terms there exists a unique so that
+
+. From this we can
+
+again use standard techniques of HOL to obtain a function from
+
+to (see for example
+
+Slind [28]). We ﬁrst show that in
+
+the “result” has ﬁnite support provided the
+
+functions , and have ﬁnite support.
+
+Lemma 12 (Finite Support) If , and have ﬁnite support, then implies that has ﬁnite support.
+
+Proof By induction over the relation deﬁned in (23). In the variable-case we have to show that has ﬁnite support, which we inferred in Example 1 using our heuristic. The application and lambda-case are by similar calculations.
+
+In the proof of Thm 3, we need the following lemma establishing that ant (see Pitts [26]).
+
+is equivari-
+
+Lemma 13 (Equivariance) If holds.
+
+holds then for all , also
+
+Proof By induction over the rules given in (23). All cases are routine by pushing the permu-
+
+tation into and , except in the lambda-case where we have to apply Lem. 3(iii) in order
+
+to infer
+
+from .
+
+Next we can show the crucial lemma about
+
+being a “function”.
+
+Lemma 14 (Existence and Uniqueness) If , and have ﬁnite support and satisﬁes
+
+the FCB, then
+
+.
+
+Proof By the induction principle given in Thm. 2, where we set the function to the constant
+
+function
+
+and the induction context to .8 Condition (i) of Thm. 2 holds
+
+because by assumption , and have ﬁnite support. The only non-routine case then is
+
+the lambda-case with showing that
+
+holds. This is difﬁcult,
+
+because for lambdas we do not have injectivity (see (18)). The proof in this case proceeds
+
+as follows.
+
+The induction principle allows us to assume that
+
+, therefore the “ex-
+
+istential” part of the lemma is immediate. In the “uniqueness” part we have to show that
+
+if and also
+
+with the
+
+equation
+
+, then
+
+holds. By rule inversion we can
+
+assume that
+
+and that there exists an such that
+
+; further
+
+by the induction we know there is a unique such that
+
+. Now we show the
+
+following 6 facts:
+
+8 For this induction we cannot use the more convenient induction principle shown in (21), because functions do not have ﬁnitely supported type.
+
+19
+
+(i) From
+
+and
+
+we can infer by Lem. 12 that
+
+and are ﬁnitely supported. Therefore we can apply Prop. 1 to obtain a with
+
+—all variables in the tuple have ﬁnite support.
+
+(ii) From (19) we have that
+
+and . With (i) we can further
+
+infer that
+
+and . From the assumption
+
+, we can then use Lem. 4 to derive
+
+,
+
+which implies that
+
+; hence by (18) that
+
+.
+
+(iii) From
+
+,
+
+and , we
+
+can infer by Lem. 4 and 13 that
+
+and
+
+. Since by induction hypothesis
+
+we also have the fact
+
+that
+
+. Thus we can use (ii) to infer that
+
+.
+
+(iv) Using the FCB for and knowing that and as well as and are
+
+ﬁnitely supported (from (i)), we can infer that
+
+and
+
+hold.
+
+(v) Since
+
+and since
+
+(from (i)), we know
+
+by Lem. 11 that
+
+holds. Similarly we can infer that
+
+holds.
+
+(vi) Finally, in order to show that
+
+holds, it sufﬁces by Lem. 4 and the
+
+facts derived in (iv) and (v) to show that
+
+holds. This
+
+in turn is by (3) equivalent to
+
+. By the
+
+facts derived in (ii) and (iii) we have that these terms are indeed equal.
+
+To prove our theorem about structural recursion we deﬁne
+
+to be the unique so
+
+that . This is a standard construction in HOL-based theorem provers; it in-
+
+volves the HOL’s deﬁnite description operator (see Isabelle’s tutorial [21, Sec. 5.10.1]). The
+
+characteristic equations for
+
+are then determined by the deﬁnition of
+
+given in (23). This completes the proof of Thm. 3.
+
+As mentioned earlier, the FCB we use differs from the one introduced by Pitts. He deﬁnes this notion as follows:9
+
+Deﬁnition 7 (FCB’) A function with type vided:
+
+satisﬁes the FCB’ pro-
+
+It can be shown that in all cases where the recursion combinator is applied both versions of the FCB are interderivable.
+Lemma 15 Provided is ﬁnitely supported, then the FCB holds if an only if the FCB’ holds.
+
+Proof Since is ﬁnitely supported, we can choose using Prop. 1 an atom such that
+
+. With this we can instantiate the FCB and obtain
+
+as we have to show. We have that
+
+and
+
+and need to show that
+
+. By the FCB’ we have an atom such that
+
+and
+
+. Since
+
+if an only if
+
+, we can infer
+
+. By Lemma 3(iii) we can apply on both sides of the
+
+swapping
+
+and obtain
+
+which by Lem. 1(i) is equivalent to
+
+—the fact we had to show.
+
+9 His deﬁnition of the FCB does not actually include
+
+, because he considers only ﬁnitely
+
+supported objects, and also does not include the quantiﬁcation over as he derives an iteration, rather than a
+
+recursion combinator.
+
+20
+The reason that we prefer our version of the FCB is that when establishing a universal quantiﬁed formula, Isabelle/HOL will just introduce an eigen-variable and then proceed to prove the “rest”. This is in practice easier than generating a fresh atom and then instantiate the existential quantiﬁer in the FCB’.
+
+6 Examples
+
+Finally, we can start to formalise Barendregt’s informal proof of the substitution lemma
+
+(Fig. 1). All the constructions of the previous 3 sections would, due to their complexity, be
+
+of only academic value, if we can not automate them and hide the complexities from the
+
+user. However, we can! We shall illustrate this next.
+
+The type
+
+can be deﬁned in Isabelle/HOL using the nominal datatype package by
+
+the two declarations:
+
+where the ﬁrst declaration establishes the type with the properties described in Sec. 2;
+
+in the second declaration
+
+indicates that a name is bound in . With this informa-
+
+tion the nominal datatype package performs automatically the construction we described in
+
+Sec. 3 and also automatically derives the structural induction principles from Sec. 4 and the
+
+recursion combinator from Sec. 5 without any user interference. Furthermore, this package
+
+derives this reasoning infrastructure even for more complicated term-calculi that have more
+
+than one binder and binders may have different types.
+
+After the declaration, we can then use the recursion combinator to deﬁne the capture-
+
+avoiding substitution function by stating the following characteristic equations:
+
+(24)
+
+where in the clause for
+
+the precondition
+
+corresponds to the usual condition
+
+that and is not free in . Internally the nominal datatype package extracts the
+
+following functions for capture-avoiding substitution:
+
+def def def
+
+In order to apply Thm. 3 with the instantiation
+
+, Isabelle ﬁrst
+
+needs to determine whether the result type of the function is a permutation type. Since
+
+substitution returns a -term, it can use Lem. 10(i) and automatically determine this
+
+fact. Next Isabelle asks the user to verify the preconditions of Thm. 3 about the functions
+
+, and having ﬁnite support. It turns out that all of them are supported
+
+by the set
+
+, which is ﬁnitely supported because of Lem. 5 (this can be determined
+
+automatically by Isabelle). To verify whether
+
+holds, the tactic
+
+does automatically the calculations shown in Example 2 and similar ones for
+
+the cases
+
+and . Next Isabelle asks the user to verify the FCB for
+
+which amounts to showing that
+
+21
+
+holds. This can be done by a simple application of the property given in (19). Last, Isabelle
+
+asks the user to verify that the precondition of the recursion combinator in the lambda-case,
+
+namely that
+
+is implied by the precondition
+
+given
+
+in (24). Since, as indicated earlier, all these functions are supported by
+
+, Isabelle
+
+can determine this automatically with the help of a tactic. This completes the deﬁnition of
+
+capture-avoiding substitution. The Isabelle code for this is:
+
+consts
+
+nominal primrec
+
+by
+
+where in the ﬁrst two lines we declare the type of the substitution function and introduce
+
+nicer syntax for writing this function. The line starting with by contains the proof for show-
+
+ing that the characteristic functions of substitution are ﬁnitely supported, that the FCB is
+
+satisﬁed and that the precondition
+
+is sufﬁcient for instantiating the recursion
+
+combinator.
+
+Having the substitution function at our disposal, we can now formalise Barendregt’s
+
+proof of the substitution lemma. First we have to formalise the fact that
+
+implies
+
+whose proof is omitted by Barendregt.
+
+Lemma 16 (Forget) If
+
+then
+
+.
+
+Proof The proof proceeds by induction over using (21) with instantiated to
+
+. In
+
+the variable case we have to show that
+
+under the assumption
+
+that
+
+. This assumption is equivalent to
+
+, which is in turn equivalent to
+
+, allowing us to apply (24) to prove this case. In the lambda-case we have the induction
+
+hypothesis
+
+and have to show that
+
+under the assumption that
+
+holds. The induction in
+
+allows us further to assume that
+
+— is the induction context and the point
+
+of (21) is that we can assume the binder is fresh w.r.t. this context. Therefore we can move
+
+the substitution under the binder, namely
+
+, and
+
+also infer by (19) that
+
+. This allows us to apply the induction hypothesis and we are
+
+done. The application case is trivial.
+
+Using Isabelle’s automatic proof-tools one can formalise this proof with:
+lemma assumes shows
+using by
+
+where
+
+corresponds to the property given in (19) and the lemma
+
+fact that for atoms and ,
+
+holds if and only if
+
+. The method
+
+to the
+
+22
+
+(see Wenzel [38]) brings the induction principle, called
+
+, automatically to the
+
+form needed in (21)—we only have to state over which variable the induction is done and
+
+what the induction context is, that is the variables to avoid.
+
+Next we need to show a lemma whose need is not immediately apparent by looking
+
+at Barendregt’s informal proof. However, in the lambda-case where Barendregt pulls out a
+
+substitution from under the binder, namely in the step
+
+we need to know that is not free in
+
+. But by the variable convention we only
+
+know that is not free in and . In a formalisation, this fact needs to be established
+
+explicitly. It can be done in Isabelle with
+
+lemma ﬁxes assumes shows
+using by
+
+where needs to be given an explicit type-annotation so that Isabelle can determine its type. The substitution lemma can now be formalised with:
+
+lemma assumes shows
+using by
+
+(25)
+
+A formalised proof of this lemma mentioning much more details is shown in Fig. 3. Other proofs we formalised in a similar fashion are the Church-Rosser proof from
+Barendregt [5, pp. 60–62] and [29], the strong normalisation proof given in Girard et al [12, pp. 42–46], the strong normalisation proof for cut-elimination from Urban [31], the correctness proof of the type-inference algorithm W from Leroy [18, pp. 26–31] and the logical relation proof for algorithmic equality between simply-typed lambda-terms given in Crary [7, pp. 223–244] and between LF-terms given by Harper and Pfenning in [15]. These proofs are more complicated than the proofs we have given above and need some manual reasoning. All proofs are included in the distribution of the nominal datatype package available from
+
+7 Related Work
+There are many approaches to formal treatments of binders; this section describes the ones from which we have drawn inspiration and also work reported in Ambler et al [1], Aydemir et al [2] and Homeier [16].
+Our work uses many ideas from the nominal logic work by Pitts et al [26, 11, 27]. The main difference is that by constructing, so to say, an explicit model of the -equated lambdaterms based on functions, we have no problem with the axiom of choice. This is important. For consider the alternative: if the axiom-of-choice causes inconsistencies, then one cannot build a framework for binding on top of Isabelle/HOL with its rich reasoning infrastructure. One would have to base the implementation on a lower level and would have to redo the
+
+23
+
+lemma assumes shows
+using proof
+case show proof
+assume have have from
+
+have
+
+using using
+by
+
+by by
+
+(Case 1: variables) is
+(Case 1.1)
+
+moreover assume have have have from
+
+and have
+
+using using using by
+
+by by
+by
+
+(Case 1.2)
+
+moreover assume have have from
+
+and have
+
+using using
+by
+
+by by
+
+(Case 1.3)
+
+ultimately show qed next case have have hence show proof
+have also have also have also have ﬁnally show qed next case thus qed
+
+by
+
+by by
+
+using
+
+using
+
+by
+
+by
+
+by using using
+
+(Case 2: lambdas) by
+(variable convention) is
+by by
+(Case 3: applications) by
+
+Fig. 3 A formalised proof of Barendregt’s substitution lemma using the Isabelle’s Isar language. This proof contains all reasoning steps given in extreme detail. An automated version of this proof, given in (25), is only 5 lines long. The crucial point in both proofs, however, is that in the lambda-case we have the assumptions labelled with available. They allow us to easily formalise Barendregt’s slick informal proof, shown in Fig. 1, which uses the variable convention.
+
+effort that has been spend to develop Isabelle/HOL. This was attempted in Gabbay [10], but the attempt was quickly abandoned.
+Closely related to our work is Gordon and Melham [14], which has been applied and much further developed by Norrish [22, 23]. Gordon and Melham’s work states ﬁve axioms characterising -equivalence and then shows that a model based on de-Bruijn indices satisﬁes these axioms. This is somewhat similar to our approach where we construct explicitly
+
+24
+the set . In [14] Gordon and Melham give an induction principle that requires in the lambda-case to prove (using their notation)
+
+That means they have to prove
+
+for a variable for which nothing can be
+
+assumed; explicit -renamings are then often necessary in order to get proofs through. This
+
+inconvenience has been alleviated by the version of structural induction given in [13] and
+
+[23], where the lambda-case is as follows
+
+For this principle one has to provide a ﬁnite set and then has to show the lambda-case for all binders not in this set. This is very similar to our induction principle where we have to specify an induction context, but we claim that our version based on freshness ﬁts better with informal practice (recall Fig. 1 where Barendregt states that is fresh w.r.t. , , and
+) and can make better use of the automatic infrastructure of Isabelle (namely the axiomatic type-classes enforce the ﬁnite-support property).
+Gordon and Melham [14] do not consider the case of rule inductions over inductively deﬁned predicates. This has been done in [33, 34]. It turns out that while the variable convention can be built into every structural induction principle, like our Thm. 2, this is not the case for rule induction principles. In [33] the authors give an example where the variable convention can lead to faulty reasoning. The nominal datatype package prevents this by introducing conditions for when an inductive deﬁnition is compatible with the variable convention and only derives a strong rule induction principle for those that satisfy these conditions.
+Like our , HOAS uses functions to encode lambda-abstractions; it comes in two ﬂavours: weak HOAS [8] and full HOAS [25]. The advantage of full HOAS over our work is that notions such as capture-avoiding substitution come for free. We, on the other hand, load the work of making such deﬁnitions onto the user. The advantage of our work is that we have no difﬁculties with notions such as simultaneous-substitution (a crucial notion in the usual strong normalisation proofs based on logical relation arguments), which in full HOAS seem rather difﬁcult to encode when one at the same time wants to reap the beneﬁts of a HOAS-representation. Another advantage we see is that by inductively deﬁning , one has induction for “free”, whereas induction requires considerable effort in full HOAS. The work by Ambler et al [1] on the Hybrid-system provides full HOAS on top of Isabelle/HOL. For this they use a de-Bruijn encoding and construct a type corresponding to full HOAS. This construction is somewhat similar to our subset-construction from Sect. 3. However, their construction is done manually and only for one datatype, while we have automatic support to do the subset construction for any nominal datatype.
+The main difference of our work with weak HOAS is that we use some speciﬁc functions to represent lambda-abstractions; in contrast, weak HOAS uses the full function space. This causes problems known by the term “exotic terms”—essentially junk in the model.
+Recently, Homeier [16] introduced a quotient package for HOL4 that helps with deﬁning alpha-equivalence classes (this package supports quotients by any equivalence relation) and with lifting theorems from the “raw” version of the datatype to the quotient. Norrish makes use of this package in [23]. This package would help us with the construction of , but would have only little impact on obtaining the strong induction principles and the recursion combinator. Nevertheless we look forward to a port of Homeier’s package to Isabelle/HOL. It will simplify our work when we consider more complicated binding structures.
+
+25
+Aydemir et al [2] reported work in progress for providing nominal reasoning techniques in Coq. Essentially, they derive more or less automatically from a speciﬁcation of a nominal datatype an axiomatisation of nominal concepts in Coq and in case of the lambda-calculus use a Gordon-Melham representation to justify their axiomatisation. However, this justiﬁcation needs to be done manually, while with our constructions we provide the justiﬁcation completely automatically. Judging from recent work, the authors seem to have “abandoned” this work in favour of working with a locally nameless representation of -equated lambdaterms [3].
+8 Conclusion
+The paper [4], which sets out some challenges for automated proof assistants, claims that theorem proving technologies have almost reached the threshold where they can be used by the masses for formal reasoning about programming languages. We hope to have pushed with this paper the boundary of the state-of-the-art in formal reasoning closer to this threshold. We showed all our results for the lambda-calculus. But the lambda-calculus is only one example. The nominal datatype package has no problems with generalising the results reported here to more complicated term-calculi. For example, there is already work by Bengtson using the nominal datatype package for formalising the -calculus [6]; Tobin-Hochstadt and Felleisen used it to verify their work on Typed Scheme [30].
+There has also been work on extending strong induction principles to rule inductions [33, 34]. The real challenge has been and still is to generalise all the necessary reasoning infrastructure to more general binding structures. While there is no problem in the nominal datatype package with iterated binders, as in name name , and binders of different type, as in name coname , it is not yet possible to have, for example, a ﬁnite set of binders in a term-constructor. A typical example where such a generalisation is very helpful is the Hindley-Milner typing-algorithm where one has type-schemes of the form
+. Such type-schemes can at the moment only be represented by encoding them as an iterated list of single binders. To work out the details for the generalisation of binding structures and to implement them is future work. Future work also includes the generalisation of our recursion combinator to work with varying parameters. This has been treated in [23, 27], but it seems difﬁcult to adapt their results to our setting.
+Acknowledgements: I am very grateful to Andy Pitts and Michael Norrish for the many discussions with them on the subject of the paper. Stefan Berghofer and Markus Wenzel have been helpful beyond measure with implementing the work reported here. Christine Tasson helped with the early parts of the work. Julien Narboux provided helpful comments.
+References
+1. S. J. Ambler, R. L. Crole, and A. Momigliano. Combining Higher Order Abstract Syntax with Tactical Theorem Proving and (Co)Induction. In Proc. of the 15th International Conference on Theorem Proving in Higher Order Logics (TPHOLs), volume 2410 of LNCS, pages 13–30, 2002.
+2. B. Aydemir, A. Bohannon, and S. Weihrich. Nominal Reasoning Techniques in Coq (work in progress). In Proc. of the International Workshop on Logical Frameworks and Meta-Languages: Theory and Practice (LFMTP), ENTCS, pages 60–68, 2006.
+3. B. Aydemir, A. Chargue´raud, B. C. Pierce, R. Pollack, and S. Weirich. Engineering Formal Metatheory. In Proc. of the 35rd Symposium on Principles of Programming Languages (POPL), pages 3–15. ACM, 2008.
+
+26
+4. B. E. Aydemir, A. Bohannon, M. Fairbairn, J. N. Foster, B. C. Pierce, P. Sewell, D. Vytiniotis, G. Washburn, S. Weirich, and S. Zdancewic. Mechanized Metatheory for the Masses: The PoplMark Challenge. In Proc. of the 18th International Conference on Theorem Proving in Higher-Order Logics (TPHOLs), volume 3603 of LNCS, pages 50–65, 2005.
+5. H. Barendregt. The Lambda Calculus: Its Syntax and Semantics, volume 103 of Studies in Logic and the Foundations of Mathematics. North-Holland, 1981.
+6. J. Bengtson and J. Parrow. Formalising the pi-Calculus using Nominal Logic. In Proc. of the 10th International Conference on Foundations of Software Science and Computation Structures (FOSSACS), volume 4423 of LNCS, pages 63–77, 2007.
+7. K. Crary. Logical Relations and a Case Study in Equivalence Checking. In B. C. Pierce, editor, Advanced Topics in Types and Programming Languages, pages 223–244. MIT Press, 2005.
+8. J. Despeyroux, A. Felty, and A. Hirschowitz. Higher-Order Abstract Syntax in Coq. In Proc. of the 2nd International Conference on Typed Lambda Calculi and Applications (TLCA), volume 902 of LNCS, pages 124–138, 1995.
+9. G. Dowek, T. Hardin, and C. Kirchner. Higher-Order Uniﬁcation via Explicit Substitutions. Information and Computation, 157:183–235, 2000.
+10. M. J. Gabbay. A Theory of Inductive Deﬁnitions With -Equivalence. PhD thesis, University of Cambridge, 2001.
+11. M. J. Gabbay and A. M. Pitts. A New Approach to Abstract Syntax with Variable Binding. Formal Aspects of Computing, 13:341–363, 2001.
+12. J.-Y. Girard, Y. Lafont, and P. Taylor. Proofs and Types, volume 7 of Cambridge Tracts in Theoretical Computer Science. Cambridge University Press, 1989.
+13. A. D. Gordon. A Mechanisation of Name-carrying Syntax up to Alpha-Conversion. In Proc. of the 6th International Workshop on Higher-order Logic Theorem Proving and its Applications (HUG), volume 780 of LNCS, pages 414–426, 1994.
+14. A. D. Gordon and T. Melham. Five Axioms of Alpha Conversion. In Proc. of the 9th International Conference on Theorem Proving in Higher Order Logics (TPHOLs), volume 1125 of LNCS, pages 173– 190, 1996.
+15. R. Harper and F. Pfenning. On Equivalence and Canonical Forms in the LF Type Theory. ACM Transactions on Computational Logic, 6(1):61–101, 2005.
+16. P. Homeier. A Design Structure for Higher Order Quotients. In Proc. of the 18th International Conference on Theorem Proving in Higher Order Logics (TPHOLs), volume 3603 of LNCS, pages 130–146, 2005.
+17. S. C. Kleene. Disjunction and Existence Under Implication in Elementary Intuitionistic Formalisms. Journal of Symbolic Logic, 27(1):11–18, 1962.
+18. X. Leroy. Polymorphic Typing of an Algorithmic Language. PhD thesis, University Paris 7, 1992. INRIA Research Report, No 1778.
+19. T. Melham. Automating Recursive Type Deﬁnitions in Higher Order Logic. Technical Report 146, Computer Laboratory, University of Cambridge, September 1988.
+20. T. Melham. Automating Recursive Type Deﬁnitions in Higher Order Logic. In Current Trends in Hardware Veriﬁcation and Automated Theorem Proving, pages 341–386. Springer-Verlag, 1989.
+21. T. Nipkow, L. C. Paulson, and M. Wenzel. Isabelle HOL: A Proof Assistant for Higher-Order Logic, volume 2283 of LNCS. Springer-Verlag, 2002.
+22. M. Norrish. Recursive Function Deﬁnition for Types with Binders. In Proc. of the 17th International Conference Theorem Proving in Higher Order Logics (TPHOLs), volume 3223 of LNCS, pages 241–256, 2004.
+23. M. Norrish. Mechanising -Calculus Using a Classical First Order Theory of Terms with Permutation. Higher Order and Symbolic Computation, 19:169–195, 2006.
+24. L. Paulson. Deﬁning Functions on Equivalence Classes. ACM Transactions on Computational Logic, 7(4), 2006.
+25. F. Pfenning and C. Elliott. Higher-Order Abstract Syntax. In Proc. of the 10th Conference on Conference on Programming Language Design and Implementation (PLDI), pages 199–208. ACM Press, 1989.
+26. A. M. Pitts. Nominal Logic, A First Order Theory of Names and Binding. Information and Computation, 186:165–193, 2003.
+27. A. M. Pitts. Alpha-Structural Recursion and Induction. Journal of the ACM, 53:459–506, 2006. 28. K. Slind. Wellfounded Schematic Deﬁnitions. In Proc. of the 17th International Conference on Auto-
+mated Deduction (CADE), volume 1831 of LNCS, pages 45–63, 2000. 29. M. Takahashi. Parallel Reductions in Lambda-Calculus. Information and Computation, 118(1):120–127,
+1995. 30. S. Tobin-Hochstadt and M. Felleisen. The Design and Implementation of Typed Scheme. In Proc. of the
+35rd Symposium on Principles of Programming Languages (POPL), pages 395–406. ACM, 2008.
+
+27
+31. C. Urban. Classical Logic and Computation. PhD thesis, Cambridge University, October 2000. 32. C. Urban and S. Berghofer. A Recursion Combinator for Nominal Datatypes Implemented in Is-
+abelle/HOL. In Proc. of the 3rd International Joint Conference on Automated Reasoning (IJCAR), volume 4130 of LNAI, pages 498–512, 2006. 33. C. Urban, S. Berghofer, and M. Norrish. Barendregt’s Variable Convention in Rule Inductions. In Proc. of the 21th International Conference on Automated Deduction (CADE), volume 4603 of LNAI, pages 35–50, 2007. 34. C. Urban and M. Norrish. A Formal Treatment of the Barendregt Variable Convention in Rule Inductions. In Proc. of the 3rd International ACM Workshop on Mechanized Reasoning about Languages with Variable Binding and Names, pages 25–32, 2005. 35. C. Urban, A. M. Pitts, and M. J. Gabbay. Nominal Uniﬁcation. Theoretical Computer Science, 323(12):473–497, 2004. 36. C. Urban and C. Tasson. Nominal Techniques in Isabelle/HOL. In Proc. of the 20th International Conference on Automated Deduction (CADE), volume 3632 of LNCS, pages 38–53, 2005. 37. M. Wenzel. Using Axiomatic Type Classes in Isabelle. Manual in the Isabelle distribution. 38. M. Wenzel. Structured Induction Proofs in Isabelle/Isar. In Proc. of the 5th International Conference on Mathematical Knowledge Management (MKM), volume 4108 of LNAI, pages 17–30, 2006.
+
+

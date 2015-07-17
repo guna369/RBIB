@@ -1,0 +1,277 @@
+Principal Types for Nominal Theories
+
+Elliot Fairweather, Maribel Fernández and Murdoch J. Gabbay
+
+Abstract. We deﬁne rank 1 polymorphic types for nominal rewrite rules and equations. Typing environments type atoms, variables, and function symbols, and since we follow a Curry-style approach there is no need to fully annotate terms with types. Our system has principal types, and we give rule and axiom formats to guarantee preservation of types under both rewriting and equality reasoning. This is non-trivial because substitution does not avoid capture, so a substituted symbol can—if we are not careful—appear in inconsistent typing contexts. Keywords: binding, polymorphism, type inference, rewriting.
+
+1 Introduction
+
+Suppose we want to specify -calculus ⌘-equivalence. We might well write this:
+
+object-variable x
+#
+( x. ( y.s))t =
+
+y.(( x.s)t)
+
+x.
+"
+
+(rx)
+
+=⌘
+
+r
+"
+
+binding term-former meta-variable r
+
+freshness side-condition
+#
+provided y not free in t provided x not free in r
+
+Equalities like this are typical, and appear in speciﬁcations of the -calculus (as above), substitution, logic with quantiﬁers, ⇡-calculus, and more. They have common features as annotated above. To formalise and reason with this kind of systems, in this paper we follow the nominal approach:
+
+– Nominal terms directly represent syntax with binding using term-formers, two levels of variable, and freshness side-conditions [20]. The terms and sideconditions above can be represented symbol-for-symbol in a formal syntax.
+– Equality on nominal terms can be formalised in nominal rewriting [10] (for oriented equality) and nominal algebra [14] (for unoriented equality).
+– Nominal terms can be given Hindley-Milner style types [9]. Given a type environment, principal types for nominal terms can be automatically deduced.
+
+This paper combines types and equality reasoning—so we type terms and equations between them. This is not trivial because equality gives terms a dynamic behaviour, and type systems must ensure types are robust with respect to it.
+For a large class of closed theories, corresponding to what can be deﬁned in higher-order rewriting and equality reasoning, nominal rewriting is sound and complete for nominal algebra [11]. The technical contributions of this paper are notions of typeable closed rewrite rule and equality axiom such that types are preserved under rewriting and equality reasoning respectively. To ensure this, closedness and principal types play a key role, as our examples will demonstrate.
+
+Related work. Nominal terms support a capturing substitution and the notation, though formal, is close to standard informal practice. For example -reduction may be represented as app(lam[a]X, Y ) ! sub([a]X, Y ) where sub([a]X, Y ) is a term which may be given the behaviour of ‘non-capturing substitution’ by rewrite rules [12,10].
+Now consider static semantics, i.e. types like N for numbers and ⌧ ! ⌧ for functions. Assigning types to terms partitions the language into ‘numbers’, or ‘functions between numbers’, and so on. This paper will not make the case for types but the interested reader can ﬁnd compelling practical and theoretical motivations elsewhere, e.g. Java [17], ML [7], and System F [16].
+Two approaches have been used to give static semantics for nominal terms: In e.g. [20,19,18] atoms have a special type of atoms A. But, when we write lam[a]X or lam[a]a to represent x.- (a term with a hole, or context) or x.x, we might not expect a to be forbidden from having any type other than A. We can use explicit casting function symbols to inject A into other types; but the a in lam[a]X still has type A, so we cannot infer more about a until X is instantiated. This notion of typing is useful for terms without variables or in systems without polymorphism. So an alternative approach was proposed in [9] which allows atoms to inhabit any type. It follows a Curry-style approach, and has rank 1 polymorphism (MLstyle polymorphism or Hindley-Milner types [7]); that is, types are assigned to terms without requiring type annotations for atoms or variables. Thus, we can write lam[a]X, or ﬁx[f ]X, or forall[a]X, or app(lam[a]X, lam[b]Y ), and so on, and expect the type system to make sense of this. The syntax-directed typing rules for nominal terms given in [9] guarantee that every typeable term has a principal type (one which subsumes all others in a suitable sense) in a given environment, and types are compatible with ↵-equivalence on nominal terms. Type inference is decidable and an algorithm to compute principal types has been implemented [8].
+In [9], a notion of typed nominal rewriting rule is given, with a condition to ensure type preservation under rewriting. In this paper we consider also nominal equational axioms, and give suﬃcient conditions for type preservation under rewriting and equational deduction that are intuitive and easy to implement. Overview of the paper. In Section 2 we recall nominal rewriting and equational reasoning, as well as the Curry-style type system for nominal terms. Section 3 gives examples to motivate the design of the type system for rules and equations. Section 4 contains the main results of the paper: it deﬁnes closed rules and the closed rewrite relation (which is sound and complete for nominal equational reasoning when the axioms are closed), and presents a notion of typeable rule and typeable axiom that guarantee that rewriting and equational reasoning preserve types. Finally, in Section 5 we draw conclusions and discuss future work.
+2 Background
+In this section we recall the main notions underlying the nominal approach to the speciﬁcation of systems with binders. We focus on equational speciﬁcations.
+2
+
+Fix denumerable sets of atoms, variables, and term-formers. a, b, c will range over distinct atoms, X, Y, Z, . . . over distinct variables, and f, g, . . . over distinct term-formers. A permutation ⇡ is a bijection on atoms such that nontriv (⇡) = {a | ⇡(a)6=a} is ﬁnite. Nominal terms r, s, t are deﬁned by:
+
+t ::= a | ⇡·X | f t | (t, . . . , t) | [a]t
+
+⇡·X is a (moderated) variable; [a]t is an atom-abstraction. We write V (t) for the variables in t and A(t) for the atoms in t (so A([a]a) = {a} and A(⇡·X) = nontriv (⇡)). We write (a b) for the swapping permutation mapping a to b, b to a, and all other c to themselves; id for the identity permutation (so id (a) = a); ⇡ ⇡0 for composition (so (⇡ ⇡0)(a) = ⇡(⇡0(a)) and ⇡-1 for inverse).
+A substitution is a map from variables to terms. Write [X7!r] for the substitution mapping X to r and all other Y to id ·Y .
+Permutation and substitutions act on terms:
+
+⇡·a = ⇡(a)
+
+⇡·(⇡0·X) = (⇡ ⇡0)·X ⇡·(f r) = f ⇡·r
+
+⇡·(r1, . . . , rn) = (⇡·r1, . . . , ⇡·rn) ⇡·[a]r = [⇡(a)]⇡·r
+
+a =a (r1, . . . , rn) = (r1 , . . . , rn )
+
+(⇡·X) = ⇡·( (X)) (f r) = f(r ) ([a]r) = [a](r )
+
+Deﬁnition 1. ↵-equality and freshness are deﬁned by the following rules, where ds(⇡, ⇡0) = {a | ⇡(a) 6= ⇡0(a)} is the diﬀerence set of ⇡, ⇡0:
+
+a#s a#si (1in)
+
+a#s ⇡-1(a)#X s⇡↵t
+
+a#b a#fs a#(s1, . . . , sn) a#[a]s a#[b]s a#⇡·X f s ⇡↵ f t
+
+s⇡↵t s⇡↵(a b)·t a#t ds(⇡, ⇡0)#X
+
+si⇡↵ti (1in)
+
+a⇡↵a [a]s⇡↵[a]t
+
+[a]s⇡↵[b]t
+
+⇡·X⇡↵⇡0·X (s1, . . . , sn)⇡↵(t1, . . . , tn)
+
+The intuition of a#t is ‘a is not free in t’, the intuition of s⇡↵t is ‘s and t are ↵-equivalent’. Both are conditional on freshness assumptions on the variables X. So freshness contexts , r, . . . , are ﬁnite sets of freshness constraints a#X, and we write ` a#r when a#r follows from ; similarly for ` r⇡↵s.
+
+For example, [a]a⇡↵[b]b and ds((a b), id ) = {a, b} so a#X, b#X ` (a b)·X⇡↵X; see [20,10] for more examples.
+We now recall the Curry-style type system from [9], which can typecheck nominal terms even if they contain variables (representing unknown subterms); see [8] for an implementation in Haskell.
+Fix denumerable sets of base data types (e.g. , N), type variables (e.g. ↵), and type-formers (e.g. C , List). Types ⌧ , type-schemes , and typedeclarations (arities) ⇢ are generated by:
+
+⌧ ::= | ↵ | ⌧1 ⇥ . . . ⇥ ⌧n | C ⌧ | [⌧ 0]⌧
+
+::= 8↵.⌧ ⇢ ::= (⌧ 0)⌧
+
+↵ denotes any ﬁnite set of type variables (if empty we omit 8); call them bound in and call free type variables mentioned in not in ↵. Write TV (⌧ ) for the set of type variables in ⌧ , and ⌘ for equality modulo ↵-equivalence.1
+
+1 Types could be expressed in nominal syntax; our focus here is the term language.
+
+3
+
+We associate a type declaration to each term-former. E.g. we can have succ : (N)N and 0 : ()N (we may write just 0 : N in this case).
+Type substitutions S, T , U are ﬁnite partial functions from type variables to types. Write [↵7!⌧ 0] for the partial function just mapping ↵ to ⌧ 0, and id for the identity substitution. Substitutions act on types, type schemes and arities as usual; application is written ⌧ S and composition SS0 (apply S then S0). Write
+< ⌧ when ⌘ 8↵.⌧ 0 and ⌧ 0S ⌘ ⌧ for S with domain in ↵. ⌧ may contain other type variables; only bound type variables in may be instantiated; so 8↵.(↵⇥ ) < ( ⇥ ) but (↵⇥ ) 6< ( ⇥ ). Write ⇢ < ⇢0 when ⇢S ⌘ ⇢0 for some S. All variables in arities are bound, but since they are all bound we omit 8.
+
+Deﬁnition 2. A typing context is a partial function from atoms and variables to type schemes, with ﬁnite domain. We write , a : for updated with a : , that is, ( \ {a : 0}) [ {a : }. Similarly we write , X : . We write S for the typing context obtained by applying S to the types in . Similarly, ⇡· denotes the context obtained by applying ⇡ to the atoms in . TV ( ) denotes the set of type variables occurring free in .
+A typing judgement is a tuple ; ` s : ⌧ where is a typing context, a freshness context, s a term and ⌧ a type (when is empty we omit the separating ‘;’). Deﬁne derivable typing judgements by:
+
+<⌧
+
+< ⌧ ; ` ⇡·X : ⇧
+
+,a : ⌧; ` t : ⌧0
+
+,a : ; ` a : ⌧
+
+, X : ; ` ⇡·X : ⌧
+
+; ` [a]t : [⌧ ]⌧ 0
+
+; ` ti : ⌧i (1  i  n)
+
+; ` t : ⌧ 0 f : ⇢ < (⌧ 0)⌧
+
+; ` (t1, . . . , tn) : ⌧1 ⇥ . . . ⇥ ⌧n
+
+; `ft:⌧
+
+; ` ⇡·X : ⇧ holds if, for any a such that ⇡·a 6= a, ` a#X or a : , ⇡·a : 2 for some . The condition f : ⇢ < (⌧ 0)⌧ is shorthand for f : ⇢ and ⇢ < (⌧ 0)⌧ . If ; ` s:⌧ for some ⌧ then call ; ` s typeable; otherwise call it untypeable.
+
+⇡·X represents an unknown term in which ⇡ permutes atoms. The second rule ensures compatibility between this and ↵-equivalence (see Theorem 4 below) since substitution does not avoid capture: e.g. ([a]X)[X7!s] = [a]s.
+We refer the reader to [9] for examples and give just the typing of one term here: ([a](a, b), [a][b](a, b), a, b) : [↵1](↵1 ⇥ ) ⇥ [↵2][ 2](↵2 ⇥ 2) ⇥ ↵ ⇥ ). Lemma 3. If ; ` t : ⌧ then [↵7!⌧ 0]; ` t : ⌧ [↵7!⌧ 0].
+If ; ` t:⌧ and a,b: 2 for some , then ; ` (a b)·t:⌧ .
+
+Theorem 4. ` s ⇡↵ t and ; ` s : ⌧ imply ; ` t : ⌧ .
+
+Deﬁnition 5. A typing problem is a triple ; ` s, and its solution is a pair (S, ⌧ ) of a type-substitution S and a type ⌧ such that S; ` s:⌧ . Write S| for the restriction of S to TV ( ). Solutions are naturally ordered by instantiation of substitutions; call a minimal element in a set of solutions principal.
+
+Principal solutions for ; ` s are unique modulo renaming type-variables. A function pt to compute principal types, generalising Hindley-Milner [7] to nominal terms, is given in [9, Deﬁnition 4]: pt( ; ` s) is a principal solution (S, ⌧ ) such that S; ` s : ⌧ , and is undeﬁned if s is untypeable in ; .
+
+4
+
+Lemma 6. 1. Type weakening: If ; ` s : ⌧ then , 0; ` s : ⌧ , provided that 0 and are disjoint.
+2. Type strengthening for atoms: If , a : ⌧ 0; ` s : ⌧ then ; ` s : ⌧ provided that ` a#s.
+3. Type strengthening for variables: If , X : ⌧ 0; ` s : ⌧ then ; ` s : ⌧ provided X does not occur in s.
+
+We now introduce nominal algebra [14] and nominal rewriting [10]. See [11] for a detailed treatment of their connections.
+An equality judgement is a tuple ` s = t of a freshness context and two terms. Similarly a rewrite judgement is a tuple ` s ! t. An equational theory T = (⌃, Ax ) is a pair of a signature ⌃ and a possibly inﬁnite set of equality judgements Ax (axioms) in ⌃. A rewrite theory R = (⌃, Rw ) is a pair of ⌃ and a possibly inﬁnite set of rewrite judgements Rw (rewrite rules) in ⌃. Where ⌃ is clear, we identify T with Ax and R with Rw .
+
+Deﬁnition 7. Write ` ( 1, . . . , n) for ` 1, . . . , ` n. A position C is a pair (s, X) of a term and a distinguished unknown X that occurs precisely once in s, as id ·X. If C = (s, X) then we write C[t] for s[X7!t].
+Nominal rewriting: The one-step rewrite relation ` s !R t is the least relation such that for every (r ` l ! r) 2 R, freshness context , position C, term s0, permutation ⇡, and substitution ✓,
+
+s ⌘ C[s0]
+
+` r✓,
+
+s0 ⇡↵ ⇡·(l✓), ` s !R t
+
+C[⇡·(r✓)] ⇡↵ t (Rewr`l!r).
+
+(1)
+
+The rewrite relation `R s ! t is the reﬂexive transitive closure of the one-step rewrite relation. So, in particular, ` s ⇡↵ s0 implies `R s ! s0.
+Nominal algebra: `T s = t is the least transitive reﬂexive symmetric relation such that for every (r ` l = r) 2 T, freshness context , position C, permutation ⇡, substitution ✓, and fresh (so if a#X 2 then a 62 A( , s, t)),
+
+,
+
+` r✓,
+
+s ⇡↵ C[⇡·(l✓)], `T s = t
+
+C[⇡·(r✓)] ⇡↵ t (Axir`l=r).
+
+(2)
+
+3 Examples
+
+Consider a type ⇤ and term-formers lam : ([⇤]⇤)⇤, app : (⇤ ⇥ ⇤)⇤ and sub : ([⇤]⇤ ⇥ ⇤)⇤, sugared to [a]s, s t, and s[a7!t]. Then X, Y :⇤ ` ( [a]X)Y : ⇤ by Deﬁnition 2. The function pt can automatically infer this type and a most general type for a, namely ⇤, since lam : ([⇤]⇤)⇤. Anticipating Section 4, here are rewrite rules for -reduction (note typing and freshness conditions in rules); types of abstracted atoms can be inferred and are ⇤:
+X, Y :⇤ ` ( [a]X)Y ! X[a7!Y ]:⇤ X, Y :⇤; a#X ` X[a7!Y ] ! X:⇤ Y :⇤ ` a[a7!Y ] ! Y :⇤ X, Y :⇤; b#Y ` ( [b]X)[a7!Y ] ! [b](X[a7!Y ]):⇤
+X, Y, Z:⇤ ` (XY )[a7!Z] ! (X[a7!Z]) Y [a7!Z]:⇤
+
+5
+
+And here is an equality axiom for ⌘: X:⇤; a#X ` [a](Xa) = X:⇤. Rewriting and axioms are used to compute and reason with terms—not only ground terms, but also terms with variables. Types should be compatible with the resulting dynamics on terms. Since a variable might occur several times in a term, under diﬀerent abstractions, the interaction between types and rewriting or equational reasoning is subtle. Closedness [10] ensures the interaction between abstractions and variables is safe. Later we leverage this to conditions on closed rewrite rules and axioms to ensure also type preservation. E.g. the rules for and ⌘ (as a rewrite or an equality) preserve types. Thus, the type ⇤ of b : ⇤ ` [a](ba) is preserved in the reduced term b : ⇤ ` b. We get more interesting types for -terms with a type-former ) of arity 2 and term-formers : ([↵] )(↵) ), : ((↵) )⇥↵) , and : (([↵] )⇥↵) . As before, write ([a]s, t) as s[a7!t]. Then the following rules preserve types:
+
+X:↵, Y : ; a#X ` X[a7!Y ] ! X : ↵
+
+Y : ` a[a7!Y ] ! Y :
+
+X:↵ ) , Y :↵, Z: ` (XY )[a7!Z] ! (X[a7!Z])(Y [a7!Z]) :
+
+X: , Y : ; b#Y ` ( [b]X)[a7!Y ] ! [b](X[a7!Y ]) : ↵)
+
+X: , Y :↵ ` ( [a]X)Y ! ([a]X, Y ) :
+
+Assume types B and N. Then B:B, N :N ` (( [a]a)B, ( [a]a)N ) : B ⇥ N and B:B, N :N ` (( [a]a)B, ( [a]a)N ) ! (B, N ) : B ⇥ N.
+[a]a takes diﬀerent types just like x.x in the Hindley-Milner type system; pt(` [a]a) = (id , ↵ ) ↵). Our system will not type B:B, N :N ` BN or [a]aa— the previous system with a unique type ⇤ types the second term.
+Below we show that ⌘ is compatible with this notion of type: X:↵) ; a#X ` [a](Xa) = X : ↵ ) . A term obtained from a typeable term by typed equational reasoning is also typeable.
+
+4 Types for (closed) nominal rewriting and algebra
+We recall closed rewrite rules [10] and closed equational axioms [11], then give conditions to ensure nominal rewriting and equational reasoning preserve types.
+
+4.1 Closed rules and closed rewriting Intuitively, a closed term has no unabstracted atoms and all occurrences of X (representing an unknown subterm) appear under the same abstracted atoms. So f([a]X, X) is not closed since a is abstracted in the ﬁrst X but not the second, and a#X ` f([a]X, X) is closed, since the freshness constraint ensures that a cannot occur in X. Closedness was introduced in [12]. Deﬁnition 8 tests to check for closedness using freshened variants [10] (inductive deﬁnitions are also possible [6,13]).
+A freshened variant tN of t is t in which atoms and unknowns have been replaced by ‘fresh’ atoms and unknowns (not in A(t) and V (t), and perhaps also fresh for some atoms and unknowns from other syntax, which we will always
+
+6
+
+specify). We omit an inductive deﬁnition. Similarly, if r is a freshness context then rN will denote a freshened variant of r (so if a#X 2 r then aN#XN 2 rN, where aN and XN are fresh for the atoms and unknowns of r). We may extend this to other syntax, like equality and rewrite judgements. If rN ` lN ! rN is a freshened variant of r ` l ! r then V (rN ` lN ! rN) \ V (r ` l ! r) = ?.
+For example: [aN][bN]XN is a freshened variant of [a][b]X, aN#XN is a freshened variant of a#X, and ? ` aN ! bN is a freshened variant of ? ` a ! b. Deﬁnition 8 (Closedness). Call r ` l closed when there exists a substitution ✓ with dom(✓) ✓ V (rN ` lN) such that r, A(rN, lN)#V (r, l) ` (rN✓, l ⇡↵ lN✓).
+Call R = (r ` l ! r) and A = (r ` l = r) closed when r ` (l, r) is closed. Given a rewrite rule R = (r ` l ! r) and a term-in-context ` s, the (one-step) closed rewriting relation ` s !Rc t holds if there are C and ✓, such that, for a freshened variant RN of R (fresh for R, , s, t): s ⌘ C[s0] and , A(RN) # V ( , s, t) ` (rN✓, s0⇡↵lN✓, C[rN✓]⇡↵t). (3) Closed rewriting `R s !c t is the reﬂexive transitive closure, as in Def. 7. The choice of freshened variant in Deﬁnition 8 does not matter. Closed rewriting is sound and complete for nominal algebra, if all axioms are closed [11].
+4.2 Typed closed rewriting We deﬁne a notion typeable rule such that rewriting preserves types: Deﬁnition 9. A typeable closed rewrite rule R ⌘ ; r ` l ! r : ⌧ is a tuple of a type context which only types the variables in l and has no typeschemes (in particular, mentions no atoms), a freshness context r, and terms l and r such that 1. V (r, r, ) ✓ V (l), 2. pt( ; r ` l) = (id , ⌧ ) and ; r ` r : ⌧ , 3. RT is closed, where RT is a variant of R in which each abstracted atom
+is decorated by appending the type of that atom to its name; a renamed atom occurring in a freshness constraint in r is replaced by new freshness constraints, one for each diﬀerently decorated variant of the atom. For example, under the signature f : ([N ]N )N , g : ([Bool]N )N , the variant of the rule X : N ; a#X ` f([a]X) ! g([a]X) : N used in the third condition in Deﬁnition 9 is X : N ; aN #X, aBool#X ` f([aN ]X) ! g([aBool]X). The condition is satisﬁed: although one occurrence of X is under an abstraction for aN and the other is under an abstraction for aBool, we have freshness assumptions for both atoms: aN #X, aBool#X. The type decorations for RT can be determined mechanically by running pt to compute principal types on the left-hand side and right-hand side of R. The ﬁrst condition in the deﬁnition of typeable closed rule is standard. The second condition says that l is typeable using and r, and r is typeable with a
+7
+
+type at least as general. The third condition ensures that atom abstractions are typed in a consistent manner throughout the rule. To check this, we compute types for the abstracted atoms using the type inference algorithm, and annotate atom abstractions with types. In a Church-style system, we would use the type annotations provided by the user; thanks to the type inference algorithm, in our system users need not provide explicit type annotations for every abstraction.
+The typed closed rewriting relation is deﬁned using typed matching. Deﬁnition 10. A (typed) matching problem ( ; r ` l) ?⇡ ( ; ` s) is a pair of tuples ( and are typing contexts, r and are freshness contexts, l and s are terms) such that variables and type-variables on the left are disjoint from those in , , s, and mentions no atoms or type-schemes.
+A solution to this matching problem, if it exists, is the least pair (S, ✓) of a type- and term-substitution (the ordering on substitutions extends to pairs component-wise) such that: 1. X✓ ⌘ X for X 62 V ( ,r,l), ↵S ⌘ ↵ for ↵62TV ( )2, ` l✓⇡↵s and ` r✓. 2. pt( ; r ` l) = (id , ⌧ ), pt( ; ` s) = (id , ⌧ S), and for each X : 0 2 , we
+have , 0; ` X✓ : 0S, where 0 = 0S and 0 contains the typings for the atoms abstracted above an occurrence of X in l and which may occur in instances of X. That is: we want to make l on the left ↵-equivalent to s on the right. The ﬁrst condition deﬁnes a matching solution for untyped nominal terms [20,10]. The last condition enforces type consistency: terms should have compatible types, and the solution should instantiate the variables consistent with the typing assumptions. For typeable closed rules, the typing context 0 is uniquely deﬁned. The assumption that mentions no atoms or type-schemes may seem strong, but is all we need: we give applications in Section 4.4. For example, (X:↵ ` X) ?⇡ (a:B ` a) has solution ([↵7!B], [X7!a]), whereas (X:B ` X) ?⇡ (a:↵ ` a) has no solution—↵ on the right is too general. To see why we must check ✓ in the second condition, consider g(f True) where g : (↵)N and f : ( )N (i.e. both functions are polymorphic and produce a result of type N) and a rule X : N ` g(f X) ! suc X, where suc : (N)N. Then the untyped matching problem g(f X)) ?⇡ g(f True) has solution [X7!True], but the typed matching problem (X : N ` g(f X)) ?⇡ (` g(f True)) has none: [X7!True] fails the last condition since X should have type N but is instantiated with a Boolean. If matching did not fail, this rewrite would not preserve types. Deﬁnition 11 (Typed closed rewriting). Take a typeable term ; ` s:µ and a typeable closed rule R ⌘ ; r ` l ! r : ⌧ . Assume s ⌘ C[s0] and 0; ` s0 : µ0 is the typing of s0 at the corresponding position in s.3 We say s closed rewrites with R to t in the context ; and write ; ` s !Rc t when there is some RN a freshened variant of R (fresh for R, , , s, and t), where 0 is the freshness context A(RN) # V ( , , s, t), such that: 2 So in particular, by the side-conditions on variables being disjoint between left and right of the problem, X✓ ⌘ X for X2V ( , , s) and ↵S ⌘ ↵ for ↵ 2 TV ( ). 3 ✓ 0, and ⇢ 0 if C contains abstractions over s0.
+8
+
+1. The typed matching problem ( N; rN`lN) ?⇡ ( 0; , 0`s0) has solution (S,✓). 2. , 0 ` C[rN✓] ⇡↵ t.
+The conditions of typed closed rewriting extend those of closed nominal rewriting, with types. The following lemma, proved by induction, is used to prove that rewriting preserves types:
+Lemma 12. Consider 0; r ` r0, where r0 is either the right-hand side of a typeable closed rule R ⌘ ; r ` l ! r : ⌧ or a subterm of the right hand side; if r0 is under atom abstractions in r, we assume 0 = [ 00 where 00 contains the atom typings of the removed atom abstractions. Assume 0; r ` r0 : ⌧ 0 (so ⌧ 0 = ⌧ if r0 = r) and let (S, ✓) be the substitutions that solve the typed matching problem ( ; r ` l) ?⇡ ( ; ` s). Then , 00S; ` r0✓ : ⌧ 0S.
+Theorem 13 (Subject Reduction). Let R ⌘ ; r ` l ! r : ⌧ be a typeable closed rule. If ; ` s : µ and ; ` s !Rc t then ; ` t : µ.
+Proof. It suﬃces to prove that if pt( ; ` s) = (id , ⌫) and ; ` s !Rc t then ; ` t : ⌫. Suppose ; ` s !Rc t. Then (using the notation in the deﬁnition
+of matching and rewriting above) we know that: 1. RN is a freshened variant of R (fresh for R, , , s, and t) and 0 is the
+freshness context A(RN) # V ( , , s, t). 2. s ⌘ C[s0], , 0 ` lN✓ ⇡↵ s0, and , 0 ` a#X✓ for each a#X in rN. 3. 0; ` s0 : ⌫0 is the typing of s0, and by the Weakening Lemma 6, also
+0; , 0 ` s0 : ⌫0. 4. pt ( N; rN ` lN) = (id , ⌧ ) and pt ( 0, ` s0) = (id , ⌧ S) so there is some S0
+such that 0S0 = 0 and ⌧ SS0 = ⌫0. 5. , 0 ` C[rN✓] ⇡↵ t. By Theorem 4 (↵-equivalence respects types), and 1, 2 and 3, we deduce 0; , 0 ` lN✓ : ⌧ SS0. Since pt( N; rN ` lN) = (id , ⌧ ), by our assumptions on rewrite rules also N; rN ` rN : ⌧ , and by Lemma 3 also NSS0; r ` rN : ⌧ SS0. Since ✓ respects the context NSS0; rN by deﬁnition of typed matching, then, by the auxiliary lemma 12, 0; , 0 ` rN✓ : ⌧ SS0 = ⌫0. Hence ; , 0 ` C[rN✓] : ⌫. By Theorem 4, also ; , 0 ` t : ⌫, and since A( 0) 62 t (by deﬁnition of closed rewriting), then ; ` t : ⌫ as required.
+Closure ensures that for each occurrence of X in l and r, instantiation behaves uniformly with respect to abstraction. This alone does not ensure preservation of types under reduction: consider f : ([N ]N )N , g : ([Bool]N )N , suc : (N )N . The rule X : N ` f[a]X ! g[a]X : N is closed, and the principal type of the left-hand side is also the type of the right-hand side, but the term f[a]suc(a) : N rewrites to g[a]suc(a), which is untypeable. Each X in l and r must be under the same abstractions, typed in the same way. So condition 3 of Deﬁnition 9 annotates abstracted atoms in l ! r with types.
+9
+
+4.3 Typed equational reasoning Deﬁnition 14. A typeable closed axiom A ⌘ ; r ` l = r : ⌧ is a tuple of a type context which only types the variables in l and r and has no type-schemes (so mentions no atoms), a freshness context r, and terms l and r such that pt( ; r ` l) = pt( ; r ` r) = (id , ⌧ ) and AT is closed, where AT is a decorated version of A from Deﬁnition 11.
+Typed nominal equational reasoning is deﬁned as in Deﬁnition 7, but with the additional requirement that the substitution ✓ applied to l and r solves typed matching problems, that is, it must respect the types given in the typing context. Thus, using Lemma 12, equational deduction preserves types. Theorem 15 (Preservation of types). Let T be a nominal theory with only typeable closed axioms. If ; ` s:µ and ; `T s=t is in the typeable nominal equality relation generated from T by typed nominal reasoning, then ; ` t : µ. Proof. By induction on nominal algebra equality. The interesting case is the use of the rule (Axi ;r`l=r), for a typeable closed axiom A ⌘ ; r ` l = r : ⌧ in T . The conditions in Deﬁnition 14 ensure that pt( ; r ` l) = pt( ; r ` r). Since the substitution used to instantiate l and r to derive ; `T s = t respects ; r (it solves typed matching problems), we can proceed as for Theorem 13.
+4.4 Examples Rewrites for surjective pairing cannot be implemented by compositional translation to -calculus [3]. We can deﬁne it; assume fst : (↵⇥ )↵ and snd : (↵⇥ ) :
+X:↵, Y : ` fst(X, Y ) ! X:↵ X:↵, Y : ` snd(X, Y ) ! Y : Z:↵⇥ ` (fst Z, snd Z) ! Z:↵⇥
+Consider a type o and term-formers >, ? : o, ^, ), , : (o ⇥o)o, ⇡ : (↵⇥↵)o, 8 : ([↵]o)o, and substitution : ([↵]o, ↵)o sugared as before. Rewrite rules for equality and simpliﬁcation for (a fragment of) ﬁrst-order logic are typeable closed; we use inﬁx notation for the binary connectives:
+X:↵ ` X ⇡ X ! >:o X:o; a#X ` 8[a]X ! X:o X, Y :o ` 8[a](X ^ Y ) ! 8[a]X ^ 8[a]Y :o
+Using P [a7!T ] as syntactic sugar for the term ([a]P, T ) representing the substitution of a by T in P , we also have the following typeable closed axioms:
+P : o, T : ↵ ` 8[a]P )P [a7!T ] = > : o P, Q : o; a#P ` 8[a](P )Q) , P )8[a]Q = > : o U, T : ↵, P : o ` U ⇡ T ^ P [a7!T ])P [a7!U ] = > : o We can extend this with arithmetic. Consider a type N, term-formers 0 : N, succ : (N)N, + : (N ⇥ N)N. Then [a](a ⇡ a) has principal type [↵]o, and 8[a](a ⇡ 0) is typeable (with type o) whereas 8[a](> ⇡ 0) is not typeable.
+10
+
+We can also axiomatise the -calculus by these equalities [15], using the notation introduced in Section 3: a[a7!X] = X a#Z ` Z[a7!X] = Z c#X ` ( [c]Z)[a7!X] = [c](Z[a7!X])
+(Z0Z)[a7!X] = (Z0[a7!X])(Z[a7!X]) Z[a7!a] = Z All are typeable closed axioms except for the last, which is not closed: it contains a free atom a on the left hand side and the atoms in an instance of Z on the left are under the scope of an abstraction for a, but they escape the abstraction on the right. The results presented here do not apply to this rule. Non-closed rules are arguably rare (and the standard higher-order rewriting formalisms do not accept them), but interesting examples exist—in this case, the rule is needed for completeness with respect to the models [15]. We conjecture that an extension with essential typings [9] (type assignments need not be unique but every type assignment for an occurrence of a variable X on the right must have already been made for an occurrence of X on the left) would let us deal with non-closed rules or axioms like this.
+5 Conclusions and future work
+Type inference is well-studied for the -calculus and Curry-style systems also exist for ﬁrst-order rewriting systems [1] and algebraic -calculi (which combine term rewriting and -calculus) [2]. We know of no type assignment system for the standard higher-order rewriting formats (HRSs use a typed metalanguage, and restrict rewrite rules to base types). Our system is in Curry style; type annotations on terms are not required. We do rely on type declarations for term-formers (arities) and in future we may investigate conditions under which this assumption and the closedness assumptions could be relaxed.
+The types produced resemble the Hindley-Milner polymorphic type system for the -calculus, but are acting on nominal terms which include variables X representing context holes as well as atoms a representing program variables.
+The function pt is implemented [8]. The conditions on typeable closed rules and typeable closed axioms are decidable and easily mechanisable using pt and nominal matching, which is also implemented [5].
+Theorem 4 proves our types compatible with the powerful notion of ↵equivalence inherited from nominal terms [20]. Theorem 13 shows that a notion of typeable closed nominal rewrite rule exists which guarantees the preservation of types under closed nominal rewriting. Theorem 15 shows that types are also preserved under equational reasoning using a notion of typeable closed axioms.
+Our type system has rank 1 polymorphism. More powerful systems, e.g. rank 2 polymorphic types or intersection types [4], should be possible. The latter have been used to characterise normalisation properties of -terms. Normalisation of nominal rewriting using type systems is a subject for future work, and one of our long-term goals is to come closer to applying logical semantics such as intersection types, to nominal rewriting.
+11
+
+References
+1. Steﬀen van Bakel and Maribel Fernández, Normalization results for typeable rewrite systems, Information and Computation 133 (1997), no. 2, 73–116.
+2. Franco Barbanera and Maribel Fernández, Intersection type assignment systems with higher-order algebraic rewriting, Theoretical Computer Science 170 (1996), 173–207.
+3. Henk P. Barendregt, Pairing without conventional constraints, Zeitschrift für mathematischen Logik und Grundlagen der Mathematik 20 (1974), 289–306.
+4. Henk P. Barendregt, Mario Coppo, and Mariangiola Dezani Ciancaglini, A ﬁlter lambda model and the completeness of type assignment, Journal of Symbolic Logic 48 (1983), no. 4, 931–940.
+5. Christophe Calvès, Complexity and implementation of nominal algorithms, Ph.D. thesis, King’s College London, 2010.
+6. Ranald Clouston, Closed terms (unpublished notes), http://users.cecs.anu.edu.au/ ~rclouston/closedterms.pdf, 2007.
+7. Luis Damas and Robin Milner, Principal type-schemes for functional programs, Proceedings of the 9th ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages (POPL 82), ACM, 1982, pp. 207–212.
+8. Elliot Fairweather, Principal types for nominal terms: tool description, Available from http://www.inf.kcl.ac.uk/pg/elliotf/research.
+9. Maribel Fernández and Murdoch J. Gabbay, Curry-style types for nominal terms, Types for Proofs and Programs (TYPES 06), Lecture Notes in Computer Science, vol. 4502, Springer, September 2007, pp. 125–139.
+10. , Nominal rewriting (journal version), Information and Computation 205 (2007), no. 6, 917–965.
+11. , Closed nominal rewriting and eﬃciently computable nominal algebra equality, Proceedings of the 5th International Workshop on Logical Frameworks and MetaLanguages (LFMTP 2010), 2010.
+12. Maribel Fernández, Murdoch J. Gabbay, and Ian Mackie, Nominal Rewriting Systems, Proceedings of the 6th ACM SIGPLAN symposium on Principles and Practice of Declarative Programming (PPDP 2004), ACM Press, August 2004, pp. 108–119.
+13. Murdoch J. Gabbay, Nominal terms and nominal logics: from foundations to metamathematics, Handbook of Philosphical Logic, vol. 17, Kluwer, 2011.
+14. Murdoch J. Gabbay and Aad Mathijssen, Nominal universal algebra: equational logic with names and binding, Journal of Logic and Computation 19 (2009), no. 6, 1455–1508.
+15. , A nominal axiomatisation of the lambda-calculus, Journal of Logic and Computation 20 (2010), no. 2, 501–531.
+16. Jean-Yves Girard, The system F of variable types, ﬁfteen years later, Theoretical Computer Science 45 (1986).
+17. James Gosling, Bill Joy, and Guy Steele, The Java language speciﬁcation, Addison-Wesley, 1996.
+18. Andrew M. Pitts, Nominal system T, Proceedings of the 37th ACM SIGACT-SIGPLAN Symposium on Principles of Programming Languages (POPL 2010), ACM Press, January 2010, pp. 159–170.
+19. Mark R. Shinwell, Andrew M. Pitts, and Murdoch J. Gabbay, FreshML: Programming with Binders Made Simple, Proceedings of the 8th ACM SIGPLAN International Conference on Functional Programming (ICFP 2003), vol. 38, ACM Press, August 2003, pp. 263–274.
+20. Christian Urban, Andrew M. Pitts, and Murdoch J. Gabbay, Nominal Uniﬁcation, Theoretical Computer Science 323 (2004), no. 1–3, 473–497.
+Acknowledgements. Thanks to the anonymous referees. Supported by grant RYC-2006-002131 at the Polytechnic University of Madrid.
+12
+
+

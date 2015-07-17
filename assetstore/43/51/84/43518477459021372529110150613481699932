@@ -1,0 +1,459 @@
+Induced Sorting Sufﬁxes in External Memory
+GE NONG, Sun Yat-sen University, SYSU-CMU Shunde International Joint Research Institute WAI HONG CHAN, The Hong Kong Institute of Education SHENG QING HU and YI WU, Sun Yat-sen University
+
+We present in this article an external memory algorithm, called disk SA-IS (DSA-IS), to exactly emulate the induced sorting algorithm SA-IS previously proposed for sorting sufﬁxes in RAM. DSA-IS is a new diskfriendly method for sequentially retrieving the preceding character of a sorted sufﬁx to induce the order of the preceding sufﬁx. For a size-n string of a constant or integer alphabet, given the RAM capacity ((nW )0.5), where W is the size of each I/O buffer that is large enough to amortize the overhead of each access to disk, both the CPU time and peak disk use of DSA-IS are O(n). Our experimental study shows that on average, DSA-IS achieves the best time and space results of all of the existing external memory algorithms based on the induced sorting principle.
+Categories and Subject Descriptors: F.2.2 [Analysis of Algorithms and Problem Complexity]: Nonnumerical Algorithms and Problems—Sorting and searching; G.2.1 [Discrete Mathematics]: Combinatorics— Combinatorial algorithms; H.3.4 [Information Storage and Retrieval]: Systems and Software— Performance evaluation (efﬁciency and effectiveness)
+General Terms: Algorithms, Performance
+Additional Key Words and Phrases: Sufﬁx array, sorting algorithm, external memory
+ACM Reference Format: Ge Nong, Wai Hong Chan, Sheng Qing Hu, and Yi Wu. 2015. Induced sorting sufﬁxes in external memory. ACM Trans. Inf. Syst. 33, 3, Article 12 (February 2015), 15 pages. DOI: http://dx.doi.org/10.1145/2699665
+1. INTRODUCTION
+For a size-n input string x[0, n − 1] over an ordered alphabet of characters in [0, σ − 1], the substring starting from x[i] and running to x[n − 1] is called a sufﬁx and denoted by suf(x, i). The problem of sorting sufﬁxes is to lexicographically sort all of the sufﬁxes of x into increasing order. The result of sorting is generally stored in an integer array sa[0, n − 1], called a sufﬁx array [Manber and Myers 1993], in which each item is a log n-bit integer storing the index for the start position of a sufﬁx in x. Hence, sorting all of the sufﬁxes of x is also widely known as constructing the sufﬁx array of x.
+The sufﬁx array is a fundamental data structure in many applications, and its construction, in either internal memory or external memory, is crucial to the applications’ overall efﬁciencies. The recent book by Ohlebusch [2013] has a sophisticated survey of
+G. Nong was supported by projects DEGP 2012KJCX0001, NCET-10-0854, 11lgzd04, and 11lgpy93. W. H. Chan was supported by GRF (810012), Research Grant Council, Hong Kong SAR. Authors’ addresses: G. Nong, S. Q. Hu, and Y. Wu, Computer Science Department, Sun Yat-sen University, Guangzhou 510275, China; emails: issng@mail.sysu.edu.cn, hu-sheng-qing@163.com, wu.yi.christian@ gmail.com; W. H. Chan, Department of Mathematics and Information Technology, The Hong Kong Institute of Education, Kowloon, Hong Kong; email: waihchan@ied.edu.hk. Permission to make digital or hard copies of part or all of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for proﬁt or commercial advantage and that copies show this notice on the ﬁrst page or initial screen of a display along with the full citation. Copyrights for components of this work owned by others than ACM must be honored. Abstracting with credit is permitted. To copy otherwise, to republish, to post on servers, to redistribute to lists, or to use any component of this work in other works requires prior speciﬁc permission and/or a fee. Permissions may be requested from Publications Dept., ACM, Inc., 2 Penn Plaza, Suite 701, New York, NY 10121-0701 USA, fax +1 (212) 869-0481, or permissions@acm.org. c 2015 ACM 1046-8188/2015/02-ART12 $15.00 DOI: http://dx.doi.org/10.1145/2699665
+
+12
+
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+12:2 G. Nong et al.
+the applications of enhanced sufﬁx arrays (the original sufﬁx array enhanced by other auxiliary data structures such as lcp-table) in bioinformatics. Sufﬁx arrays are used in many information processing applications, and their construction is a problem that has received intensive research attention.
+Many sufﬁx array construction algorithms (SACAs) have been proposed on randomaccess machine models. Puglisi et al. [2007] provide a comprehensive survey up to 2007. Recently, work has been done on external memory SACAs. Recent experimental results have shown that algorithms based on the induced sorting principle, that is, eSAIS [Bingmann et al. 2013] and EM-SA-DS [Nong et al. 2014], are competitive against the previously best techniques such as DC3 [Dementiev et al. 2008] and bwtdisk [Ferragina et al. 2012].1
+Let SA(x) denote the sufﬁx array of x. The key steps to compute SA(x) by induced sorting are to (1) reduce x to the string x1[0, n1 − 1] with n1 ≤ n/2 , (2) compute SA(x1), and (3) induce SA(x) from SA(x1). The time complexity of induced sorting is linear as given by the recursive formula T (n) = T (n/2) + O(n) = O(n). The induced sorting method also facilitates time- and space-efﬁcient designs in practice, for example, SA-IS [Nong et al. 2011], its optimized implementation [Mori 2008], and a recent improvement of SA-IS called SACA-K, which uses only a σ log n-bit workspace beyond the input string and the output sufﬁx array [Nong 2013].
+If both x and SA(x) are held completely in the RAM, the process of inducing SA(x) from SA(x1) consists of two scans of SA(x) [Nong et al. 2011]. The L-type sufﬁxes are sorted from the sorted leftmost S-type (LMS) sufﬁxes and the S-type sufﬁxes are sorted from the sorted L-type sufﬁxes (refer to Section 2.1 for the deﬁnitions of L-type, S-type, and LMS sufﬁxes). The details are described here, in which bkt[0, σ − 1] is an integer array.
+—Inducing L-type sufﬁxes: Scan sa from left to right, and j = sa[i] − 1 for i increased from 0 to n − 1. If j ≥ 0 and x[ j] is L-type, put suf(x, j) into the current head item of its bucket in sa by setting sa[bkt[x[ j]] + +] = j and shift the bucket head one place to the right.
+—Inducing S-type sufﬁxes: Scan sa from right to left, and j = sa[i] − 1 for i decreased from n − 1 to 0. If j ≥ 0 and x[ j] is S-type, put suf(x, j) into the current end item of its bucket in sa by setting sa[bkt[x[ j]] − −] = j and shift the bucket end one place to the left.
+These two passes are symmetrically analogous. If x, sa, and bkt are completely stored in the RAM, these two steps can be done very quickly. However, random accesses of x[ j], bkt[x[ j]], and sa[bkt[x[ j]]] in the external memory are problematic, because they lead to slow disk seeks. Thus, a version of SA-IS that runs in the external memory should be developed to avoid these random accesses. Retrieving x[ j] without random accesses of x is still a challenge in the existing external memory designs for induced sorting sufﬁxes. The attempts to solve this problem in Bingmann et al. [2013] and Nong et al. [2014] resulted in much more complicated designs than their counterparts in the RAM.
+Following our recent work [Nong et al. 2014] developing an external memory design for the algorithm SA-DS [Nong et al. 2011], we propose a new solution called disk SA-IS (DSA-IS) in this article. Pleasingly, unlike the solutions in Bingmann et al. [2013] and Nong et al. [2014], DSA-IS emulates SA-IS merely by replacing random accesses of the RAM with sequential accesses of the external memory. We develop DSA-IS on the same settings as the external memory model in Nong et al. [2014] with the following memory parameters (in log n-bit words): RAM capacity M = ((nW )0.5), disk capacity E = O(n),
+1bwt-disk computes the Burrows-Wheeler transform (BWT) and the others construct the sufﬁx array.
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+Induced Sorting Sufﬁxes in External Memory
+
+12:3
+
+and the size of each I/O buffer W. W is large enough to amortize the overhead of each disk access; given W, the I/O complexity in terms of the number of I/Os is deﬁned as the total I/O volume over W.
+This work has a number of motivations. The sufﬁx array is an indispensable data structure for many applications such as full-text retrieval and sequence alignment. In all applications involving a sufﬁx array, constructing the sufﬁx array is the ﬁrst, crucial step. Induced sorting is commonly recognized as a promising method for sufﬁx array construction in both the internal memory and external memory. Two external memory algorithms, eSAIS and EM-SA-DS, have been designed based on induced sorting. However, their designs are complicated and challenging for engineering by third-party users, and their time-and-space performance must be further improved. For such a fundamental problem, a better solution with a simpler design and better performance is preferred and desired.
+In this article, Section 2 gives the preliminaries for presenting DSA-IS, Section 3 the algorithm’s details, Section 4 the experiments for performance evaluation, and Section 5 the summary.
+2. OVERVIEW
+2.1. Notations
+Some basic notations for induced sorting are necessary for presenting this work:
+L-type, S-type, and LMS sufﬁxes/characters. The sufﬁxes in x are classiﬁed into two classes: suf(x, i) is S-type if (1) i = n − 1 or (2) suf(x, i) < suf(x, i + 1) for i ∈ [0, n − 2]; otherwise, suf(x, i) is L-type. Moreover, suf(x, i) is LMS if suf(x, i) is S-type and suf(x, i − 1) is L-type for i ∈ [1, n − 1]. A sufﬁx and its head character are considered to be the same type: x[i] is said to be L-type, S-type, or LMS if suf(x, i) is L-type, S-type, or LMS, respectively.
+L-type, S-type, and LMS substrings. For all i < j, if x[ j] is LMS and there is no LMS character in x[i + 1, j − 1], then x[i, j] is L-type, S-type, or LMS as long as x[i] is L-type, S-type, or LMS, respectively. Moreover, x[n − 1] itself is an S-type and an LMS substring.
+Bucket. In SA(x), all of the sufﬁxes with the same head character, ch, are consecutively stored in a range called the bucket for ch, denoted by bucket(SA(x), ch). The leftmost and the rightmost items of a bucket are called the start and the end items of the bucket, respectively. If there are both L-type and S-type characters in a bucket, all of the L-type characters are on the left side of the bucket and all of the S-type characters are on the right.
+Preceding character. The preceding character of x[i] for i ∈ [0, n − 1], denoted by prec(x, i), is x[i − 1] for i > 0, or else x[n − 1]. The preceding character of a sufﬁx/substring starting at x[i] is also prec(x, i).
+Reduced string. The reduced string x1 is formed by replacing all of the LMS substrings in x with their integer names, which represent the order of the LMS substrings.
+We assume that x[n − 1] = 0 is the unique smallest character of x and that each character is equal to the number of characters in x smaller than it. Under these assumptions, x[n−1] is usually called the sentinel. It guarantees that any sufﬁx is unique and not a preﬁx of another. x[i] itself also gives the start position of bucket(SA(x), x[i]). These assumptions are rather easy to satisfy in practice.2
+
+2For an input string x of σ = O(1) or nO(1), all of the characters of x are sorted by an external memory integer sorting algorithm and each character is renamed as the number of characters smaller than it. It is obvious
+
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+12:4 G. Nong et al.
+
+2.2. DSA
+For SA(x), we introduce its external memory alternative DSA(x) (i.e., disk-SA for x). Each item of DSA(x) is a tuple pos, ch, t called DSAITEM, where each symbol is deﬁned as:
+— pos: position index for suf(x, pos) —ch: x[ pos], that is, the head character of suf(x, pos) —t: 0 or 1 for prec(x, pos) being L-type or S-type, respectively
+For an instance e of DSAITEM, we say that e stores a sufﬁx/substring in x if e. pos is the start position of the sufﬁx/substring in x.
+Let DSA(x) and DSAB(x) be two size-n arrays of DSAITEM. DSA(x) is deﬁned as DSA(x)[i]. pos = SA(x)[i] and DSA(x)[i].{ch, t}, set as speciﬁed in DSAITEM. Using DSA(x), we deﬁne the disk BWT of x, denoted by DSAB(x), as DSAB(x)[i]. pos set as DSA(x)[i]. pos − 1 or n − 1, for DSA(x)[i]. pos greater than or equal to 0, respectively, and DSAB(x)[i].{ch, t} set as speciﬁed in DSAITEM.
+The key idea behind the design of DSA-IS is to split x into blocks and divide DSA(x) and DSAB(x) for each block of x. Compute, in the RAM, DSA(x) and DSAB(x) of each block in a block-by-block manner. Compute DSA(x) by sequentially accessing the data of DSA(x) and DSAB(x) in each block via an I/O buffer of W words per block. SA-IS is used to compute in the RAM the external representation DSA(x bi|x) of the sufﬁx array of each block x bi of x. The whole sufﬁx array of x can then be efﬁciently induced by merging all of the DSA(x bi|x) together in a scanning complexity. Prior to the merging, each DSA(x bi|x) is augmented with the BWT of x bi, that is, DSAB(x bi|x), to enable fast sequential access to the preceding character of each sorted sufﬁx in x bi during the inducing process, where a sufﬁx suf(x, j) is said to be in x bi if x[ j] ∈ x bi.
+
+2.3. Dividing x and dsa into Blocks
+To follow are the general constraints for dividing x into k = n/m, where m = O(M), consecutive blocks {x bi|i ∈ [0, k − 1]}:
+
+(1) Each block starts with x[0] or an LMS character and ends with another LMS character.
+(2) Any pair of neighboring blocks overlaps on a common LMS character. (3) A block x[g, h], 0 ≤ g < h ≤ n − 1, can have more than m characters only if there is
+no LMS character in x[g + 1, h − 1].
+
+There are many ways to divide x under these constraints. Here we initialize i = k− 1
+
+and x bi as empty. For all of the LMS substrings from right to left in x, a substring will be added to x bi if the addition will not cause x bi > m, or else i is decreased by 1 and a new block, x bi, consisting of this substring at its rightmost is created. This block
+
+division can be done by scanning x leftward. Similarly, we can also divide x by scanning
+
+x rightward, but this will require a somewhat complicated method to check the type of
+
+each character to on-the-ﬂy detect each substring and hence is not used here.
+
+The constraints and the division strategy lead to x bi = n + k − 1 and x bi +
+
+x bi+1
+
+≥
+
+m+
+
+2
+
+for
+
+i
+
+∈
+
+[0, k − 2].
+
+Thus,
+
+(
+
+k−1 2
+
+)(m
+
++
+
+2)
+
+<
+
+n+
+
+k−1
+
+and
+
+hence
+
+k
+
+<
+
+2n m
+
++
+
+1.
+
+The number of blocks does not exceed
+
+2n m
+
+.
+
+For i ∈ [0, k−1], x[i ·m] is called a boundary character. Each character x[ j], i ·m ≤ j ≤
+
+(i + 1) · m must belong to the block containing x[i · m], the block containing x[(i + 1) · m],
+
+or the block in between these two. The three blocks may be the same or all different.
+
+that the new string of renamed characters satisﬁes the assumption and the sufﬁx arrays for both strings are identical.
+
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+Induced Sorting Sufﬁxes in External Memory
+
+12:5
+
+Hence, for each boundary character, we record the start and end positions of the block containing it. In this way, given the position of a character, we can locate the block containing this character in O(1) time and O(k) space.
+In addition to dividing the input x into blocks, the output dsa[0, n− 1] of n DSAITEM tuples is also divided into blocks. We split dsa into dsa k blocks {dsa bi|i ∈ [0, dsa k−1]} evenly (except that the last block may be smaller), where dsa bi = dsa[i · dsa m, (i + 1) · dsa m− 1], dsa k = n/dsa m and dsa m = O(M). It should be noted that m and dsa m are two independent parameters for the division of x and dsa, respectively, under the given RAM limit. They are generally different for optimal performance; nevertheless, they can also be set as identical for engineering convenience in practice.
+2.4. Algorithm Framework
+The framework of DSA-IS remains similar to that of SA-IS and is sketched here:
+
+Similar to SA-IS in RAM, with slight modiﬁcations, the algorithm for induced sorting of sufﬁxes in the external memory can also be reused for sorting LMS substrings. Hence, the sorting algorithm for inducing the solution is described ﬁrst. It is used to develop the algorithm for sorting and naming LMS substrings to reduce the problem.
+3. ALGORITHM DETAILS
+Radix sort is frequently used in DSA-IS to sort ﬁxed-size items of integer keys. Given M = ((nW )0.5) in our external memory model, the sorting of each log n-bit integer can be done in two passes using a multipass radix sort. The ﬁrst pass sorts the lowest 0.5 log n bits and the second pass sorts the highest 0.5 log n bits.
+3.1. Inducing Solution
+We deﬁne the following sets for x bi = x[g, h] with g < h and i ∈ [0, k − 1], where the symbol |x (i.e., on condition of x) in each set indicates that the ordering of the sufﬁxes in the set may be affected by parts of x outside x bi:
+—SAlms(x bi|x) = {SA(x)[ j]|SA(x)[ j] ∈ [g + 1, h] and x[SA(x)[ j]] is LMS, j ∈ [0, n − 1]}. —DSA(x bi|x) = {DSA(x)[ j]|DSA(x)[ j]. pos ∈ [g, h − 1], j ∈ [0, n − 1]}. —DSAB(x bi|x) = {DSAB(x)[ j]|DSA(x)[ j]. pos ∈ [g, h − 1], j ∈ [0, n − 1]}. —DSAB (x bi|x) and DSABs(x bi|x) contain only the items of L-type and S-type sufﬁxes
+in DSAB(x bi|x), respectively.
+Computing DSA(x bi|x) from x bi and SAlms(x bi|x) is a key issue in inducing the solution. We make two important observations with respect to whether x bi is a singlesubstring block or not.
+If x bi is not a single-substring block, the size of x bi is at most m and hence both x bi and SAlms(x bi|x) can be stored in the RAM. The characters in x bi are sorted and renamed as their ranks starting from 0 to form a new block x bi. The LMS sufﬁx array of
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+12:6 G. Nong et al.
+x bi, that is, SAlms(x bi|x), can be derived from SAlms(x bi|x) trivially. Then DSA(x bi|x) can be computed from x bi, x bi, and SAlms(x bi|x) using a method similar to that for inducing SA(x) from SA(x1) as explained in the introduction. Hence, we have the ﬁrst observation.
+OBSERVATION 3.1. Given x bi and SAlms(x bi|x), where x bi is not a single-substring block, DSA(x bi|x) can be computed in linear CPU time and the RAM space O(x ni) by adapting the algorithm for induced sorting in SA-IS with minor modiﬁcations.
+When x bi is a single-substring block, the size of x bi may exceed m and hence it cannot be put in the RAM. We thus make the second observation as follows.
+OBSERVATION 3.2. DSA(x bi|x) for a single-substring block x bi can be computed in the external memory.
+In a single-substring block x bi, all of the L-type and S-type sufﬁxes in the block are already sorted from right to left into their increasing and decreasing orders, respectively. DSA(x bi|x) can be computed by scanning and merging these two kinds of sorted sufﬁxes in CPU time O(x ni) and I/O complexity O(x ni/W ), where x ni = x bi .
+As an example for demonstrating how to sort the sufﬁxes in a single-substring block, let us suppose that x bi = “abbcc...xxyzyxx....ccba” is a single-substring block with all of the S-type characters marked in bold. Notice that the last sufﬁx in x bi is not contained in DSA(x bi|x). To compute DSA(x bi|x), we use two I/O buffers to sequentially retrieve the L-type and S-type sufﬁxes (excluding the last S-type sufﬁx) in ascending order, respectively. For any two sufﬁxes being compared for merging, their order can be determined immediately if their head characters are different; otherwise, the S-type sufﬁx must be greater (see Lemma 2 in Ko and Aluru [2005]). For instance, in this example of the two sufﬁxes starting with “y” in x bi, the one with a bold “y” is greater.
+With these observations, the algorithm for induced sorting is given here:
+ALGORITHM 1: Inducing a Solution in the External Memory
+—Input: x, DSA(x1). —Output: DSA(x). —Procedure:
+(1) Compute SAlms(x bi|x) from DSA(x1) for all i ∈ [0, k − 1]. (2) Make DSA(x bi|x), DSAB (x bi|x), and DSABs(x bi|x) from SAlms(x bi|x) for all i. (3) Merge DSA(x bi|x) for all i to produce DSA(x).
+More details are given next to each step in Algorithm 1.
+Step 1.1
+This step consists of three substeps:
+(a) Radix sort j by DSA(x1)[ j]. pos for all j ∈ [0, n1 − 1] to produce ISA(x1), that is, the inverse sufﬁx array of x1 deﬁned as SA(ISA(x1)[ j]) = j for all j.
+(b) Radix sort PAlms(x)[ j], ch, t by ISA(x1)[ j] for all j. The sorting result is DSAlms(x), which contains all of the sorted LMS sufﬁxes in x, where PAlms(x) is the position array for all of the LMS characters in x. PAlms(x)[ j] gives the starting position of the jth LMS character in x.
+(c) Scan and decompose DSAlms(x) into SAlms(x bi|x) for all i ∈ [0, k − 1] as follows. For each DSAlms(x)[ j] being scanned, denoted by e, we can determine in O(1) time and O(k) space which x bi contains x[e. pos]. Once SAlms(x bi|x) is located, e. pos is appended to the I/O buffer for SAlms(x bi|x). The I/O buffer will be ﬂushed to disk when it is full.
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+Induced Sorting Sufﬁxes in External Memory
+
+12:7
+
+Step 1.2
+There are two cases with respect to whether x bi is a single-substring block or not for computing DSA(x bi|x) from SAlms(x bi|x):
+—Yes: DSA(x bi|x) can be computed in the disk (see Observation 3.2). —No: DSA(x bi|x) can be computed in the RAM (see Observation 3.1), because x ni ≤ m.
+Then, DSAB (x bi|x) and DSABs(x bi|x) are computed by scanning DSA(x bi|x).
+Step 1.3
+This step consists of three substeps, in which random access of x[ p] in substeps (b) and (c) is avoided because e1.ch = x[ p]:
+(a) Initialize each item of dsa as empty by setting all of its members to 0. Scan DSAlms(x) leftward. For each scanned item e, let p = e. pos and put suf(x, p) in the current rightmost empty item in bucket(dsa, x[ p]), say, dsa[ j], by copying e to dsa[ j].
+(b) Scan dsa rightward. For each scanned item e with e. pos > 0 and e.t = 0, let p = e. pos − 1. Determine the block in x containing x[e. pos], say, x br. Put suf(x, p) in the current leftmost empty item in bucket(dsa, x[ p]), say, dsa[ j], by copying the current leftmost unvisited item in DSAB (x br|x), say, e1, to dsa[ j] and mark e1 as visited.
+(c) Scan dsa leftward. For each scanned item e with e. pos > 0 and e.t = 1, let p = e. pos − 1. Determine the block in x containing x[e. pos], say, x br. Put suf(x, p) in the current rightmost empty item in bucket(dsa, x[ p]), say, dsa[ j], by copying the current rightmost unvisited item in DSABs(x br|x), say, e1, to dsa[ j] and mark e1 as visited.
+
+Avoiding Random Access of dsa[j] in Step 1.3
+In Algorithm 1, all of the steps except Step 1.3 adapt easily to disk. The obstacle for making an external memory design for Step 1.3 is the need to “put suf(x, p) in the current leftmost/rightmost empty item in bucket(dsa, x[ p]).” dsa[ j] may be currently on disk and will be accessed slowly. To overcome this difﬁculty, the blockwise-induced sorting method reported in Beller et al. [2013] and Nong et al. [2014] can be applied to avoid random access of dsa[ j].
+Blockwise-induced sorting evenly splits dsa into a number of blocks (the last block may be smaller). It repeats the following steps for all of the blocks of dsa sequentially (from left to right for inducing L-type sufﬁxes and from right to left for inducing S-type sufﬁxes), where the dsa block currently in the RAM is the active dsa block:
+(1) After a block in dsa has been switched from the disk to the RAM and has become the active block, the sufﬁxes already in the block are stably radix sorted to the correct positions in their buckets by their head characters. In each bucket, the L-type and S-type sufﬁxes are clustered at the left end and right end, respectively.
+(2) For each sufﬁx whose order is being induced from a sorted sufﬁx in the active block, determine the dsa block, say, dsa bi, that the sufﬁx should be sorted into and put the sufﬁx into dsa bi as follows: if dsa bi is the active dsa block, put the sufﬁx in its correct position in dsa bi, or else append the sufﬁx to the I/O buffer for dsa bi.
+Figure 1 shows the main data structures used by the blockwise-induced sorting algorithm with x and dsa divided into three and four blocks, respectively. In this example, block 1 of x contains only a single substring and is much longer than the other two blocks, whereas all of the blocks of dsa are the same length.
+
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+12:8 G. Nong et al.
+Fig. 1. The main data structures used in the blockwise-induced sorting method, where “DS AB blocks” include {DSAB (x bi|x)} and {DSABs(x bi|x)} for all i for inducing L-type and S-type sufﬁxes, respectively, in Steps I.3.b and I.3.c of Algorithm 1. The I/O buffers and active dsa block are stored in the RAM, and DS AB and dsa are in the disk. 3.2. Reducing the Problem
+The main task for reducing the size of the problem is to sort and name all of the LMS substrings. By replacing each substring in x with its new name, a new shorter string can be produced. A naive method for sorting substrings in the external memory is to use a k-way merge sort: sort all of the substrings in each block x bi and merge all of the sorting results. This merge sort requires O(n log k) CPU time. However, a merge sort works only when all of the k substrings in a comparison for merging are available in the RAM. We should avoid using a merge sort for reducing the size of the problem in our solution, because the k substrings may require storage exceeding M and each substring may need to be read from the disk many times for comparisons. We reuse the method for induced sorting of sufﬁxes in Step 1.3 of Algorithm 1, similar to what we did for sorting substrings in SA-IS.
+Before presenting the algorithm for reducing the size of the problem, we ﬁrst deﬁne some symbols on x: —DSTR(x): a size-n DSAITEM array stores all of the L-type and S-type substrings
+sorted in lexicographical order. —DSTRB(x): DSTRB(x)[i]. pos = j and DSTRB(x)[i].{ch, t} are set as speciﬁed in the
+deﬁnition of DSAITEM, where j = DSTR(x)[i]. pos − 1 for DSTR(x)[i]. pos > 0 or else j = n − 1, for i ∈ [0, n − 1]. —DSTRlms(x) = {DSTR(x)[i]. pos|x[DSTR(x)[i]. pos] is LMS, i ∈ [0, n − 1]}. Next, we let x bi = x[g, h] with g < h for all i ∈ [0, k − 1] and deﬁne some more symbols on x bi: —DSTR(x bi|x) = {DSTR(x)[ j]|DSTR(x)[ j]. pos ∈ [g, h − 1], j ∈ [0, n − 1]}. —DSTRB(x bi|x) = {DSTRB(x)[ j]|DSTR(x)[ j]. pos ∈ [g, h − 1], j ∈ [0, n − 1]}. —DSTRB (x bi|x) and DSTRBs(x bi|x) contain only the items of the L-type and S-type substrings in DSTRB(x bi|x), respectively.
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+Induced Sorting Sufﬁxes in External Memory
+
+12:9
+
+—DSTRDATAlms(x bi|x) stores the characters for the sorted LMS substrings in x bi; that is, each item of DSTRDATAlms(x bi|x) is a substring (not an index to the substring).
+ALGORITHM 2: Reducing the Problem in the External Memory
+—Input: x. —Output: x1. —Procedure:
+(1) Compute DSTR(x bi|x) and DSTRDATAlms(x bi|x) for i ∈ [0, k − 1]. (2) Merge DSTR(x bi|x) for all i to produce DSTRlms(x). (3) Scan DSTRlms(x) and DSTRDATAlms(x bi|x) for all i to compute the name for each LMS
+substring in x, using DSTRlms(x) as the pivot for the order of sequentially retrieved substrings from each DSTRDATAlms(x bi|x). (4) Replace each LMS substring in x by its name to produce the reduced string x1.
+More details of each step in Algorithm 2 are given here.
+Step 2.1
+Compute DSTR(x bi|x) using the algorithm for sorting LMS substrings in SA-IS and scan DSTR(x bi|x) to produce DSTRB (x bi|x), DSTRBs(x bi|x), and DSTRDATAlms(x bi|x).
+Step 2.2
+This step consists of three substeps:
+(a) Scan x leftward to put all of the LMS sufﬁxes into their buckets in dsa, from right to left in each bucket.
+(b) Reuse Steps I.3.b and I.3.c of Algorithm 1 to compute DSTR(x) in the disk by replacing DSAB (x bi|x) and DSABs(x bi|x) with DSTRB (x bi|x) and DSTRBs(x bi|x), respectively.
+(c) Scan DSTR(x) to produce DSTRlms(x).
+In substep (c), we need to detect if a character x[DSTR(x)[i]. pos] is LMS or not. This can be done trivially as follows. In our program, each bucket in DSTR(x) is split into the L-type and the S-type subbuckets for all of the L-type and S-type items, respectively, in this bucket. All of the L-type subbuckets in DSTR(x) are consecutively stored in a ﬁle and similarly all of the S-type subbuckets in another ﬁle. When DSTR(x)[i] is in an S-type subbucket, we retrieve the type of its preceding character from DSTR(x)[i].t to make a decision.
+Step 2.3
+Scan DSTRlms(x) rightward. For each item e being scanned, let x bh be the block containing x[e]. The LMS substring starting at x[e] must be the current leftmost unvisited substring in DSTRDATAlms(x bh|x). The sorted LMS substrings are sequentially retrieved and marked as visited from DSTRDATAlms(x bi|x), for all i. Hence, any pair of neighboring substrings in DSTRlms(x) can be sequentially retrieved and compared once to determine if they are equal or not. The name of each substring in DSTRlms(x), which is deﬁned as the number of all of the substrings less than it, can also be computed.
+Step 2.4
+DNAMElms(x) is an integer array storing the names of all of the sorted LMS substrings in DSTRlms(x); that is, DNAMElms(x)[i] is the name for the LMS substring starting at x[DSTRlms(x)[i]. pos]. The reduced string x1 is produced by radix sorting DNAMElms(x)[i] by DSTRlms(x)[i] for all i.
+
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+12:10
+
+G. Nong et al.
+
+Corpus uniprot genome guten random2
+
+n 2.42 2.86 3.05 4.00
+
+genome2 enwiki guten1209
+
+5.72 7.88 22.44
+
+Table I. Corpora, n in GiB, 1 Byte per Character
+σ Speciﬁcation
+96 UniProt Knowledgebase release 4.0, at http://www.uniprot.org/news/2005/02/01/release.
+6 Human genome data, used in Dementiev et al. [2008], at http://algo2.iti.kit.edu/dementiev/esufﬁx/instances.
+256 Gutenberg collection, used in Dementiev et al. [2008], at http://algo2.iti.kit.edu/dementiev/esufﬁx/instances.
+256 A concatenation of two identical copies of a string with each character randomly selected from [0, 255], with a maximum LCP of 2.0 Gi. The exact size of this ﬁle is 232 − 2 bytes.
+6 A concatenation of two copies of a corpus “genome,” with a maximum LCP of 2.86 Gi.
+256 A dump for English Wikipedia, at http://download.wikimedia.org/ enwiki/latest/enwiki-latest-pages-articles.xml.bz2.
+256 The Gutenberg collection from September 2012, used in Bingmann et al. [2013], at http://algo2.iti.kit.edu/bingmann/ esais-corpus/gutenberg-201209.24090588160.xz.
+
+3.3. Analysis
+The time and space complexities of DSA-IS are dominated by Algorithm 1 for induced sorting; hence, it sufﬁces to conduct the analysis on Algorithm 1.
+The maximum RAM requirement is for storing the data structures shown in Figure 1, where all of the I/O buffers for the blocks of DS AB and dsa must be simultaneously maintained in the RAM. Thus, the maximum number of blocks is (k + dsa k) · W = O(M), that is, k + dsa k = O(M/W). As dsa m = O(M), the maximum input size is n = dsa k · dsa m ≤ (k + dsa k) · dsa m = O(M/W) · O(M) = O(M2/W), and so M = ((nW )0.5). This meets the assumptions for our external memory model given in Section 1. With these I/O buffers, accessing the data of each DS AB or dsa block is done in an I/O complexity of the block’s size over W, yielding the algorithm’s total I/O complexity as O(n/W).
+DSA-IS thus exactly emulates SA-IS and, therefore, inherits the advantages of the latter: both the CPU time and peak disk use are O(n) and the I/O complexity is O(n/W).
+
+4. EXPERIMENTS
+The time and space performance of DSA-IS are evaluated by comparing with eSAIS [Bingmann et al. 2013] and EM-SA-DS [Nong et al. 2014] on the datasets listed in Table I. All of the datasets except the last one were used in the experimental study in Nong et al. [2014] for evaluating the performance of EM-SA-DS. The last dataset is a recent version of the Gutenberg collection. It is chosen not only because it is large enough for our experiments but also because its alphabet size of 256 is typical for texts in full ASCII.
+Our experimental platform has an identical conﬁguration to that used in the experimental study in Nong et al. [2014]: 1 CPU (Intel(R) Core(TM) i3 3.20GHz); 4GiB RAM (1,333MHz DDR3); 1 Disk (2TiB, 7,200rpm, SATA2); Linux (Ubuntu 11.04). The program for eSAIS is downloaded from the web page3 described in Bingmann et al. [2013] and the programs for EM-SA-DS and DSA-IS are our own implementations. A package containing our programs and SACA-K can be retrieved from our project site.4 For the convenience of presentation, these programs are denoted by the lowercase symbols esais, emsads, dsais, and sacak, respectively.
+
+3http://panthema.net/2012/1119-eSAIS-Inducing-Sufﬁx-and-LCP-Arrays-in-External-Memory/. 4http://code.google.com/p/ge-nong/.
+
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+Induced Sorting Sufﬁxes in External Memory
+
+12:11
+
+Table II. Running Times in μs/ch. The mean running time for each program is the total time averaged over all of the corpora. The throughput
+in μs per byte is the total time averaged over the total I/O volume.
+
+Corpus
+uniprot genome guten random2 genome2 enwiki
+
+esais
+2.998 3.029 3.662 4.037 3.425 3.827
+
+emsads
+3.124 3.068 3.900 3.744 3.308 4.610
+
+dsais
+2.502 2.550 3.250 3.856 2.966 4.185
+
+mean norm.
+
+3.586 1.049
+
+3.797 1.111
+
+3.418 1.000
+
+throughput
+
+0.019
+
+0.019
+
+0.022
+
+Two experiments are conducted to measure the time and space consumptions of each algorithm. The program for each algorithm is set at 3-GiB RAM and 40-bit integers. The performance metrics measured are the mean speed in microseconds per character (μs/ch), peak RAM use in gigabytes, peak disk use and mean I/O volume in bytes per character, and the recursion depth. To obtain the statistics for each program, the running time and peak RAM use are collected using the shell commands “time” and “memusage,” respectively, and the other metrics are collected by the program itself. For accurate time results, the time of each program on a corpus is evaluated as the mean of two runs.
+For the recursion depth, esais counts all of the recursions as in SA-IS; that is, the deepest recursion level considers all of the characters of the reduced string to be different. However, both emsads and dsais count only the recursions down to the recursion level where the sufﬁx array of the reduced string can be computed in the RAM by SA-IS. Hence, the metrics for esais should not be compared with the metrics of the other two. The purpose of collecting these metrics is to see how many recursions are needed for each individual program running on a corpus and to gain more information about the program’s behavior.
+
+4.1. Experiment I: Different Input Data
+This experiment investigates the time and space performance of each algorithm on different input data of varying size, alphabet, and LCP. The ﬁrst six corpora in Table I are used.
+As a reference benchmark for the sequential I/O throughput of the machine in use, we use the shell command “time cp” to evaluate the time to copy the ﬁle “guten1209.” This ﬁle duplication job consists of reading and writing the ﬁle once. After three runs, a mean running time of 673 seconds is recorded, yielding a saturated sequential I/O throughput of 0.014μs per byte, that is, 68.3MiB/s. To calculate the speed gap between DSA-IS and its internal memory counterpart SA-IS, we also run sacak, which is an optimized SA-IS design requiring a 5n space for n ≤ 232, on all 600MiB preﬁxes of each corpus to obtain a total running time of 2,672 seconds, that is, 0.607μs per byte.
+Table II shows the experimental results for the running time in μs/ch of each program on a corpus, the mean running time, and the I/O throughput of each program on all of the corpora, where the mean running time in μs/ch for each program is the total time averaged over all of the corpora and the I/O throughput in μs per byte is the total time averaged over the total I/O volume. In each row, the best result is marked in bold. The row “norm.” gives the results in the row “mean” normalized by the best result. From this table, we conclude the following:
+
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+12:12
+
+G. Nong et al.
+
+Table III. Peak RAM in GiB, Peak Hard-Disk (HD) Use and Mean I/O Volume in Bytes per Input Character, and Recursion Depth (RD). The mean of each metric is the total of this metric averaged over all of the corpora.
+
+Corpus
+
+esais
+
+emsads
+
+dsais
+
+RAM HD I/O RD RAM HD I/O RD RAM HD I/O RD
+
+uniprot
+
+3.3 22.8 157.0 8 3.0 30.8 187.3 2 3.0 18.9 124.6 2
+
+genome
+
+3.7 22.5 153.2 11 3.0 29.3 159.0 3
+
+3.0 18.8 120.4 2
+
+guten
+
+3.6 24.7 185.3 13 3.0 31.1 210.5 3 3.0 19.1 155.4 3
+
+random2 3.2 25.4 201.4 18 3.0 31.0 220.7 3 3.0 19.9 172.8 3
+
+genome2 3.7 22.6 169.1 18 3.0 28.6 157.9 3 3.0 18.8 133.8 3
+
+enwiki
+
+3.2 24.4 215.6 5 3.0 33.7 233.0 4 3.0 20.4 180.8 4
+
+mean norm.
+
+- 23.8 187.3 - 1.2 1.2 -
+
+- 31.1 199.4 - 1.6 1.3 -
+
+- 19.5 154.3 - 1.0 1.0 -
+
+—The mean running times of dsais and esais are more or less the same, although dsais is observed to be marginally faster in most cases. As the speed of an I/Ointensive program usually ﬂuctuates about a certain range, a small difference of 10% may be negligible.
+—The I/O throughput of each program is almost equal to 0.02μs per byte, which is 0.014/0.02 = 70% of the system’s saturated sequential I/O throughput.
+—The mean running time of dsais is 3.418μs per byte, which is 3.418/0.607 = 5.6 times that of saca-k, indicating a speed gap of around six times between the internal and external designs for the induced sorting method.
+Table III shows the space metrics collected in this experiment, including the peak RAM use, peak disk (HD) use, mean I/O volume, and recursion depth (RD), where the mean of each metric is its total averaged over all of the corpora. The RAM use for emsads and dsais are observed to be well bounded by the given RAM limit of 3GiB, but that for esais varies from 3.2 to 3.7GiB. In this study, the parameter “ram_use” in the ﬁle “esactest.cc” of esais is set at 3GiB. As commented in “esactest.cc,” in addition to the RAM set by this parameter, “all structures besides the external sorters need memory as well.” This results in some more RAM being used in addition to the set RAM limit of 3GiB. This should be regarded as an implementation choice instead.
+Table III shows that the best results are achieved by dsais. Speciﬁcally:
+—dsais has the smallest disk capacity requirement. On average, the disk use for esais and emsads are, respectively, 1.2 and 1.6 times that of dsais.
+—the smallest I/O volume is achieved by dsais. On average, the mean I/O volumes for esais and emsads are, respectively, 1.2 and 1.3 times that of dsais. These results agree with the ratios of the mean running times for esais and emsads against dsais, that is, 1.049 and 1.111, respectively, and with the running time being proportional to the I/O volume.
+
+4.2. Experiment II: Increasing the Input Size
+In this experiment, the scalability of each program is investigated by evaluating its time and space performance on the preﬁxes of “guten1209” in lengths varying from 1 to 16GiB. The experiment results are shown in Figure 2 and Table IV. In Figure 2, the running time of each program is plotted against the preﬁx length. The curves look analogous: all of them increase at similar rates when the preﬁx length grows. The curves for esais and dsais are so close that they twist together with only negligible distances. However, there is a noticeable gap between the curve for emsads and the other two curves. This gap is due to the larger I/O volume of emsads, as seen in Table IV.
+Table IV shows that the best results for disk use and I/O volume are also achieved by dsais. For each program, the peak disk use remains stable as the preﬁx length
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+Induced Sorting Sufﬁxes in External Memory
+
+12:13
+
+Fig. 2. Running times in μs/ch for preﬁxes of “guten1209” in lengths from 1 to 16GiB.
+
+Table IV. Peak RAM in GiB, Peak Hard-Disk (HD) Use and Mean I/O Volume in Bytes per Input Character, and Recursion Depth (RD), for Preﬁxes of “guten1209” in Lengths from 1 to 16GiB. The mean of each metric is the total of this metric averaged over all of the preﬁxes.
+
+Preﬁx
+
+esais
+
+emsads
+
+dsais
+
+RAM HD I/O RD RAM HD I/O RD RAM HD I/O RD 1 3.6 22.3 139.1 8 3.0 31.7 185.2 2 3.0 18.7 113.6 2 2 3.7 22.4 143.5 10 3.0 31.7 200.7 3 3.0 18.7 115.1 2 4 3.7 22.8 157.1 12 3.0 31.5 202.6 3 3.0 18.8 134.8 3 8 3.7 23.0 172.5 12 3.0 31.4 209.4 4 3.0 18.8 139.2 3 16 3.7 23.4 193.1 13 3.0 29.3 167.8 4 3.0 18.9 160.0 6
+
+mean
+
+- 23.1 178.2 -
+
+norm. -
+
+1.2 1.2 -
+
+- 30.3 185.7 - 1.6 1.3 -
+
+- 18.9 147.0 - 1.0 1.0 -
+
+increases. However, the I/O volume grows substantially as the preﬁx length increases. For emsads and dsais (esais is not analyzed here because we do not know much about its implementation details), the growth of the I/O volume is mainly due to the use of a merge sort in the programs. In some steps of the algorithms EM-SA-DS and DSA-IS, there are several tasks requiring sorting of ﬁxed-size tuples of integer keys. Those tasks are done using a merge sort instead of a radix sort in our programs. A merge sort is used in the current revisions of the two programs as its external memory design is much easier for us to code with limited time and manpower. In these two programs, replacing merge sorting with radix sorting to achieve a linear I/O volume is a routine engineering job and can be done with enough programming capacity. Due to the use of a merge sort, given a ﬁxed RAM limit, M is ﬁxed and hence m = O(M) is ﬁxed. At each recursion level, k = n/m becomes larger as n increases and hence the I/O volume O(n log k) also increases.
+
+4.3. Implementation Issues
+Given M and n, there are many possible choices for m and W. In our program, the peak RAM use is estimated as 91m bytes. Given M = 3GiB in our experiments, when n < 10 Gi, we simply set m = M/96 = 225, and hence k < 10 · 230/m = 5 · 26 and it is safe to set W = (96 − 91)m/k = m/26 = 219. For bigger n, we choose m = M/91, and W is dynamically set as m divided by the number of I/O buffers. For the program running on the 16GiB preﬁx of “guten1209,” these parameters are recorded as W = 71.2KiB, m = dsa m = 33.8MiB, and k = dsa k = 486. For a given M, if we keep choosing m and
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+12:14
+
+G. Nong et al.
+
+W in this way, then W will decrease when n increases and the I/O complexity O(n/W) will proportionally increase to slow down the program. To solve this problem, we can choose a smaller m to save RAM space for the I/O buffers when W is less than a given threshold. In the current revision of our program, we ﬁx m = M/91 and use 40-bit integers, resulting in a peak disk use of around 20n bytes. If we do not take the issue of W into account, the largest ﬁle that DSA-IS can handle on the experiment platform is 2,048GiB/20 > 100GiB. However, as mentioned earlier, ﬁxing m = M/91 in this case is obviously not good enough and a better method must be used for improving the performance.
+Our programs dsais and emsads are natural implementations of the algorithms for conducting our experiments. They can be further reﬁned for better performance. Only very basic integer sorting algorithms such as radix sorting and merge sorting are used. The current routines for these sorts in our programs are plain and have not been optimized. All the I/O jobs in our programs are executed via the operating system (by calling functions fread and fwrite in C).
+In their current implementations, dsais, emsads, and esais do not use compression to reduce the I/O volume and disk use. To the best of our knowledge, bwt-disk is a representative (and may be the only up-to-date) method for using compression to improve the practical performance of sorting sufﬁxes in the external memory. The study in Ferragina et al. [2012] showed that compressing data can make disk use smaller than the size of the input string. Both dsais and emsads perform I/Os in size-W blocks. They can naturally be improved by using compression on each I/O block. Nevertheless, due to the use of a priority queue provided by STXXL, adding a compression feature to I/Os in esais may have to be done inside STXXL. As we are not experts in STXXL, we are not sure if this can be done and leave it to be determined by interested readers.
+
+5. SUMMARY
+The core contribution of this article is to introduce a new disk-friendly method in DSAIS for sequentially retrieving the preceding character of a sorted sufﬁx to induce the order of the preceding sufﬁx. There are several potential applications for this method. For example, by modifying SA-IS, Fischer [2011] gave an excellent algorithm to induce an LCP array. As the induced sorting process in DSA-IS exactly mimics its counterpart in SA-IS, the method for inducing the LCP array can naturally be extended to the external memory model with DSA-IS. Goto and Bannai [2013] utilized SACA-K to design a space-efﬁcient linear-time algorithm for computing LZ77 factorization on constant alphabets. Ka¨ rkka¨ inen et al. [2014] proposed algorithms for computing the LZ77 parsing efﬁciently using the external memory. This suggests a possibility for extending DSA-IS for computing LZ77 factorization in the external memory. The approach for turning SA-IS into DSA-IS can be directly applied to make an external memory design for the sufﬁx array construction algorithm in Ko and Aluru [2005].
+The algorithms eSAIS, EM-SA-DS, and DSA-IS contain three designs proposed for using the induced sorting principle to sort sufﬁxes in the external memory. For readers’ information, some comparisons between them are sketched here:
+—Given the internal memory capacity M = ((nW )0.5) and the external memory capacity E = O(n), the I/O complexity of each is O(n/W).
+—The best experimental times are achieved by DSA-IS and eSAIS. They are around 10% better than that of EM-SA-DS. Although they have similar speed, eSAIS uses around 20% more disk space than DSA-IS.
+—Random access of bkt[x[ j]] and sa[bkt[x[ j]]] (described in Section 1) is avoided by dividing the sufﬁx array into blocks in both DSA-IS and EM-SA-DS, whereas eSAIS uses a priority queue managed by the external memory library STXXL.
+
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+Induced Sorting Sufﬁxes in External Memory
+
+12:15
+
+—Random access of x[ j] (described in Section 1) is avoided in different ways. The methods used in eSAIS and EM-SA-DS both divide long LMS substrings into ﬁxed-size substrings and move the substrings around during the inducing process. However, DSA-IS uses a technique based on dividing x into blocks and constructing a separate sufﬁx array for each block, in which the main inducing phase can be regarded as a multiway merging of the sufﬁx arrays of the blocks.
+DSA-IS is presented here to share the results of our current research on designing efﬁcient sufﬁx sorting algorithms. We are approaching a favorable position for the development of a distributed solution for building a big sufﬁx array or sufﬁx tree and their compressed alternatives. We are currently investigating efﬁcient methods for extending our external memory algorithms to be distributed so as to further scale the problem size by running the algorithms on a distributed system consisting of many computing nodes.
+ACKNOWLEDGMENTS
+The authors wish to thank the reviewers who have given constructive and insightful suggestions for improving the presentation of this article.
+REFERENCES
+T. Beller, M. Zwerger, S. Gog, and E. Ohlebusch. 2013. Space-efﬁcient construction of the burrowswheeler transform. In String Processing and Information Retrieval. Lecture Notes in Computer Science, Vol. 8214. 5–16.
+T. Bingmann, J. Fischer, and V. Osipov. 2013. Inducing sufﬁx and LCP arrays in external memory. In Proceedings of ALENEX. 88–102.
+R. Dementiev, J. Ka¨ rkka¨ inen, J. Mehnert, and P. Sanders. 2008. Better external memory sufﬁx array construction. ACM Journal of Experimental Algorithmics 12 (Aug. 2008), 3.4:1–3.4:24.
+P. Ferragina, T. Gagie, and G. Manzini. 2012. Lightweight data indexing and compression in external memory. Algorithmica 63, 3 (2012), 707–730.
+J. Fischer. 2011. Inducing the LCP-array. In Algorithms and Data Structures. Lecture Notes in Computer Science, Vol. 6844. 374–385.
+K. Goto and H. Bannai. 2013. Space Efﬁcient Linear Time Lempel-Ziv Factorization on Constant Size Alphabets. Retrieved January 6, 2014, from http://arxiv.org/abs/1310.1448.
+J. Ka¨ rkka¨ inen, D. Kempa, and S. J. Puglisi. 2014. Lempel-ziv parsing in external memory. In Proceedings of the Data Compression Conference (DCC’14). 153–162.
+P. Ko and S. Aluru. 2005. Space-efﬁcient linear time construction of sufﬁx arrays. Journal of Discrete Algorithms 3, 2–4 (2005), 143–156.
+U. Manber and G. Myers. 1993. Sufﬁx arrays: A new method for on-line string searches. SIAM Journal on Computing 22, 5 (1993), 935–948.
+Y. Mori. 2008. SAIS—An Implementation of the Induced Sorting Algorithm. Retrieved from http://yuta.256. googlepages.com/sais.
+G. Nong. 2013. Practical linear-time O(1)-workspace sufﬁx sorting for constant alphabets. ACM Transactions on Information Systems 31, 3 (July 2013), 15:1–15:15.
+G. Nong, W. H. Chan, S. Zhang, and X. F. Guan. 2014. Sufﬁx array construction in external memory using D-critical substrings. ACM Transactions on Information Systems 32, 1 (Jan. 2014), 1:1–1:15.
+G. Nong, S. Zhang, and W. H. Chan. 2011. Two efﬁcient algorithms for linear time sufﬁx array construction. IEEE Transactions on Computers 60, 10 (Oct. 2011), 1471–1484.
+E. Ohlebusch. 2013. Bioinformatics Algorithms: Sequence Analysis, Genome Rearrangements, and Phylogenetic Reconstruction. Oldenbusch Verlag.
+S. J. Puglisi, W. F. Smyth, and A. H. Turpin. 2007. A taxonomy of sufﬁx array construction algorithms. ACM Computer Surveys 39, 2 (2007), 1–31.
+
+Received October 2013; revised July 2014; accepted November 2014
+
+ACM Transactions on Information Systems, Vol. 33, No. 3, Article 12, Publication date: February 2015.
+
+

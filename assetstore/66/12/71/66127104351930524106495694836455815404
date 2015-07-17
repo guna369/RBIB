@@ -1,0 +1,1595 @@
+SOFTWARE – PRACTICE AND EXPERIENCE Softw. Pract. Exper. 2014; 44:1287–1314 Published online 23 May 2013 in Wiley Online Library (wileyonlinelibrary.com). DOI: 10.1002/spe.2198
+Optimized succinct data structures for massive data
+Simon Gog1,*,† and Matthias Petri2
+1Department of Computing and Information Systems, The University of Melbourne, Victoria, 3010, Melbourne, Australia
+2School of Computer Science and Information Technology, RMIT University, Victoria, 3001, Melbourne, Australia
+SUMMARY
+Succinct data structures provide the same functionality as their corresponding traditional data structure in compact space. We improve on functions rank and select, which are the basic building blocks of FM-indexes and other succinct data structures. First, we present a cache-optimal, uncompressed bitvector representation that outperforms all existing approaches. Next, we improve, in both space and time, on a recent result by Navarro and Providel on compressed bitvectors. Last, we show techniques to perform rank and select on 64-bit words that are up to three times faster than existing methods. In our experimental evaluation, we ﬁrst show how our improvements affect cache and runtime performance of both operations on data sets larger than commonly used in the evaluation of succinct data structures. Our experiments show that our improvements to these basic operations signiﬁcantly improve the runtime performance and compression effectiveness of FM-indexes on small and large data sets. To our knowledge, our improvements result in FM-indexes that are either smaller or faster than all current state of the art implementations. Copyright © 2013 John Wiley & Sons, Ltd.
+Received 16 October 2012; Revised 26 February 2013; Accepted 29 March 2013
+KEY WORDS: succinct data structures; binary sequences; FM-index; algorithm engineering; massive data sets; rank; select; SSE; hugepages
+1. INTRODUCTION
+In ﬁelds such as bioinformatics, information retrieval, or data mining, massive volumes of information are processed on a regular basis. One of the biggest challenges in efﬁciently processing data of this size is in-memory storage capacity constraints: Standard workstations cannot keep the complete data sets in-memory [1]. A potential remedy to this problem is the use of space-efﬁcient, succinct, data structures. Succinct data structures take space close to the information theoretic lower bound needed to represent the underlying objects while providing the same functionality as their classical counterparts. Succinct data structures have successfully been used in the ﬁelds such as information retrieval and bioinformatics [2, 3].
+Prominent examples of succinct data structures include compressed representations of sufﬁx arrays and sufﬁx trees. An uncompressed sufﬁx tree requires the storage of multiple, say k, pointers per node; so each node requires k log n bits, and a sufﬁx tree itself consists in the worst case of 2n 1 nodes for a text of size n. In comparison, a succinct representation of a sufﬁx tree can be represented in only 2n C o.n/ bits. This translates to several orders of magnitude less space used in practice [4, 5]. Consequently, succinct data structures can be used to process texts an order of magnitude larger than classical data structures. Another popular succinct data structure is the FM-index [6], which emulates a sufﬁx array. To perform search, the sufﬁx array requires n log n
+*Correspondence to: Simon Gog, Department of Computing and Information Systems, The University of Melbourne, Victoria, 3010, Melbourne, Australia. †E-mail: simon.gog@unimelb.edu.au
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+1288
+
+S. GOG AND M. PETRI
+
+bits in addition to the original text T , whereas the FM-index uses space roughly equal to the size of the compressed representation of T . The FM-index efﬁciently supports the following operations over a compressed representation of a given text T : (1) count the number of occurrences of a pattern P in T ; (2) locate all positions of P in T ; and (3) extract T Œi..j  from the index. All of these operations can be implemented as a combination of multiple basic operations on bitvectors that we will focus on in this paper [7].
+In addition to memory constraints, which can be mitigated by succinct data structures, processing power has also become a bottleneck for computationally large tasks. For years, programmers could rely on CPU manufacturers increasing processor speeds with every generation. Unfortunately, this is no longer the case, and the speed of processors has been stagnant for the last 5 years. New processor generations, in recent years, provide better performance through including multiple processing cores that, unfortunately, do not affect single-threaded program execution. The instruction set supported by current processors has also become more versatile. Additional instruction sets such as Streaming SIMD Extensions (SSE) 4.2 can perform critical operations more efﬁciently. However, they require time and effort by the programmer to be effective [8, 9]. Broadword programming is another optimization on the word (or larger) level [10] that has already been successfully applied to the ﬁeld of succinct data structures [11].
+Another emerging problem is the cost of memory access. Each memory access performed by a program requires the operating system to translate the virtual address of a memory location to its physical location in RAM. All address mappings are stored in a process-speciﬁc page table in RAM itself. Today, all CPUs additionally contain a fast address cache called the translation lookaside buffer (TLB). The TLB is used to cache address translation results similar to the way the ﬁrst-level (L1) cache is used to store data from recently accessed memory locations. If the TLB does not contain the requested address mapping, then the in-memory page table has to be queried. This is generally referred to as a TLB miss and similar to a L1/L2 cache miss, affects runtime performance. Accessing main memory at random locations results in frequent TLB misses, as the amount of memory locations cached in the TLB is limited. Operating systems provide features such as hugepages to improve the runtime performance of in-memory data structures. Hugepages allow the increase of the default memory page size of 4 Kb to up to 16 GB, which can signiﬁcantly decrease the cost of address translation as a larger area of memory can be ‘serviced’ by the TLB. Succinct data structures such as FM-indexes exhibit random memory access patterns when performing operations such as count; yet, to our knowledge, the effect of hugepages on the performance of succinct data structures has not yet been explored.
+Unfortunately, in practice, the runtime of operations on succinct data structures tends to be slower than the original data structure they emulate. Succinct data structures should therefore only be used where memory constraints prohibit the use of traditional data structures. Twenty years ago, Ian Munro conjectured that we no longer live in a 32-bit world [12]. Yet, many experimental studies involving succinct data structures are still based on small data sets, which contradicts the original motivation for their development. Furthermore, the cost of memory translation increases as the size of the in-memory data structure increases, and this effect cannot be clearly measured when performing experiments on small data sets.
+In this paper, we focus on improvements to basic operations on bitvectors used in many succinct data structures. We speciﬁcally focus on the performance on data sets much larger than in previous studies. We explore cache-friendly layouts, new architecture-dependent parameters, and previously unexplored operating system features such as hugepages. Speciﬁcally, we show that our improvements to these basic operations translate to signiﬁcant performance improvements of FM-type succinct text indexes. Our contributions can be summarized as follows:
+
+We propose a cache efﬁcient, uncompressed rank enabled bitvector representation that, as data sets become larger, approaches the time it takes to access an individual bit. We provide a practical select implementation based on Clark’s proposal [13], and show it to have low space overhead, and fast query and construction time for many kinds of bitvectors. We present optimizations on compressed bitvectors and show that we can improve the recent results of Navarro and Providel [14].
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+OPTIMIZED SUCCINCT DATA STRUCTURES FOR MASSIVE DATA
+
+1289
+
+We further provide an extensive empirical evaluation by building on the experimental studies of Ferragina et al. [15], Vigna [11], and González et al. [16]. We explore the following aspects.
+We show that previously unexplored, machine-dependent features can be used to increase the performance of succinct data structures dramatically. To the best of our knowledge, we are the ﬁrst to explore the behavior of these succinct data structures on massive data sets (64 GB compared with commonly used 200 MB). We then show how the speedup of basic bit operations propagates through the different levels of succinct data structures: from binary rank and select over bitvectors to FM-indexes.
+The paper is structured as follows: We ﬁrst give an overview of previous work. Next, we introduce our newly engineered uncompressed bitvector representations for rank in Section 3 and select in Section 4. Further, we discuss practical improvements to the compressed bitvector representation of Navarro and Providel in Section 5. Last, we provide an extensive empirical evaluation of our improvements in Section 6.
+2. DEFINITION AND PREVIOUS WORK
+In this paper, we consider the space-efﬁcient implementation of the following operations on a vector BŒ0..n 1 of length n over an alphabet † of size :
+access.B, i/: Return the ith element of sequence B, also denoted as BŒi. rank.B, i, c/: Return the number of occurrences of symbol c in the preﬁx BŒ0..i 1. select.B, i, c/: Return the position of the ith occurrence of symbol c in B.
+We are especially interested in the efﬁcient implementation over bitvectors († D ¹0, 1º, D 2), because the case of larger alphabets can be reduced to log operations on bitvectors using a wavelet tree [17]. A wavelet tree recursively divides the alphabet to create a binary tree whose notes correspond to individual symbols in the alphabet. General rank.B, i, c/ queries over can be answered in O.log / time by traversing the tree to the leaf level. Changing the underlying bitvectors or the shape of the tree can lead to a variety of different time–space trade-offs [15]. For example, using Huffman codes to encode each symbol in B results in a Huffman-shaped wavelet tree that tends to be more compressible. For an extensive overview on wavelet trees, see [18].
+Let m be the number of set bits in B. In the case of an uncompressed bitvector, access takes constant time. Jacobson [13] and Clark [19] have shown that it is possible to answer rank and select also in constant time when using o.n/ bits of additional space. It is also possible to replace B by an entropy compressed representation without increasing the time bounds [20]. The latter approach is used in practice for sparse (m n) and the former for dense bitvectors. Implementations for the dense case were presented by González et al. [16] and Vigna [11]. For the sparse case, Claude and Navarro [21], and recently Navarro and Providel [14] presented implementations of [20, 22]. Okanohara and Sadakane [23] presented an implementation for very sparse bitvectors following the idea of [24]. Most implementations reduce rank.B, i, c/ to performing population count (popcnt), that is counting the number of set bits, on a speciﬁc computer word in B. The select.B, i, c/ operation is generally reduced to determining the position of the j th bit in a single computer word. We later refer to this operation as select64 because bitvectors in our implementations are represented as a sequence of 64-bit integers.
+Note that most of these studies did not explore the effects on massive data. González et al. perform experiments on bitvectors of sizes up to 128 MB [16], Navarro et al. use bitvectors of size 32 MB and texts of size 50 MB [14], and Okanohara and Sadakane [23] instance up to 120 MB. Vigna [11] was the ﬁrst who used data in the gigabyte range and provided a 64-bit implementation in an easy-to-use library.‡
+The most common use for succinct data structures is in text indexing. Traditionally, sufﬁx arrays (SA) are used to perform text indexing [25]. A sufﬁx array SAŒ0 : : : n 1 stores, in n log n bits, all sufﬁx positions of a text T in lexicographical order. That is, the sufﬁx position stored at SAŒi
+
+‡Available at: http/sux.dsi.unimi.it. Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+1290
+
+S. GOG AND M. PETRI
+
+is lexicographically smaller than the sufﬁx starting at position SAŒi C 1: T ŒSAŒi : : : n 1 < T ŒSAŒi C 1 : : : n 1. All occurrences of a pattern in the text can then be found efﬁciently in a continuous range SAŒi : : : j . Succinct text indexes try to emulate the functionality of sufﬁx arrays and sufﬁx trees in succinct space [26]. One popular succinct text index is the FM-index initially proposed by Ferragina and Manzini [6]. The FM-index exploits a duality between the sufﬁx array and the Burrows–Wheeler transform (BWT) where T BW T Œi  D T ŒSAŒi  1. The BWT permutes T by lexicographically sorting all rotations of T to produce T BW T . The transform was initially used in data compression systems as T BW T tends to be more compressible than T , whereas the original text can be recovered from T BW T in linear time without requiring any additional information [27]. FM-indexes can be implemented efﬁciently using rank and select operations over T BW T using a wavelet tree [7]. An FM-index supports the following operations:
+count.P /: Return the number of times pattern P occurs in T Œ0..n. ocate.P /: Return all positions of pattern P in T Œ0..n. extract.i, j /: Extract T Œi..j  from the index.
+The key component of all operations supported by the FM-index is backwards search. Backwards search allows, for a pattern P of length jP j, determination of the range SAŒ`..r, where all sufﬁxes are preﬁxed by P , using 2jP j log basic rank operations using a wavelet tree. Over time, several other succinct text indexes based on the initial concept of the FM-index have been proposed. For example, Mäkinen and Navarro combine a run-length encoded wavelet tree of T BW T and two additional bitvectors [28]. Unlike a normal FM-index, run-length-based FM-indexes (RLFM) require additional select operations to perform backwards search.
+Ferragina et al. perform an extensive evaluation of compressed text indexes by providing multiple baseline implementations and a widely used test corpus [15]: the Pizza & Chili Corpus available at http://pizzachili.dcc.uchile.cl/texts.html. The corpus consists of ﬁles up to 2 GB in size from different domains and has been used by many researches as a reference collection in experiments [14, 21, 29].
+
+3. A CACHE-FRIENDLY RANK IMPLEMENTATION FOR UNCOMPRESSED BITVECTORS
+
+The ﬁrst sublinear-space data structures supporting constant time rank operations store two levels of precomputed rank values: blocks Rb and superblocks Rs [12, 19]. In theory, each superblock RsŒi  stores precomputed rank values at s D log2 n intervals at a total cost of n= log n bits. Each block RbŒi  stores precomputed rank values relative to the preceding superblock in b D log n intervals at a total cost of n log log n= log n bits. This results in a total cost of n= log n C n log log n= log n 2 o.n/ bits.
+In practice, rank.B, i , 1/ is answered as follows. First, the correct superblock RsŒi=s is retrieved.
+Next, the correct block RbŒi=b is calculated. Finally, rank.B, i , 1/ D RsŒi=s C RbŒi=b C popcnt.bvŒv/, where bvŒv is the machine word containing position i masked up to position i, and popcnt is a method that counts the ones in the word. Note that each choice of the parameters s and b implies a certain level of overhead. For example, 38% overhead is achieved for b D 32 and s D b log n.
+In addition to fast, basic bit operations, minimizing cache and TLB misses is the key to fast suc-
+cinct data structures [11, 16]. Using two block levels may result in three cache misses to answer a rank query: one access to Rs and Rb each and a third access to the bitvector to perform popcnt within the target block. To reduce cache and TLB misses, Vigna proposed to interleave Rs and Rb [11]. So each superblock RsŒi  that contains absolute rank samples is followed in memory by the corresponding blocks RbŒj ..k containing the relative rank samples. The size of the blocks is chosen as follows: 64 bits are used to store each superblock value. The second 64 bits are used to store seven 9-bit block counts. Overall, rank queries can be answered in constant time for a superblock size of s D .7 C 1/ 29 D 512. This reduces the number of cache and TLB misses to two: one to
+access the precalculated counts and a second to perform the population counts within the bitvector.
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+OPTIMIZED SUCCINCT DATA STRUCTURES FOR MASSIVE DATA RANK (B,i,1)
+
+1291
+
+sb data sb data sb data sb B
+Figure 1. Interleaved bitvector (B) showing superblocks (sb) and data interleaved for optimal cache performance. A rank operation ﬁrst jumps to the interleaved superblock and then iteratively processes the following
+data block.
+
+The total space overhead of this approach is 128=512 D 25%. We refer to this approach as RANK-V. Note that it is called RANK9 in [11].
+Extending Vigna’s approach, we propose interleaving the precomputed rank values and the bitvector data as shown in Figure 1. Furthermore, we only store one level of precomputed values similar to one of the methods proposed in [16]. For large enough bitvectors and fast popcnt methods, we conjecture that this will increase runtime performance as we perform only one cache and TLB miss. For each block b, we therefore only store a 64-bit cumulative rank count. For a block size of 256 bits, the space overhead of our method is 25%, the same as the solution proposed by Vigna. We call our 25% overhead implementation RANK-1L.
+More space-efﬁcient versions can be achieved by choosing a larger block size. For example, a block size of 1024 results in 6.25% extra space. The same space can also be achieved by a variation of Vigna’s approach, which we call RANK-V5 . Set the superblock size to s D 2048 and the block size to b D 6 64 D 384 bits [11]. RANK-V5 stores the superblock values in a 64-bit word and the 5 positive relative 11-bit counts in a second 64-bit word. A rank query then requires two memory accesses plus at most six popcnt operations.
+
+4. A FAST SELECT IMPLEMENTATION FOR UNCOMPRESSED BITVECTORS
+
+Using the block/superblock data structure described in Section 3, a select.B, i, 1/ operation can be solved by performing O.log n/ rank operations over a bitvector to determine the position of the ith one bit. González et al. [16] show that using binary search over the prestored superblock counts Rs followed by sequential search within the determined superblock is several times faster. In their one-level rank structure containing only superblocks, González et al. sequentially search within the superblock by performing byte-wise popcnt operations followed by a bitwise search.
+We implement this approach over RANK-1L and call it SEL-BS. However, performing binary search for large inputs is inefﬁcient, as the array positions of the ﬁrst binary search steps lie far apart and consequentially cause cache and TLB misses. We provide a second implementation called SELBSH, which uses an auxiliary array H . The array contains 1024 rank samples of the ﬁrst 10 steps of each possible binary search in a heap order. SEL-BSH uses H to improve the memory access locality of the ﬁrst 10 steps of the binary search to reduce TpLB and cache misses.
+Clark presents a sublinear space 3n=j log log nj C O. n log n log log n/ bits , constant time three-level data structure for select in his PhD thesis [13, Section 2.2.2, pp. 30-32]. González et al.’s [16] verbatim implementation of Clark’s structure requires 60% space overhead in addition to the original bitvector and was slower than SEL-BS for inputs smaller than 32 MB.
+We now present an implementation of a simpliﬁed version of Clark’s proposal, called SEL-C. Let m 6 n be the number of ones in the bitvector B. We divide B in superblocks by storing the position of every 4096th one bit. Each position is stored explicitly at a cost of dlog ne 6 64 bits. In total, we use d n=4096e log n bits of extra space. When using 64-bit words to store each position, the additional space required is d64 n=4096e bits or 1.6%. Using this structure, we can answer select queries for every 4096th one bit directly. Let x D select.4096i C1/ and y D select.4096.i C1/C1/ be the border position of the ith superblock. A superblock is called long if its size r D y x is larger or equal to log4 n. As a result, storing each of the 4096 positions explicitly requires only 4096= log3 n bits per position that translates to only 6 10% overhead per bit in a 1-GB
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+1292
+
+S. GOG AND M. PETRI
+
+bitvector. If r < log4 n, we call the superblock short, and it is further subdivided by storing the position of every 64th one bit relative to the left border of the superblock. This requires at most log r 6 log.log4 n/ D 4 log log n bits per entry. Hence, an upper bound for the space overhead is 4096=64 log r D 64 log r, which in the worst case (r D 4096) results in an overhead of 64 log r=4096 D 64 12=4096 D 18.75%. For the important case of dense bitvectors, the typical space overhead is much smaller than the worst case, because r 2 4096, which translates into 64 log.8196/=8196 D 10.2% overhead per input bit.
+Vigna also proposed two select.B, i , 1/ implementations called SELECT9 and SIMPLE that we refer to as SEL-V9 and SEL-VS [11]. SEL-V9 builds select capabilities on top of RANK-V. In addition to the rank counts, a two-level inventory is stored at a total cost of 57.5% space overhead. SEL-VS similar to SEL-V9 uses a multilevel inventory to perform select but does not require RANKV during query time that results in a less space overhead. Similar to the select structure of Clark [13], a three-level structure is used in SEL-VS. However, SEL-VS is algorithmically engineered to use only 64-bit and 16-bit words instead of using integers of size log r that are more expensive to access and store. For very large superblocks, SEL-VS further stores the absolute positions of each set bit using a 64-bit word, whereas Clark’s structure stores the position in log r bits relative to the beginning of the superblock. For smaller superblocks, the positions are not stored explicitly. Instead, two inventories are used to ﬁnd a region in the original bitvector that is then scanned sequentially to ﬁnd the correct ith bit position.
+
+5. ENGINEERING A BETTER H0-COMPRESSED BITVECTOR
+
+Sparse bitvectors, in which the number of ones, m, is signiﬁcantly smaller than n=2, can be stored
+
+more succinctly using a bitvector representation such as that proposed by Pagh [22]. The representa-
+
+tion requires dlog
+
+n m
+
+eCO.log log n/Co.n/
+
+bits
+
+in
+
+theory,
+
+and
+
+supports
+
+access
+
+and
+
+rank
+
+in
+
+constant
+
+time. Note that the ﬁrst term earlier is bounded by the zeroth-order entropy H0 of the bitvector using
+
+Stirling’s formula.
+
+We will brieﬂy revisit the data structure to explain our practical optimizations. To achieve the described compression, the original bitvector B is divided into n0 D dn=Ke blocks of ﬁxed length K.
+
+The information of each block bi is split into two parts: ﬁrst the number Äi representing the num-
+
+ber of one bits in the block. There are only
+
+K Äi
+
+possible bit permutations of bi containing Äi ones.
+
+Therefore, storing a second number
+
+i 2 Œ0,
+
+K Äi
+
+1 is enough to uniquely encode and decode block
+
+bi . Each Äi is stored in an array CŒ0 : : : n=K of dlog.K C1/e-bit integers. Compression is achieved
+
+by representing each
+
+i with only dlog.
+
+K Äi
+
+C 1/e bits and storing all
+
+i consecutively in a bitvector
+
+O. To efﬁciently answer access and rank queries, samples, with a sample rate t , are stored in an
+
+interleaved array S. For each block bjt , the element SŒj  contains the starting position of jt and
+
+the rank to the start of the block rank.B, jtK, 1/.
+
+5.1. Performing operations
+
+access.B, i/ or rank.B, i, 1/ can be answered in time O.t / as follows. First, we determine the block
+
+index i 0 D bi=Kc of bit i . Second, we calculate the intermediate block iQ D bi 0=t ct prior to i 0 that
+
+contains a pointer into O. Third, the sum  of the binary lengths of each j (iQ 6 j 6 i 0 1) is cal-
+
+culated
+
+by
+
+sequentially
+
+scanning
+
+C,
+
+adding
+
+dlog.
+
+K Äj
+
+C 1/e for each block bj . Finally, bi0, the block
+
+containing position i , can be reconstructed by accessing Äi0 and i0 directly as they are encoded
+
+at
+
+position
+
+SŒiQ C 
+
+with
+
+dlog.
+
+K Äi 0
+
+C 1/e bits in O. Having recovered bi0 from O and C, we can
+
+answer access.B, i/ by returning the bit at index i mod K. Operation rank.B, i, 1/ can be answered
+
+by adding SŒiQC1, the sum of values in CŒt iQ..i 0 1, and rank.bi0, i mod K/.
+
+In practice, select is performed in O.log n/ time by ﬁrst performing binary search over the rank
+
+samples in S and then sequentially scanning the blocks between the target interval.
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+OPTIMIZED SUCCINCT DATA STRUCTURES FOR MASSIVE DATA
+
+1293
+
+Space in (%) of original bitvector
+
+120 bitvector = WEB-WT-1GB Space of
+100 -array C 80 -array O
+pointers/samples S
+60
+
+bitvector = DNA-WT-1GB
+
+40
+
+20
+
+0 8 32 64
+
+128 Block size K
+
+256 8 32 64
+
+128 Block size K
+
+256
+
+Figure 2. Space consumption of the three different parts of the H0-compressed bitvector as a function of block size K for two different bitvectors. The sample rate t was set to 32. The original bitvectors of size
+1 GB were extracted from wavelet trees of WEB and DNA text (see Section 6.1.4).
+
+5.2. Space consumption
+
+The total space of O is bounded by nH0Cn=K bits (see [22]). Bitvector C is bounded by n log K=K
+
+bits and bitvector S by 2n log n=tK bits. If the bitvector is compressible – that is H0 1 – then
+
+the size of C is dominant when K is small. Figure 2 shows the space usage of the individual com-
+
+ponents (C,O,S) for two, ‘real-world’ bitvectors WEB-1GB and DNA-1GB; see Section 6.1.4 for a
+
+detailed description of their origin. By using Claude et al.’s [21] implementation, which uses blocks
+
+of size K D 15 and decodes bi0 from .Äi0 , i0/ via a lookup table, the sizes are jCj D 275 MB and
+
+jOj D 64 MB. Note that lookup tables for larger K are not practical. Navarro and Providel [14]
+
+recently propose decoding and encoding of i without a lookup table by encoding and decoding blocks in O.K/ time on the ﬂy. During the encoding process, i is computed from a block bi with
+
+Äi set bits as follows: initially i D 0. First, the least signiﬁcant bit in bi is considered. There are
+
+K1 Äi
+
+blocks ending on zero and
+
+K Äi
+
+1 1
+
+ending on one. If the last bit is one, then
+
+i is increased
+
+by
+
+K1 Ä
+
+(i.e., the number of blocks of ending with zero); otherwise,
+
+i is not changed. In the next
+
+step, K is decreased by one, and Äi is decreased by one if the last bit was set. bi is shifted to the
+
+right, and we reevaluate the least signiﬁcant bit. The process ends when Äi D 0.
+
+A block bi can be recovered from
+
+i and Äi as follows: If
+
+i>
+
+K1 Äi
+
+,
+
+then
+
+the
+
+least
+
+signiﬁcant
+
+bit in b was set. In this case,
+
+i is decreased by
+
+K1 Äi
+
+and Äi by one. Otherwise, the least signiﬁcant
+
+bit was a zero. In the next step, K is decreased by one and repeat the decoding process until Äi D 0.
+
+On-the-ﬂy decoding requires only O.K/ simple arithmetic operations (subtraction, shifts, and comparisons) and a lookup table of size K2 to calculate the binomial coefﬁcients. Navarro and
+
+Providel [14] use a block size of K D 63, which reduces the size of C to 98 MB. This is still of
+
+similar size as C (97 MB) for WEB-1GB. It was reported that the use of K > 63 results in runtimes
+
+‘orders of magnitudes slower’ than for smaller K.
+
+We try to improve on this result by applying the following optimizations:
+
+1. The access operation can immediately return the result if block bi contains only zeros or ones (called uniform), without scanning O and accessing S. The rank operation can immediately return its result if the .iQ C1/th and iQth rank samples in S differ by 0 or tK, saving the scanning
+of C. At ﬁrst glance, this optimization seems to be trivial; however, in text indexing, the bitvec-
+tors of wavelet trees often contain long runs of zero and ones, and we therefore conjecture that
+this optimization will be effective in practice. 2. If a block b C i has to be decoded, then we can apply an optimization if the block contains
+only few ones: We ﬁrst check if Äi 6 K=log K. In this case, it is faster to determine the Äi positions of ones in bi by Äi binary search over the columns in Pascal’s triangle.
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+1294
+
+S. GOG AND M. PETRI
+
+6. EXPERIMENTAL STUDY
+
+6.1. Experimental setup
+6.1.1. Hardware. Our main experimental machine is a server equipped with 2 Intel Xeon E5640 processors each with a 12 MB L3 cache. The total memory is 144 GB of DDR3 DRAM, 72 GB directly attached to each socket. This implies that the memory architecture is nonuniform (NUMA), as accessing a different NUMA domain (the memory attached to a different socket) is more expensive. Each processor uses a 32-kB L1 data cache and 256-kB L2 cache per core. The L1 cache line size is 64 bytes. The processor additionally supports memory page sizes of 4 kB, 2 MB, and 1 GB. All our experiments are run on a single thread. Each CPU further includes a two-level TLB with 64 times 4-kB-page entries in the ﬁrst level and 512 in the second level. The TLB has four dedicated entries for 1-GB pages in its ﬁrst level.
+We also used a second machine to sanity check our results on small test instances. A MacBook Pro equipped with an Intel Core i5-2435M processor with 3 MB L3 cache, 4 GB of DDR3 DRAM. The processor uses 64-kB L1 data cache and 256-kB L2 cache per core.
+
+6.1.2. Software. Ubuntu Linux version 12.04 served as the operation system on the server, whereas Mac OS X version 10.7.3 was used on the MacBook. We used the g++ compiler version 4.6.3 on the server and version 4.3.6 on the MacBook. The compiler ﬂags -O3 -DNDEBUG -funroll-loops were used to compile all programs. We selectively enabled SSE 4.2 support using the -msse4.2 ﬂag.
+All our implementations are included in the open source C++ template library sdsl that is available at http://github.com/simongog/sdsl. The library includes a test framework that was used to check the correctness of our implementations. The library also provides methods to measure the space usage of data structures and provides support for timings based on the getrusage and gettimeofday functions. We state the elapsed real time in all results.
+The papi library version 4.4.0, which is capable of reading performance counters of CPUs, was used to measure cache and TLB misses. It is available under http://icl.cs.utk.edu/papi/. Note that we deliberatively choose to not use cachegrind, a cache measurement tool provided in the valgrind debugging and proﬁling tool suite. Cachegrind performs simulations to determine the number of cache misses caused by a program. However, this simulation does not elucidate cache and TLB misses caused when accessing the page table, which is also stored in memory. As the size of the page table grows with the size of the data, cache and TLB misses resulting from accesses to the page table become more frequent and thus more relevant to the overall performance of a data structure.
+
+6.1.3. Environmental features. One of our main goals is to study how much an implementation can be improved by varying the feature set of the operating system and hardware employed. We have selected the following three features:
+TBL Programs marked with this feature use a lookup table to perform popcnt on bytes and process the ﬁnal byte of a select64 operation bit by bit. Compiling with ﬂag -DPOPCOUNT_TL activates the feature.
+BLT A program marked with BLT uses the CPU built-in popcnt function and functions to determine the leading and trailing zeros. It also activates the use of the new select64 implementation presented in Section 6.2. The feature can be used by adding the compile ﬂag -msse4.2 for gcc versions > 4.3.
+HP Programs marked with this feature use 1-GB memory pages instead of the standard 4kB pages. This feature is supported by, among other operating systems, Linux kernels in the 2.6 series or newer. However, the usage of this feature requires preparation. Hugepages must be reserved at boot time and can then be used by memory mapping their physical memory area. For this study, we have implemented a basic memory management system in the sdsl library to be able to map the heap allocated part of our data structures to hugepages. The library keeps track of all allocated memory and maps all structures when sdsl::mm::map_hp() is called. After the execution of an
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+OPTIMIZED SUCCINCT DATA STRUCTURES FOR MASSIVE DATA
+
+1295
+
+experiment, the structure can be copied back to 4-kB-page memory region by a call of sdsl::mm::unmap_hp(). The use of 1-GB pages reduces the number of TLB misses for programs that perform nonlocal memory accesses.
+
+6.1.4. Data sets. As in previous studies on rank and select [11, 14, 16], we created bitvectors of varying sizes and densities to evaluate our data structures. The instance sizes range from 1 MB to 64 GB, quadrupling in size each time. For each size, we generate three vectors with density d D 5%, d D 20%, and d D 50% by setting each bit with probability d .
+For the evaluation of the FM-indexes, we used the following data sets:
+The 200-MB instances (DNA,DBLP.XML,PROTEINS,SOURCES, ENGLISH) of the Pizza & Chili website, which provides texts from different application areas and is the standard benchmark in text indexing. The 200-MB test instances are the largest ﬁles that are available for all categories on the website. We also created bitvectors denoted F -WT-X , where each has size X and was produced by taking a preﬁx of the instance ﬁle F , calculating the Huffman-shaped wavelet tree W T of the BWT of this preﬁx, and concatenating all the bitvectors of W T . To go beyond the 200-MB limit, we created a 64-GB ﬁle from the 2009 CLUEWEB web crawl available at http://lemurproject.org/clueweb09.php/. The ﬁrst 64 ﬁles in the directory ClueWeb09/disk1/ClueWeb09_English_1/enwp00/ were concatenated, and null bytes in the text were replaced by 0xFF-bytes. This ﬁle is denoted WEB-64GB. Preﬁxes of size X are denoted by WEB-WT-X . We again created bitvectors denoted by WEB-X . Each has size X and was produced by taking a preﬁx of WEB-64GB, calculating the Huffman-shaped wavelet tree W T of the BWT of this preﬁx, and concatenating all the bitvectors of W T . Our second large text is a 3.6-GB genomic sequence ﬁle called DNA. It was created by concatenating the ‘soft-masked’ assembly sequence of the human genome (hg19/GRCH37) and the Dec. 2008 assembly of the cat genome (catChrV17e) in fasta format. We removed all comment/section separators and replaced them with a separator token to ﬁx the alphabet size at
+D 8. We created bitvectors DNA-X with the same process described for WEB-64GB.
+6.1.5. Basic data structure implementations. In sdsl, we distinguish between bitvectors and support data structures that add rank or select functionality. The uncompressed bitvector bv (class bit_vector) is represented as a sequence of 64-bit integers and only provides the access operation. Operations rank and select can be answered by adding support data structures that are compatible with the bitvector class. We can therefore evaluate different time and space trade-offs for rank and select over a single bitvector. For example, class bit_vector can be supported by the 25% overhead class rank_support_v<> or by the 6.25% overhead class rank_support_v5<>, and if required, select queries can be supported in constant time by adding an object of class select_support_mcl. Table I summarized all our rank and select implementations used in the following experimental study and references to where they were described in more detail in this paper or in previous work.
+6.1.6. Random queries. In the ﬁrst part of our experimental evaluation, we perform random queries (rank or select) over different bitvectors. As many of these basic operations only take several nanoseconds, generating a random query position (using, e.g., rand()) can affect the outcome of the experiments. We therefore took the approach of generating 220 random numbers before we perform each measurement. Each random number represents one query position in the bitvector. We then sequentially perform multiple passes over the array holding the random numbers to perform the random rank or select operations on the bitvectors. The time shown for individual queries is the mean query time over 107 random queries. We sequentially cycle the random number array to minimize the effect of accessing the random numbers on the TLB/L1 miss rates in our experiments while not affecting the time measurements. To ensure this assumption is true, we conducted experiments using a pseudo-random number generator and observed only minor improvements in TLB performance. In our uncompressed rank experiments, we further include the TLB and L1 cache performance of a single random accessoperation on a bitvector as a baseline at the same 107 positions.
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Name
+RANK-V RANK-V5 RANK-1L RANK-R3K RANK-SD
+SEL-C SEL-BSH SEL-BS SEL-R3K SEL-SD SEL-VS SEL-V9
+
+Table I. Overview of rank and select implementations used in the experiments.
+
+Described
+in
+Sec. 3,[11] Sec. 3 Sec. 3
+Sec. 5,[14] [23]
+
+Corresponding sdsl
+Support class
+rank_support_v<> rank_support_v5<> rank_support_interleaved<1,256> rrr_rank_support<1,K> sd_rank_support<>
+
+Bitvector class
+bit_vector bit_vector bit_vector_interleaved<256> rrr_vector<K> sd_vector<>
+
+Sec. 4 Sec. 4 Sec. 4
+Sec. 5,[14] [23] [11] [11]
+
+select_support_mcl<>
+
+bit_vector
+
+select_support_interleaved<1,256>
+
+bit_vector_interleaved<256>
+
+see SEL-BSH (compile option -DNOSELCACHE)
+
+rrr_select_support<1,K>
+
+rrr_vector<K>
+
+sd_select_support<>
+
+sd_vector<>
+
+—
+
+—
+
+S. GOG AND M. PETRI
+
+1296
+
+OPTIMIZED SUCCINCT DATA STRUCTURES FOR MASSIVE DATA
+
+Table II. Time in nanoseconds for popcnt and select64 implementations.
+
+Average time (ns)
+
+Operation
+
+TBL
+
+BW BLT
+
+popcnt select64
+
+5.12 19.22
+
+2.80 11.60
+
+1.04 6.40
+
+1297
+
+6.2. Rank and select on 64-bit words
+Answering operations rank.B, i , c/ and select.B, i , c/ requires computing popcnt and select64 on a 64-bit word. The ﬁrst step to an optimal rank and select implementation is the optimization of these basic operations. In 2005, González et al. [16] found that computing popcnt using multiple 8-bit probs into a loookup table resulted in the best performance. We refer to this approach as TBL. In 2008, Vigna used a broadword computing technique discussed by Knuth [10, p. 143]. We call this approach BW. Recently, researchers started using SSE 4.2 instructions to perform population count more efﬁciently [8, 9]. At the end of 2008, both Intel and AMD released processors with efﬁcient built-in CPU instructions for popcnt on 64-bit words (down to 1 CPU cycle; see, e.g., [30]).
+Table II shows a comparison of the described methods. In the experiment, we performed 107 operations on random values for each method. As described in Section 6.1.6, we cycle through our array of random numbers to avoid generating random numbers on the ﬂy. Note that the table lookup method TBL that was considered the fastest in 2005 now is roughly ﬁve times slower for popcnt than using the built-in CPU instruction. The broadword technique is roughly three times slower. This is by no means an exhaustive comparison of all available popcnt methods. For a more in-depth comparison of different population count methods, see [8, 9].
+Unfortunately, the development of efﬁcient select operations on 64-bit integers (select64) has not been as rapid as for popcnt. There are no direct CPU instructions available to return the position of the i th set bit. Method TBL solves the problem in two steps: First, the byte that contains the i th set bit is determined by performing sequential byte-wise population counts using a version of TBL. The ﬁnal byte is scanned bit by bit to retrieve the position of the ith bit. Vigna proposed a broadword computing method [11]§ that we refer to as BW. In Lising 1, we introduce a faster variant of Vigna’s method (BW) that uses two small additional lookup tables and a built-in CPU instruction.
+
+Listing 1. Fast, branchless select64 method using two lookup tables. The difference to Algorithm 2 in [11] is highlighted.
+
+§available at http://sux.dsi.unimi.it/select.php Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+1298
+
+S. GOG AND M. PETRI
+
+Given a 64-bit word x and a number i, we determine the position of the ith set bit in x as follows. In the ﬁrst step, the byte bi in x that contains the i th set bit is determined. In the second step, we use a lookup table to select the j th set bit in bi , which corresponds to the i th set bit in word x.
+In detail, we ﬁrst use the divide-and-conquer approach described by Knuth that calculates the number of ones in each byte in x (lines 2–6). Line 7 calculates the cumulative sums of the byte counts using one multiplication. Next, we use these cumulative sums to determine bi . This can be carried out by adding a mask (PsOverflow[i]) depending on i to the cumulative sums (line 8). After the addition, the most signiﬁcant bit of each byte is set, if its corresponding sum was larger than i (line 8). The ﬁrst byte with a sum larger or equal to i contains the ith bit in x. We use a second mask to set the remaining 7 bits in each byte to zero. Now, the position of bi corresponds to the number of trailing zeros divided by eight (lines 9 and 10). We use a CPU instruction (builtin_ctzll) to select the leftmost non-overﬂowed byte bi . In the second step, we determine the rank j of the i th bit in bi by subtracting the number of set bits in x occurring before bx (line 11). Last, we use a lookup table (Select256) to select the j th bit in bi and return the position (pos) of j in the word x.
+A performance comparison of different select64 methods on 64 bits is shown in Table II. Using incremental table lookups to determine the correct byte within the 64-bit integer and using bitwise
+processing of the target byte (TBL) is roughly three times slower than the fastest method BLT. The
+original broadword (BW) method is roughly two times slower than BLT.
+
+6.3. Rank on uncompressed bitvectors
+We now consider the two most efﬁcient popcnt implementations (BW and BLT) and use them inside the fastest known implementation of rank.B, i , c/, RANK-V, and our new, fully interleaved representation RANK-1L. We also vary the memory page size because address translation can also affect the performance of the data structure. We use either the standard 4-kB pages (no HP) or 1-GB pages (HP).
+
+Time per operation in (ns)
+
+BW 200
+150
+
+BLT RANK-V RANK-1L BV access
+
+no HP
+
+100
+
+50
+
+0
+
+200
+
+Time per operation in (ns)
+
+150
+
+HP
+
+100
+
+50
+
+0
+
+16 MB 256 MB 4 GB Bitvector and rank size
+
+64 GB
+
+16 MB 256 MB 4 GB Bitvector and rank size
+
+64 GB
+
+Figure 3. Time for single random rank operations on uncompressed bitvectors. The top row shows performance with standard 4-kB pages, and the bottom row shows performance with 1-GB pages. The left column
+shows performance using the broadword method, and the right column with the BLT method.
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+OPTIMIZED SUCCINCT DATA STRUCTURES FOR MASSIVE DATA
+
+1299
+
+The results of our random query experiment is depicted in Figure 3. Note that the performance is not affected by the density of the bitvector, because accessing the cumulative counts and performing popcnt do not depend on the underlying data. We further included the cost of performing a single access.B, i/ operation as a baseline and as a practical lower bound, because a rank operation cannot be faster than reading a single bit. Figure 3 shows that RANK-V is better than RANK-1L for test instances of larger size if we use popcnt method BW, and RANK-1L outperforms RANK-V if we use popcnt BLT. It also shows that the runtime of the access and rank operations signiﬁcantly increases with the size of the data structure if the standard 4-kB pages are used. Table III further shows the number of L1 cache and TLB misses for all three operations that we will use in the succeeding sections to explain the runtime behavior for each operation as the input size increases.
+We ﬁrst explain why this effect occurs for access.B, i/. Performing access.B, i/ consists of (1) address translation from the virtual address of BŒi and (2) accessing the physical memory location of the bitvector corresponding to BŒi. For 4-kB pages, the 512 elements of the TLB can store translations of up to 512 4 kB D 2 MB of memory. For a 1-MB bitvector, all address translations can be performed using the TLB. After a few initial TLB misses for the ﬁrst random accesses, no more TLB misses occur. The main cost is therefore the L2 miss that occurs when fetching the bitvector data from L3 cache.
+For bitvectors in the range from 2 to 12 MB, the bitvector still ﬁts in the L3 cache, but TLB misses occur as more memory pages are accessed than TLB entries are available. The handling of a TLB miss is cheap, because the page table for a 12-MB index is about 12 kB and ﬁts in the L1 cache. This is still the case for bitvectors in the range from 12 to 32 MB, but the bitvectors themselves cannot be completely held in L3 cache (as our L3 cache is 12 MB large). Therefore, L3 misses occur, and the bitvector data are transferred from the RAM. In the range from 32 to 256 MB, the page table is of size 32 to 256 kB and does not ﬁt in the L1 cache anymore. Therefore, each TLB miss now forces an L1 miss to fetch the page table entry from the L2 cache. In the range from 256 MB to 12 GB, the page table is larger than the L2 cache, and thus, the access operation can cause an L2 miss to update the TLB.
+Finally, for bitvectors larger than 12 GB, the page table is larger than the L3 cache. Therefore, looking up an address of one page table entry can now itself result in a TLB miss, which in turn can be handled by one L1 miss to access an entry of the upper level of the hierarchical page table. Accessing and loading this page table entry into memory causes another L3 miss. In total, one accessoperation can result in two TLB and three cache misses when 4-kB pages are used. This can be seen in Table III: For a 64-GB bitvector, the mean number of TLB misses per access query is 1.9, and the mean number of L1 cache misses is 3.1.
+On the basis of these ﬁndings, we now explain the runtime of RANK-V and RANK-1L. The cost of RANK-V is two memory accesses plus one popcnt operation. For the 64-GB instance, the TLB and L1 misses are two times the misses for one access operation. We can observe in Figure 3 that
+
+Table III. Average TLB and level 1 cache misses for a single rank or accessoperation on uncompressed bitvectors averaged over 10 million queries for 4-kB and 1-GB pages.
+
+4-kB pages (no HP) RANK-V RANK-1L
+BV access
+
+1 MB
+0.0=2.0 0.0=2.0 0.0=1.0
+
+TLB misses = L1 cache misses per operation 16 MB 64 MB 256 MB 1 GB 4 GB 16 GB
+
+1.6=3.1 0.9=2.3 0.8=1.6
+
+1.9=3.8 0.9=2.0 0.9=2.0
+
+1.9=4.0 1.0=3.0 1.0=2.0
+
+2.1=4.3 1.0=3.2 1.0=2.1
+
+2.8=5.0 1.2=3.7 1.4=2.6
+
+3.6=5.7 1.3=4.0 1.8=2.9
+
+64 GB
+3.9=6.0 1.9=4.3 1.9=3.1
+
+1-GB pages (HP)
+
+RANK-V RANK-1L BV access
+
+0.0=2.0 0.0=2.0 0.0=1.0
+
+0.0=2.1 0.0=2.0 0.0=1.1
+
+0.3=2.1 0.2=2.0 0.0=0.9
+
+1.4=2.1 0.9=2.0 0.7=1.1
+
+1.8=2.1 1.0=2.0 0.9=1.1
+
+2.0=2.1 1.1=2.0 0.9=1.1
+
+2.0=2.1 1.1=2.0 1.0=1.1
+
+2.0=2.1 1.1=2.0 1.0=1.1
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+1300
+
+S. GOG AND M. PETRI
+
+the runtime is also doubled. Using the BW popcnt adds extra overhead. The new RANK-1L structure performs only one memory access to the superblock and sequentially reads, for a block size of 256 bits, at most 32 additional bytes (equal to four 64-bit words). The latter may result in an extra L1 cache miss, because the blocks are not aligned to the 64-byte cache lines.
+The use of 1-GB pages reduces the number of TLB misses. For smaller instance sizes, no TLB misses occur. For large bitvectors, the second TLB miss caused by the access to the large page table is no longer needed. We observe in Table III and Figure 3 that the transition from not having a TLB miss to having a TLB miss happens before the 1-GB size is reached. There are only four TLB entries for 1-GB pages available in the TLB. We would therefore expect this to only occur at bitvectors of sizes larger than 4 GB. A reason for this might be that the operation system also stores the kernel itself in one hugepage, which in turn affects the number of TLB entries available to other programs. Further note that the runtime for the 64-GB bitvector increases slightly. As the data structure, including the 25% rank, is 80 GB, therefore larger than the memory of one NUMA node, which is 72 GB, an extra cost has to be paid for the RAM access.
+Overall, the combination of the BLT and HP features results in a signiﬁcant performance improvement for the rank structures compared with the BW and no HP version. Our improvements allow a rank.B, i, c/ operation at the cost close to that of one memory access and are therefore almost optimal for this hardware conﬁguration.
+
+6.4. Select on uncompressed bitvectors
+Next, we focus on select.B, i, c/. We ﬁrst examine the properties of the binary search solutions SEL-BS and SEL-BSH, the two-level solution SEL-C, and the two select (SEL-V9 and SEL-VS) solutions proposed in [11] under two extreme environmental feature combinations: TBL + 4-kB pages and BLT + HP. We choose instance sizes of 16 MB and 16 GB to highlight the effects of address translation. For each instance, we further use bitvectors of densities 5%, 20%, and 50% as, unlike rank, the density can affect the performance of different select data structures.
+For each density, we perform 10 million random select queries and show the mean runtime performance per operation for densities 5% and 50% in Figure 4. For all 16-MB test instances, the bitvector and the support structure ﬁt in one 1-GB hugepage. Therefore, all structures beneﬁt from enabling the features (BLT+HP). All structures roughly become twice as fast for the small test case. Overall, the two-level structure SEL-C outperforms SEL-BS, SEL-BSH, and SEL-V9 for small instances, but is slower than SEL-VS. Further note that the performance of SEL-BSH and SEL-BS is almost identical as address translation for small instances does not signiﬁcantly affect runtime performance (see our analysis of rank for details).
+
+Time per select in (µs)
+
+density d = 5% Size
+1.5 16 MB 16 GB
+1.0
+
+density d = 50%
+
+0.5
+
+0.0 TBL BLT TBL BLT TBL BLT TBL BLT TBL BLT +++++ HP HP HP HP HP
+SEL -BS SEL -BSH SEL -C SEL -V9 SEL -VS
+
+TBL BLT TBL BLT TBL BLT TBL BLT TBL BLT +++++ HP HP HP HP HP
+SEL -BS SEL -BSH SEL -C SEL -V9 SEL -VS
+
+Figure 4. Average time for a single select operation on uncompressed bitvectors dependent on the size (16 MB/16 GB), the density (5/50) of the input, the implementation (SEL-BS/SEL-BSH/SEL-C/SEL-
+V9/SEL-VS), and the used environmental features (TBL/BLT+HP).
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+OPTIMIZED SUCCINCT DATA STRUCTURES FOR MASSIVE DATA
+
+1301
+
+For the 16-GB instances, all runtimes increase because of the increasing cost of TLB and cache misses as described in the discussion of our rank experiment in Section 6.3. As expected, SEL-BSH outperforms SEL-BS because the ﬁrst 10 memory accesses cause no TLB miss. However, the unoptimized implementation (TBL + 4-kB pages) of our two-level SEL-C approach outperforms both binary search approaches even with BLT + HP enabled. Without the features, SEL-C is slightly faster than SEL-V9 for d D 5% and roughly the same speed for d D 50%. For all instances, SEL-VS outperforms our new two-level approach SEL-C.
+Next, we measure the mean number of TLB and L1 cache misses per operation in the experiment. The results are depicted in Table IV. Note that we do not include SEL-V9 in this discussion, as it is outperformed by SEL-VS and SEL-C that both use signiﬁcantly less space (Figure 5). As expected, for the large test instances, the binary search methods produce signiﬁcantly more TLB misses as SEL-C and SEL-VS. Without hugepages, the effect of the binary search ‘hints’ can clearly be observed as the number of TLB misses is roughly reduced by 15. Hugepages reduce the effect of the hints as more steps of the binary search procedure can be performed on a single page. For 16 GB, we can further observe that for SEL-C and BLT+HP, the number of TLB misses increases for bitvectors of higher densities, whereas the number of L1 misses decreases. The TLB misses increase because, for higher densities, the index part of the data structure is larger, whereas the average block size decreases. For d D 50%, the ﬁnal block is 128 bits or 16 bytes large, whereas we require 1280 bits or 160 bytes for d D 5%. Therefore, we load two cache lines for d D 50%, whereas we only require one cache line for the d D 5%. This explains the difference of two L1 misses (10.2 compared with 8.1) shown in Table IV for 16 GB and densities d D 5 and d D 50. The TLB and L1 cache miss performance of SEL-VS is better than SEL-C. This is caused by the way both structures store bit positions. SEL-VS uses only byte-aligned accesses to words of size 16 or 64 bits. SEL-C stores
+
+Table IV. Average number of TLB misses/L1 cache misses per select operation dependent on implementation (SEL-BS/SEL-BSH/SEL-C/SEL-VS), select64 method (TBL/BLT), and activation of 1-GB pages (HP)
+on bitvectors of different sizes (16 MB/16 GB) and densities (5/20/50).
+
+Density d D 5 16 MB 16 GB
+Density d D 20 16 MB 16 GB
+Density d D 50 16 MB 16 GB
+
+TLB misses = L1 cache misses per operation
+
+SEL-BS
+
+SEL-BSH
+
+TBL BLT+HP TBL BLT+HP
+
+1.2=13.8 25.6=67.9
+
+0.0=12.5 7.4=68.7
+
+1.3=10.9 10.3=43.3
+
+0.0=10.1 5.9=40.3
+
+1.2=14.2 25.6=68.4
+
+0.0=13.8 7.4=68.8
+
+1.3=11.1 10.3=43.5
+
+0.0=10.9 6.0=40.2
+
+1.3=13.8 25.7=68.0
+
+0.1=13.2 7.5=69.0
+
+1.5=10.6 10.6=44.0
+
+0.1=10.6 6.6=40.6
+
+Overhead in %
+
+SEL-BS
+
+SEL-BSH
+
+19 19 20 19
+19 19 20 20
+19 19 20 20
+
+SEL-C
+
+SEL-VS
+
+SEL-C
+
+SEL-VS
+
+Density d D 5 16 MB 16 GB
+Density d D 20 16 MB 16 GB
+Density d D 50 16 MB 16 GB
+
+TBL
+0.9=7.9 4.9=13.7
+1.3=7.3 5.0=13.0
+2.1=6.9 5.2=12.9
+
+BLT+HP
+0.0=7.5 3.9=10.2
+0.0=6.7 4.4=8.9
+0.0=5.7 4.9=8.1
+
+TBL
+1.3=4.3 3.0=7.8
+1.4=4.5 3.0=8.1
+1.2=5.2 3.0=8.8
+
+BLT+HP
+0.0=3.6 2.8=3.6
+0.0=3.7 2.9=3.8
+0.0=4.3 2.8=4.4
+
+2 2
+5 5
+12 12
+
+11 11
+11 11
+7 7
+
+The two columns on the right contain the space overhead of the data structures in percent of the original bitvector size.
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+1302
+
+S. GOG AND M. PETRI
+
+Time per select (µs)
+
+Time per select (µs)
+
+PROTEIN S-WT-200MB (d = 54.04%)
+0.7
+
+0.6
+
+0.5
+
+0.4
+
+0.3
+
+0.2
+
+0.1
+
+0.0
+
+DNA-WT-200MB (d = 58.92%)
+0.7
+
+0.6
+
+0.5
+
+0.4
+
+0.3
+
+0.2
+
+0.1
+
+0.0
+
+DB LP.XM L-WT-200MB (d = 53.24%)
+0.7
+
+0.6
+
+0.5
+
+0.4
+
+0.3
+
+0.2
+
+0.1
+
+0.0
+
+ENG LISH-WT-200MB (d = 53.88%)
+0.7
+
+0.6
+
+0.5
+
+0.4
+
+0.3
+
+0.2
+
+0.1
+
+0.0 0
+
+10 20 30 40 50 60 0
+
+Space overhead in (%)
+
+Implementation
+
+SEL-BS SEL-BSH SEL-C
+
+SEL-V9 SEL-VS
+
+DNA-WT-1GB (d = 58.28%)
+
+WE B-WT-1GB (d = 52.85%)
+
+SOURC ES-WT-200MB (d = 52.92%)
+10 20 30 40 50 Space overhead in (%)
+
+60
+
+Time per select (µs)
+
+Time per select (µs)
+
+Figure 5. Time–space trade-offs for a single select operation on uncompressed bitvectors for different ‘real-world’ data sets of the implementations SEL-BS, SEL-BSH, SEL-C, SEL-V9, and SEL-VS. For all
+implementations, the features BLT+HP were used.
+
+positions bit-compressed. This results in a slower runtime performance and an increased number of L1 cache misses.
+Table IV further shows the space overhead required for each select structure. The binary search methods use 20% overhead. The size of the ‘hints’ in SEL-BSH is only 8 kB and is therefore negligible. For densities d D 5 and d D 20, SEL-C is signiﬁcantly smaller than SEL-VS. However, for d D 50, SEL-VS is smaller than SEL-C.
+As suggested by [11], it is important to evaluate the performance of select structures on uneven distributed bitvectors. We therefore evaluate the performance of all select structures discussed earlier on several real-world data sets. The ‘real-world’ bitvector instances are extracted from the Huffman-shaped wavelet tree as described in Section 6.1.4. Figure 5 shows the time–space tradeoffs of each structure for all test instances. We contrast the mean time per select operations over
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+OPTIMIZED SUCCINCT DATA STRUCTURES FOR MASSIVE DATA
+
+1303
+
+10 million random queries with the space overhead of each structure in percent of the original bitvector. Note that the real-world data sets roughly have about 50% density as they represent a Huffman-shaped wavelet tree. Another property is that they contain long runs and evenly distributed regions. Long runs occur frequently in the bitvectors of human-generated texts, which contains words and are structured. We observe in Figure 5 that overall, SEL-BS and SEL-BSH are not competitive. SEL-V9 is faster than the binary search methods but requires 57% overhead. SEL-VS is always the fastest method, but the space usage varies between different data sets. For WEB-1GB, SEL-VS uses 35% overhead, whereas SEL-C uses only 13%. The same behavior can be observed for SOURCES-WT-200MB, ENGLISH-WT-200MB, and DBLP.XML-WT-200MB. On the one hand, for bitvectors with few runs (PROTEINS-WT-200MB, DNA-WT-200MB, and DNA1GB), the space usage of SEL-VS is about the same as for evenly distributed bitvectors and therefore less than SEL-C.
+We independently evaluate the effect of different select64 implementations on the select structures. For all evaluated select structures, only one select64 operation is performed to determine the position of the ith bit in a target word x. Before this step, potentially many other operations such as popcnt s in a sequential scan or binary search are performed to determine x. We measure the effect of using a slow select64 method (TBL) compared with the fastest method (BLT) of the target word on the overall performance of the structure. For small instances, the running time for SEL-C and SEL-VS decreases by 10% to 20%; for the binary search structures, it decreased by 7%. For large instances, the running time for SEL-C and SEL-VS decreases only by 2% to 5%. The binary search solutions do not beneﬁt from improved select64 on large instances, as the running time is dominated by binary search and the resulting TLB misses. Interestingly, the running time for SEL-V9 decreases by 30% for all instances, whereas all other select structures improve mostly for small instances.
+Another consideration when choosing a select structure is construction cost. We use both popcnt and select64 methods during the construction of our SEL-C structure. We observed an improvement in construction cost by up to an order of magnitude (up to 30 times faster for the random bitvectors used in our experiments) compared with versions with simple bit-by-bit processing during construction.
+
+6.5. Rank and select on compressed bitvectors
+We now turn our attention to the H0-compressed bitvector representation. We have seen in Figure 2 that this representation can lead to signiﬁcant space savings. In what follows, we explore how the runtime is affected by different choices of the block size K.
+In the implementation of BV-R3, we used built-in 64-bit and 128-bit integers for block sizes K 6 64 and K 6 128. For K > 129, we used our own tailored class for 256-bit integers. Note that the sizes of the lookup tables for Pascal’s triangle for the on-the-ﬂy decoding are therefore 32 kB, 256 kB, and 2 MB for the three different integer types. In the special case of K D 15, we do not use on-the-ﬂy decoding but use an access to a lookup table of size 64 kB to retrieve the 15-bit block instead. In this case, we also use broadword computing to calculate the sum of multiple block types Äi s. For all other block sizes, we sum up each Äi individually and use the on-the-ﬂy decoding in the last block bi0 .
+Figure 6 depicts the resulting runtime for the three operations access, rank, and select as a function of K for the bitvectors originating from text indexing. We ﬁrst concentrate on the operations access and rank. Note that the specialized implementation for K D 15 can be recognized clearly: its is about twice as fast as the on-the-ﬂy decompression with comparable block sizes. In fact, additional experiments showed that our solution for this special case is slightly faster (about 10–30%) than the original implementation of Claude and Navarro [21] for rank and twice as fast for access.
+We can observe that the runtime of the on-thy-ﬂy decoding version linearly depends on the block size. The constant of the linear correlation is determined by two factors: the integer type used and the structure of the original bitvector, where the latter has a stronger impact than the former. The reason for that is the number of uniform blocks in WEB-1GB is much larger than in DNA-1GB;
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+1304
+
+S. GOG AND M. PETRI
+
+bitvector = WEB-WT-1GB
+2.0 SEL -R3 K RANK-R3 K
+1.5 BV-R3 K access
+
+bitvector = DNA-WT-1GB
+
+Time per operation in (µs)
+
+1.0
+
+0.5
+
+0.0 50 100 150 200 250 Block size K
+
+50 100 150 200 250 Block size K
+
+Figure 6. Query times for the operations on the H0-compressed bitvector as a function of block size K. The sample rate t was set to 32.
+
+Block distribution in (%)
+
+100 bitvector = WEB-WT-1GB
+80 60
+
+bitvector = DNA-WT-1GB Blocktype
+sparse uniform
+
+40
+
+20
+
+0 8 32 64
+
+128
+Block size K
+
+256 8 32 64
+
+128
+
+Block size K
+
+256
+
+Figure 7. Percentage of blocks in a H0-compressed bitvector representation that can be optimized using techniques one (uniform blocks) and two (sparse blocks) for wavelet trees of ﬁles WEB and DNA.
+
+for example, for K D 63, it is 84% compared with 28%; thus, we actually do less decoding in WEB-WT-1GB. The percentage of affected blocks depending on K is shown in Figure 7. Up to 90% of all blocks in WEB-WT-1GB are uniform and can therefore be decoded efﬁciently. As shown in Figure 7, this percentage is much smaller for DNA-1GB.
+The described optimization for access results in a signiﬁcant speedup: access is two times faster than rank for K and a high ratio of uniform blocks.
+The time for select, which is implemented using binary search, slightly decreases when we increase the block size, and native arithmetic is used. For K > 64, the decoding costs become too dominant, and we cannot observe the reduced time for the binary search on less rank samples any more. The effect of the integer type can be clearly observed by the transitions from using 64-bit or 128-bit integers to the custom 256-bit integers.
+Our implementation decodes only as many bits as necessary to answer the speciﬁc operation as proposed in [14]. Further experiments show that this optimization reduces the running time by 50%. The runtime was again reduced by 50% by applying the ﬁrst optimization proposed in Section 5 for bitvectors from the indexing domain. The second proposed optimization – decoding with binary searching Pascal’s triangle if only a few bits are set in the block – only improved the runtime for the random bitvectors of densities d 6 5%. The runtime was reduced by 10% for d D 5% and 50% for d D 1%.
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+OPTIMIZED SUCCINCT DATA STRUCTURES FOR MASSIVE DATA
+
+1305
+
+6.6. Effects of improved rank/select on FM-indexes
+Next, we evaluate how our improvements affect the performance of different types of succinct text indexes. We are especially interested in the effects caused by using faster rank and select implementations on bitvectors to the performance of count queries. A count query for a pattern of length m can be reduced to about 2mH0 rank queries if a Huffman-shaped wavelet tree is used, or at most 2m.H0 C2/ rank and 2m select queries if a run-length encoded wavelet tree is used [28]. We expect that the improvements of basic data structures directly propagate to the FM-indexes, because our benchmarking methodology in the previous sections and performing a count query are similar. Both require the execution of a series of consecutive rank and/or select operations on bitvectors.
+Operations locate and extract are more complex. locate additionally depends on the sampling of sufﬁx array SA and extract on the sampling of the inverse SA (ISA). We also expect improvements for these operations as they both depend on performing rank and/or select operations.
+
+6.6.1. Baseline implementations. Ferragina et al. [15] provide a set of highly optimized FM-indexes. They also provide all resources of their paper (including the source code) as part of the Pizza & Chili corpus discussed in Section 6.1.4. In what follows, we will compare our work to these implementations to ensure that our indexes are competitive to commonly used baseline implementations. Here is a short description of the baseline implementations used:
+
+SSA The succinct sufﬁx array [28] is an FM-index based on a Huffman-shaped wavelet
+
+tree. The wavelet tree uses uncompressed bitvectors supported by one-level rank data
+
+structures using 5% space overhead. The popcnt implementation is TBL; authors are
+
+Veli Mäkinen and Rodrigo González.
+
+SSA-RRR Same index as SSA, but the H0-compressed bitvector representation of [20, 22]
+
+implemented by Francisco Claude and Gonzalo Navarro [21] is used.
+
+RLFM Run-length wavelet tree [28] implementation by Veli Mäkinen and Rodrigo González.
+
+The two indicator bitvectors for the run heads in the BWT are represented by uncom-
+
+pressed bitvectors and the same rank structure as in SSA. The select operation is
+
+solved by a binary search over the rank samples.
+
+CSA
+
+The compressed sufﬁx array [31] (CSA) is not based on the backward decoding
+
+approach but on the forward decoding approach. This approach is based on an array ‰,
+
+which can be stored in compressed form by employing delta and self-delimiting cod-
+
+ing. Fast access is achieved by adding samples. Note that Sadakanes’ implementation
+
+is not dependent on rank and select structures.
+
+SAu Plain sufﬁx array [25] implementation of Veli Mäkinen and Rodrigo González.
+
+We compiled the 32-bit implementations with all compiler optimizations and added the ﬂag -m32 because we used our 64-bit platform. Note that this limits the usage of these indexes to small inputs.
+
+6.6.2. Corresponding sdsl implementations. We create comparable sdsl indexes for the presented baseline indexes by parametrizing sdsl FM-indexes and CSAs with comparable basic data structures.
+The following list gives an overview.
+FM-HF-V5 FM-index based on a Huffman-shaped wavelet tree (wt_huff) that is parametrized with the uncompressed bitvector (bit_vector) and the 6.25% overhead rank structure rank_support_v5<>. Corresponds to the baseline index SSA.
+FM-HF-R315 Same as FM-HF-V5 except that the wavelet tree is parametrized with the compressed bitvector rrr_vector<15> and its associated rank and select structures. Corresponds to the baseline index ssa_rrr.
+FM-HF-R3K A family of more space-efﬁcient FM-indexes. Realized by parametrizing the wavelet tree of FM-HF-V5 by the rrr_vector<K>
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+1306
+
+S. GOG AND M. PETRI
+
+FM-RLMN FM-index based on a run-length compressed wavelet tree (wt_rlmn) that is conﬁgured with compressed bitvectors (BV-SD) for the two indicator bitvectors. Corresponds to the baseline index RLFM.
+CSA-SADA The sdsl CSA class (csa_sada) parametrized with Elias-ı coder and ‰ sampling density base of 128. Corresponds to CSA.
+Note that all these indexes do not contain SA or ISA samples that are not required to answer count queries efﬁciently.
+6.6.3. Operation count without Optimizations. The performance of count was measured by recreating the experiment of Ferragina et al. [15] (Table VI in their work). Table V contains the result of their indexes on our hardware. A nice observation is that the times are almost halved compared with the results in [15] on older hardware. Table VI shows the resulting index sizes and runtime for the sdsl implementations. Note that we use TBL for popcnt without activating hugepages to ensure a fair comparison with the baseline implementations. As expected, the size of SSA and FM-HF-V5 are almost identical because the rank structure size only differs by 1.5%. Our FM-HF-V5 index is slightly faster than SSA because the 5% overhead rank implementation used in SSA scans blocks 66% larger than that of RANK-V5 . The space of FM-HF-R315 is slightly smaller than that of SSARRR because we use log n bits to store an integer instead of a computer word. Our implementation is again faster as we use our algorithmic optimizations described in Section 5. Our implementation FM-RLMN, which uses the compressed bitvector representation, is smaller than RLFM for two test cases (DBLP.XML and SOURCES). It is however larger for all other test cases. We attribute this to the high compressibility of the other test cases. Our compressed bitvector representation (BV-SD) is engineered to compress sparse bitvectors efﬁciently. Dense bitvectors, which occur in an FM-Index for highly compressible data due to the large number of runs in the BWT, can however not be compressed efﬁciently. Furthermore, the compressed bitvector causes a slowdown. Unexpectedly, FM-RLMN is two times faster than RLFM on the XML-instance.
+
+Table V. Space and time performance of four Pizza & Chili FM-index implementations on ﬁve different inputs for count queries.
+
+SSA
+
+SSA-RRR
+
+RLFM
+
+SAu
+
+200-MB test instance DBLP.XML
+DNA ENGLISH PROTEINS SOURCES
+
+Time (s)
+1.300 0.548 1.156 1.024 1.356
+
+Space (%)
+69 29 60 56 72
+
+Time (s)
+1.776 0.812 1.676 1.668 1.960
+
+Space (%)
+34 30 40 55 41
+
+Time (s)
+6.108 1.216 1.744 1.704 1.864
+
+Space (%)
+52 62 67 76 61
+
+Time (s)
+0.436 0.388 0.372 0.368 0.364
+
+Space (%)
+500 500 500 500 500
+
+The space of an index is stated in percent of the input text. The time is the average time to match one character in a count query. Times were determined by executing 50, 000 queries, each for patterns of length 20, which were extracted from the corresponding texts at random positions.
+
+Table VI. Space and time performance of four sdsl FM-index implementations.
+
+FM-HF-V5
+
+FM-HF-R315
+
+FM-RLMN
+
+FM-HF-R363
+
+200-MB test instance DBLP.XML
+DNA ENGLISH PROTEINS SOURCES
+
+Time (s)
+1.096 0.404 0.976 0.872 1.208
+
+Space (%)
+70 29 61 56 73
+
+Time (s)
+1.316 0.728 1.472 1.604 1.688
+
+Space (%)
+32 28 38 53 39
+
+Time (s)
+3.456 1.484 2.272 2.128 2.460
+
+Space (%)
+34 79 69 89 53
+
+Time (s)
+2.048 1.660 2.648 3.228 2.820
+
+Space (%)
+17 24 27 48 26
+
+The experiment was the same as in Table V. All implementations in this experiment use method TBL for popcnt.
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+OPTIMIZED SUCCINCT DATA STRUCTURES FOR MASSIVE DATA
+
+1307
+
+The last column of Table VI further shows the results of using larger block size K D 63 to achieve better compression of BV-R3 in FM-HF-R3K. As expected, the space is signiﬁcantly reduced for the compressible texts, and the runtime doubles compared with that of FM-HF-R315. Recalling Figure 6, we would expect an even greater slowdown. However, rank queries on the lower levels of the wavelet tree have a better locality of reference. Therefore, the performance of the H0-compressed bitvectors shown in Figure 6 can only be used to predict the runtime of the rank queries in the upper levels where rank positions are more random.
+Overall, our implementations are competitive and tend to outperform the ones used by Ferragina et al., which are available through the Pizza & Chili corpus.
+6.6.4. Operation count with Optimizations. We now study the effect of our environmental features and optimizations on the performance of our indexes. We perform the same experiment as earlier while varying the applied features discussed in Section 6.1.4. Table VII shows the results of the experiment. The runtime of FM-HF-V5 is reduced by about 40% for all test cases when BLT and HP are activated. Our implementation is twice as fast as the highly optimized Pizza & Chili counterpart. Surprisingly, for the DNA-instance, FM-HF-V5 outperforms the plain uncompressed sufﬁx array solution that takes 17 times the space of FM-HF-V5 (see Table V, column SAu). This is especially interesting as succinct data structures tend to be slower than their uncompressed counterpart. The effect on the Huffman-shaped wavelet tree-based FM-indexes using BV-R3 is not signiﬁcant. For both K D 15 and K D 63, scanning the array Ä and decoding of the original blocks bi of the underlying compressed bitvector contribute the most toward the running time of FM-HF-R3K
+
+Table VII. Time performance of the sdsl FM-index implementations of Table VI dependent on the popcnt method used (see Section 6.2) and the usage of 1-GB pages (HP) to avoid TLB misses.
+
+FM-HF-V5
+
+FM-HF-R315
+
+FM-RLMN
+
+FM-HF-R363
+
+Time t (s)
+
+200-MB test instance
+
+DBLP.XML
+
+TBL 1.096 BW 0.924 BLT 0.764
+
+BLT+HP
+
+0.644
+
+DNA
+
+TBL 0.404 BW 0.348 BLT 0.280
+
+BLT+HP
+
+0.252
+
+ENGLISH TBL BW BLT
+BLT+HP
+
+0.976 0.832 0.688 0.600
+
+PROTEINS TBL BW BLT
+BLT+HP
+
+0.872 0.752 0.624 0.552
+
+SOURCES TBL BW BLT
+BLT+HP
+
+1.208 1.044 0.856 0.744
+
+t (%)
+16 30 41
+14 31 38
+15 30 39
+14 28 37
+14 29 38
+
+Time t (s)
+1.316 1.324 1.304 1.140
+0.728 0.724 0.716 0.628
+1.472 1.480 1.472 1.300
+1.604 1.596 1.560 1.408
+1.688 1.680 1.656 1.476
+
+t (%)
+C1 1 13
+1 2 14
+C1 C0
+12
+C0 3 12
+C0 2 13
+
+Time t (s)
+3.456 2.600 1.876 1.764
+1.484 1.408 1.248 1.356
+2.272 2.108 1.900 2.200
+2.128 1.980 1.824 2.100
+2.460 2.196 1.996 2.276
+
+t (%)
+25 46 49
+5 16 9
+7 16 3
+7 14 1
+11 19 7
+
+Time t (s)
+2.048 2.064 2.036 1.924
+1.660 1.652 1.660 1.688
+2.648 2.644 2.660 2.756
+3.228 3.264 3.244 3.432
+2.820 2.804 2.824 2.652
+
+t (%)
+C1 1 6
+C0 C0 C2
+C0 C0 C4
+C1 C0 C6
+1 C0
+6
+
+The time difference is stated as a relative difference to the corresponding implementation that uses method TBL for popcnt.
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+1308
+
+S. GOG AND M. PETRI
+
+Table VIII. Result of the experiment of Table VII conducted on the MacBook.
+
+FM-HF-V5
+
+FM-HF-R315
+
+FM-RLMN
+
+FM-HF-R363
+
+Time t (s) 200-MB test instance DBLP.XML
+TBL 1.071 BW 0.903 BLT 0.775
+
+DNA
+
+TBL BW BLT
+
+0.368 0.317 0.279
+
+ENGLISH TBL BW BLT
+
+0.875 0.757 0.653
+
+PROTEINS TBL BW BLT
+
+0.807 0.673 0.595
+
+SOURCES TBL BW BLT
+
+1.090 0.958 0.829
+
+t (%)
+16 28
+14 24
+13 25
+17 26
+12 24
+
+Time t (s)
+1.353 1.359 1.350
+0.705 0.682 0.676
+1.392 1.386 1.363
+1.463 1.458 1.482
+1.630 1.575 1.555
+
+t (%)
+C0 C0
+3 4
+C0 2
+C0 C1
+3 5
+
+Time t (s)
+3.133 2.644 1.989
+1.463 1.375 1.247
+2.212 2.068 1.941
+1.972 1.939 1.841
+2.331 2.329 2.053
+
+t (%)
+16 37
+6 15
+7 12
+2 7
+C0 12
+
+Time t (s)
+2.123 2.110 2.125
+1.550 1.556 1.532
+2.587 2.598 2.640
+3.192 3.180 3.207
+2.795 2.799 2.812
+
+t (%)
+1 C0
+C0 1
+C0 C2
+C0 C0
+C0 C1
+
+and can thus not be improved by BLT or hugepages. Our second compressed solution, FM-RLMN, proﬁts mostly from the BLT feature for two reasons: First, the rank operations on the underlying Huffman-shaped wavelet tree on uncompressed bitvectors are accelerated, and second, the two rank queries in BV-SD, which translate to select queries on SEL-C, are faster.
+We rerun the experiment of Table VII on our second experimental machine, to verify our observations. Because Mac OS X 10.7.3 does not support 1-GB pages, we only show results for the ﬁrst three environmental features. The results are depicted in Table VIII. In most cases, the runtime for the basic popcnt implementation decreases slightly compared with the results on the main experimental machine. This is expected because the maximum clock speed of CPU on the MacBook is 3.00 GHz compared with 2.93 GHz on the server. The impact of applying BW and BLT is roughly the same, and the ﬁnal query time of FM-HF-V5 is again twice as fast as the corresponding Pizza & Chili implementation.
+
+6.6.5. Operation locate with Optimizations. As mentioned earlier, the locate operation is more complex than a count query. In general, locate is implemented by storing samples of SA. Each value SAŒi can be computed by iteratively calculating the positions of the next longer sufﬁx until a sampled sufﬁx SAŒj  is reached. The calculation of the next longer sufﬁx can be carried out by one rank query on a wavelet tree, and we refer to it as calculating the LF-function. In case of CSAs, the inverse of LF, called ‰, is stored in compressed form. ‰ returns the next shorter sufﬁx and is applied until a sampled sufﬁx is reached. In both cases, we know the number of iterations k and can therefore return SAŒi D SAŒj  C k respectively SAŒi D SAŒj  k.
+There exist two simple strategies to sample SA. Let sSA be the SA sampling parameter. In the ﬁst variant, SAŒj  is sampled when SAŒj  mod sSA Á 0 and in the second, when j mod 0. The ﬁrst variant is generally referred to as sufﬁx array order sampling, whereas the second method is referred to as text order sampling. In the ﬁrst strategy, a bitvector marks the sampled positions j , and a rank data structure calculates the index of the corresponding sample in a satellite array. This adds space, but it is guaranteed that LF is not performed more than sSA 1 times to retrieve SAŒi . The second version does not require an additional bitvector but does not guarantee running time bounded by the
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+OPTIMIZED SUCCINCT DATA STRUCTURES FOR MASSIVE DATA
+
+1309
+
+sampling rate. However, it has proven to work well on many inputs, including the test cases of the Pizza & Chili corpus. CSA uses text order sampling, whereas all other Pizza & Chili indexes use an uncompressed bitvector to implement sufﬁx array order sampling. We parametrized our implementations with both strategies and empirically determined that the sufﬁx array order sampling was up to two times faster than the text order sampling. Therefore, we opted to use the faster variant in the following experiment. The Pizza & Chili indexes use an uncompressed bitvector representation to mark the sampled position. In our indexes, we use a compressed bitvector (BV-SD) to save space instead.
+Figure 8 shows the results of the recreated locate experiment of Ferragina et al. (Figure 4 in [15]) including our solutions with all optimizations enabled. We varied sSA in ¹4, 8, 16, 32, 64, 128, 256º to compare indexes of different size and speed identical to the original experiment of Ferragina et al. In all but CSA, the sampling parameter for the ISA values was set to sISA D sSA. Therefore, we obtain a space overhead of .2ndlog ne/=sSA bits for the samples. CSA sets sISA D 16 sSA and is therefore smaller than its counterpart CSA-SADA. The runtime of both implementations is about the same. This was expected, because CSA-SADA is not based on the optimized basic data structures.
+However, we can observe signiﬁcant improvements to the performance of FM-indexes based on wavelet trees. FM-HF-V uses less space than SSA because BV-SD is used to mark sampled SA positions. SSA spends about 20% space, whereas FM-HF-V spends about 4% for sSA D 32. Using
+
+Time per occurrence (µs)
+
+instance = DNA.200MB
+25 20 15 10 5 0
+instance = PROTEINS.200MB
+25
+
+Index
+
+SSA-RRR CSA SSA
+
+FM-HF-R3 63 CSA-SADA FM-HF-V5
+
+Compression baseline
+
+XZ (--best)
+
+GZIP (--best)
+
+instance = ENGLISH.200MB
+
+Time per occurrence (µs)
+
+20
+
+15
+
+10
+
+5
+
+0
+instance = SOURCES.200MB
+25
+
+instance = DBLP.XML.200MB
+
+Time per occurrence (µs)
+
+20
+
+15
+
+10
+
+5
+
+0 0 50 100 150 200 250 0 50 100 150 200 250
+
+Index size in (%)
+
+Index size in (%)
+
+Figure 8. Time–space trade-offs for locate of different Pizza & Chili and sdsl indexes. Features BLT+HP were enabled for all sdsl indexes.
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+1310
+
+S. GOG AND M. PETRI
+
+BV-SD to detect the samples is slower than using an uncompressed bitvector in SSA, but overall
+FM-HF-V is still faster, because we use faster rank structures to calculate LF. The best example for
+this behavior is the DNA.200MB case. Whereas SSA requires about 20 s to calculate an occur-
+rence at a compression rate of 50%, FM-HF-V only needs about 5s. Last, we compare ssa_rrr and FM-HF-R363 that use compressed bitvectors to calculate LF.
+Note that we deliberately chose not to compare ssa_rrr with FM-HF-R315. We show that, while FM-HF-R363 uses a slower bitvector representation, it still achieves a better time–space trade-off.
+As expected, the trade-off improves with test cases that are more compressible, which we already
+analyzed in Figures 2 and 6.
+
+6.6.6. Operation extract with optimizations. Extracting text T Œi..j  from a compressed index is performed again with a two-step process. In the case of FM-indexes, the position of sufﬁx j in SA is determined by calculating p D ISAŒj . This is carried out in a similar way to the calculation of SA. Next, a table C of size , containing the index of the ﬁrst sufﬁx in SA preﬁxed by c, is used to translate p into the corresponding character T Œp. The process recovers the text backward by decoding the preceding characters by applying LF. For CSAs, the process is slightly changed: First the position of i in SA is determined and then ‰ is applied to decode the text in forward direction.
+
+Time per character (µs)
+
+instance = DNA.200MB
+3.0 2.5 2.0 1.5
+
+Index
+
+SSA-RRR CSA SSA
+
+FM-HF-R 3 63 CSA-SADA FM-HF-V5
+
+1.0
+0.5
+0.0
+instance = PROTEINS.200MB
+3.0
+
+Compression baseline
+
+XZ (--best)
+
+GZIP (--best)
+
+instance= ENGLISH.200MB
+
+Time per character (µs)
+
+2.5
+
+2.0
+
+1.5
+
+1.0
+
+0.5
+
+0.0
+instance = SOURCES.200MB
+3.0
+
+instance = DBLP.XML.200MB
+
+Time per character (µs)
+
+2.5
+
+2.0
+
+1.5
+
+1.0
+
+0.5
+
+0.0 0
+
+20 40 60 80 100 120 140 0
+
+20 40 60 80 100 120 140
+
+Index size in (%)
+
+Index size in (%)
+
+Figure 9. Time–space trade-offs for extract of different Pizza & Chili and sdsl indexes. Features BLT+HP were enabled for all sdsl indexes.
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+OPTIMIZED SUCCINCT DATA STRUCTURES FOR MASSIVE DATA
+
+1311
+
+In this experiment, we use the same index conﬁguration as in the locate experiment to measure the performance of operation extract. Again, we use the same experimental setup as [15]: We extract 10, 000 substrings consisting of 512 characters from the index. The results are depicted in Figure 9.
+As in the count experiment, we ﬁrst observe that the extraction speed for the Pizza & Chili indexes is much faster on our new hardware. Ferragina et al. [15] reported a maximal extraction speed of 1 MB/s. Now, it is about 2.5 MB/s for DNA.200MB and about 2 MB/s for most other cases. The use of fast popcnt and HP feature results in 4 MB/s for our FM-HF-V for the DNA case. In general, the runtime of FM-HF-V is only about 60–70% the runtime of SSA. As in [15], the CSA dominates the runtime for the human-generated texts. The high sampling rate in the CSA implementation is the main reason why the runtime degrades faster and is generally slower than that of CSA-SADA.
+Finally, note that FM-HF-R363 reaches, or even breaks, the size of the GZIP compressed text, and we are still able to decode between 0.3 and 0.6 MB/s.
+
+6.6.7. Operation count on massive data sets. Finally, we evaluate the performance of our new rank
+data structure RANK-1L and our improvements to the implementation of select and H0-compressed bitvectors on a massive data set. We show runtime performance (Table IX) for different feature
+sets and time–space trade-offs (Figure 10) for small (64‘MB) and large (64 GB) data sets. We
+further included – as in the previous experiments – two state-of-the-art compression baselines in
+the time–space trade-off graph to better evaluate the compression effectiveness of the different
+index types. We parametrize the Huffman-shaped wavelet tree with the two 25% overhead rank structures
+RANK-V and RANK-1L and refer to the results as FM-HF-V and FM-HF-1L. We further also evaluate FM-index types using RANK-R3K with K D 15, 63, 127, 255. These indexes are referred to as FM-HF-R3K. We use preﬁxes of WEB-64GB and again use the same methodology as Ferragina et al.’s study [15]. We report the average query time per character of a count query for 50, 000 pat-
+terns of length 20, which are extracted from random positions of the corresponding input prior to
+the experiment. The results of the experiments are shown in Table IX and Figure 10. For FM-HF-R3K, a perfor-
+mance improvement caused by applying optimizations is only achieved for the large test instance. Enabling BLT for K D 15 results in faster runtime performance, because a shift and a popcnt are used to determine the rank to the right offset, after a block bi0 is decoded by a table lookup. The on-the-ﬂy decoding-based solution with K 6D 15 stops decoding when the offset is reached and therefore does not proﬁt from BLT. All FM-HF-R3K-type indexes proﬁt from HP, but the effect decreases as K becomes larger, and decoding the blocks inside the compressed bitvector dominates
+runtime. Note that for the 64-MB inputs, the size of the indexes is at most 30% (Figure 10) of the
+
+Table IX. Count performance of FM-index implementations dependent on instance size and features.
+
+FM-HF-R3K
+
+FM-RLMN FM-HF-V FM-HF-1L
+
+Test instance WEB-64M
+TBL
+BW
+BLT
+BLT+HP WEB-64G
+TBL
+BW
+BLT
+BLT+HP
+
+K D 15 Time (s)
+1.183 1.194 1.182 1.008
+3.488 3.526 2.945 1.780
+
+K D 63 Time (s)
+2.085 2.091 2.094 1.991
+3.675 3.707 3.724 2.796
+
+K D 127 Time (s)
+3.509 3.482 3.489 3.393
+4.794 5.621 4.961 4.353
+
+K D 255 Time (s)
+13.864 14.027 14.019 13.714
+17.571 16.940 15.756 15.496
+
+Time (s)
+2.362 1.855 1.447 1.316
+8.237 6.991 4.960 4.177
+
+Time (s)
+0.789 0.684 0.651 0.519
+2.440 2.244 2.224 1.085
+
+Time (s)
+0.843 0.733 0.590 0.508
+2.684 1.952 1.700 0.870
+
+The indexes in the left part use compressed bitvectors and therefore take considerably less space than FM-HF-V and FM-HF-1L as shown in Figure 10.
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+1312
+
+S. GOG AND M. PETRI
+
+Time per character in (µs)
+
+instance = WEB-64MB
+
+8
+XZ GZIP
+6
+
+Index
+FM-HF-R3 K FM-RLMN FM-HF-V FM-HF-1L
+
+K = 127 4
+
+instance = WEB-64GB
+
+XZ GZIP
+
+Feature
+TBL
+BLT+HP
+
+K = 127
+
+2
+K = 63 0 K = 15
+0 20 40 60 80 Index size in (%)
+
+K = 63
+
+K = 15
+
+100 0
+
+20 40 60 Index size in (%)
+
+80
+
+100
+
+Figure 10. Count time and space of our index implementations on input instances of different size with compression effectiveness baselines using standard compression utilities XZ and GZIP with option -best.
+
+original data set, and the resulting page table is about 20 kB large that ﬁts in the L1 cache. Therefore, TLB handling is cheap, and HP has almost no effect.
+The FM-RLMN proﬁts from each feature, especially replacing the lookup table version for popcnt and select64 with more efﬁcient BLT versions discussed earlier. Because FM-RLMN is a rather complex structure, the different rank and select subdata structures ‘compete’ for cache. As expected, the FM-index based on RANK-1L is slower than FM-HF-V when no optimization is used but slightly faster when BLT and HP are activated. This reﬂects the outcome of the experiments of the basic rank data structures used in both indexes shown in Figure 3.
+Finally we discuss the time-space trade-offs of the different index types in Figure 10. As discussed above, optimizations BLT and hugepages only affects the runtime performance on larger data sets (right). The uncompressed representations FM-HF-V and FM-HF-1L, and FM-RLMN are affected the most by the features. The FM-indexes based on H0 compressed bitvectors are also affected. Interestingly, the indexes for K D 63 and 128 achieve better compression then our gzip -best baseline. The FM-index using RANK-R3K and K D 128 is only 5% larger than the xz compressed representation of the test input. The index for K D 256 is even smaller but is not shown in Figure 10 due to the increased runtime as shown in Table IX.
+Overall, our new data structures, improvements, and optimized implementations enable FM-indexes that are faster (using RANK-1L) or smaller than the state-of-the-art indexes (using RANK-R3K with K D 128, 255).
+
+7. CONCLUSION
+
+We proposed a simple, cache-friendly rank data structure, a practical select data structure for uncompressed bitvectors, and an improved implementation of compressed bitvector representations. We explore the behavior of rank and select data structures for binary and general sequences for varying data sizes, implementations, instruction sets, and operating system features. We show that using the built-in popcnt and our optimized select64 operation signiﬁcantly improves the performance of classic rank and select data structures. We further discuss the effect of larger page sizes on the performance of succinct data structures. We demonstrate that these improvements propagate directly to more complex succinct data structures such as FM-indexes. Using larger page sizes has not yet been explored in literature in the context of succinct data structures and string processing. This is surprising, because succinct data structures tend to have memory access patterns that cause many TLB and cache misses. We think that exploiting the hugepage feature is an important step to making succinct structures competitive to classical uncompressed structures. The effects of using larger page sizes
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+OPTIMIZED SUCCINCT DATA STRUCTURES FOR MASSIVE DATA
+
+1313
+
+in the construction of index structures remain as a future work. However, ﬁrst experiments show that the construction time of sufﬁx array, BWT, longest common preﬁx array, and compressed sufﬁx trees can be halved.
+To foster the usage of succinct data structures, we provide all our implementations in a ready-to-use open source C++ template library, sdsl.
+
+ACKNOWLEDGEMENTS
+We thank Zoltan Somogyi and Alistair Moffat for fruitful discussions about virtual memory and Andrew Turpin for proof reading. We are also grateful to the anonymous reviewer who helped us discover the real state-of-the-art implementation of select.
+The ﬁrst author was supported by the Australian Research Council and the second author by NICTA.
+
+REFERENCES
+1. Hon W-K, Shah R, Vitter JS. Compression, indexing, and retrieval for massive string data. In Proceedings of the 21st Annual Symposium on Combinatorial Pattern Matching (CPM), New York, NY, USA, 2010; 260–274.
+2. Culpepper JS, Petri M, Scholer F. Efﬁcient in-memory top-k document retrieval. In Proceedings of the 35th International ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR), Portland, OR, USA, 2012; 225–234.
+3. Mäkinen V, Navarro G, Sirén J, Välimäki N. Storage and retrieval of individual genomes. In Proceedings of the 13th Annual International Conference on Research in Computational Molecular Biology (RECOMB), Tucson, AZ, USA, 2009; 121–137.
+4. Gog S. Compressed sufﬁx trees: Design, construction, and applications. Ph.D. Thesis, Ulm University, Ulm, Germany, 2011.
+5. Ohlebusch E, Fischer J, Gog S. CST++. In Proceedings of the 17th International Symposium on String Processing and Information Retrieval (SPIRE), Los Cabos, Mexico, 2010; 322–333.
+6. Ferragina P, Manzini G. Opportunistic data structures with applications. In Proceedings of the 41st Annual Symposium on Foundations of Computer Science (FOCS), Redondo Beach, California, USA, 2000; 390–398.
+7. Ferragina P, Manzini G, Mäkinen V, Navarro G. An alphabet-friendly FM-index. In Proceedings of the 11th International Conference on String Processing and Information Retrieval (SPIRE), Padova, Italy, 2004; 150–160.
+8. Haque IS, Pande VS, Walters WP. Anatomy of high-performance 2D similarity calculations. Journal of Chemical Information and Modeling 2011; 51(9):2345–2351.
+9. Suciu A, Cobarzan P, Marton K. The never ending problem of counting bits efﬁciently. In Proceedings of the 10th Roedunet International Conference (ROEDUNET), Iasi, Romania, 2011; 1–4.
+10. Knuth D. The Art of Computer Programming, Volume 4a, The: Combinatorial Algorithms, Part 1. Addison-Wesley: Reading, Massachusetts, 2011.
+11. Vigna S. Broadword implementation of rank/select queries. In Proceedings of 7th Won Experimental Algorithms (WEA), Provincetown, MA, USA, 2008; 154–168.
+12. Munro I. Tables. In Proceedings of the 16th Conference on Foundations of Software Technology and Theoretical Computer Science (FSTTCS), Hyderabad, India, 1996; 37–42.
+13. Clark DR. Compact Pat Trees. Ph.D. Thesis, University of Waterloo, 1996. 14. Navarro G, Providel E. Fast, small, simple rank/select on bitmaps. In Proceedings of the 11th International
+Symposium on Experimental Algorithms (SEA), Bordeaux, France, 2012; 295–306. 15. Ferragina P, González R, Navarro G, Venturini R. Compressed text indexes: from theory to practice. ACM Journal
+of Experimental Algorithmics 2008; 13:1–31. 16. González R, Grabowski S, Mäkinen V, Navarro G. Practical implementation of rank and select queries. In Pro-
+ceedings of 4th Workshop on Experimental and Efﬁcient Algorithms (WEA), Santorini Island, Greece, 2005; 27–38. 17. Grossi R, Gupta A, Vitter JS. High-order entropy-compressed text indexes. In Proceedings of the 14th ACM-SIAM Symposium on Discrete Algorithms (SODA), Baltimore, Maryland, USA, 2003; 841–850. 18. Navarro G. Wavelet trees for all. In Proceedings of the 23rd Annual Symposium on Combinatorial Pattern Matching (CPM), Helsinki, Finland, 2012; 2–26. 19. Jacobson GJ. Succinct static data structures. Ph.D. Thesis, Carnegie Mellon University, Pittsburgh, PA, USA, 1988. AAI8918056. 20. Raman R, Raman V, Rao SS. Succinct indexable dictionaries with applications to encoding k-ary trees and multisets. In Proceedings of the 13th ACM-SIAM Symposium on Discrete Algorithms (SODA), San Francisco, CA, USA, 2002; 233–242. 21. Claude F, Navarro G. Practical rank/select queries over arbitrary sequences. In Proceedings of the 15th International Conference on String Processing and Information Retrieval (SPIRE), Melbourne, Australia, 2008; 176–187. 22. Pagh R. Low redundancy in static dictionaries with O(1) worst case lookup time. TEchnical Report RS-98-28, BRICS, Department of Computer Science, University of Aarhus, Midtbyen, Aarhus, Denmark, 1998.
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+1314
+
+S. GOG AND M. PETRI
+
+23. Okanohara D, Sadakane K. Practical entropy-compressed rank/select dictionary. In Proceedings of the Workshop on Algorithm Engineering and Experiments (ALENEX), New Orleans, Louisiana, USA, 2007.
+24. Elias P. Efﬁcient storage and retrieval by content and address of static ﬁles. Journal of the ACM 1974; 21(2):246–260. 25. Manber U, Myers EW. Sufﬁx arrays: a new method for on-line string searches. SIAM Journal of Computing 1993;
+22(5):935–948. 26. Navarro G, Mäkinen V. Compressed full-text indexes. ACM Computing Surveys 2007; 39(1):1–31. 27. Burrows M, Wheeler DJ. A block-sorting lossless data compression algorithm. Technical Report 124, Digital
+Equipment Corporation, Palo Alto, California, 1994. 28. Mäkinen V, Navarro G. Succinct sufﬁx arrays based on run-length encoding. In Proceedings of the 16th Annual
+Symposium on Combinatorial Pattern Matching (CPM), Jeju Island, Korea, 2005; 45–56. 29. Kärkkäinen J, Puglisi SJ. Fixed block compression boosting in FM-indexes. In Proceedings of the 18th International
+Conference on String Processing and Information Retrieval (SPIRE), Pisa, Italy, 2011; 174–184. 30. Fog A. Instruction tables, 2012. Available from: http://www.agner.org/optimize/instruction_tables.pdf (accessed
+March 13, 2012). 31. Sadakane K. New text indexing functionalities of the compressed sufﬁx arrays. Journal of Algorithms 2003;
+48(2):294–313.
+
+Copyright © 2013 John Wiley & Sons, Ltd.
+
+Softw. Pract. Exper. 2014; 44:1287–1314 DOI: 10.1002/spe
+
+

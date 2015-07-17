@@ -1,0 +1,1224 @@
+Algorithms 2009, 2, 1105-1136; doi:10.3390/a2031105
+OPEN ACCESS
+algorithms
+ISSN 1999-4893 www.mdpi.com/journal/algorithms Article
+Approximate String Matching with Compressed Indexes
+Lu´ıs M. S. Russo 1,3, , Gonzalo Navarro 2, Arlindo L. Oliveira 1,4, and Pedro Morales 2
+1 INESC-ID, R. Alves Redol 9, 1000 Lisboa, Portugal; E-Mail: aml@inesc-id.pt (A.L.O.) 2 Department of Computer Science, University of Chile, Avenida Blanco Encalada, 2120,
+837-0459 Santiago, Chile Santiago, Chile; E-Mails: gnavarro@dcc.uchile.cl (G.N.); pemorale@dcc.uchile.cl (P.M.) 3 CITI, Departamento de Informa´tica, Faculdade de Cieˆncias e Tecnologia, Universidade Nova de Lisboa, 2829-516 Caparica, Portugal 4 Instituto Superior Te´cnico, Universidade Te´cnica de Lisboa, 1049-001 Lisboa, Portugal
+Author to whom correspondence should be addressed; E-Mail: lsr@di.fct.unl.pt; Tel: +351 21 294 85 36 and Fax: +351 21 294 85 41.
+Received: 9 July 2009; in revised form: 8 September 2009 / Accepted: 9 September 2009 / Published: 10 September 2009
+Abstract: A compressed full-text self-index for a text T is a data structure requiring reduced space and able to search for patterns P in T . It can also reproduce any substring of T , thus actually replacing T . Despite the recent explosion of interest on compressed indexes, there has not been much progress on functionalities beyond the basic exact search. In this paper we focus on indexed approximate string matching (ASM), which is of great interest, say, in bioinformatics. We study ASM algorithms for Lempel-Ziv compressed indexes and for compressed sufﬁx trees/arrays. Most compressed self-indexes belong to one of these classes. We start by adapting the classical method of partitioning into exact search to self-indexes, and optimize it over a representative of either class of self-index. Then, we show that a LempelZiv index can be seen as an extension of the classical q-samples index. We give new insights on this type of index, which can be of independent interest, and then apply them to a LempelZiv index. Finally, we improve hierarchical veriﬁcation, a successful technique for sequential searching, so as to extend the matches of pattern pieces to the left or right. Most compressed sufﬁx trees/arrays support the required bidirectionality, thus enabling the implementation of the improved technique. In turn, the improved veriﬁcation largely reduces the accesses to the text, which are expensive in self-indexes. We show experimentally that our algorithms are competitive and provide useful space-time tradeoffs compared to classical indexes.
+
+Algorithms 2009, 2
+
+1106
+
+Keywords: compressed index; approximate string matching; Lempel-Ziv; compressed sufﬁx tree; compressed sufﬁx array
+
+1. Introduction and Related Work
+Approximate string matching (ASM) is an important problem that arises in applications related to text searching, pattern recognition, signal processing, and computational biology, to name a few. The problem consists in locating all the occurrences O of a given pattern string P , of size m, in a larger text string T , of size u, where the distance between P and O is less than a given threshold k. We focus on the edit distance, that is, the minimum number of character insertions, deletions, and substitutions of single characters to convert one string into the other.
+The classical sequential search solution runs in O(um) worst-case time (see [1]). An optimal averagecase algorithm requires O(u(k + logσ m)/m) time [2, 3], where σ is the size of the alphabet Σ. Those good average-case algorithms are called ﬁltration algorithms: they traverse the text fast while checking for a simple necessary condition, and only when this condition holds do they verify the text area using a classical ASM algorithm. For long texts, however, sequential searching might be impractical as it must scan all the text. To avoid the scanning we use an index [4, 5], which is a data structure built on the text.
+There exist indexes speciﬁcally devoted to ASM [6–9] (see [5] for an overview). Most are oriented to worst-case performance, and experiment a space-time barrier: They require either exponential time (in m or k), or exponential index space (e.g., O(u logk u) integers). This renders them impractical in many applications. Another choice is to reuse an index designed for exact searching, all of which are linearspace (i.e. O(u) integers), and try to do ASM over it. Indexes such as sufﬁx trees [10], sufﬁx arrays [11], or based on so-called q-grams or q-samples [4], have been used for ASM. There exist several algorithms, based on sufﬁx trees or arrays, which focus on worst-case performance [12–14]. They suffer from the same space-time barrier, achieving a search time independent of u but exponential in m or k. Essentially, they backtrack on the sufﬁx tree or array, simulating the sequential search over all the text sufﬁxes, and take advantage of the factoring of similar substrings achieved by sufﬁx trees or arrays.
+Indexes based on q-grams or q-samples are appealing because they require less space than sufﬁx trees or arrays. The algorithms on those indexes do not offer worst-case guarantees, but perform well on average when the error level α = k/m is low enough, say O(1/ logσ u). Those indexes basically simulate a sequential ﬁltration algorithm, such that the “necessary condition” checked involves exact matching of pattern substrings, and as such can be veriﬁed with any exact-searching index. Such ﬁltration indexes, e.g., [15, 16], cease to be useful for moderate α levels that are still of interest in applications.
+The most successful approach, in practice, is in between backtracking and exact-matching ﬁltration, and is called hybrid indexing. The index determines the text positions to verify using an approximatematching condition over pattern pieces. Those positions are determined using backtracking, whose time is exponential in the length of the string or the number of errors. Yet, it is applied over short pattern pieces and allowing few errors, so that the exponential cost is controlled. Indexes of this kind offer average-case guarantees of the form O(mnλ) for some 0 < λ < 1, and work well for higher error levels.
+
+Algorithms 2009, 2
+
+1107
+
+They have been implemented over q-gram indexes [17], sufﬁx arrays [18], and q-sample indexes [19].
+
+Yet, many of those linear-space indexes are very large anyway. For example, sufﬁx arrays require
+
+4 times the text size and sufﬁx trees require at the very least 10 times [20]. In recent years a new and
+
+extremely successful class of indexes has emerged. Compressed full-text indexes use data compression
+
+techniques to produce less space-demanding data structures [21]. It turns out that data compression
+
+algorithms exploit the internal structure of a string much in the same way indexes do, and therefore
+
+it is possible to build a compressed index that takes space proportional to that of the compressed text,
+
+offers indexed searching, and replaces the text as it can reproduce any text substring (in which case they
+
+are called self-indexes). The size of those indexes is measured in terms of the empirical text entropy, Hk [22], which gives a lower bound on the number of bits per symbol achievable by a k-th order compressor.
+
+There are two main families of self-indexes [21]. One is based on Ziv-Lempel compression [23–28], and
+
+the other simulates sufﬁx trees and sufﬁx arrays [24, 29–35].
+
+Compressed indexes usually require more operations than their classical counterpart, yet they can
+
+operate on a smaller/faster memory in the hierarchy. This is particularly noticeable when they can ﬁt in
+
+RAM while the classical indexes must operate on disk. In this case their advantages are most striking. A
+
+recent survey covers the practical state of the art in compressed self-indexes [36].
+
+cenDtleysspoitme ethienidregxreesattaskuicncgeOss(, us)elof-rinOd(eux√eslohgavue)
+
+been mainly used for bits have appeared [8,
+
+exact searching. Only very re37, 38]. Those are speciﬁcally
+
+designed for ASM, focus on worst case, and unfortunately require time exponential in k [5].
+
+Instead, in this paper we are interested in carrying out ASM over existing compressed full-text self-
+
+indexes, and in achieving good practical performance. We start by implementing the exact-match ﬁl-
+
+tration approach over compressed self-indexes. This is the most direct solution because these indexes
+
+already provide exact searching. We choose a Ziv-Lempel self-index [25], as this type of index is fast
+
+to extract the text areas to be veriﬁed, and we optimize the process of extracting those text passages.
+
+We also try a sufﬁx-array self-index [24] as these permit efﬁciently counting the number of occurrences,
+
+which allows us to optimize the pattern partitioning.
+
+Then we turn our attention to hybrid indexing, which has been very successful on classical indexes.
+
+We show how the ideas of hybrid indexing over q-sample indexes [19] can be carried over Ziv-Lempel
+
+indexes, by regarding the text parsing as an irregular variant of the q-sampling. We obtain novel results
+
+about q-sample indexes that may ﬁnd applications beyond compressed indexes.
+
+Finally, we focus on sufﬁx-tree-based self-indexes. Any ASM algorithm over sufﬁx trees can be
+
+adapted to work over compressed ones. However, some adjustments are necessary because accessing
+
+the text in a self-index is around two orders of magnitude slower than in plain form. To address this
+
+problem we study the hierarchical veriﬁcation technique [17, 39] and show that it can beneﬁt from
+
+bidirectionality, that is, by extending edit distance computation from both ends of the string. This is
+
+particularly relevant on this type of self-indexes, as they permit moving in the text in either direction.
+
+This second index is slower than the Lempel-Ziv-based one, but it takes signiﬁcantly less space. Both
+
+hybrid indexing techniques improve upon the results obtained with the exact-matching approach.
+
+The paper has the following structure. In Section 2. we review some basic concepts about ASM, deﬁne
+
+some notation, and describe our contributions. Section 3. describes our application of exact-matching
+
+ﬁlters for ASM over self-indexes. Sections 4. and 5. are dedicated to hybrid ASM over Lempel-Ziv com-
+
+Algorithms 2009, 2
+
+1108
+
+pressed indexes. In Section 4. we explain our approach over a general q-samples index, but we assume the size of the samples is ﬁxed. In Section 5. we tackle the problem of an irregular parsing. Section 6. is dedicated to our second hybrid approach, i.e. ASM over compressed sufﬁx trees. Section 7. gives experimental results comparing all of our approaches with each other and with other ASM compressed indexes. The paper ﬁnishes with Section 8., where we draw some conclusions and point out future research directions.
+Preliminary versions of our results were presented in SPIRE [40, 41]. In this paper we include previously unpublished ASM algorithms based on exact partitioning (Section 3.), as well as more exhaustive material on the previously published algorithms: the proofs of all the lemmas, illustrative examples of the algorithms, a characterization of homogeneous LZ-phrases (Section 5.3.), and more exaustive experimental results (Section 7.).
+2. Basics and Contribution Overview
+2.1. Basic Concepts
+We denote by T the text string, by P the pattern string, and by O an occurrence of P in T ; by Σ the strings’ alphabet, of size σ; by T [i] the symbol (or character) at position (i mod u) of T ; by S.S the concatenation of strings; by S = S[..i − 1].S[i..j].S[j + 1..] respectively a preﬁx, a substring, and a sufﬁx of a string S; by S S that S is a substring of S ; and by ε the empty string.
+A trie is a character-labeled tree where no two children of a node have the same label. The concatenation of the labels from the root to a node v is called the path-label of v, and also denoted v. A compact trie is obtained by collapsing the unary paths in a trie into single edges, labeled with the concatenation of the collapsed symbols. The sufﬁx tree [10, 42] of T is a compact trie such that each sufﬁx of T $ is the path-label of a leaf and vice versa, where $ ∈ Σ is a terminator symbol. String labels in a sufﬁx tree are substrings of T , thus they can be represented by a starting position in T plus a length. We will assume that u is the length of T $. The sufﬁx array [11] SA[0, u − 1] stores the sufﬁx indexes of the leaves in lexicographical order. The sufﬁx tree nodes can be identiﬁed with sufﬁx array intervals: each node v corresponds to the range of leaves that descend from v. For a detailed explanation see, e.g., Gusﬁeld’s book [43]. Figure 1 shows an example of a sufﬁx tree and a sufﬁx array.
+Ziv-Lempel compression [23, 44–46] is based on cutting a text T into phrases of varying length, so that, essentially, each phrase already appears somewhere earlier in the text. Each phrase is encoded usually with a ﬁxed number of bits, so more compressible texts generate longer phrases. There are many variants of this family, which basically differ in the rules to form the phrases from the previous text.
+2.2. Approximate String Matching
+The edit or Levenshtein distance between two strings, ed(A, B), is the smallest number of edit operations that transform A into B. Valid operations are insertions, deletions, and substitutions of characters. Assuming we have a text T , the problem we are interested in solving in this paper is: Given a pattern P and an error limit k, determine all the (starting or ending positions of) substrings O of T for which ed(P, O) ≤ k. We now review the most basic techniques related to this problem. As our running example consider that P = abccba, k = 2 and T = abbbab. The only occurrence O in T is abbba.
+
+Algorithms 2009, 2
+
+1109
+
+Figure 1. On top, sufﬁx tree for cbdbddcbababa$. Some sufﬁx links are shown (dashed arrows). On the bottom, sufﬁx array of T .
+
+c bb
+
+d dd
+
+b bb
+
+d dd
+
+dd cc
+
+dd
+
+d
+
+cccc
+
+bb
+
+bbbb
+
+a a aaaaaaa
+
+b b bbbbbbb a a aaaaaaa
+b bbbbbbbb a aaaaaaaa $$$$$$$$$$$$$$
+0 1 2 3 4 5 6 7 8 9 10 11 12 13
+SA 13 12 10 8 11 9 7 1 3 6 0 2 5 4
+
+T[SA[i]] $ a a a b b b b b c c d d d
+
+$bbaaaddbbbcd
+
+aa$bbbdaddbc
+
+$b
+
+aadcbbdab
+
+a $bdbadcba
+
+$ acabdbab
+
+$bbacaba
+
+aa$bbab
+
+bb
+
+aa$a
+
+aa
+
+bb
+
+$
+
+b$
+
+aa
+
+a b$
+
+$a
+
+$
+
+Dynamic programming. There is a well-known dynamic programming (DP) algorithm that computes
+
+matrix D, where D[i, j] = ed(A[..i−1], B[..j −1]) is the edit distance between the preﬁxes A[..i−1] and
+
+B[..j −1] of A and B. Figure 2 (middle) shows an example of matrix D for A = abccba and B = abbbab.
+
+By looking at cell D[6, 6] = 3 we can conclude that ed(abccba, abbbab) = 3. Let the size of A and B be
+
+m and m respectively. This matrix can be computed, in O(mm ) time, by setting D[0, 0] = 0 and
+
+  D[i − 1, j] + 1
+
+D[i, j]
+
+=
+
+min 
+
+D[i, j − 1] + 1 D[i − 1, j − 1] + δA[i−1]=B[j−1]
+
+if i > 0 if j > 0 where if i, j > 0
+
+δx=y is 0 if x = y and 1 otherwise. Ukkonen [47] noted that in order to ﬁnd cells in D whose value is k there is no need to compute cells with a value larger than k; those can be replaced by +∞. The remaining cells are referred to as active cells. With this method, extending the computation of ed(A, B) to ed(Ac, B) or ed(A, Bc) requires only O(k) time: All we need to compute is another row, which can contain at most 2k + 1 entries that are ≤ k (as D[i, j] ≥ |i − j|).
+
+Algorithms 2009, 2
+
+1110
+
+Figure 2. D table computation for strings abccba and abbbab. Left: schematic representation of the alignment. Middle: computation of D. The numbers in bold correspond to the alignment shown on the left, and to the shortest path. Right: computation with increasing error bound.
+
+abccba abbbab
+
+a b c c b a j: 0123456 0 a 1012345 1 b 2101234 2 b 3211123 3 b 4322223 4 a 5433332 5 b 6544433 6 i: 0 1 2 3 4 5 6
+
+a b c c b a j:
+
+00
+
+a0
+
+1
+
+b 101
+
+2
+
+b 21112
+
+3
+
+b
+
+2222
+
+4
+
+a 25
+
+b6
+
+i: 0 1 2 3 4 5 6
+
+One can regard the edit distance matrix as an edit graph: Each matrix position (i, j) is a node, which is the source of three arrows towards (i, j + 1) (of weight 1), (i + 1, j) (of weight 1), and (i + 1, j + 1) (of weight δA[i]=B[j]). Hence ed(A, B) is the weight of the shortest path from (0, 0) to (m, m ).
+
+Backtracking. A way of performing ASM over indexed text is as follows. Perform a depth-ﬁrst search over the sufﬁx tree of T , processing one letter at a time, while simultaneously computing the D table for P and O , where O is the path-label of the node we are visiting. This table can be used to control the search. When we reach a point O such that ed(P, O ) ≤ k, i.e. D[|P |, |O |] ≤ k, O is reported as an occurrence. Usually we also report all the positions in T at which O occurs, which means traversing the whole sub-tree of O and reporting all its leaf positions. Otherwise if ed(P, O ) > k but there is at least one active cell in the last row, i.e. D[i, |O |] ≤ k for some i, this means that ed(P [..i − 1], O ) ≤ k and therefore O can potentially be extended into an occurrence, thus the search is allowed to proceed. If, on the other hand, there are no active cells in the last row of D, the search within the subtree of the current node can be abandoned. For example, by looking at Figure 2 we can conclude that the search should not proceed further after abbbab because there are no active cells in the last row of the table. Also, since all the other rows contain active cells, this point is indeed reached by the search. It helps to think of D as a stack of rows that is growing downwards. Note that it is a convenient coincidence that the difference between the D tables of ed(P, O ) and ed(P, O c) is only the last row. This means that we can move between these two tables simply by adding or removing a row. At each step the DFS algorithm either pushes a new element into the stack, i.e. moves from ed(P, O ) to ed(P, O c), or it removes a row from the stack, i.e. moves from ed(P, O c) to ed(P, O ). The problem with backtracking is that the number of nodes it visits is at least exponential in k, and usually in m. Nevertheless, this process will be a key ingredient in our algorithms.
+
+Algorithms 2009, 2
+
+1111
+
+Filtration and sampling. Filtration algorithms build on the following lemma, simpliﬁed from [4].
+Lemma 1 Let A and B be strings such that ed(A, B) ≤ k. Let A = A1A2 . . . Aj, for any j ≥ 1. Then there is a substring B of B and an i such that ed(Ai, B ) ≤ k/j .
+Consider for example k = 2 and A = P = A1.A2.A3, A1 = ab, A2 = cc, A3 = ba and B = O = abbba. Since ed(A, O) = 2 and j = 3, we can conclude that there is a substring B of B and an i such that ed(Ai, B ) ≤ 2/3 = 0. In particular ed(A1, ab) = 0. In this case we also have that ed(A3, ba) = 0.
+Note from the example that, if j = k + 1, then the Ai’s can be matched within B with zero errors, that is, using exact matching. If we assume that A = P and B is contained in O, we can partition P into j non-overlapping parts and search T for them. Thus we must be able to ﬁnd any text substring with the index (exactly [16] or approximately [17, 18], depending on j). Thus we must use a sufﬁx tree or array [18], or even a q-gram index if we never use pieces of P longer than q [16, 17] (a q-gram index collects all text substrings of length q and stores a list of the positions of each different such text substring). The contexts around the occurrences found are then examined (say, with dynamic programming) for full occurrences of P .
+Alternatively, if we assume that B = P and A is contained in O, then we can index each s-th text q-gram (for some s ≥ q), to form a so-called q-samples index. The different text q-samples are stored into, say, a trie data structure. This trie is traversed to ﬁnd q-samples that match within P with at most k/j errors. The contexts around those q-samples are then veriﬁed. This works as long as q and k are sufﬁciently small compared to m. More precisely, any occurrence O of P is of length at least m − k. Wherever an occurrence lies, it must contain at least j = (m − k − q + 1)/q complete q-samples, and this deﬁnes s. This the basis of an “approximate q-samples” index [19].
+2.3. Our Contributions
+Reducing to exact matching of pattern pieces. One can use any compressed self-index to implement a ﬁltration ASM method that relies on looking for exact occurrences of pattern substrings, as this is what all self-indexes provide. This is our approach in Section 3.. We ﬁrst use a Lempel-Ziv index [25]. The Lempel-Ziv index works well because it is faster to extract the text to verify (recall that in self-indexes the text is not directly available). The speciﬁc structure of the Lempel-Ziv index used allows several interesting optimizations, such as factoring out the work of several text extractions. This is possible only when the occurrences span a single Ziv-Lempel phrase. We also use a compressed sufﬁx array [24], as it permits fast counting of the number of occurrences of any substring. This allows us to quickly ﬁnd the best partition A = A1.A2 . . . Ak+1 so that the number of text veriﬁcations is minimized.
+Hybrid indexing on Ziv-Lempel indexes. In Sections 4. and 5. we turn our attention to hybrid indexing, which is more complex but promises handling higher error levels α more efﬁciently. We still stick to a Ziv-Lempel index, as it allows fast extracting of text contexts. Considering the complications of Ziv-Lempel indexes when occurrences span more than one phrase, we pay special attention to this problem. A good choice to handle this turns out to be another Ziv-Lempel index [28], whose sufﬁx-tree-like structure is useful for this approximate searching.
+
+Algorithms 2009, 2
+
+1112
+
+Mimicking q-sample indexes is particularly useful for our goals. A Lempel-Ziv parsing can be regarded as an irregular sampling of the text, and therefore our goal, in principle, is to adapt the techniques of the approximate q-samples index [19] to an irregular parsing (thus we must stick to the interpretation B = P , recall Section 2.2.). As desired, we would not need to consider occurrences spanning more than one phrase. Moreover, the trie of phrases stored by all Lempel-Ziv self-indexes is the exact analogous of the trie of q-samples. Thus we can search without requiring further structures.
+The irregular parsing poses several challenges. There is no way to ensure that there will be a minimum number j of phrases contained in an occurrence. Occurrences could even be fully contained in a phrase!
+We develop several tools to face those challenges. (1) We give a new variant of Lemma 1 that distributes the errors in a convenient way when the samples are of varying length. (2) We introduce a new ﬁltration technique where the samples that overlap the occurrence (not only those contained in the occurrence) can be considered. This is of interest even for classical q-sample indexes. (3) We search for q-samples within long phrases to detect occurrences even if they are within a phrase. This technique also includes novel insights.
+Hybrid indexing on compressed sufﬁx trees. Finally, in Section 6. we explore the impact of hierarchical veriﬁcation on hybrid searching, using a compressed sufﬁx tree instead of a Lempel-Ziv index. Hierarchical veriﬁcation means that an area that needs to be veriﬁed is not immediately checked with the maximum number of errors; instead the error threshold is raised gradually. This technique was originally proposed for a hybrid index [17] and later extended and used for a sequential algorithm [39]. However, these approaches used hierarchical veriﬁcation directly over the text T , meaning that none of the repeated computation was factorized. We investigate precisely how to do this computation over the index, thus allowing us to avoid repeated computation. A key ingredient to achieve our goal is bidirectionality, that is, the ability of extending the distance computation to the left or to the right of the matched part.
+Algorithms for computing edit distance are typically unidirectional, computing from left to right, because they are based on dynamic programming or automata. Interestingly this computation was made bidirectional more than 10 years ago [48]. They showed how to obtain the edit distance for strings A and cB by extending that for for strings A and B, where c is a letter.
+Fortunately enough, most compressed sufﬁx trees and arrays support bidirectionality. Typical indexes, classical sufﬁx trees in particular, are unidirectional, meaning that they can search only by adding letters at the end of the search pattern. Due to the RANK/SELECT duality [21], bidirectionality arises naturally in a wide class of compressed indexes (Although not usual, there are some non-compressed indexes, such as afﬁx trees [49], that support bidirectionality).
+Combining these bidirectional algorithms we can use hierarchical veriﬁcation directly over the index, instead of over T . Thus, we ﬁll an important gap in indexed ASM. Moreover, while hybrid methods need careful tuning (where a small error can be disastrous), ours achieves a good performance without the need of tuning (and can be improved by tuning as well).
+In addition, our work addresses a very important practical issue. Compressed sufﬁx trees and arrays are usually self-indexes, meaning that they do not store the text T but they are able to obtain it. Yet, experimental results [28] show that this is still two orders of magnitude slower than storing T . This can easily be explained as cache effects, common in modern computer architectures. Efﬁcient algorithms for
+
+Algorithms 2009, 2
+
+1113
+
+ASM over compressed indexes must therefore minimize their accesses to T . This completes the strong symbiotic exchange between hierarchical veriﬁcation and compressed self-indexing, and provides a very important result for ASM over compressed indexes, both in theory and in practice.
+3. A Simple Self-Indexing Method
+Any self-index can be used to materialize the search based on partitioning the pattern into k + 1 pieces and searching for them without errors. Because each such occurrence must be veriﬁed with DP, one wishes an index able of extracting fast a context around each piece occurrence. This favors the choice of the LZ-index [25] for this task. Later in this section we will give reasons to try a different kind of index which, despite being slow to extract contexts, allows one to count very fast the number of occurrences of each piece.
+3.1. Using the LZ-index
+The LZ-index of a $-terminated text T [1, u] is based on the LZ78 parsing, which divides T = Z0, . . . , Zn into n + 1 phrases Zi so that Z0 = ε and each other Zi is is equal to the longest possible phrase Zj, j < i, plus a single character in Σ. Because the set of phrases is preﬁx-closed (i.e. every preﬁx of a phrase is also a phrase), the set of phrases {Zi} can be conveniently organized into a trie, so that each trie node is the path-label of some Zi. This trie, called the LZ-trie, is one of the structures of the LZ-index, where it is represented in compressed form. Any phrase can be extracted in reverse order from the LZ-trie, by starting from its corresponding node and moving to the parent in the trie. This requires constant time per character and is efﬁcient in practice [50]. The LZ-index requires O(uHk) bits. For example the LZ78 parsing of the string T = abababcddbdbc is a, b, ab, abc, d, db, dbc. We show the corresponding LZ-trie in Figure 3, moreover we also show a tree composed of the reverse phrases which is also an important component of LZ-indexes.
+
+Figure 3. (left) LZ-trie for strings {a, b, ab, abc, d, db, dbc}. (right) Reverse tree of the LZ78 trie.
+
+ab b c
+
+d b c
+
+ab
+
+c b
+
+d
+
+ad
+
+ad
+
+The occurrences of a pattern are classiﬁed into three categories in the LZ-index. Those of type 1
+fall within a single phrase Zi. Those of type 2 span two consecutive phrases, that is, fall within some Zi.Zi+1. Those of type 3 span more than two phrases. Because in a LZ78 parsing all the phrases are different, there are at most O(m2) occurrences of type 3 overall. Occurrences of type 1 are found by ﬁrst
+
+Algorithms 2009, 2
+
+1114
+
+spotting the type-1 occurrences that lie at the end of their phrase, that is, where P is a sufﬁx of Zi. Let us call those occurrences primary. Primary occurrences are found using other LZ-index structures (in particular, the trie of reverse phrases) in time O(m), plus O(1) per primary occurrence found. Now, it turns out that every type-1 occurrence descends from a primary occurrence in the LZ-trie (alternatively, each occurrence where P is inside Zi but not a sufﬁx of it, is inherited from an occurrence of P within the phrase copied by Zi, from which Zi descends in the LZ-trie). Thus all occurrences of type 1 are obtained by simply traversing all LZ-trie subtrees of the primary occurrences. Occurrences of type 2 and 3 are costlier to obtain.
+A simple method for ASM is thus to split P into k + 1 pieces, as evenly as possible, search for those pieces in the LZ-index, extract a context of m + 2k characters around the occurrence, and run DP over it. This approach will be called LZI in the experiments.
+3.2. Improving the Basic Solution
+In the sequel we introduce several improvements to the basic approach, to obtain what will be called DLZI in the experiments.
+The basic approach carries out redundant work in occurrences of type 1. Assume we are looking for a piece Pr of P = Ar.Pr.Br, 1 ≤ r ≤ k + 1. Given an occurrence of it, we must extract text substring Lr of length |Ar| + k to the left, and Rr of length |Br| + k to the right of the occurrence Pr, for veriﬁcation using DP. Consider a primary occurrence at LZ-trie node v = Zi. To extract the context, we will traverse the upward path from v, so as to obtain the content of Zi. If necessary, we will locate (using other fast LZ-index structures) the node v−1 corresponding to Zi−1, v−2 for Zi−2, and so on, until we have extracted |Lr| characters. Now we locate v+1 to obtain Zi+1, and so on until extracting |Rr| characters to the right. Note that, towards the left, we can stop exactly when we have extracted |Lr| characters, as the phrases are obtained right-to-left, whereas towards the right we must extract complete phrases until exceeding |Rr|, and then discard the unneeded characters from the last phrase.
+As explained, we have to repeat this process for each descendant of v. Let u = Zj be a child of v by character c. The extraction of Zj from u starts by obtaining c and then repeats exactly the process already carried out for v = Zi (as Zj = Zi.c). Our aim is to factor out that redundant work.
+Given two strings S and X, let us deﬁne the sufﬁx edit distance from S to X as
+sed(S, X) = min ed(S, X[j..]),
+j
+where we note that the formula is not symmetric. Similarly, we deﬁne the preﬁx edit distance
+ped(S, X) = min ed(S, X[..j]).
+j
+Note that sed(S, X) is easily computed by traversing X backwards, whereas ped(S, X) is easier if traversing X forwards. Now let Pr be a pattern piece found in the text, so that we have to verify the area LrPrRr with DP. The occurrence O minimizing ed(P, O) may start anywhere in Lr and ﬁnish anywhere in Rr. More precisely, there will be an occurrence within LrPrRr iff
+sed(Ar, Lr) + ped(Br, Rr) ≤ k.
+
+Algorithms 2009, 2
+
+1115
+
+We factor out the redundant work in the subtree of a primary occurrence v = Zi as follows. First, we obtain Zi and compute sed(Ar, Zi), remembering the last row Lrow of the DP matrix (where we have processed Ar and Zi in reverse order, and assuming Zi corresponds to the rows). Indeed, if |Zi| ≥ |Lvr| (where Lvr is the Lr text substring corresponding to occurrence v), we only process the last |Lvr| characters of Zi. Otherwise, we obtain the nodes v−1, v−2, and so on until obtaining Lvr and computing k = sed(Ar, Lvr). If k > k, there is no possible occurrence around v. Otherwise, we obtain and process v+1, v+2, until either we obtain ped(Br, Zi+1.Zi+2 . . .) ≤ k − k or we process more than |Rrv| characters.
+Now we traverse the subtree of v while avoiding redundant work. We set up a new DP matrix between Br and an initially empty string, and traverse the subtree while carrying out a process similar to that described in Section 2.2. so that, when we are at node u = Zj, the matrix corresponds to the edit distance computation between Br and u. Let Rrow be the last row of this matrix upon reaching u. Now we extract u−1, u−2, and so on, so as to compute k = sed(Ar, Lur ) starting from Lrow, that is, we avoid reprocessing u itself. Then we extract u+1, u+2, and so on until ﬁnding ≤ k − k errors or processing |Rru| characters.
+3.3. Using the FM-index
+A problem when partitioning into k + 1 pieces is that some may be much more frequent than others. Since any partitioning into k + 1 pieces is good, it is natural to look for the partitioning yielding the least number of veriﬁcations to carry out. This can be easily found in time O(m2k) with (a different) dynamic programming [16]. However, we need to know the frequencies in the text of every pattern substring. That is, we need to be able of efﬁciently counting the number of occurrences of a string.
+The LZ-index is not good at this task: It can only count by essentially locating all of the occurrences. We tried some approximate counting methods with no success (more precisely, the ﬁnal search time decreased, but the time for counting exceeded the gains by far).
+Sufﬁx-array based indexes, instead, are very efﬁcient at counting. In particular, we used a variant of the FM-index [24, 36], which is a self-index that simulates a sufﬁx array within O(uHk) bits of space. The FM-index can easily count the number of occurrences of all the substrings of P in O(m2) time. Within the same time, the sufﬁx array intervals corresponding to each of the pieces is found. Once the optimal partition is chosen, a context around each occurrence of each of the Pr pieces is obtained, and DP is run on the context to ﬁnd the approximate matches.
+For the experiments we used an FM-index variant that favors speed over space, described in [50, Sec. 12.2]. As optimizing the partition did reduce the overall time, we show only this variant in the experiments.
+4. An Improved q-samples Index
+In this section we extend classical q-sample indexes by allowing samples to overlap the pattern occurrences. This is of interest by itself, and will be used for an irregular sampling index later. Recall that a q-samples index stores the locations, in T , of all the substrings T [qi..qi + q − 1].
+
+Algorithms 2009, 2
+
+1116
+
+4.1. Varying the Error Distribution
+
+We will need to consider parts of samples in the sequel, as well as samples of different lengths. Lemma 1 gives the same number of errors to all the samples, which is disadvantageous when pieces are of different lengths. The next Lemma generalizes Lemma 1 to allow different numbers of errors in each piece.
+
+Lemma 2 Let A and B be strings, let A = A1.A2 . . . Aj, for strings Ai and some j ≥ 1. Let ki ∈ R such
+
+that
+
+j i=1
+
+ki
+
+>
+
+ed(A,
+
+B).
+
+Then
+
+there
+
+is
+
+a
+
+substring
+
+B
+
+of B and an i such that ed(Ai, B ) < ki.
+
+Proof The edit distance between A and B corresponds to the shortest path in the edit graph of A and B.
+
+The partition of A induces a partition in this graph and in particular splits the shortest path. Let Bi be
+
+the substring of B that shares the shortest path with Ai. This means that
+
+j i=1
+
+ed(Ai,
+
+Bi)
+
+=
+
+ed(A,
+
+B).
+
+Suppose, by absurd, that for every B substring of B and every i we have that ed(Ai, B ) ≥ ki.
+
+Therefore, this is also true for the Bi’s, i.e. ed(Ai, Bi) ≥ ki. This is absurd since that way ed(A, B) =
+
+j i=1
+
+ed(Ai,
+
+Bi)
+
+≥
+
+j i=1
+
+ki
+
+>
+
+ed(A, B).
+
+Therefore, there must exist an i such that ed(Ai, Bi)
+
+<
+
+ki.
+
+Note that Bi is the substring B we mention in the lemma.
+
+Figure 4 shows an illustration of this Lemma.
+
+Figure 4. A schematic edit distance graph between A and B. The dashed lines show the division of A and B into the Ai’s and delimit B . The shortest path in the graph is enclosed between two parallel lines.
+A0 A1 A2 A3
+
+B´
+
+Lemma 1 is a particular case of Lemma 2: set ki = k/j + for sufﬁciently small > 0. Consider the application of Lemma 1 to k = 9, A = A1.A2.A3, A1 = ab, A2 = cdef ghijklm, A3 = no and B = axbcxdxexf gxhixjkxlxmnxo (see Figure 5). We can conclude that there is a substring B of B and an i such that ed(B , Ai) ≤ 9/3 = 3. In particular, we have that ed(A1, axb) = 1 and ed(A3, nxo) = 2. This number of errors (3) is excessively high for strings a as small as A1 and A3. Instead, we can use Lemma 2 with k1 = k3 = 1.2 and k2 = 6.7; note that k1 + k2 + k3 = 9.1 > 9. Using this lemma, we only allow for 1 error for A1 and A3. In this case we have that ed(A1, axb) = 1 < 1.2. We also have that ed(A3, nxo) = 1 < 1.2.
+
+Algorithms 2009, 2
+
+1117
+
+Figure 5. Dynamic programming table D for strings, B = P = axbcxdxexf gxhixjkxlxmnxo (vertical) and A = O = abcdef ghijklmno (horizontal) with k = 9. The shortest path in the edit graph is shown in bold, we do not show inactive cells.
+
+ab cdef ghi jkl mno 0123456 789 a 10123456789 x 21123456789 b 32123456789 c 432123456789 x 543223456789 d 654323456789 x 765433456789 e 876543456789 x 987654456789 f 98765456789 g 98765456789 x 9876556789 h 987656789 i 987656789 x 98766789 j 9876789 k 987678 9 x 98778 9 l 9878 9 x 988 9 m 98 9 n 9 89 x 99 o9
+
+An early version of Lemma 2 was given in the context of hierarchical veriﬁcation [39]. This result was later improved [4] as follows.
+
+Lemma 3 Let A and B be strings, let A = A1.A2 . . . Aj, for strings Ai and some j ≥ 1. Let ki ∈ N0
+
+such that j ≥ 1 and
+
+j i=1
+
+ki
+
+≥
+
+ed(A,
+
+B)
+
+−
+
+j
+
++
+
+1.
+
+Then there is a substring B
+
+of B and an i such that
+
+ed(Ai, B ) ≤ ki.
+
+Proof We will prove this lemma using Lemma 2. Let ki be the numbers referred in this lemma. Consider
+
+ki = ki + 1. The ki numbers satisfy the conditions of Lemma 2, i.e.
+
+j i=1
+
+ki
+
+=
+
+j+
+
+j i=1
+
+ki
+
+≥
+
+j − j + 1 + k = k + 1 > k. Therefore, by Lemma 2, we can conclude that there is a substring B
+
+Algorithms 2009, 2
+
+1118
+
+of B and an i such that ed(Ai, B ) < ki = ki + 1. Since ed(Ai, B ) and ki are integers we have that ed(Ai, B ) ≤ ki.
+The proof shows that Lemma 3 is a consequence of Lemma 2. In fact, both are equivalent. To prove that Lemma 3 implies Lemma 2 use the transformation ki = ki − 1 and reason as above.
+In our version the ki’s can be real numbers. However, this is not the case of Lemma 3. For example with k = 3, ki = 1/3 and j = 3 we conclude that some Ai must occur with at most 1/3 errors. Since the edit distance between two strings is always an integer, the conclusion would be that ed(Ai, B ) ≤ 0, which is not correct. With Lemma 2, we can expose our results without being forced to work with integers, i.e. having to deal with ﬂoors and ceilings. Also, we do not need to know j a priori, which is important since in our application we will not know the value of j before locating O in T .
+Lemma 2 can be used to adapt the error levels to the length of the pieces. For example, it is appropriate to try to maintain a constant error level, by taking ki = (1 + ) · k · |Ai|/|A| for any > 0. In our recent example, this would yield k1 = k3 = (1 + ) · 9 × 2/15 = (1 + ) · 1.2 and k2 = (1 + ) · 9 × 11/15 = (1 + ) · 6.6. This gives essentially the same result we presented before.
+
+4.2. Partial q-sample Matching
+
+Contrary to all previous work, let us assume that A in Lemma 2 is not only that part of an approximate
+
+occurrence O formed by full q-samples, but instead that A = O, so that A1 is the sufﬁx of a sample and Aj is the preﬁx of a sample. An advantage of this is that now the number of involved q-samples is at least j = (m − k)/q , and therefore we can permit fewer errors per piece (e.g., k/j using Lemma 1).
+
+On the other hand, we would like to allow fewer errors for the pieces A1 and Aj. Yet, notice that any text q-sample can participate as A1, Aj, or as a fully contained q-sample in different occurrences at different text positions. Lemma 2 tells us that we could allow ki = (1 + ) · k · |Ai|/|A| errors for Ai, for any
+> 0. Conservatively, this is ki = (1 + ) · k · q/(m − k) for 1 < i < j, and less for the extremes. In order to adapt the trie searching technique to those partial q-samples, we should not only search all
+
+the text q-samples with (1 + ) · k · q/(m − k), but also all their preﬁxes and sufﬁxes with fewer errors.
+
+This includes, for example, verifying all the q-samples whose ﬁrst or last character appears in P (cases
+
+|A1| = 1 and |Aj| = 1). This is unaffordable. Our approach will be to redistribute the errors across A using Lemma 2 in a different way to ensure that only sufﬁciently long q-sample preﬁxes and sufﬁxes
+
+are considered.
+
+Let v be a non-negative integer parameter. We associate to every letter of A a weight: the ﬁrst and last
+
+v letters have weight 0 and the remaining letters have weight (1 + )/(|A| − 2v). We deﬁne |Ai|v as the
+
+sum of the weights of the letters of Ai. For example if Ai is within the ﬁrst v letters of A then |Ai|v = 0;
+
+if it does not contain any of the ﬁrst or last v letters then |Ai|v = (1 + ) · |Ai|/(|A| − 2v). Notice that
+
+for this deﬁnition to be sound we need that |A| − 2v > 0, i.e. v < |A|/2.
+
+We can now apply Lemma 2 with ki = k · |Ai|v provided that k > 0. Note that
+
+j i=1
+
+ki
+
+=
+
+(1 +
+
+)·k
+
+>
+
+k. In this case, if |A1| ≤ v we have that k1 = 0 and therefore A1 can never be found with strictly less
+
+than zero errors. The same holds for Aj. This effectively relieves us from searching for any q-sample
+
+preﬁx or sufﬁx of length at most v.
+
+Parameter v is thus doing the job of discarding q-samples that have very little overlap with the occur-
+
+Algorithms 2009, 2
+
+1119
+
+rence O = A, and maintaining the rest. It balances between two exponential costs: one due to verifying all the occurrences of too short preﬁxes/sufﬁxes, and another due to permitting too many errors when searching for the pieces in the trie. In practice tuning this parameter will have a very signiﬁcant impact on performance.
+Recall the application of Lemma 2 with k = 9, A = A1.A2.A3, A1 = ab, A2 = cdef ghijklm, A3 = no, k1 = k3 = 1.2, k2 = 6.7 and B = axbcxdxexf gxhixjkxlxmnxo. In this case we would need to search for all the q-samples that end in a string that is at edit distance 1 from A1 = ab. This, in particular, includes all the q-samples that contain the sufﬁx a, all the q-samples that contain the sufﬁx b and so on. This yields an excessive number of samples to verify. If we consider v = 1 in this example we will instead obtain k1 = k3 = (1 + ) · 9 × 1/13 ≈ 0.7 and k2 = (1 + ) · 9 × 11/13 ≈ 7.7. Note that k1 + k2 + k3 = 9.1 > 9. In our example we have that ed(A2, cxdxexf gxhixjkxlxm) = 7 < 7.7. Note that, in this example, we moved the errors to A2 since A1 and A3 are very small.
+4.3. A Hybrid q-samples Index
+We have explained all the ideas necessary to describe a hybrid q-samples index. The algorithm works in two steps. First we determine all the q-samples Oi for which ed(Oi, P ) < k · |Oi|v for some substring P of P . In this phase we also determine the q-samples that contain a sufﬁx O1 for which ed(O1, P ) < k · |O1|v for some preﬁx P of P (note that we do not need to consider substrings of P , just preﬁxes). Likewise we also determine the q-samples that contain a preﬁx Oj for which ed(Oj, P ) < k · |Oj|v for some sufﬁx P of P (similar observation). The q-samples that qualify are potentially contained inside an approximate occurrence of P , i.e. Oi may be a substring of a string O such that ed(O, P ) ≤ k. In order to verify whether this is the case, in the second phase we scan the text context around Oi with a sequential algorithm.
+As the reader might have noticed, the problem of verifying conditions such as ed(Oi, P ) < k · |Oi|v is that we cannot know a priori which i does a given text q-sample correspond to. Different occurrences of the q-sample in the text could participate in different positions of an O, and even a single occurrence in T could appear in several different O’s. We do not know either the size |O|, as it may range from m − k to m + k.
+A simple solution is as follows. Conservatively assume |O| = m−k. Then, search P for each different text q-sample in three roles: (1) as a q-sample contained in O, so that |Oi| = q, assuming pessimistically |Oi|v = (1 + ) min(q/(m − k − 2v), 1); (2) as an O1, matching a preﬁx of P for each of the q-sample sufﬁxes of lengths v < < q, assuming |O1| = and thus |O1|v = (1 + ) min(( − v)/(m − k − 2v), 1); (3) as an Oj, matching a sufﬁx of P for each of the q-sample preﬁxes, similarly to case (2) (i.e. |Oj|v = |O1|v). We assume that q < m − k and thus the case of O contained inside a q-sample does not occur.
+In practice, one does not search for each q-sample in isolation, but rather factors out the work due to common q-gram preﬁxes by backtracking over the trie and incrementally computing the DP matrix between every different q-sample and any substring of P ([4], recall Section 2.2.). We note that the trie of q-samples is appropriate for role (3), but not particularly efﬁcient for roles (1) and (2) (ﬁnding q-samples with some speciﬁc sufﬁx). In our application to a Lempel-Ziv index this will not be a problem because we will have also a trie of the reversed phrases (that will replace the q-grams).
+
+Algorithms 2009, 2
+
+1120
+
+5. Using a Lempel-Ziv Self-Index
+
+We now adapt our technique of Section 4. to the irregular parsing of phrases produced by a LempelZiv-based index. Among the several alternatives [24–28], we will focus on the ILZI [28], for the convenient sufﬁx-tree-like structure of phrases generated. The ILZI partitions the text into phrases such that every sufﬁx of a phrase is also a phrase (similarly to LZ78 parsing [23], where every preﬁx of a phrase is also a phrase). It uses two tries, one storing the phrases and another storing the reverse phrases. In addition, it stores a mapping that permits moving from one trie to the other, and it stores the compressed text as a sequence of phrase identiﬁers. This index [28] has been shown to require O(uHk) bits of space, and to be efﬁcient in practice.
+
+5.1. Handling Different Lengths
+
+As explained, the main idea is to use the phrases instead of q-samples. For this sake Lemma 2 solves the problem of distributing the errors homogeneously across phrases. However, other problems arise especially for long phrases. For example, an occurrence could be completely inside a phrase. In general, backtracking over long phrases is too costly.
+Even when an occurrence is not completely contained inside a phrase, it is not viable to start searching for an occurrence with too many errors, even if the occurrence is long. This is essentially the argument in favor of ﬁltration and hybrid indexes. Consider our example with k = 9, A = A1.A2.A3, A1 = ab, A2 = cdef ghijklm, A3 = no, k1 = k3 = 0.7, k2 = 7.7 and B = axbcxdxexf gxhixjkxlxmnxo. Recall also that we consider P = B and O = A. It is not viable to search for all the samples A such that ed(A , cxdxexf gxhixjkxlxm) ≤ 7, by using backtracking. The problem is essentially that, in this way, we allow for all the seven errors to concentrate in the beginning of A , i.e. we have to potentially consider for σ7 strings. Only a very small fraction of these strings will end up extending to a sample A that veriﬁes ed(A , cxdxexf gxhixjkxlxm) ≤ 7. To avoid this problem we adopt a hybrid approach.
+We resort again to q-samples, this time within phrases. We choose two non-negative integer parameters q and s < q. We will look for any q-gram of P that appears with less than s errors within any phrase. All phrases spotted along this process must be veriﬁed. Still, some phrases not containing any pattern q-gram with < s errors can participate in an occurrence of P (e.g., if (m − k − q + 1)/q · s ≤ k or if the phrase is shorter than q). Next we show that those remaining phrases have a certain structure that makes them easy to ﬁnd.
+
+Lemma 4 Let A and B be strings and q and s be integers such that 0 ≤ s < q ≤ |A| and for any substrings B of B and A of A with |A | = q we have that ed(A , B ) ≥ s. Then for every preﬁx A of A there is a substring B of B such that ed(A , B ) ≤ ed(A, B) − s (|A| − |A |)/q .
+
+Proof This is an application of Lemma 2 and it is important because it gives a good description of the
+
+restrictions obtained by the ﬁltration.
+
+Apply Lemma 2 with A1 = A , |Aj| < q and the remaining Ai’s of size q, i.e. |Ai| = q. Consider
+
+k1 = ed(A, B) − s (|A| − |A |)/q + with 0 < < 1, kj = 0. The remaining ki’s are equal to s. Note
+
+that j = (|A| − |A |)/q + 1 and therefore
+
+j i=1
+
+ki
+
+=
+
+ed(A,
+
+B)
+
++
+
+− s (|A| − |A |)/q
+
++ s(j − 1) =
+
+ed(A, B) + − s (|A| − |A |)/q + s (|A| − |A |)/q = ed(A, B) + > ed(A, B).
+
+Algorithms 2009, 2
+
+1121
+
+Therefore we conclude that there is a substring B of B and an i such that ed(Ai, B ) < ki. We will prove that it must be i = 1. If i = j, then ed(Aj, B ) < kj = 0, which is impossible. If 1 < i < j, then ed(Ai, B ) < ki = s with |Ai| = q, which contradicts the hypotheses of the lemma. Therefore i = 1 and ed(A1, B ) = ed(A , B ) < k1 = ed(A, B) − s (|A| − |A |)/q + , which means that ed(A , B ) ≤ ed(A, B) − s (|A| − |A |)/q .
+The lemma implies that, if a phrase is close to a substring of P , but none of its q-grams are sufﬁciently close to any substring of P , then the errors must be distributed uniformly along the phrase. Therefore we can check the phrase progressively (for increasing preﬁxes), so that the number of errors permitted grows slowly. This severely limits the necessary backtracking to ﬁnd those phrases that escape from the q-gram-based search.
+Let us consider q = 4 in our running example. Note that for a substring A of A of size 4 we have that k · |A |v = (1 + ) · 9 × 4/13 ≈ 2.8. Therefore we choose s = 2. Note that we cannot use Lemma 4 with A = A2 = cdef ghijklm and B = cxdxexf gxhixjkxlxm, since ed(f ghi, f gxhi) = 1 < 2 = s and |f ghi| = 4. This means that there is an exceptionally well preserved area of B in A where we only deleted 1 letter out of 5 consecutive ones. Consider instead that A = cdef ghijklm and that B = cxdxexf gxhxijxkxlm. In this case we can use Lemma 4 and obtain bound ed(cdef ghijklm[..i], B ) ≤ 7 − 2 (11 − i − 1)/4 for some substrings B of B. Note in particular that this is tight for i = 6, i.e. ed(cdef ghijklm[..6], B ) = ed(cdef ghi, cxdxexf gxhxi) = 5 = 7 − 2 × 4/4 .
+Parameter s enables us to balance between two search costs. If we set it low, then the q-gram-based search will be stricter and faster, but the search for the escaping phrases will be costlier. If we set it high, most of the cost will be absorbed by the q-gram search.
+
+5.2. A Hybrid Lempel-Ziv Index
+
+The following lemma describes how we combine previous results to search using a Lempel-Ziv index.
+
+Lemma 5 Let A and B be strings such that 0 < ed(A, B) ≤ k. Let A = A1.A2 . . . Aj, for strings Ai and some j ≥ 1. Let q, s and v be integers such that 0 ≤ s < q ≤ |A| and 0 ≤ v < |A|/2. Then there is a substring B of B and an i such that either:
+
+1. there is a substring A of Ai with |A | = q and ed(A , B ) < s, or
+
+2. ed(Ai, B ) < k · |Ai|v in which case for any preﬁx A of Ai there exists a substring B of B such that ed(A , B ) < k · |Ai|v − s (|Ai| − |A |)/q .
+
+Proof As we have explained, our approach ﬁrst consists in applying Lemma 2 considering ki = k · |Ai|v
+
+for 0 ≤ i ≤ j. Observe that, by the deﬁnition of |Ai|v, we have that
+
+j i=1
+
+k
+
+· |Ai|v
+
+=
+
+k(
+
++ (|A| −
+
+2v)/(|A| − 2v)) = k( + 1) > k. Now, we classify the resulting Ai into one of the two classes we deﬁned
+
+before. The ﬁrst class justiﬁes the ﬁrst condition of this Lemma. If the Ai belongs to the second class,
+
+we apply Lemma 4 with the resulting ki.
+
+Figure 6 shows a schematic representation of Lemma 5. As before the search runs in two phases. In the ﬁrst phase we ﬁnd the phrases whose text context must be veriﬁed. In the second phase we verify those text contexts for an approximate occurrence of P . Lemma 5 gives the key to the ﬁrst phase. We ﬁnd the relevant phrases via two searches:
+
+Algorithms 2009, 2
+
+1122
+
+Figure 6. A schematic representation of the two possible cases mentioned in Lemma 5. The boxes represent the A string and the density of the ﬁlling represents the density of errors with B.
+q
+
+vv
+
+(1) We look for any q-gram contained in a phrase which matches within P with less than s errors. We backtrack in the trie of phrases for every P [y1..], descending in the trie and advancing y2 in P [y1, y2] while computing the DP matrix between the current trie node and P [y1, y2]. We look for all trie nodes at depth q that match some P [y1, y2] with less than s errors. Since every sufﬁx of a phrase is a phrase in the ILZI, every q-gram within any phrase can be found starting from the root of the trie of phrases. All the phrases Z that descend from each q-gram trie node found must be veriﬁed (those are the phrases that start with that q-gram). We must also spot the phrases sufﬁxed by each such Z. Hence we map each phrase Z to the trie of reverse phrases and also verify all the descent of the reverse trie nodes. This covers case 1 of Lemma 5.
+This is precisely the case in our example, since we have that q = 4 and ed(f ghi, P [9..13]) = ed(f ghi, f gxhi) = 1 < 2 = s. We then determine that the phrase cdef ghijklm contains the string f ghi and locate the occurrence by searching the context around that phrase.
+(2) We look for any phrase Ai matching a portion of P with less than k · |Ai|v errors. This is done over the trie of phrases. Yet, as we go down in the trie (thus considering longer phrases), we can enforce that the number of errors found up to depth d must be less than k · |Ai|v − s (|Ai| − d)/q . This covers case 2 in Lemma 5, where the equations vary according to the roles described in Section 4.3. (i.e. depending on i):
+(2.1) 1 < i < j, in which case we are considering a phrase contained inside O that is not a preﬁx nor a sufﬁx. The formula k · |Ai|v (both for the matching condition and the backtracking limit) can be bounded by (1 + ) · k · min(|Ai|/(m − k − 2v), 1), which depends on |Ai|. Since Ai may correspond to any trie node that descends from the current one, we determine a priori which |Ai| ≤ m − k maximizes the backtracking limit. We apply the backtracking for each P [y1..].
+This is what occurs in the variation of our example with P = axbcxdxexf gxhxijxkxlmnxo, that obtains the limit ed(cdef ghijklm[..d+1], B ) ≤ 7.7−2 (11−d)/4 for some substring B of P [3..13] = cxdxexf gxhxijxkxlm. Note that, in particular, this limit is valid for string cdef ghijklm. Any string for which this is not the case is abandoned by the search.
+(2.2) i = j, in which case we are considering a phrase that starts by a sufﬁx of O. Now k · |Ai|v can be bounded by (1 + ) · k · min((d − v)/(m − k − 2v), 1), yet still the limit depends on |Ai| and must be maximized a priori. This time we are only interested in sufﬁxes of P , that is, we can perform m searches with y2 = m and different y1. If a node veriﬁes the condition we must consider also those that descend
+
+Algorithms 2009, 2
+
+1123
+
+from it, to get all the phrases that start with the same sufﬁx. (2.3) i = 1, in which case we are considering a phrase that ends in a preﬁx of O. This search is as the
+case i = j, with similar formulas. We are only interested in preﬁxes of P , that is y1 = 0. As the phrases are sufﬁx-closed, we can conduct a single search for P [0..] from the trie root, ﬁnding all phrase sufﬁxes that match each preﬁx of P . Each such sufﬁx node must be mapped to the reverse trie and the descent there must be included. The case i = j = 1 is different, as it includes the case where O is contained inside a phrase. In this case we do not require the matching trie nodes to be sufﬁxes, but also preﬁxes of sufﬁxes. That is, we include the descent of the trie nodes and map each node in that descent to the reverse trie, just as in case 1.
+
+5.3. Homogeneous Lempel-Ziv Phrases
+
+In this section we give further insight into the structure of the homogeneous Lempel-Ziv phrases, i.e. those that verify the conditions of Lemma 4. The objective of this section is to analyze the complexity of the search for the escaping phrases, i.e. those that are not found in the q-grams based search. This search for these homogeneous phrases is described in point (2) of Section 5.2..
+We need a couple of lemmas that give further insight into the structure of these homogeneous phases. Lemma 4 explained that by restricting the minimal number of errors that a substring of A, of size q, may have we are also restricting the maximal number of errors that it can have. In fact this condition also restricts the spacing between consecutive errors. The next lemmas explain this property.
+
+Lemma 6 Let A and B be strings and q and s be integers such that 0 ≤ s ≤ q ≤ |A| and for any substrings B of B and A of A with |A | = q we have that ed(A , B ) ≥ s. Then for any preﬁx of A of A such that for any substring B of B, ed(A , B ) ≥ 1 we can conclude that |A | > |A| − q (ed(A, B) − 1 + )/s , for any > 0.
+
+Proof Suppose by absurd that there is a preﬁx A of A such that for any substring B of B we have
+
+ed(A , B ) ≥ 1 and |A | ≤ |A| − q (ed(A, B) − 1 + )/s for some > 0.
+
+Now apply Lemma 2 with A1 = A , |Aj| < q and the remaining Ai’s of size q, i.e. |Ai| = q and
+
+j = 2 + (ed(A, B) − 1 + )/s . Consider k1 = 1, kj = 0 and the remaining ki’s equal to s. Therefore
+
+j i=1
+
+ki
+
+= 1+s(j −2) = 1+s
+
+(ed(A, B)−1+
+
+)/s
+
+≥ 1+ed(A, B)−1+
+
+= ed(A, B)+
+
+> ed(A, B).
+
+Therefore we conclude that there is a substring B of B and an i such that ed(Ai, B ) < ki. This, how-
+
+ever, is absurd because no value of i may verify this condition. Suppose that i = j. Then ed(Aj, B ) <
+
+kj = 0, which is impossible. Suppose that 1 < i < j. Then ed(Ai, B ) < ki = s with |Ai| = q,
+
+which contradicts the hypotheses of the lemma. Finally, it cannot be that i = 1 either. That would mean
+
+that ed(A1, B ) = ed(A , B ) < k1 = 1 for some B and this contradicts our initial hypotheses that ed(A , B ) ≥ 1 for any B .
+
+Lemma 7 Let A and B be strings and q and s be integers such that 0 ≤ s ≤ q ≤ |A| and for any substrings B of B and A of A with |A | = q we have that ed(A , B ) ≥ s. Then for any preﬁx of A of A for which there is a substring B of B, ed(A , B ) ≤ 1 we can conclude that |A | < q (1 + )/s , for any > 0.
+
+Algorithms 2009, 2
+
+1124
+
+Proof Suppose by absurd that there is a preﬁx A of A for which there is a substring B of B such that ed(A , B ) ≤ 1 and |A | ≥ q (1 + )/s , for some > 0.
+Consider the sufﬁx A that results from A by removing A . Consider also the sufﬁx B that results when removing B from B. Note that B is not necessarily a preﬁx of B, but we are only interested in the remaining sufﬁx.
+We must have ed(A, B) ≤ ed(A , B ) + ed(A , B ), because of the shortest path interpretation. Therefore ed(A , B ) ≥ ed(A, B) − ed(A , B ) ≥ ed(A, B) − 1. The sufﬁx A however is too small to contain this number of errors. To see this, apply Lemma 6, replacing 1 by ed(A, B) − 1 and using A and B . We conclude that we must have |A | > |A| − q (1 + )/s . On the other hand, by our initial hypotheses, we conclude that |A | = |A| − |A | ≤ |A| − q (1 + )/s . Therefore we have reached an absurd condition and the lemma is proved.
+Ukkonen studied the structure of the set of O strings such that ed(P, O) = k, denoted as Uk(P ) [51], showing that |Uk(P )| ≤ (12/5)(m + 1)k(σ + 1)k. We will now count the number of strings for which the errors are spread homogeneously. We deﬁne as Uk,q,s(P ) the set of O strings such that ed(P, O) = k, and for any substring O of O, with |O | = q, and substring P of P we have that ed(O , P ) ≥ s.
+Lemma 8 |Uk,q,s| ≤ (2σ + 1)k(2k + 1)[q(2 + k/s) + k − m − 1]k.
+Proof From the previous lemmas we conclude that, for the strings in Uk,q,s the spacing from an error to the next varies from |O| − q (k − 1 + )/s to q (1 + )/s . Therefore, counting the number of strings in Uk,q,s is a matter of choosing these spacings and the type of error to use. The total number of error types is 2σ + 1. One σ counts insertions, the other counts substitutions, and the 1 counts the deletions. The number of spacings available is given by the following expression:
+
+q (1 + )/s − (|O| − q (k − 1 + )/s ) − 1 ≤ q(2 + k/s) − |O| − 1.
+
+Therefore, the number of strings in Uk,q,s can be bounded as follows:
+
+m+k
+
+|Uk,q,s| ≤ (2σ + 1)k
+
+[q(2 + k/s) − |O| − 1]k
+
+|O|=m−k
+
+= (2σ + 1)k[q(2 + k/s) + k − m − 1]k(2k + 1).
+
+This bound is somewhat loose. In fact, the (2σ + 1) and [q(2 + k/s) + k − m − 1] never occur together. For example when [q(2 + k/s) + k − m − 1] occurs, the other factor is 1.
+We have therefore shown that, by choosing q and s properly, Uk,q,s is much smaller than Uk. Consider for example the optimal case where ms = qk. Then Uk,q,s = O((2σ + 1)k(k − 1 + 2(m.s/k))k(2k + 1)). This shows that the dependence on m can be reduced to ms/k, which is considerably smaller, especially when we take s = 1. To obtain this optimal result we choose the q and s parameters in the same way as in the hybrid index, by using q = m/h and s = k/h + 1 for an appropriate parameter h. This parameter plays the role of the j parameter in the classical hybrid index [52].
+
+Algorithms 2009, 2
+
+1125
+
+6. Hierarchical Approximate String Matching
+
+6.1. Bidirectional Compressed Indexes
+
+Our ﬁnal algorithm can be implemented over any bidirectional index. This means that, from the index
+
+point corresponding to a text substring T [i..j] we can efﬁciently move to that of T [i..j + 1] but also to
+
+that of T [i − 1..j].
+
+Although classical text indexes are not usually bidirectional, the compressed indexes that simulate
+
+sufﬁx arrays are. For example, FM-indexes [24, 31] offer a so-called LF mapping operation, which
+
+moves from the sufﬁx array position k such that A[k] = i, to the position k such that A[k ] = i − 1.
+
+Compressed sufﬁx arrays [29, 30, 32], instead, offer function ψ, which moves to a k such that A[k ] =
+
+i + 1, thus ψ is the inverse of LF. Both kinds of compressed indexes can implement the inverse of their
+
+basic functionality, and hence are bidirectional (see [53] for the case of LF).
+
+The existing compressed sufﬁx trees [33–35] build complete sufﬁx tree functionality on top of a
+
+compressed sufﬁx array, and hence are bidirectional as well. To ﬁx ideas, let us focus in the so-called
+
+fully compressed sufﬁx trees (FCSTs) [35], which build on top of an FM-index [24, 31] and require
+
+uHk + o(u log σ) bits, although any other combination would essentially ﬁt. The LF mapping of FMindexes allow FCSTs implement Weiner links [10]: WEINERLINK(v, a), for node v and letter a gives
+
+the sufﬁx tree node v with path-label a.v[0..], and it is the key to move from a v representing T [i..j]
+
+to a v representing T [i − 1..j], that is, to bidirectionality. The other direction, that is, from T [i..j]
+
+to T [i..j + 1], is supported just by moving to a child of v. FCSTs support all of the usual sufﬁx tree
+
+navigation operations, including sufﬁx links (via ψ) and lowest common ancestors (LCA(v, v )).
+
+Our algorithm will carry out a hybrid search by backtracking on the compressed sufﬁx tree in order
+
+to ﬁnd the approximate occurrences of pattern pieces, yet it will proceed in a slightly more sophisticated
+
+fashion. Instead of extending O only in one direction, to the right, we will use a bidirectional search.
+
+Landau et al. [48] obtained the surprising result that it is possible to compute ed(A, cB) from ed(A, B),
+
+also in time O(k). The resulting algorithm is very sophisticated and the reader should consult the original
+
+paper. For our purposes all we need are the following observations. (1) The extension is not restricted to
+
+B, i.e. we can also extend ed(A, B) to ed(cA, B). (2) The number of errors does not have to be ﬁxed,
+
+i.e. we can extend a computation with k errors to a computation on k + 1 errors in O(k + 1) time. (3)
+
+Finally, the data structure they use are two doubly linked lists organized in a grid. This means that if we
+
+compute ed(A, cB) from ed(A, B) we can revert back to the ed(A, B) state by simply keeping a rollback
+
+log of which pointers to revert, which requires O(k) computer words (It should be possible to extend
+
+their algorithm to support this directly, but if that is not the case we can still use the rollback log idea).
+
+For our algorithm this idea sufﬁces since the states we need to visit are always organized in a stack. Thus
+
+we never need to compute a sequence such as ed(A, B) to ed(A, cB) to ed(dA, cB) to ed(dA, B).
+
+To improve the success rate of the process described above we should start our search from an area
+
+of P that is well preserved. To limit the number of errors we divide the pattern into small pieces. We
+
+will use Lemma 2, taking A = P and B = O, and dividing the errors in a homogeneous fashion, i.e.
+
+choosing ki = α|Ai| + , where α = k/m and > 0 is a number that can be as small as we want and
+
+is only used to guarantee that ed(A, B) <
+
+j i=0
+
+ki.
+
+Recall our
+
+running example
+
+with O
+
+=
+
+abbba and
+
+P = abc.cba, assuming this is the partition of A. Therefore we should have k0 = k1 = (2/6) × 3 + .
+
+Algorithms 2009, 2
+
+1126
+
+Hence the lemma says that in any O there is at least one substring O such that ed(O , abc) < 1 + or ed(O , cba) < 1 + . In our example there are in fact two substrings O that satisfy this property, ed(abb, abc) ≤ 1 and ed(bba, cba) ≤ 1. This redundancy will make the same string to be found in more than one way. To avoid it, notice that we do not need to add to both ki’s, i.e. we can choose k0 as before and k1 = 1. This means that the conclusion of the lemma now states that there should be an O such that ed(O , abc) ≤ 1 or ed(O , cba) < 1 ⇒ ed(O , cba) ≤ 0, and hence the redundancy is eliminated.
+Note that the condition on O is no guarantee that there exists an occurrence O of P , since it is a one-way implication. Hence the area around O must be veriﬁed to determine whether there is an occurrence or not. Note that in previous work the usual veriﬁcation procedure is computed on T , not taking advantage of the index. Therefore, verifying those occurrences can cost O(k(m + k)) operations. The problem with dividing P too much, such as when j = k + 1, is that the number of positions to verify can become excessively large and we get a low success rate, i.e. only a small percentage of the O s veriﬁed by the process turn out to be occurrences of P .
+The hybrid approach tries to maximize the overall success rate by ﬁnding an optimal balance between ﬁltration and backtracking. It was shown [52] that the optimal point occurs for j = Θ(m/ logσ u), with a complicated constant. Our approach can have a slightly different optimal point, but if we use their j the resulting algorithm is never worse than theirs. Moreover we also attempt to automatically determine the optimal point and hence eliminate the need for parameterization.
+
+6.2. Indexed Hierarchical Veriﬁcation
+
+We modify the veriﬁcation phase, after ﬁltration, in two ways: (1) We will perform it over the FCST instead of over T , to factor out possibly repeated computations. (2) We use hierarchical instead of direct veriﬁcation, which also provides a strategy to approximate the optimal point.
+The idea of hierarchical veriﬁcation is to gradually extend the error level instead of jumping directly to k. This is obtained by iterating Lemma 2.
+This technique was shown to be extremely efﬁcient for the sequential approach [52]. We use the following lemma.
+
+Lemma 9 Let A and B be strings, A = A0.A1 . . . Aj, for strings Ai and some j +1 = 2h ≥ 1. Let ki ∈ R
+
+such that ed(A, B) <
+
+j i=0
+
+ki
+
+.
+
+For
+
+some
+
+ﬁxed
+
+0
+
+≤
+
+i
+
+≤
+
+j,
+
+deﬁne Ai
+
+= A2i i/2i
+
+. . . A2i (1+ i/2i )−1,
+
+for any 0 ≤ i ≤ h, as the hierarchical upward path from Ai to A, and deﬁne accordingly ki =
+
+k2i (1+ i/2i )−1
+
+i =2i i/2i
+
+i
+
+as the error level corresponding to each Ai . Then there are strings B0
+
+...
+
+Bh = B and an i such that for any 0 ≤ i ≤ h we have ed(Ai , Bi ) < ki . Moreover, for each i , if Ai is
+
+a preﬁx(sufﬁx) of Ai +1 then Bi is a preﬁx(sufﬁx) of Bi +1.
+
+Proof For i = h the lemma is trivial because ed(Ah, Bh) < kh reduces to ed(A, B) <
+
+j i=1
+
+ki.
+
+To
+
+obtain the result for i = h − 1, consider the partition of A into two strings, Aleft = A0...A2i −1 and
+
+Aright = A2i ...A2i +1−1 (depending on i, either Ah−1 = Aleft or Ah−1 = Aright), and its edit distance
+
+matrix to B achieving edit distance ed(A, B) <
+
+j i=1
+
+ki
+
+=
+
+klef t
+
++ kright,
+
+for
+
+klef t
+
+=
+
+2i −1 i =0
+
+ki
+
+and
+
+kright =
+
+k2i +1−1
+i =2i i
+
+.
+
+Then there must be a partition B
+
+= Bleft.Bright such that ed(Aleft, Bleft) < kleft
+
+or ed(Aright, Bright) < kright. Thus Bh−1 = Bleft if Ah−1 = Aleft (note kh−1 = kleft in this case), and
+
+Algorithms 2009, 2
+
+1127
+
+otherwise Bh−1 = Bright. To obtain the result for i = h − 2 we repeat the process from Ah−1, Bh−1, and kh−1.
+Figure 7 gives a schematic representation of Lemma 9.
+
+Figure 7. A schematic representation of Lemma 9.
+
+A : A0 A1 A2 A3 A4 A5 A6 A7
+
+k3
+
+k2 + k3
+
+k0 + k1 + k2 + k3
+
+k0 + k1 + k2 + k3 + k4 + k5 + k6 + k7
+
+B0
+
+B : B2
+
+B1
+
+B3
+
+Consider our running example with k = 2 and P = abccba. Instead of applying Lemma 9 we will instead iterate Lemma 2, which is actually the way we compute the partition in practice. We divide P = A = abc.cba into pieces of size 3 and therefore we have k0 = k1 = 3×(2/6)+ = 1+ , which in practice means 1 error per piece. Now we divide these pieces as ab.c.cb.a and we have k0 = k2 = 2 × (2/6) + and k1 = k3 = 1 × (2/6) + , which means 0 errors for all the pieces. Notice that we can reﬁne our method by adding to only one ki, as we did in Section 2.2.. Hence we can choose k0 = k2 = 2/3 and k1 = 1/3 + and k3 = 1/3 (and thus k0 = 1 + and k1 = 1). Notice that in our example the occurrence abbba veriﬁes this Lemma because ed(ab, ab) < 2/3 and ed(abb, abc) < (2/3) + (1/3) + , where ab and abc are substrings of P .
+This lemma is used to reduce the cost of verifying an occurrence. Instead of directly verifying the space around a B0 when ed(Ai, B0) < ki for a string B such that ed(A, B) < k, we extend the error level gradually. Assuming i is even, this means checking for ed(Ai.Ai+1, B1) < ki + ki+1 ﬁrst, for some B1. Figure 2 (right) shows an example of this process, computed with table D. Whenever a row reaches a certain level in the hierarchy and contains active cells, the computation on that row is extended to activate the cells that are < ki + ki+1. For example since D[2, 2] = 0 the cells in row 2 that can be < 1 + are activated, i.e. cells D[1, 2] and D[3, 2], that correspond to ed(a, ab) and ed(abc, ab). A similar process happens at row 3. In theory we can compute all the cells that have a value equal or smaller than k all the time. Still, we can also start to compute them at a given row, especially since it is not necessary to ﬁll upwards the missing cells in the table. That is, we can compute the missing cells, up to ki + ki+1, from the ones already in the table. There is no problem if the value of the new cells is larger than their value on the complete D table. In fact it is desirable. This will only make the algorithm skip occurrences that, because of Lemma 9, will be found in another case.
+To determine that ed(Ai, B0) < ki we must compute the D table for these two strings. Extending this computation to ed(Ai.Ai+1, B1) < ki + ki+1 is simple because table D only needs to be updated in its natural directions (to the right and downwards). From the sufﬁx tree point of view this situation is also natural because it involves descending in the tree.
+
+Algorithms 2009, 2
+
+1128
+
+When i is odd the situation is a bit trickier. This time we must check for ed(Ai−1.Ai, B1) < ki−1 + ki. This is much more difﬁcult because we need to move in the FCST by prepending letters to the current point. This is possible with the WEINERLINK operation (recall Section 6.1.). Moreover we need to extend the DP in unnatural directions (to the left and upwards). For this we use the result [48] mentioned also in Section 6.1.. Hence computing each new row requires only O(k) operations. Note that the underlying operation on which their algorithm relies is the longest common preﬁx of any two sufﬁxes of A and B. To solve this we build a FCST for P , in O(m) time, in uncompressed format so that the LCA operation takes O(1) time. Note that this FCST is built only once at the beginning of the algorithm and adds O(m log m) bits to the space requirements of the algorithm. We determine the positions of O [i..] in that sufﬁx tree, in O(m ) time, with the PARENT and WEINERLINK operations. Together with the LCA operation we can compute the size of the necessary longest common preﬁxes. Note that whenever O is extended to/contracted from cO , this information must be updated, by recomputing in O(m ) time.
+Our algorithm consists in backtracking, where the error bound is gradually increased. Depending on the position of current P ’s substring in the hierarchical veriﬁcation, the string O is extended either to the left or to the right. Hence, as mentioned before, the ed(P, O ) states are stored in a stack, whereas the O string being generated is stored in a double stack structure that can be pushed/popped at both ends.
+7. Practical Issues and Testing
+In this section we present the experimental performance of the algorithms we described in the previous sections. As a baseline we used efﬁcient sequential bit-parallel algorithms (namely BPM, the bit-parallel DP matrix of Myers [54], and EXP, the exact pattern partitioning by Navarro and Baeza-Yates [55]). We also used a classical uncompressed hybrid index [52].
+The algorithms of Section 3. lead to implementations LZI (the basic one, described in Section 3.1.) and DLZI (the advanced one, described in Section 3.2.), as well as FMIndex, described in Section 3.3.. These structures work over the LZ-Index and FM-Index implemented by Navarro [50], where the second structure is a larger and faster variant of the usual FM-index implementations. Recall that these are pure ﬁltration indexes, using Lemma 1 with A = P and B = O, as described in the beginning of Section 2.3..
+The algorithm explained in Sections 4. and 5. is the prototype called ILZI and it is based on the same ILZI compressed index [28]. For this prototype we used a stricter backtracking than what was explained in previous sections. For each pattern substring P [y1, y2] to be matched, we computed the maximum number of errors that could occur when matching it in the text, also depending on the position O[x1, x2] where it would be matched, and maximizing over the possible areas of O where the search would be necessary. For example, the extremes of P can be matched with fewer errors than the middle. This process involves precomputing tables that depend on m and k. We omit the technical details. Note that we could use the ILZI to implement the exact partitioning algorithms run over the LZI and DLZI, yet the ILZI allows for a much stronger search, and we found it more interesting to stress this fact in the experiments.
+We also implemented a prototype, BiFMI, to test the algorithm described in Section 6.. We replaced the FCST with a bidirectional FM-Index over one wavelet tree [21]. The wavelet tree is a data structure that allows one to compute LF in O(log σ) time. It contains σ bitmaps which add up to n log σ bits (that is, the same space of the original text), on which rank and select operations are carried out to
+
+Algorithms 2009, 2
+
+1129
+
+compute LF and its inverse. We compress these bitmaps using a technique [56] that solves rank/select in constant time and, when applied in the context of an FM-index, achieves nHk bits of space [57]. We reverse the search so that the most common search (forwards) is done using LF (where the FM-index is faster) instead of ψ. Replacing a sufﬁx tree (FCST) by a compressed sufﬁx array (BiFMI) was possible because we did not use the SLINK operation of the FCST.
+Note that, since the BiFMI prototype is an FM-Index, it could also have been used to implement the algorithm described in Section 3.3., instead of the FMIndex structure (The converse is not true, as that FMIndex is intrinsically non-bidirectional. The formula for the inverse of LF [53] requires an operation called select that can be carried out efﬁciently on wavelet-tree-based FM-indexes, but not on this implementation). Yet, the result is in all cases inferior to the hybrid indexing on the BiFMI. On the other hand, the BiFMI cannot reach the speed of the FMIndex for unidirectional search even if using the same amount of space. Thus we found it more interesting to implement the exact partitioning method over the larger and faster FMIndex, to show a different tradeoff.
+We tested our algorithm, BiFMI, in automatic mode, i.e. Lemma 9 is used until every ki < 1. We did not implement the algorithm of Landau et al. [48]. Instead we used the bit-parallel NFA of Wu et al. [58] and recomputed the D table whenever it was necessary to change the computing direction. Note this requires O(m) time when we switch from right to left or vice versa, but after the change it will require only O(k) time for each new row. Although in theory this process could slow down our algorithm by a factor of O(log k), in practice this factor was negligible.
+We used the texts from the Pizza&Chili corpus (http://pizzachili.dcc.uchile.cl), with 50 MB of English and DNA and 64 MB of proteins. The machine was a Pentium 4, 3.2 GHz, 1 MB L2 cache, 1 GB RAM, running Fedora Core 3, and compiling with gcc-3.4 -O9. The pattern strings were sampled randomly from the text and each character was distorted with 10% of probability. All the patterns had length m = 30. Every conﬁguration was tested during at least 60 seconds using at least 5 repetitions. Hence the numbers of repetitions varied between 5 and 130,000. To parametrize the hybrid index we tested all the j values from 1 to k + 1 and reported the best time. To parametrize we choose q = m/h and s = k/h + 1 for some convenient h, since we can prove that this is the best approach and it was corroborated by our experiments. To determine the value of h and v we also tested the viable conﬁgurations and reported the best results. In our examples choosing v and h such that 2v is slightly smaller than q yielded the best conﬁguration. Figure 9 shows the sensitivity of the ILZI to this parameter. The LZI and DLZI are not parametrized.
+The average query time, in seconds, is shown in Figure 8, and the respective memory heap peaks for indexed approaches are shown in Table 1. The hybrid index provides the fastest approach to the problem. However it also requires the most space. Aside from the hybrid index the ILZI is always either the fastest or within reasonable distance from the fastest approach. For low error level, k = 1 or k = 2, the ILZI is signiﬁcantly faster, up to an order of magnitude better. This is very important since this is the area where indexed ASM has chances to make a difference. The sequential approaches outperform all compressed indexing approaches for sufﬁciently high error levels. In DNA this occurs at k = 4 and in English at k = 5.
+
+Algorithms 2009, 2
+
+1130
+
+Figure 8. Average user time for ﬁnding the occurrences of patterns of size 30 with k errors in DNA, English, and Proteins. The y axis units are in seconds.
+
+ILZI EXP BPM Hybrid LZI DLZI FMIndex BiFMI
+
+1e+03 1e+02 1e+01 1e+00 1e-01 1e-02
+
+DNA
+
+1e-03
+
+1e-04
+
+123456
+
+k English
+
+ILZI 1e+03
+
+EXP 1e+02
+
+BPM Hybrid
+LZI
+
+1e+01 1e+00
+
+DLZI FMIndex
+BiFMI
+
+1e-01 1e-02
+
+1e-03
+
+1e-04
+
+123456
+
+k Proteins
+
+ILZI 1e+03
+
+EXP 1e+02
+
+BPM Hybrid
+LZI
+
+1e+01 1e+00
+
+DLZI FMIndex
+BiFMI
+
+1e-01 1e-02
+
+1e-03
+
+1e-04
+123456 k
+
+Algorithms 2009, 2
+
+1131
+
+Figure 9. Average user time, in seconds, that the ILZI takes to ﬁnd occurrences of patterns of size 30 with k errors, using different v’s.
+
+sec sec sec
+
+English
+
+1e+03
+
+1e+02
+
+1e+01
+
+1e+00
+
+1e-01
+
+1e-02
+
+1e-03 0 2 4 6 8 10 12 14 v
+DNA
+1e+03
+
+1e+02
+
+1e+01
+
+1e+00
+
+1e-01
+
+1e-02
+
+1e-03
+
+0 2 4 6 8 10 12 14 v
+
+1e+04
+
+Proteins
+
+1e+03
+
+1e+02
+
+1e+01
+
+1e+00
+
+1e-01
+
+1e-02
+
+1e-03
+0 2 4 6 8 10 12 14 v
+
+Algorithms 2009, 2
+
+1132
+
+Table 1. Memory peaks, in Megabytes, for the different approaches when k = 6.
+
+ILZI Hybrid LZI DLZI FMIndex BiFMI
+
+English 55
+
+257 145 178
+
+131
+
+54
+
+DNA
+
+45 252 125 158
+
+127
+
+40
+
+Proteins 105 366 217 228
+
+165
+
+63
+
+The ILZI performed particularly well on proteins, as did the hybrid index. This could be due to the fact that proteins behave closer to random text, and this means that the parametrization of ours and the hybrid index indeed balances between exponential worst cases.
+In terms of space the ILZI is also very competitive, as it occupies almost the same space as the plain text, except for proteins. We presented the space that the algorithms need to operate and not just the index size, since the other approaches build intermediate data structures at search time.
+Our BiFMI index, on the other hand, achieves the smallest space. We maintain a sparse sampling for our prototype, to show that even within little space we can achieve competitive performance. The FMIndex, on the other hand, needs a much denser sampling to be competitive. Thus our hierarchical and bidirectional veriﬁcation method is faster than the basic one, even if run on a much slower index.
+The performance of the BiFMI prototype closely follows that of ILZI, except for the DNA ﬁle. This indicates that it was able to approach hybrid performance in minimal space. It is also, mostly, capable of reducing the gap caused by cache misses.
+Among the exact partitioning indexes, the DLZI obtained the best performance. Although it is in some cases the fastest when we exclude Hybrid, in general the compressed hybrid approaches achieved the same or better performance using much less space.
+
+8. Conclusions and Future Work
+
+In this paper we presented two algorithms for ASM in compressed space: an adaptation of the hybrid index for Lempel-Ziv compressed indexes and an hierarchical veriﬁcation over FCST’s.
+We started by addressing the problem of approximate matching with q-samples indexes, where we described a new approach to this problem. We then adapted our algorithm to the irregular parsing produced by Lempel-Ziv indexes. Our approach was ﬂexible enough to be used as a hybrid index instead of an exact-searching-based ﬁltration index. We implemented our algorithm and compared it with the simple ﬁltration approach built over different compressed indexes, with sequential algorithms, and with a good uncompressed index.
+Our results show that our index provides a good space-time tradeoff, using a small amount of space (at best 0.9 times the text size, which is 5.6 times less than a classical index) in exchange for searching from 6.2 to 33 times slower than a classical index, for k = 1 to 3. This is better than the other compressed approaches for low error levels. This is signiﬁcant since indexed approaches are most valuable, if compared to sequential approaches, when the error level is low. Therefore our work signiﬁcantly improves the usability of compressed indexes for approximate matching. A crucial part of our work was our approach for the preﬁxes/sufﬁxes of O. This approach is in fact not essential for q-samples indexes, but it can improve previous approaches [19]. For a Lempel-Ziv index it is indeed essential.
+
+Algorithms 2009, 2
+
+1133
+
+Our ILZI implementation can be further improved since we do no secondary ﬁltering, that is, we do not apply any sequential ﬁlter over the text context before fully verifying them. We also plan to further explore the idea of associating weights to the letters of O. We will investigate the impact of assigning smaller weights to less frequent letters of O. This should decrease the number of positions to verify and improve the overall performance.
+We also studied the impact of hierarchical veriﬁcation in ASM. We obtained an automatic hybrid index that uses fully-compressed sufﬁx trees. This a very important result because it is the ﬁrst algorithm that approximates the performance of the hybrid index automatically and effectively in practice. Our result is also very important because FCSTs require only compressed space, i.e. uHk + O(n log σ) bits. Compared with other compressed indexes, our approach was more efﬁcient for low error levels. Although it was less efﬁcient than the ILZI-based algorithm, it requires less space in theory and in practice. In theory, the ILZI requires 5uHk + o(n log σ) bits, but in practice that is closer to 3uHk, including the sublinear term. On the other hand, a FCST requires uHk + o(n log σ) bits in theory, but this becomes a bit higher in practice if we consider the sublinear term. Moreover our algorithm can be used as a subroutine in a sufﬁx tree algorithm whereas the ILZI-based algorithm cannot.
+Acknowledgements
+First and third authors partially funded by the Portuguese Science and Technology Foundation by project ARN: Algorithms for the Identiﬁcation of Genetic Regulatory Networks, PTDC/EIA/67722/2006. Second author partially supported by Fondecyt Grant 1-080019.
+References and Notes
+1. Navarro, G. A guided tour to approximate string matching. ACM Comput. Surv. 2001, 33, 31-88. 2. Chang, W.; Marr, T. Approximate string matching and local similarity. In Proceedings of the
+5th Annual Symposium on Combinatorial Pattern Matching (CPM), Asilomar, CA, USA, June 5-8, 1994; pp. 259-273. 3. Fredriksson, K.; Navarro, G. Average-optimal single and multiple approximate string matching. ACM J. Exp. Algorithmics 2004, 9, No. 1.4. 4. Navarro, G.; Baeza-Yates, R.; Sutinen, E.; Tarhio, J. Indexing methods for approximate string matching. IEEE Data Eng. Bull. 2001, 24, 19-27. 5. Sung, W.K. Indexed approximate string matching; Springer: Berlin, Germany, 2008; pp. 408-411. 6. Cole, R.; Gottlieb, L.A.; Lewenstein, M. Dictionary matching and indexing with errors and don’t cares. In Proceedings of the 36th ACM Symposium on Theory of Computing (STOC), Chicago, IL, USA, June 13-16, 2004; pp. 91-100. 7. Maaß, M.; Nowak, J. Text indexing with errors. In Proceedings of the 16th Annual Symposium on Combinatorial Pattern Matching (CPM), Jeju Island, Korea, June 19-22, 2005; pp. 21-32. 8. Chan, H.L.; Lam, T.W.; Sung, W.K.; Tam, S.L.; Wong, S.S. A linear size index for approximate pattern matching. In Proceedings of the 17th Annual Symposium on Combinatorial Pattern Matching (CPM), Barcelona, Spain, July 5-7, 2006; pp. 49-59. 9. Coelho, L.; Oliveira, A. Dotted sufﬁx trees: a structure for approximate text indexing. In Proceed-
+
+Algorithms 2009, 2
+
+1134
+
+ings of the 13th International Symposium on String Processing and Information Retrieval (SPIRE), Glasgow, UK, October 11-13, 2006; pp. 329-336. 10. Weiner, P. Linear pattern matching algorithms. In 14th IEEE Annual Symposium on Switching and Automata Theory, Iowa City, USA, October 15-17, 1973; pp. 1-11. 11. Manber, U.; Myers, E. Sufﬁx arrays: a new method for on-line string searches. SIAM J. Comput. 1993, 22, 935-948. 12. Gonnet, G. A tutorial introduction to Computational Biochemistry using Darwin; Technical report; Informatik E.T.H.: Zuerich, Switzerland, 1992. 13. Ukkonen, E. Approximate string matching over sufﬁx trees. In Proceedings of the 5th Annual Symposium on Combinatorial Pattern Matching (CPM), Asilomar, CA, USA, June 5-8, 1994; pp. 228-242. 14. Cobbs, A. Fast approximate matching using sufﬁx trees. In Proceedings of the 6th Annual Symposium on Combinatorial Pattern Matching (CPM), Espoo, Finland, July 5-7, 1995; pp. 41-54. 15. Sutinen, E.; Tarhio, J. Filtration with q-samples in approximate string matching. In Proceeding of the 7th Annual Symposium on Combinatorial Pattern Matching (CPM), Laguna Beach, CA, USA, June 10-12, 1996; pp. 50-63. 16. Navarro, G.; Baeza-Yates, R. A practical q-gram index for text retrieval allowing errors. CLEI Electron. J. 1998, 1, No. 2. 17. Myers, E.W. A sublinear algorithm for approximate keyword searching. Algorithmica 1994, 12, 345-374. 18. Navarro, G.; Baeza-Yates, R. A hybrid indexing method for approximate string matching. J. Discrete Algorithms 2000, 1, 205-239. 19. Navarro, G.; Sutinen, E.; Tarhio, J. Indexing text with approximate q-grams. J. Discrete Algorithms 2005, 3, 157-175. 20. Kurtz, S. Reducing the space requirement of sufﬁx trees. Softw. Pract. Exper. 1999, 29, 1149-1171. 21. Navarro, G.; Ma¨kinen, V. Compressed full-text indexes. ACM Comput. Surv. 2007, 39, No. 2. 22. Manzini, G. An analysis of the Burrows-Wheeler transform. JACM 2001, 48, 407-430. 23. Ziv, J.; Lempel, A. Compression of individual sequences via variable length coding. IEEE Trans. Inf. Theory 1978, 24, 530-536. 24. Ferragina, P.; Manzini, G. Indexing compressed text. JACM 2005, 52, 552-581. 25. Navarro, G. Indexing text using the Ziv-Lempel trie. J. Discrete Algorithms 2004, 2, 87-114. 26. Ka¨rkka¨inen, J.; Ukkonen, E. Lempel-Ziv parsing and sublinear-size index structures for string matching. In Proceedings of the 3rd South American Workshop on String Processing (WSP), Recife, Brazil, August 08-09, 1996; pp. 141-155. 27. Arroyuelo, D.; Navarro, G.; Sadakane, K. Reducing the space requirement of LZ-Index. In Proceedings of the 17th Annual Symposium on Combinatorial Pattern Matching (CPM), Barcelona, Spain, July 5-7, 2006; pp. 318-329. 28. Russo, L.M.S.; Oliveira, A.L. A compressed self-index using a Ziv-Lempel dictionary. Inf. Retr. 2008, 11, 359-388. 29. Sadakane, K. New text indexing functionalities of the compressed sufﬁx arrays. J. Algorithms 2003, 48, 294-313.
+
+Algorithms 2009, 2
+
+1135
+
+30. Grossi, R.; Gupta, A.; Vitter, J. High-order entropy-compressed text indexes. In Proceedings of the 14th Annual ACM-SIAM Symposium on Discrete Algorithms (SODA), Baltimore, MD, USA, January 12-14 2003; pp. 841-850.
+31. Ferragina, P.; Manzini, G.; Ma¨kinen, V.; Navarro, G. Compressed representations of sequences and full-text indexes. ACM Trans. Algorithms 2007, 3, No. 20.
+32. Grossi, R.; Vitter, J. Compressed sufﬁx arrays and sufﬁx trees with applications to text indexing and string matching. SIAM J. Comput. 2005, 35, 378-407.
+33. Sadakane, K. Compressed sufﬁx trees with full functionality. Theory Comput. Syst. 2007, 41, 589607.
+34. Fischer, J.; Ma¨kinen, V.; Navarro, G. An(other) entropy-bounded compressed sufﬁx tree. In Proceedings of the 19th Annual Symposium on Combinatorial Pattern Matching (CPM), Pisa, Italy, June 18-20, 2008; pp. 152-165.
+35. Russo, L.; Navarro, G.; Oliveira, A. Fully-compressed sufﬁx trees. In Proceedings of the 8th Latin American Symposium on Theoretical Informatics (LATIN), Bu´zios, Brazil, April 7-11, 2008; pp. 362-373.
+36. Ferragina, P.; Gonza´lez, R.; Navarro, G.; Venturini, R. Compressed text indexes: From theory to practice. ACM J. Exp. Algorithmics (JEA) 2009, 13, No. 12.
+37. Huynh, T.; Hon, W.K.; Lam, T.W.; Sung, W.K. Approximate string matching using compressed sufﬁx arrays. In Proceedings of the 16th Annual Symposium on Combinatorial Pattern Matching (CPM), Jeju Island, Korea, June 19-22, 2005; pp. 434-444.
+38. Lam, T.W.; Sung, W.K.; Wong, S.S. Improved approximate string matching using compressed sufﬁx data structures. In Proceedings of the 16th Annual International Symposium on Algorithms and Computation (ISAAC), Hainan, China, December 19-21, 2005; pp. 339-348.
+39. Navarro, G.; Baeza-Yates, R. Improving an algorithm for approximate pattern matching. Algorithmica 2001, 30, 473-502.
+40. Russo, L.M.S.; Navarro, G.; Oliveira, A.L. Approximate string matching with Lempel-Ziv compressed indexes. In Proceedings of the 14th International Symposium on String Processing and Information Retrieval (SPIRE), Santiago, Chile, October 29-31, 2007; pp. 264-275.
+41. Russo, L.M.S.; Navarro, G.; Oliveira, A.L. Indexed hierarchical approximate string matching. In Proceedings of the 15th International Symposium on String Processing and Information Retrieval (SPIRE), Melbourne, Australia, November 10-12, 2008; pp. 144-154.
+42. Apostolico, A. The myriad virtues of subword trees. In Combinatorial Algorithms on Words; Springer-Verlag: New York, NY, USA, 1985; pp. 85-96.
+43. Gusﬁeld, D. Algorithms on Strings, Trees and Sequences; Cambridge University Press, Cambridge, UK, 1997.
+44. Lempel, A.; Ziv, J. On the complexity of ﬁnite sequences. IEEE Trans. Inf. Theory 1976, 22, 75-81. 45. Ziv, J.; Lempel, A. A universal algorithm for sequential data compression. IEEE Trans. Inf. Theory
+1977, 23, 337-343. 46. Welch, T. A technique for high performance data compression. IEEE Comput. Mag. 1984,
+17, 8-19. 47. Ukkonen, E. Finding approximate patterns in strings. J. Algorithms 1985, 6, 132-137.
+
+Algorithms 2009, 2
+
+1136
+
+48. Landau, G.M.; Myers, E.W.; Schmidt, J.P. Incremental string comparison. SIAM J. Comput. 1998, 27, 557-582.
+49. Maaß, M. Linear bidirectional on-line construction of afﬁx trees. Algorithmica 2003, 37, 43-74. 50. Navarro, G. Implementing the lz-index: Theory versus practice. ACM J. Exp. Algorithmics 2009,
+13, No. 2. 51. Ukkonen, E. Finding approximate patterns in strings. J. Algorithms 1985, 6, 132-137. 52. Navarro, G.; Baeza-Yates, R. A hybrid indexing method for approximate string matching. J.
+Discrete Algorithms 2000, 1, 205-239. 53. Lee, S.; Park, K. Dynamic rank-select structures with applications to run-length encoded texts. In
+Proceedings of the 19th Annual Symposium on Combinatorial Pattern Matching (CPM), Pisa, Italy, June 18-20, 2008; pp. 95-106. 54. Myers, G. A fast bit-vector algorithm for approximate string matching based on dynamic programming. JACM 1999, 46, 395-415. 55. Navarro, G.; Baeza-Yates, R. Very fast and simple approximate string matching. Inf. Proc. Lett. 1999, 72, 65-70. 56. Raman, R.; Raman, V.; Rao, S.S. Succinct indexable dictionaries with applications to encoding k-ary trees and multisets. In Proceedings of the 13th annual ACM-SIAM symposium on Discrete algorithms, San Francisco, CA, USA, January 6-8, 2002; pp. 233-242. 57. Ma¨kinen, V.; Navarro, G. Dynamic entropy-compressed sequences and full-text indexes. ACM Trans. Algorithms 2008, 4, 32:1-32:38. 58. Wu, S.; Manber, U. Fast text searching allowing errors. Commun. ACM 1992, 35, 83-91.
+c 2009 by the authors; licensee Molecular Diversity Preservation International, Basel, Switzerland. This article is an open-access article distributed under the terms and conditions of the Creative Commons Attribution license (http://creativecommons.org/licenses/by/3.0/).
+
+
