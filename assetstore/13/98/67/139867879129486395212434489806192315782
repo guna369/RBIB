@@ -1,0 +1,349 @@
+Certiﬁed Size-Change Termination
+Alexander Krauss
+Technische Universit¨at Mu¨nchen, Institut fu¨r Informatik http://www.in.tum.de/~krauss
+Abstract. We develop a formalization of the Size-Change Principle in Isabelle/HOL and use it to construct formally certiﬁed termination proofs for recursive functions automatically.
+1 Introduction
+Program termination plays an important role in veriﬁcation, and in particular in theorem provers based on logics of total functions, where termination proofs are usually necessary to ensure logical consistency.
+Although there has been continuous progress in the ﬁeld of automated termination proofs, only few of the results have been applied to interactive theorem proving. One possible reason is that many existing methods are relatively complex, often combining several diﬀerent criteria and heuristics. Another is that they do not usually produce proofs that can be checked by an independent system. This makes their integration diﬃcult, especially when following the LCF approach, where all inferences must be checkable by a minimal logical core.
+In this paper, we formalize the size-change principle [14] and prove it correct in Isabelle/HOL [16]. Then we apply it to recursive function deﬁnitions in the logic itself, essentially following an approach by Manolios and Vroon [15], but with full proofs. We integrate the results to a fully automated proof procedure to certify size-change termination of Isabelle/HOL functions.
+To our knowledge, this is the ﬁrst formalization of the size-change principle, and also the ﬁrst mechanically veriﬁed implementation. Our results show that it is practically feasible to combine the power of state-of-the-art termination criteria with the high assurance of LCF-style theorem proving. Moreover, we think that the formalization also gives a better insight in the structure of termination proofs, and in particular in the relation between the analysis of Manolios and Vroon and the size-change principle.
+As a practical beneﬁt, a signiﬁcant class of previously hard termination proofs are now automatic.
+1.1 Size-Change Termination - abstractly
+“A program is size-change terminating iﬀ every inﬁnite execution of the program would cause an inﬁnite descent in some well-founded data value.” Although its ﬁrst presentation by Lee, Jones and Ben-Amram [14] was in the context of a
+
+simple functional language, this criterion, called size-change termination (SCT), is independent from the actual language or programming paradigm used.
+We will emphasize this generality, which leads to a neat abstraction boundary in our formalization, by using slightly more general terminology than the original paper.
+SCT abstracts from the actual program by viewing it as a set of control points and transitions between them, forming a directed graph (the control graph). Each control point has a ﬁnite set of abstract data positions associated to it, which can be seen as slots, where runtime data is passed around.
+Each transition is labeled by a size-change graph, which contains information about how the values in the data positions are related. The size-change graph contains an edge p →↓ q, if the value at data position q (after the transition) is always smaller than the value at position p (before the transition), and p →=↓ q if it is smaller or equal. Size-change graphs are usually drawn as bipartite graphs. Fig. 1 shows a simple graph with two control points A and B, with two and three data positions.
+
+GAB AB
+GBA
+
+=↓ - =↓ -
+
+1
+GAB : 2
+
+↓ -1
+2
+
+1
+GBA : 2
+
+33
+
+Fig. 1. A simple size-change problem
+
+↓ -
+
+1 2
+
+By connecting the size-change graphs along a control ﬂow path, the data ﬂow becomes visible. Chains of such connected edges are called threads. A thread has inﬁnite descent iﬀ it contains inﬁnitely many →↓ -edges.
+Deﬁnition. A control graph A satisﬁes SCT iﬀ every inﬁnite path has a thread with inﬁnite descent.
+The example in Fig. 1 satisﬁes SCT, since the only inﬁnite path is A, B, A, B, . . . and it has a thread going through data positions 1, 2, 1, 2, . . ., which has inﬁnite descent.
+SCT is decidable:
+Theorem. A control graph A satisﬁes SCT iﬀ for every edge in A+ of the form n −G→ n with G = G · G, G has an edge of the form p →↓ p.
+Here, A+ denotes the transitive closure of A, where the composition of two graphs is deﬁned in the obvious way (for details see §2). This theorem suggests
+
+an algorithm which simply computes the transitive closure and checks the above property.
+Since SCT is a purely combinatorial graph problem, generating size-change problems from programs is a separate issue.
+Here lies the power of the abstraction: Since nothing is said about what the control points and data positions actually are, we can talk about diﬀerent types of programs. The original paper treated simple functional programs, and used functions as control points. Function calls were the transitions, and the data positions were given by the sizes of the function arguments. For imperative programs, one could take program instructions as control points and program variables as data positions.
+Other interpretations are equally valid, as long as (a) inﬁnite executions of the program correspond to inﬁnite paths in the control graph, and (b) the information in the size-change graphs reﬂects actual size-changes in some well-founded data. Then a non-terminating execution would imply an inﬁnitely decreasing sequence of data values, which is impossible.
+Since the →=↓ - and →↓ -edges in a size-change graph reﬂect knowledge about the data ﬂow in the program, a suitable analysis is required to derive this information. The authors of [14] apparently had some syntactic size analysis in mind, but in fact we have the choice of weapons here, and we choose theorem proving, which does very well on this task.
+1.2 Function deﬁnitions and termination proofs in Isabelle/HOL
+Recursive functions are deﬁned in Isabelle/HOL following the deﬁnitional approach: An automated package [13] transforms the recursive speciﬁcation into a non-recursive form, which can be processed by existing means. Then the original speciﬁcation is proved from this deﬁnition. Internally, the package constructs the call relation of the function and a domain predicate characterizing values where the function terminates.
+Although the package has some support for partial (i.e. non-terminating) functions (for details, see [13]), reasoning with partial functions is more complicated than with total ones. Speciﬁcally, the recursive equations are constrained by the domain predicate.
+Now “proving termination” just means showing that the domain predicate is always true or, equivalently, that the call relation is wellfounded.
+1.3 No simple certiﬁcates
+Things would be simpler and more elegant, if we could just generate short certiﬁcates of some kind, which can be easily checked and which prove that a function is size-change terminating. Then just the checking would have to be proved correct and executed in the theorem prover, while the certiﬁcates could be generated by untrusted (but probably more eﬃcient) code.
+However, by a complexity argument, such certiﬁcates are unlikely to exist, due to the PSPACE-hardness result for SCT [14]:
+
+Corollary 1. If there were certiﬁcates proving x ∈ SCT that could be checked in polynomial time, then PSPACE = NP, which complexity theorists ﬁnd unlikely [18].
+Proof. Assume such certiﬁcates exist, then SCT ∈ NP by a simple guess-andcheck argument. But SCT is PSPACE-hard, thus PSPACE ⊆ NP.
+This result shows that size-change termination is fundamentally diﬀerent from many other methods in that it does not produce simple and short termination arguments (like simple wellfounded relations). Instead, it is more like an exhaustive search for possible sources of non-termination, ruling them out systematically.
+1.4 Related Work
+The quest for automated termination proofs is continously receiving a large amount of attention, way too much to be cited here.
+But when it comes to full formal certiﬁcation of termination proofs, the air gets thin: Termination proofs in major proof assistants like Coq [4], PVS [17] and Isabelle are usually based on user-speciﬁed measure functions. HOL4 [7], HOL Light [10] and ACL2 [11] support a rudimentary automatic guessing of measures.
+Recently, Manolios and Vroon [15] successfully combined the size-change principle with theorem proving to obtain a powerful termination checker for the ACL2 system. They make the following modiﬁcations to standard SCT:
+– Instead of using the functions as control points, they used the function calls and also take the context of a recursive call into account. This allows to analyze reachability between calls.
+– Instead of using a syntactic analysis to generate size-change graphs, they use the ACL2 prover.
+– Instead of just looking at the size of concrete data values, they are able to use arbitrary measure functions.
+– In an additional processing step, calls can be substituted into one another. This step (called context merging) allows for a limited treatment of problems where a temporary increase of data happens.
+However, the non-trivial analysis is part of the trusted code base and even if the metatheory is sound, it is not clear if it can be justiﬁed within the ﬁrstorder framework of ACL2. In this paper, we essentially follow their approach (excluding context merging), but we formally verify both the underlying theory and the implementation, which allows us to produce Isabelle proofs.
+The CoLoR project [5] aims to provide the formal basis and the tools to certify termination proofs in Coq. Proofs can be imported from various other systems, all from the area of term rewriting. However, since these tools only work on a formalization of term rewriting inside Coq, they cannot easily be applied to Coq function deﬁnitions.
+
+1.5 Overview of this paper
+In §2, we describe a formalization of the size-change principle. We formalize Kleene algebras, graphs, paths and threads and deﬁne the SCT predicate. Then we present the main theorem, which states the equivalence between the declarative and the algorithmic version of SCT.
+In §3, we apply the principle to Isabelle function deﬁnitions: We formalize what it means that a control graph approximates a relation. Then we show that for such an approximation, the size-change property implies wellfoundedness of that relation.
+It then remains to provide an algorithm for building and inspecting the transitive closure of a graph. In §4 we give a simple implementation and prove it correct. From these three ingredients we obtain a fully automated method to prove termination of recursive functions in Isabelle.
+We present some small example applications in §5 and discuss practical implications in §6.
+
+2 Formalizing SCT
+
+2.1 Kleene Algebras
+
+Since the core of SCT checking is the computation of a transitive closure, we will start by deﬁning an axiomatic type class [20] of Kleene algebras, which provide the most general structure for such an operation. With this approach, the formulation of the algorithm is kept seperate from the concrete data structures.
+Following the axiomatization by Kozen [12], Kleene algebras are idempotent semirings with an order deﬁned as (a ≤ b) = (a + b = b). Additionally, they include a star-operation satisfying the following four laws:
+
+1 + a·a∗ ≤ a∗ 1 + a∗·a ≤ a∗
+
+a·x ≤ x =⇒ a∗·x ≤ x x ·a ≤ x =⇒ x ·a∗ ≤ x
+
+These axioms follow from a stronger property, called *-continuity:
+a·b∗·c = (SUP n. a·bn·c)
+where bn denotes iterated multiplication. We deﬁne transitive closures as a+ = a ∗ ·a.
+In §4, we will give the transitive closure algorithm in terms of arbitrary Kleene algebras, which allows us to reason in a very abstract way, using simple algebraic laws. Since our graphs will be special Kleene algebras, the corresponding theorems simply follow as instances.
+
+2.2 Graphs
+
+We represent directed edge-labeled graphs as sets of triples. Graphs may have self-edges, and between two nodes there may be several edges:
+datatype (α, β) graph = Graph ((α × β × α) set)
+Instead of using the set type directly, we wrap graphs into their own type constructor. This will allow us to use axiomatic type classes to overload common notation for graph composition (written as multiplication), exponentiation and transitive closure. We write x −−e→ y if G has an edge between nodes x and y,
+G
+which is labeled with e. If we do not care about the label, we just write x −→ y.
+G
+If the type of the edges has a multiplication and unit operation, these can be lifted to graphs, preserving monoid structure:
+
+p −−−b−→ q = ∃ k e e . p −−e→ k −−e→ q ∧ b = e·e
+
+G·H
+
+GH
+
+p −−b→ q = p = q ∧ b = 1
+1
+
+With addition deﬁned as set union, we get a semiring structure with additive and
+multiplicative identity. Moreover, by taking the corresponding set operations for
+supremum and inﬁmum, graphs form a complete lattice and we can deﬁne the star operation as G∗ = (SUP n. Gn). It is then not hard to show that graphs
+form a (*-continuous) Kleene algebra.
+
+2.3 Paths
+We represent inﬁnite paths as sequences of node-edge-pairs:
+types α sequence = nat ⇒ α (α, β) ipath = (α × β) sequence
+The paths of a graph G are characterized by the predicate has-ipath:
+has-ipath :: (α, β) graph ⇒ (α, β) ipath ⇒ bool has-ipath G p = (∀ i . fst (p i ) −p−[i→] fst (p (i + 1 )))
+G
+Here, p[i] just abbreviates snd (p i ), yielding the value of the i -th edge in p. For the proofs for size-change termination we also need to talk about ﬁnite
+paths and relate them to inﬁnite paths (by taking sub-paths, constructing inﬁnite paths from ﬁnite loops). We omit these details for space reasons, as they are essentially straightforward.
+
+2.4 Size-Change Graphs
+Size-change graphs have ↓ and =↓ as edge labels, and natural numbers as nodes, representing data positions. Control graphs have size-change graphs as their edges.
+datatype sedge = LESS (↓) | LEQ (=↓) types
+scg = (nat, sedge) graph acg = (nat, scg) graph
+
+Given an inﬁnite path in the control graph, a thread is a sequence of natural numbers denoting argument positions for every node in the path, such that there are corresponding connected edges. A thread is descending, if it contains inﬁnitely many ↓-edges:
+
+is-desc-thread :: nat sequence ⇒ (nat, scg) ipath ⇒ bool is-desc-thread θ p = ((∃ n. ∀ i≥n. θ i −−→ θ (i + 1 )) ∧ (∃ ∞i. θ i −−↓−→ θ (i + 1 )))
+p[i] p[i]
+Note that threads may also start at a later point in the path. Now the size-change property is deﬁned as
+
+SCT A = (∀ p. has-ipath A p −→ (∃ θ. is-desc-thread θ p))
+
+The second characterization, which will be proved equivalent, is the basis of the size-change algorithm:
+
+SCT ex A = (∀ n G. n −−G−→ n ∧ G·G = G −→ (∃ p. p −−↓→ p))
+
+A+
+
+G
+
+Then the following is our main equivalence result, which corresponds to [14, Thm. 4]:
+
+Theorem 1. ﬁnite-acg A =⇒ SCT A = SCT ex A
+
+The condition ﬁnite-acg A expresses that the control graph and all its sizechange graphs are ﬁnite. In the original development it is implicit.
+The formal proof of Thm. 11 consists of about 1200 lines of proof script in the Isar structured proof language, mainly following the informal development in [14], but with many parts spelled out in much more detail. Like in the informal version, the proof uses Ramsey’s Theorem, which is already present in Isabelle’s Library (the formalization is due to Paulson).
+Our proof uses classical logic, including the (inﬁnite, but countable) axiom of choice. It would be interesting to investigate if the proof can be modiﬁed to work in a weaker framework.
+
+1 The proof can be found in recent versions of the Isabelle library
+
+3 Generating Size-change Problems
+
+We will now apply the size-change principle to termination problems of a speciﬁc form, namely the termination of recursive function deﬁnitions in Isabelle itself. For that, we must make the abstract notion of control points and data positions concrete, and give meaning to the size-change graphs and control graphs.
+There are multiple possibilities for doing this. In the spirit of the original authors, we could equate control points with functions and transitions with function calls. Instead we take the same route as Manolios and Vroon [15]: We take the calls as control points. A transition is a pair of calls, where one call is reachable from the other. This approach allows to analyze the recursive behaviour at a ﬁner granularity.
+As a running example, consider the following function deﬁnition2:
+
+f (n, 0 )
+
+=n
+
+f (0 , Suc m)
+
+= f (Suc m, Suc m)
+
+f (Suc n, Suc m) = f (m, n)
+
+When the deﬁnition is made, Isabelle will internally deﬁne the recursion relation (or call relation) Rf of the function. In the recursion relation, arguments of recursive calls are “smaller” than the corresponding left hand sides. In this case, Rf is deﬁned as:
+
+Rf = (λx 1 x 2.
+(∃ m. x 1 = (Suc m, Suc m) ∧ x 2 = (0 , Suc m)) ∨ (∃ n m. x 1 = (m, n) ∧ x 2 = (Suc n, Suc m)))
+
+It is our goal to show that Rf is well-founded.
+
+3.1 Call descriptors
+Recursion relations generated from function deﬁnitions are always disjunctions of existential clauses, each corresponding to a recursive call. By providing explicit descriptions for such call relations, we will make this structure accessible to the logic.
+A call descriptor is a triple (Γ , r , l ), which describes a recursive call in a function deﬁnition: r is the argument of the recursive call, l is the original argument (from the left hand side of the equation) and Γ is the condition under which the call occurs. All three values depend on variables (the pattern variables), which we replace by a single variable (possibly containing a tuple).
+types (α, γ) cdesc = (γ ⇒ bool ) × (γ ⇒ α) × (γ ⇒ α)
+Here, α is the argument type of the function and γ is the type of the pattern variable.
+2 The function does not compute anything useful.
+
+A list of call descriptors describes a relation in the obvious way:
+
+in-cdesc :: (α,γ) cdesc ⇒ α ⇒ α ⇒ bool in-cdesc (Γ , r , l ) x y = (∃ q. x = r q ∧ y = l q ∧ Γ q)
+
+mk-rel :: (α,γ) cdesc list ⇒ α ⇒ α ⇒ bool
+
+mk-rel [] x y
+
+= False
+
+mk-rel (c # cs) x y = in-cdesc c x y ∨ mk-rel cs x y
+
+We can now describe Rf by such a list of call descriptors:
+Rf = mk-rel [(λ(m, n). True, λ(m, n). (Suc m, Suc m), λ(m, n). (0 , Suc m)),
+(λ(m, n). True, λ(m, n). (m, n), λ(m, n). (Suc n, Suc m))]
+Transforming the deﬁnition to this form is easily automated by a suitable tactic. The main task here is to determine the type of γ which must be a product large enough to express all the variables in the diﬀerent clauses. The equivalence to the original version simply follows by unfolding the deﬁnitions of mk-rel and in-cdesc.
+
+3.2 Measure functions
+To each call (i.e. each control point in the graph), we will assign a list of measure functions, which correspond to the data positions.
+Measure functions capture the notion of size. The whole analysis is independent from the exact form of the measure functions. and any function mapping into a wellfounded domain can be used. For simplicity, our measure functions map into the natural numbers:
+types α measure = α ⇒ nat
+Choosing measure functions is a separate problem not addressed here. As a default choice we use just the structural size functions which Isabelle provides for each inductive data type. Product types are split into their components. So for example for an argument type S × T we use the projections sizeS ◦ fst and sizeT ◦ snd as measure functions. Manolios and Vroon [15] describe some other heuristics for choosing measure functions.
+
+3.3 Approximating the control graph
+We will now show how to construct a size-change problem that corresponds to a relation given by a list of call descriptors.
+For two call descriptors Ci and Cj, the predicate no-step is true if a Ci-call can never be followed by a Cj-call:
+
+no-step :: (α,γ) cdesc ⇒ (α,γ) cdesc ⇒ bool
+no-step (Γ 1, r 1, l 1) (Γ 2, r 2, l 2) = (∀ q1 q2. Γ 1 q1 ∧ Γ 2 q2 ∧ r 1 q1 = l 2 q2 −→ False)
+If we can prove no-step C i C j, then we can be sure that these calls can never occur in sequence. Otherwise we must add an edge between i and j to our control graph. This edge will carry a size change graph which approximates the size change behaviour of the call.
+The predicates step< and step≤ capture strict and non-strict decrease of measures from one call to the next: step< :: (α,γ) cdesc ⇒ (α,γ) cdesc ⇒ α measure ⇒ α measure ⇒ bool step≤ :: (α,γ) cdesc ⇒ (α,γ) cdesc ⇒ α measure ⇒ α measure ⇒ bool
+step< (Γ 1, r 1, l 1) (Γ 2, r 2, l 2) m1 m2 = (∀ q 1 q 2. Γ 1 q 1 ∧ Γ 2 q 2 ∧ r 1 q 1 = l 2 q 2 −→ m2 (l 2 q 2) < m1 (l 1 q 1))
+step≤ (Γ 1, r 1, l 1) (Γ 2, r 2, l 2) m1 m2 = (∀ q 1 q 2. Γ 1 q 1 ∧ Γ 2 q 2 ∧ r 1 q 1 = l 2 q 2 −→ m2 (l 2 q 2) ≤ m1 (l 1 q 1))
+Now consider a size-change graph G and functions M 1 and M 2 which assign measures to the data positions of C 1 and C 2. We say that G approximates the pair of calls, if the claimed inequalities are actually satisﬁed by the respective measures. This is expressed by the approx predicate:
+approx :: scg ⇒ (α,γ) cdesc ⇒ (α,γ) cdesc ⇒ (nat ⇒ α measure) ⇒ (nat ⇒ α measure) ⇒ bool
+approx G C 1 C 2 M 1 M 2 = (∀ i j . (i −−↓→ j −→ step< C 1 C 2 (M 1 i ) (M 2 j )) ∧
+G
+=↓ (i −−→ j −→ step≤ C 1 C 2 (M 1 i ) (M 2 j )))
+G
+Now, a control graph A is a sound description of a given list of call descriptors and measure functions, if between any two calls, either no step is possible, or A contains the corresponding edge with a size-change graph approximating the call combination3:
+sound-desc :: acg ⇒ (α,γ) cdesc list ⇒ (nat ⇒ α measure) list ⇒ bool
+sound-desc A D M = (∀ n<|D |. ∀ m<|D |. no-step D[n] D[m] ∨ (∃ G. n −−G→ m ∧ approx G D[n] D[m] M[n]
+A
+M[m]))
+Now, it is straigtforward to prove the following:
+Theorem 2. If sound-desc A D M and SCT A then mk-rel D is wellfounded .
+With this theorem, which is basically a formal version of the results in [15], we are able to prove wellfoundedness of a relation, provided we can express it in terms of a list of call descriptors and ﬁnd an A which satisﬁes SCT and is a sound estimation of the relation.
+3 Here, xs[i] denotes the i-th element of the list xs.
+
+3.4 Building size-change problems
+It is not hard to build a custom proof tactic to construct A and prove sound-desc A D M:
+– For each pair of calls C i and C j, try to prove no-step C i C j. – If this succeeds, no edge needs to be added to A. – If it fails, construct a size-change graph G, by proving as many of the step<
+and step≤ estimations as possible. For each successful proof, the corresponding edge can be added to the G.
+For the “try to prove . . . ” steps in the above algorithm, we simply call Isabelle’s auto tactic, which combines rewriting, classical reasoning and some arithmetic. Of course, other proof methods could easily be plugged in here.
+The result for our example function is given in Fig. 2. The 1 →↓ 1 arrow in G2 is surprising at ﬁrst: The automated prover discovered that when going from C2 to C1, the ﬁrst argument must get smaller, since for C1, the ﬁrst argument must be zero, but before it was nonzero. Also note that there is no arrow from C1 to itself, which is essential for the termination of the function.
+
+G1 C2
+C1 G3
+G2
+
+↓= ↓ ↓ -
+
+1 G1 :
+2
+
+1 =↓ -2
+
+1 G2 :
+2
+
+↓ -1
+2
+
+1 G3 :
+2
+
+↓ -
+↓ -
+
+1 2
+
+Fig. 2. The control graph and size change graphs for f
+
+4 Implementation Prototype
+Finally, an algorithm for checking the predicate SCT ex (cf. §2.4) must be implemented and proved correct. We will present a naive implementation without any optimizations. While this does limit the performance of our system, it is suﬃcient to explain the ideas and demonstrate the overall approach.
+We can use Isabelle’s code generator to translate the algorithm into ML. The code generator (originally developed by Berghofer [3]) was recently redesigned by Haftmann [9] to generate code for deﬁnitions involving type classes. Type classes are compiled into dictionaries as it is done in Haskell compilers.
+The code generation framework also supports the execution of functions involving (ﬁnite) sets, which are compiled to lists. By using this functionality, it takes just a few steps to produce a working prototype from our speciﬁcation.
+Recall that our deﬁnition of graph composition (cf. §2.2) involves existential quantiﬁcation, which is of course undecidable in general. However, it is easy to make graph composition executable by proving the following equations and making them available to the code generator:
+
+joinable ((n, e, m), (n , e , m )) = (m = n ) connect ((n, e, m), (n , e , m )) = (n, e·e , m ) Graph G·Graph H = Graph (connect ‘ {x ∈ G × H . joinable x })
+Note that the bounded comprehension and the image operation (‘ ) are executable, as they are compiled to an expression involving map and ﬁlter.
+The following function, overloaded on the type class of Kleene algebras, computes transitive closures by a simple iteration:
+mk-tcl A X = (if X ·A ≤ X then X else mk-tcl A (X + X ·A))
+Note that mk-tcl need not always terminate. However, since the SCT problems we consider are always ﬁnite, termination can be proved for these cases.
+By straigtforward induction, we can prove that mk-tcl computes transitive closures of ﬁnite graphs:
+ﬁnite-acg A =⇒ mk-tcl A A = A+
+Then the following function checks SCT ex:
+test-SCT A = (let T = mk-tcl A A in ∀ (n, G, m)∈dest-graph T .
+n = m ∨ G·G = G ∨ (∃ (p, e, q)∈dest-graph G. p = q ∧ e = ↓)) where dest-graph (Graph G) = G.
+We prove that the function is correct:
+Theorem 3. ﬁnite-acg A =⇒ SCT ex A = test-SCT A
+Note that the bounded universal and existential quantiﬁers in the deﬁnition of test-SCT do not prevent code generation: They are translated to the corresponding predicates on lists. Hence, test-SCT can be translated to ML and executed.
+4.1 Putting everything together
+Connecting the results of the previous sections, we obtain a method to formally certify the termination of functions in Isabelle:
+– Deﬁne the function as usual, and create a list of call descriptors, representing the call relation.
+– Assign suitable measures to each call, and, following the steps outlined in §3.4, construct a size-change problem A.
+– Apply Thm. 2. It remains to prove SCT A. – Apply Thm. 1. By construction, A is ﬁnite, so it remains to show SCT ex A. – Apply Thm. 3, obtaining an executable goal. – Evaluate the goal to True, either using the simpliﬁer (which is currently only
+feasible for small examples), or by translating to ML ﬁrst.
+
+5 Examples
+While our SCT implementation handles all forms of structural recursion and their lexicographic combinations, we are most interested in examples, where simpler analyses fail. The following example is adapted from [14]:
+p m n r = (if 0 < r then p m (r − 1 ) n else if 0 < n then p r (n − 1 ) m else m)
+Since the argument is permuted in each recursive call, simple size measures or lexicographic combinations are not suﬃcient to prove termination. The function from §3 is of a similar nature.
+A diﬀerent example shows the ability of the analysis to detect reachability between calls. The function has a boolean argument which eventually becomes False, and then the recursion descends on a diﬀerent argument:
+foo True (Suc n) m = foo True n (Suc m) foo True 0 m = foo False 0 m foo False n (Suc m) = foo False (Suc n) m foo False n 0 = n
+A third example is taken from the WST termination competition problem database [2]. The key observation here is that a recursive call can never occur more than once, which is again detected by the reachability analysis between calls, which yields a control graph with no edges.
+bar 0 (Suc n) m = bar m m m bar (Suc v ) n m = 0 bar k 0 m = 0
+These examples have a certain artiﬁcial ﬂavour, as their only reason of existence seems to be to demonstrate termination proofs. So are there also practical examples where size change termination is useful?
+The following example comes from a formalization of a descision procedure for equalities in a commutative ring, adapted from similar work in Coq [8] (the Isabelle version was done by Bernhard H¨aupler). The function adds two polynomials, represented by a datatype with three constructors Pc, Pinj and PX:
+add (Pc a) (Pc b) = Pc (a + b)
+add (Pc c) (Pinj i P ) = Pinj i (add P (Pc c))
+add (Pc c) (PX P i Q) = PX P i (add Q (Pc c))
+add (Pinj x P ) (Pinj y Q) = (if x = y then mkPinj x (add P Q) else if y < x then mkPinj y (add (Pinj (x − y) P ) Q)
+else add (Pinj y Q) (Pinj x P ))
+add (Pinj x P ) (PX Q y R) = (if x = 0 then add P (PX Q y R) else if x = 1 then PX Q y (add P R) else PX Q y (add (Pinj (x − 1 ) P ) R))
+
+add (PX P 1 x P 2) (PX Q1 y Q2) = (if x = y then mkPX (add P 1 Q1) x (add P 2 Q2) else if y < x then mkPX (add (PX P 1 (x − y) (Pc 0 )) Q1) y (add P 2 Q2)
+else add (PX Q1 y Q2) (PX P 1 x P 2))
+add (Pinj i P ) (Pc c) = add (Pc c) (Pinj i P )
+add (PX P i Q) (Pc c) = add (Pc c) (PX P i Q)
+add (PX Q y R) (Pinj x P ) = add (Pinj x P ) (PX Q y R)
+In the underlined cases the function just calls itself with permuted arguments. This avoids duplicating the code from other clauses – a sensible programming pattern for commutative functions. However, without an analysis dealing with argument permutation, it is extremely hard to convince Isabelle to accept this deﬁnition, which is why the function had to be rewritten in the original version, just for the sake of the termination proof, resulting in signiﬁcant code duplication.
+Note that such duplication does not only concern the function speciﬁcation, but will turn up again in induction proofs about the function, as the induction rule is generated from the deﬁnition. This leads to redundant cases, whose “analogous” proofs have to be copy-and-pasted.
+With our prototype, we could automatically prove termination of add.
+6 Discussion
+6.1 Scope of the method
+It is hard to describe the class of problems that can be solved by our tool. While SCT itself is well-understood, the success of the overall method also depends on the quality of the estimations in the size change graphs, which is again determined by the capabilities of Isabelle’s auto tactic.
+While this makes it hard to predict if the method will succeed on a given problem, the advantage is that auto can make use of lemmas already present in the current theory. Most static analyses would have a hard time speculating and proving these lemmas, especially when induction is required. In Isabelle, such lemmas can be provided by the user and then used by automated tools.
+This shows how interactive theorem proving and automated methods can beneﬁt from each other, when combined: The user can help establishing diﬃcult lemmas and SCT, with its strengths in combinatorics, provides the automated path analysis.
+6.2 Practical applications
+Manolios and Vroon tested their system against a large corpus of ACL2 deﬁnitions, and observed an impressive gain in automation.
+Interestingly, when looking at the function deﬁnitions in the current Isabelle distribution and the Archive of Formal Proofs [1], most of the deﬁnitions can
+
+already be handled by a much simpler search for lexicographic orderings [6]. SCT does solve all these problems, but its real strengths are not used.
+A possible explanation could be that users, knowing about Isabelle’s limitations in that area, tried to avoid function deﬁnitions that would require a diﬃcult manual termination proof, and used other modeling techniques like inductive relations instead. It remains to see whether this changes when SCT becomes generally available in Isabelle. But the add function discussed above already shows the potential of SCT.
+6.3 Eﬃciency
+Especially in the light of the PSPACE-hardness result, eﬃciency is a concern. In our setup, there are two critical operations:
+First, in order to approximate the size-change problem, many proof goals must be generated and tried by the automated prover, one for each possible edge in each size-change graph. For the add function this takes about 2 minutes on a 1GHz laptop. As an improvement, one can implement a more eﬃcient tactic, which is specialized on the kind of inequalities that actually occur, or add a heuristic to ﬁlter out subgoals that are likely to be unprovable.
+Second, computing the transitive closure can take long. However, our minimalistic implementation represents graphs very ineﬃciently using sets (implemented by lists). First experiments showed that a better representation (e.g. matrices, implemented by quadtrees) leads to a signiﬁcant speedup and we plan to integrate such an algorithm soon. Note that the proofs of the metatheory (§2) need not be changed.
+7 Conclusion
+By formalizing the size-change principle, we made an important termination criterion available for Isabelle. The implemented algorithm is only a proof-ofconcept, but it should not be diﬃcult to develop and integrate a more eﬃcient implementation.
+Recursive functions are an important application, but they are not the only one: It would be interesting work to apply SCT to other sorts of termination problems. One example is the framework for hoare-logic style veriﬁcation of imperative programs [19], where termination proofs for loops and recursive procedures currently also need a user-speciﬁed well-founded relation. In fact, due to the modularity of SCT, much of the present work should be reusable with little or no change.
+Acknowledgements. I want to thank Tobias Nipkow for fruitful discussions and helpful comments on a previous draft of this paper, and Amine Chaieb for pointing me to the add example. The anonymous referees provided valuable feedback.
+
+References
+1. Archive of Formal Proofs. http://afp.sourceforge.net/. 2. Termination Competition. http://www.lri.fr/˜marche/termination-competition/. 3. S. Berghofer and T. Nipkow. Executing higher order logic. In P. Callaghan, Z. Luo,
+J. McKinna, and R. Pollack, editors, TYPES, LNCS 2277, pages 24–40. Springer, 2000. 4. Y. Bertot and P. Cast´eran. Interactive theorem proving and program development: Coq’Art: the calculus of inductive constructions. Texts in theoretical comp. science. Springer, 2004. 5. F. Blanqui, S. Coupet-Grimal, W. Delobel, S. Hinderer, and A. Koprowski. CoLoR, a Coq library on rewriting and termination. In A. Geser and H. Søndergaard, editors, Eighth International Workshop on Termination, WST’06, Seattle, WA, USA, 2006. 6. L. Bulwahn, A. Krauss, and T. Nipkow. Finding lexicographic orders for termination proofs in Isabelle/HOL, 2007. Manuscript. 7. M. Gordon and T. Melham, editors. Introduction to HOL: A theorem proving environment for higher order logic. Cambridge University Press, 1993. 8. B. Gr´egoire and A. Mahboubi. Proving equalities in a commutative ring done right in Coq. In J. Hurd and T. F. Melham, editors, TPHOLs, LNCS 3603, pages 98–113. Springer, 2005. 9. F. Haftmann and T. Nipkow. A design for a generic code generator for the Isabelle/HOL system, 2007. Manuscript. 10. J. Harrison. The HOL Light theorem prover. http://www.cl.cam.ac.uk/users/ jrh/hol-light. 11. M. Kaufmann, P. Manolios, and J. S. Moore. Computer-Aided Reasoning: An Approach. Kluwer Academic Publishers, June 2000. 12. D. Kozen. On Kleene algebras and closed semirings. In Rovan, editor, Proc. Math. Found. Comput. Sci., LNCS 452, pages 26–47, Banska-Bystrica, Slovakia, 1990. Springer. 13. A. Krauss. Partial recursive functions in higher-order logic. In U. Furbach and N. Shankar, editors, Automated Reasoning (IJCAR 2006), LNAI 4130, pages 589– 603. Springer, 2006. 14. C. S. Lee, N. D. Jones, and A. M. Ben-Amram. The size-change principle for program termination. In ACM Symposium on Principles of Prog. Languages, pages 81–92, 2001. 15. P. Manolios and D. Vroon. Termination analysis with calling context graphs. In T. Ball and R. B. Jones, editors, CAV, LNCS 4144, pages 401–414. Springer, 2006. 16. T. Nipkow, L. C. Paulson, and M. Wenzel. Isabelle/HOL — A Proof Assistant for Higher-Order Logic. LNCS 2283. Springer, 2002. 17. S. Owre, J. M. Rushby, and N. Shankar. PVS: A prototype veriﬁcation system. In D. Kapur, editor, CADE, Springer LNCS 607, pages 748–752, 1992. 18. C. H. Papadimitriou. Computational Complexity. Addison-Wesley, New York, 1994. 19. N. Schirmer. A veriﬁcation environment for sequential imperative programs in Isabelle/HOL. In F. Baader and A. Voronkov, editors, LPAR, LNCS 3452, pages 398–414. Springer, 2004. 20. M. Wenzel. Using axiomatic type classes in Isabelle, 2000. Isabelle documentation.
+
+
