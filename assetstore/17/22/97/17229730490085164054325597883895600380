@@ -1,0 +1,589 @@
+Pure pattern calculus
+Barry Jay1 and Delia Kesner2
+1 University of Technology, Sydney, cbj@it.uts.edu.au 2 PPS, CNRS and Universit´e Paris 7, kesner@pps.jussieu.fr
+Abstract. The pure pattern calculus generalises the pure lambda-calculus by basing computation on pattern-matching instead of beta-reduction. The simplicity and power of the calculus derive from allowing any term to be a pattern. As well as supporting a uniform approach to functions, it supports a uniform approach to data structures which underpins two new forms of polymorphism. Path polymorphism supports searches or queries along all paths through an arbitrary data structure. Pattern polymorphism supports the dynamic creation and evaluation of patterns, so that queries can be customised in reaction to new information about the structures to be encountered. In combination, these features provide a natural account of tasks such as programming with XML paths. As the variables used in matching can now be eliminated by reduction it is necessary to separate them from the binding variables used to control scope. Then standard techniques suﬃce to ensure that reduction progresses and to establish conﬂuence of reduction.
+1 Introduction
+The lambda-calculus is a theory of functions which is powerful enough to model arbitrary computations. In its pure form every term is a function, so that function arguments are themselves functions. Such higher-order functions give a clean account of recursion as the application of the ﬁxpoint function. Also data structures such as pairs, lists and trees can be modelled as higher-order functions that take as arguments functions that are to act on the data stored within the structure. Central to the expressive power of the lambda-calculus is that a single rule, beta-reduction, is used to describe the evaluation of an arbitrary function. This uniformity allows a single function to be applied in a variety of diﬀerent situations, i.e. supports function polymorphism. Unfortunately, the description of data structures is not so uniform. Although the lambda-calculus supports functions that act uniformly on all pairs, or all lists, it cannot support operations that exploit characteristics common to all data structures. These include operations for searching, updating and aggregating that are at the heart of data processing but do not make sense with lambda-abstractions.
+In a way, this is surprising because such operations can be speciﬁed quite simply. Every data structure is either an atom or a compound. For example, every list is either empty or is compounded from a head and a tail, every tree is either a leaf or a node. With this characterisation, one can deﬁne searching a data structure d as follows:
+
+1. if d is the goal then return d; 2. else if d is a compound data structure then traverse its components; 3. else stop.
+
+For example, consider the problem of listing all the points in a data structure. Each point is represented by terms of the form Point t where Point is a constructor used to represent points whose data is represented by t but the nature of the structure holding the points is not known. Let the syntax [x1, . . . , xn] be used for the list whose entries are given by x1, . . . , xn and let s@t be the result of appending s to the front of t. Now the solution can be given by a patternmatching function deﬁned by cases
+
+letrec listPoints =
+
+Point y
+
+→ [Point y]
+
+| xy
+
+→ (listPoints x) @ (listPoints y)
+
+| y →[]
+
+The most interesting case of the three is the second, whose pattern x y is able to match against an arbitrary compound data structure. For example, when listPoints is applied to a pair Pair s t of points s and t we get
+
+listPoints (Pair s t) = ((listPoints Pair) @ (listPoints s)) @ (listPoints t) = ([ ] @ [s]) @ [t] = [s, t]
+
+This uniform approach to compound data structures supports path polymorphism in which all paths through a data structure can be traversed.
+Another example of path polymorphism is the function that updates point data within an arbitrary data structure. It is given by
+
+letrec updatePoint = f →
+
+Point y
+
+→ Point (f y)
+
+| z y → (updatePoint f z) (updatePoint f y)
+
+|y →y
+
+Further generalisation is achieved by making Point a parameter to the generic update function deﬁned by
+
+letrec update = x → f →
+
+xy |z y
+
+→y x (f y) → (update x f z) (update x f y)
+
+|y → y
+
+This time the two variables in the pattern x y above behave quite diﬀerently as x is a free variable ready to be substituted by, say, Point while y is a binding variable, as usual. To distinguish these alternatives, the arrow in the case is decorated with a set of binding variables, in this case just y. Where no subscript is speciﬁed then all the free variables of the pattern are assumed bound.
+
+2
+
+The function update is pattern polymorphic, as it contains the free variable x in the pattern x y whose instantiation can produce a variety of diﬀerent update functions. For example, update Point reduces to updatePoint. Further, if update is applied to a case then the pattern must be reduced before matching can occur.
+Such ﬂexibility in the use of patterns leads to the following leitmotiv:
+
+any term can be a pattern.
+
+This complements the view in lambda-calculus that any term can be a function. Hence, the pure pattern calculus has term syntax
+
+t ::= x | t t | t →θ t
+
+consisting of variables, applications and cases p →θ s where θ is a set of variables, its binding variables. In deﬁning reduction one must ﬁrst specify a set of variables γ which are to play the role of constructors (meta-variable c). The sole reduction rule is motivated by the equation
+
+(p →θ s) u =γ {p/u}γθ s
+
+(1)
+
+where γ is disjoint from θ. Here {p/u}γθ is the match of p against u that produces either a substitution with domain θ or a failure.
+It may be surprising to identify the constructors with a set of variables, but it proves convenient when reducing the pattern of a case p →θ s since the variables in θ are considered to be constructors when reducing the pattern p. For example, (x →{} x) x →x x reduces to x →x x since x is constructor within the pattern (x →{} x) x.
+The pure pattern calculus is well behaved. In particular, every closed term of the form (p →θ s) u is reducible. Also, reduction is conﬂuent.
+The simplicity of the pure pattern calculus is best appreciated by comparing to previous approaches to pattern-matching. Popular functional programming languages such as Standard ML [SML], OCAML [Oca] and Haskell [Has] only support irreducible patterns which are either headed by a constructor or are a binding variable. Recent research has sought to augment the collection of patterns with new constructions [KPT96], reducible patterns [CK98] and free variables which do not bound occurrences in the body of the program [BCKL03], and patterns for compound data structures [Jay04c]. Only the last of these supports path polymorphism and none of them supports pattern polymorphic examples.
+Moreover, the last of these underpinned the development of typed calculi supporting pattern polymorphism (e.g. [Jay04a]) which sought to allow more dynamic patterns (for us, polymorphism is about re-usability, which may be formalised by typing). These have been used to support the generic update, and its extension to handle arbitrary XML paths [HJS05a,HJS05b]. They have also been used to support an object model able to support central goals of objectorientation [Jay04b]. Again, they provide an account of structure polymorphism [JC94,JBM98,Jay04c] necessary to support operations such as mapping and folding in a uniform way, similar to polytypic or generic functional programming
+
+3
+
+[Jan00,BdMH96,GJ03]. Finally, the “scrap-your-boilerplate” approach [syb06] supports some key cases of path polymorphism.
+All these calculi attempted to control variable binding by restricting the class of patterns and their reduction. However, simplicity comes by treating binding separately from the pattern itself. It is expected that all of the applications above can be re-engineered in the new, simpler, framework.
+The structure of the rest of the paper is as follows. Section 2 introduces the terms. Section 3 deﬁnes reduction. Section 4 considers some examples. Section 5 shows that matching does not get stuck. Section 6 proves reduction is conﬂuent. Section 7 draws conclusions and considers further work.
+Acknowledgements We would like to thank the anonymous referees and Eugenio Moggi for their constructive criticism.
+
+2 Terms
+
+Fix a countable alphabet of variables (meta-variables . . . x, y, z). Let θ and γ denote ﬁnite sets of variables. The notation γ, θ denotes the disjoint union of such sets. The term syntax of the pure pattern calculus is
+
+T erms t ::= x
+
+(variable)
+
+t t (application)
+
+t →θ t (case)
+
+The variables are available for binding, matching and substitution. The applica-
+tion r u applies the function r to its argument u. The case p →θ s is formed of a pattern p and a body s linked by the set θ of binding variables. Application is leftassociative and case is right-associative. Application binds tighter than case. For
+example x → x y z →y y is equal to x → (((x y) z) →y y). Lambda-abstraction can be deﬁned by setting λx.t to be x →x t.
+Free variables of terms are deﬁned by:
+
+fv(x) = {x} fv(r u) = fv(r) ∪ fv(u) fv(p →θ s) = (fv(p) ∪ fv(s)) \ θ.
+
+Hence the binding variables of a case bind their free occurrences in both the pattern and body. A term is closed if it has no free variables.
+The notation p → s stands for p →fv(p) s. Hence programmers need never actually mention binding variables explicitly unless they require free variables in the pattern.
+
+2.1 Matches A substitution σ is a partial function from variables to terms. The notation {x1/u1, . . . , xn/un} represents the substitution that maps xi to ui for i = 1 . . . n
+4
+
+and {} denotes the empty substitution. A match (meta-variable m) is either a successful match, given by a substitution, or a failure, denoted by none. The usual concepts and notation associated with substitutions will be deﬁned for arbitrary matches.
+The domain of σ is denoted dom(σ). The domain of none is the empty set. The set of free variables of σ is given by the union of the sets fv(σx) where x ∈ dom(σ). Also, none has no free variables. Deﬁne the variables of m to be var(m) = dom(m) ∪ fv(m).
+The application of a substitution σ to a term is deﬁned by
+
+σx = σx if x ∈ dom(σ)
+
+σx = x
+
+if x ∈/ dom(σ)
+
+σ(r u) = (σr) (σu)
+
+σ(p →θ s) = σp →θ σs if var(σ) ∩ θ = {}
+
+The restriction on the deﬁnition of σ(p →θ s) is necessary to avoid a variable clash which would change the semantics of the term. Variable clashes will be handled by α-conversion.
+If matching fails in Equation (1) then none will be applied to the body of the case, which should be discarded. One possibility is to introduce a special error term, but match failure provides a natural branching mechanism which can be used to underpin the deﬁnitions of conditionals and pattern-matching functions. Hence, we deﬁne
+none t = x →x x.
+
+Given matches m1 and m2 then m1 m2 is the match deﬁned as follows. If
+
+m1 and m2 are substitutions σ1 and σ2 whose domains are disjoint then σ1 σ2
+
+is deﬁned by
+
+ 
+
+σ1x
+
+if x ∈ dom(σ1)
+
+(σ1 σ2)x = σ2x
+
+if x ∈ dom(σ2)
+
+ undeﬁned otherwise.
+
+In all other circumstances m1 m2 = none. Disjoint domains will be used to ensure that matching is deterministic.
+The composition σ2 ◦ σ1 of two substitutions σ1 and σ2 is deﬁned by (σ2 ◦ σ1)x = σ2(σ1x). Further, if m1 and m2 are matches of which at least one is none then m2 ◦ m1 is deﬁned to be none.
+The check mθ of a match m on a set of variables θ is m if m is a substitution whose domain is exactly θ and is none otherwise.
+
+2.2 Alpha conversion
+Let θ be a set of variables and x and y be variables. Then {x/y}θ is deﬁned to be the set obtained by replacing x by y in θ if x ∈ θ and y ∈ θ, and to be undeﬁned otherwise.
+Alpha conversion is the congruence relation generated by the following axiom
+p →θ s =α {x/y}p →{x/y}θ {x/y}s if y ∈/ fv(p) ∪ fv(s).
+
+5
+
+For example, x y →y x (f y) =α x z →z x (f z) if z is not free in f .
+Lemma 1. For every substitution σ and term t there is an α-equivalent term t such that σt is deﬁned. If t1 and t2 are α-equivalent terms then fv(t1) = fv(t2) and if u1 = σt1 and u2 = σt2 are both deﬁned then u1 =α u2.
+Proof. The proofs are by straightforward inductions.
+From now on, a term is an α-equivalence class in the term syntax.
+
+3 Reduction
+Reduction proceeds in two stages: ﬁrst generate a match and then apply it.
+
+3.1 Matching
+
+Deﬁne the ϕ-data structures (meta-variable d) by
+
+d ::= x if x ∈ ϕ d u.
+
+Deﬁne the data structures to be the {}-data structures. The ϕ-matchable forms are the ϕ-data structures and all cases. The matchable forms are the {}-matchable forms.
+The basic matching {p//u}θ of a term p (called the pattern) against a term u (called the argument) relative to a set θ of binding variables and a disjoint set γ of constructing variables (or constructors) is the partial operation deﬁned by applying the following equations in order
+
+{q
+
+p{/{/xcv////uuc}}}γθγθγθ
+
+= = =
+
+{x/u} {} {q//v}γθ
+
+{p//u}γθ
+
+{p//u}γθ = none
+
+{p//u}γθ = undeﬁned
+
+if x ∈ θ if c ∈ γ if q p is a γ, θ-matchable form and v u is a γ-matchable form if p is a γ, θ-matchable form and u is a γ-matchable form otherwise.
+
+That is, matching is always deﬁned if the pattern is a γ, θ-matchable form and the argument is a γ-matchable form, and match failure can only arise if rules for successful matching do not apply. A binding variable matches anything. A constructor matches itself. We will typically use the meta-variable c to denote a constructor. Matching of compound data structures is component-wise, using (disjoint) union. Note that the ordering of the equations can be avoided by expanding the deﬁnition into an induction on the structure of the pattern.
+The use of disjoint unions when matching compound patterns means that matching against a compound such as c x x can never succeed. Since non-linear patterns cannot be banned (any term can be a pattern), the alternative would be
+
+6
+
+to allow it to match with terms of the form c u u. However, this may cause a loss
+
+of conﬂuence, as in [FK03,Kah03], for reasons grounded in Klop’s observation [Klo80] that the combination of untyped λ-calculus with non left-linear ﬁrst-
+
+order rewriting systems breaks conﬂuence.
+
+As deﬁned, matching one case against another always fails. To do otherwise
+
+would require that matching be parametrised by yet another set of variables,
+
+representing those which are bound within the pattern itself, so is left for another occasion.
+
+Let p and u be terms and let θ and γ be disjoint sets of variables. Deﬁne
+
+the matching {p/u}γθ structors γ to be the
+
+of p against u with respect to check of {p//u}γθ on θ, where
+
+binding variables θ and conthe check of a match is the
+
+function deﬁned in Section 2. The check is necessary to ensure that reduction
+
+does not allow bound variables to become free. For example, {x/x}{{xy}} = none
+
+since the basic matching is not deﬁned on y.
+
+The pure pattern calculus has a match rule given by
+
+(p →θ s) u −→γ {p/u}γθ s
+
+(2)
+
+parametrised by the choice of constructors γ. That is, if matching of the pattern against the argument produces a substitution whose domain is the binding variables then apply this to the body. If the matching fails then return the identity function. Of course, if {p/u}γθ is undeﬁned (e.g. because p or u needs to be reduced) then the match rule does not apply.
+
+(p →θ s) u −→1γ {p/u}γθ s
+p −→1γ,θ p p →θ s −→1γ p →θ s
+
+r −→1γ r r u −→1γ r u
+
+u −→1γ u r u −→1γ r u
+
+s −→1γ s p →θ s −→1γ p →θ s
+
+Fig. 1. One-step reduction
+
+The one-step reduction relation −→1γ is deﬁned by the rules in Figure 1. The reduction relation −→∗γ is the reﬂexive-transitive closure of −→1γ. A term t is γ-irreducible if there is no reduction of the form t −→1γ t .
+The key point is that the binding variables of a case become constructors when reducing the pattern. For example,
+(x →{} x) x →x x −→1{} x →x x
+since the binding variable x becomes a constructor when reducing ((x →{} x) x).
+7
+
+4 Examples
+λ-calculus There is a simple embedding of the pure λ-calculus into the pure pattern calculus obtained by identifying the λ-abstraction λx.s with x →x s or x → s. Pattern-matching for these terms with respect to any set of constructors is exactly the β-reduction of the λ-calculus. For example, the ﬁxpoint term
+ﬁx = (x → f → f (x x f )) (x → f → f (x x f ))
+can be used to deﬁne recursive functions. A term deﬁnition of the form letrec x = t will be interpreted as giving f the value ﬁx (x → t) in the usual way.
+Constructors It is common to add to the λ-calculus a collection γ of term constants to play the role of constructors for data structures. Here we can deﬁne a program to consist of a pair of a term p and a set of term variables γ, and perform reduction relative to γ. Equivalently, one may deﬁne a program to be a term of the form
+p →γ •
+where • ∈ γ, with reduction relative to the empty set of variables.
+Branching constructs Let True and False be constructors and deﬁne conditionals by
+if b then s else r = (True → x → s) b r
+where x ∈ fv(s). Thus, if True then s else r reduces to (x → s) r and then to s while if False then s else r reduces to (y → y) r and then to r. More generally, the extension p →θ s | r extends the case p →θ s with a default r by
+p →θ s | r = x → (p →θ y → s) x (r x)
+where x ∈ fv(p →θ s) ∪ fv(r) and y ∈ fv(s). When applied to some term u it reduces to {p/u}θ(y → s) (r u). Now if {p/u}θ is some substitution σ then this reduces to σ(y → s) (r u) = (y → σs) (r u) and then to σs as desired. Alternatively, if {p/u}θ = none then the term reduces to (none (y → s)) (r u) = (z → z) (r u) and then to r u as desired.
+Extensions can be iterated to produce pattern-matching functions out of a sequence of many cases. Make | right-associative so that
+p1 → s1 | p2 → s2
+... | pn → sn
+is p1 → s1 | (p2 → s2 | (. . . | pn → sn)). For example, the function listPoints in the introduction is deﬁned in this way.
+Arithmetic The natural numbers can be deﬁned as data structures built from constructors Zero and Successor. Then recursive functions can be deﬁned using
+8
+
+ﬁx. This compares favourably with the representation of numbers as the iterators used to deﬁne the Church numerals.
+
+Generic equality Now let us consider some novel programs. A generic equality is deﬁned by
+equal = x → (x →{} True | y → False)
+where the ﬁrst argument is used as the pattern for matching against the second. For example, equal (Successor Zero) (Successor Zero) reduces to True. This is a simple example of pattern polymorphism where the pattern is created dynamically.
+
+The generic eliminator The generic eliminator is given by
+
+elim = x → x y →y y
+
+For example, elim Successor reduces to Successor y → y. Again, suppose that the list constructors Nil and Cons are given and deﬁne singleton = x → Cons x Nil. Then elim singleton reduces to Cons y Nil → y by reduction of the pattern.
+
+Generic updating Patterns of the form x y are used to access data along
+
+arbitrary paths through a data structure, i.e. to support path polymorphism.
+
+Combining the use of pattern and path polymorphism yields the generic update
+
+function deﬁned in the introduction. When applied to a constructor c, and a
+
+function f and a data structure d it replaces sub-terms of d of the form c t by
+
+c (f t). For example, update c f ((c u) (c v)) reduces to (c (f u)) (c (f v)). In
+
+general, update can be applied to cases. For example, update singleton f reduces
+
+to Cons y Nil → Cons (f y) Nil
+
+| zy
+
+→ (update singleton f z) (update singleton f y)
+
+| y →y
+
+Also, updating can be iterated to give ﬁner control. For example, given constructors Salary, Employee and Department and a function f then the program
+
+update Department (update Employee (update Salary f ))
+
+updates departmental employee salaries. Note that it is not necessary to know how employees are represented within departments for this to work, so that a new level of abstraction arises, similar to that which XML is intended to support. The full range of XML paths can be handled by deﬁning an appropriate abstract data type, similar to that of signposts given in [HJS05a,HJS05b].
+
+Wild-cards It is interesting to add a new constant denoted ? to the pure pattern calculus, the wild-card. It has no free variables and is unaﬀected by substitution. It is a data structure, is compatible with anything, and has the matching rule
+{?//u}γθ = {}
+for any γ and θ. That is, it behaves like a fresh binding variable in a pattern but like a constructor in a body. For example, the second and ﬁrst projections from a pair can be encoded as elim (Pair ?) and elim (x → Pair x ?).
+
+9
+
+The following example uses recursion in the pattern. Deﬁne the function for the extracting list entries by
+letrec entrypattern = Succ n → x → Cons ? (entrypattern n x)
+| Zero → x → Cons x ?
+entry = n → elim (entrypattern n)
+For example, entry (Succ (Succ Zero)) reduces to Cons ? (Cons ? (Cons x ?)) → x which recovers the second entry from a list. Note the standard approach, in which each occurrence of the wild-card represents a distinct binding variable, cannot support such recursion.
+5 Progress
+Theorem 1. Let t be a term whose free variables are all in some set γ. If t is γ-irreducible then t is a γ-matchable form. Hence, pattern-matching cannot get stuck.
+Proof. The proof is by induction on the structure of t. Without loss of generality, it suﬃces to consider t of the form (p →θ s) u. Now u is γ-irreducible, and p is γ, θ-irreducible and so, by induction, u is γ-matchable and p is γ, θ-matchable. Hence the basic matching of p against u is deﬁned and so t is γ-reducible, contradicting the assumption.
+6 Conﬂuence
+Conﬂuence of reduction is established using the parallel reduction technique due to Tait and Martin-Lo¨f [Bar84] which can be summarised in four steps: deﬁne a parallel reduction relation denoted ; prove that ∗ and −→∗ are the same relation (Lemma 2); show that has the diamond property (Theorem 2); and use this to prove conﬂuence.
+Let γ be a set of variables. The parallel γ-reduction relation is given in Figure 2.
+
+r γr u γu
+
+t γt
+
+ru γr u
+
+p γ,θ p s γ s p →θ s γ p →θ s
+
+p γ,θ p s γ s u γ u (p →θ s) u γ {p /u }γθ s
+
+Fig. 2. Parallel γ-reduction
+
+10
+
+Lemma 2. Every one-step γ-reduction is a parallel γ-reduction. Also, every par-
+
+allel γ-reduction is a γ-reduction. Hence the reﬂexive-transitive closure
+
+∗ γ
+
+of
+
+γ is the reduction relation −→∗γ.
+
+Proof. The proofs are by straightforward induction on the deﬁnitions.
+
+The parallel γ-reduction relation γ between matches is deﬁned as follows. Given two substitutions σ and σ then σ γ σ if dom(σ) = dom(σ ) and σx γ σ x for every x ∈ dom(σ). Also none γ none. Substitutions and none are not related.
+
+Lemma 3. If t is a term and m is a match then fv(mt) ⊆ fv(m) ∪ (fv(t) \ dom(m)).
+
+Proof. If m is none then the result is immediate so assume that m is a substitution σ. The proof is by induction on the structure of t. If t is p →θ s where θ ∩ var(σ) = {} then
+
+fv(σp →θ σs) = (fv(σp) ∪ fv(σs)) \ θ ⊆ (fv(σ) ∪ ((fv(p) ∪ fv(s)) \ dom(σ))) \ θ (by induction) = fv(σ) ∪ (fv(t) \ dom(σ)).
+
+The other cases are straightforward. Lemma 4. If m = {p/u}γθ for some terms p and u and disjoint sets of variables γ and θ then fv(m) ⊆ fv(u).
+
+Proof. If m = none then there is nothing to prove. Otherwise the proof is by a straightforward induction on the structure of p.
+
+Lemma 5. If t γ t is a parallel reduction then fv(t ) ⊆ fv(t). Hence, if m γ m is a parallel match reduction then var(m ) ⊆ var(m).
+
+Proof. By Lemma 2 it suﬃces to prove the result for the one-step reduction relation; we only show here the case of the reduction rule (2). Then
+
+fv(t
+
+)
+
+= ⊆ ⊆
+
+fffvvv((({{{ppp///uuu}}}γθγθγθ
+
+s) )∪ )∪
+
+(fv(s) (fv(s)
+
+\ \
+
+dom({p/u}γθ )) θ)
+
+⊆ fv(u) ∪ (fv(p →θ s))
+
+= fv(t).
+
+(Lemma 3) (Lemma 4)
+
+Lemma 6. Let m be a match and let θ and γ be two disjoint sets of variables
+
+such that is deﬁned
+
+var(m) ∩ θ then so is
+
+= dom(m) ∩ γ {m p//m u}γθ
+
+) = {}. If p and u and {m p//m u}γθ
+
+are terms ◦m=m
+
+such that ◦ {p//u}γθ .
+
+{p//u}γθ Hence
+
+{m p/m u}γθ ◦ m = m ◦ {p/u}γθ .
+
+11
+
+Proof. The second statement follows directly from the ﬁrst. If m is none then
+
+both sides are none. So without loss of generality, assume that m is a substitution
+
+σ. The proof is by induction on the structure of p. If p is a variable x ∈ θ then
+
+both sides map x to σu and behave as σ on all other variables since var(m) ∩
+
+θ = {}. If p is in γ and u is the same then both sides are m. If p and u are
+
+compatible applications {σp//σu}γθ = none (since
+
+then apply dom(σ) ∩ (θ
+
+induction twice. If {p//u}γθ ∪ γ) = {}) and so both sides
+
+= of
+
+none then the match
+
+equation are none.
+
+Lemma 7. If p γ,θ p and u γ u are parallel reductions on terms and {p/u}γθ is deﬁned then so is {p /u }γθ and {p/u}γθ γ {p /u }γθ .
+
+Proof. The proof is by induction on the structure of p. If p is a variable then p
+is the same variable so that the result follows directly. If p is a case then both
+matches will fail. Otherwise p must be a γ, θ-matchable form p1 p2 and u must be a γ-matchable form. If u is not an application then it must be a constructor
+or a case: either way, both matchings will fail. Alternatively, if u = u1 u2 then Theorem 1 implies that u1 is also a γ-data structure and thus u = u1 u2 where u1 γ u1 and u2 γ u2. Now p1 is a γ, θ-data structure and so p = p1 p2 where p1 γ,θ p1 and p2 γ,θ p2. Hence induction applies.
+
+Lemma 8. If m γ m and t γ t are parallel reductions of matches and terms respectively and dom(m) ∩ γ = {} then m t γ m t .
+
+Proof. If m is none then m is none and so the result is immediate. So assume
+
+that m and m are substitutions σ and σ respectively. The proof is by induction
+
+on the derivation of t γ t . The only non-trivial case is when t = (p →θ
+
+s) u γ {p /u }γθ s where p γ,θ p and u γ u and s γ s . Without loss
+
+of generality, assume var(σ) ∩ θ = {}. Hence var(σ ) ∩ θ ⊆ var(σ) ∩ θ = {} by
+
+Lemma 5 and dom(m ) ∩ γ = dom(m)
+
+{σ {σ
+
+p /σ p /σ
+
+uu}}γθγθ((σσ
+
+s ) by Lemma 6 and s ) = σ ({p /u }γθ s ).
+
+∩ γ = {}. Thus, σ ({p so σ((p →θ s)u) = (σ
+
+/u }γθ s ) is equal p →θ σs) (σ u)
+
+to
+γ
+
+Theorem 2. The relation γ has the diamond property. That is, t γ t1 and t γ t2 then there is t3 such that t1 γ t3 and t2 γ t3.
+
+Proof. The proof is by induction on the deﬁnition of parallel reduction. Suppose
+
+(p2 →θ s2) u2 γ (p →θ s) u γ {p1/u1}θs1
+
+where p γ,θ p1 and p γ,θ p2 and s γ s1 and s γ s2 and u γ u1 and u γ u2. By induction, there are terms p3, s3 and u3 such that p1 γ,θ p3 and p2 γ,θ p3 and s1 γ s3 and s2 γ s3 and u1 γ u3 and u2 γ u3. NLdieoamwmAmo{gnapadi1n8/,iusss1icun}opcγθmepopdsloγeemt{(e(ppd{3p→/b1uy/θ3u{}s1pγθ)}3bγθ/uy)u3dL}oeγγθemss{3mp.n2ao/tu7c2ao}nnγθdtsa2sionan{γdp1b(/ypuc1→o}nγθθssst1r)uuctγio{npγ.3{/Hpue13n/}cuγθe1s,}3γθtbhsye1 where p γ,θ p1 and p γ,θ p2 and s γ s1 and s γ s2 and u γ u1 and
+
+12
+
+u γ u2. By induction there are terms p3, s3 and u3 such that p1 γ,θ p3 and
+
+p2 γ,θ p3 and s1 γ s3 and s2 γ s3 and u1 γ u3 and u2 γ u3. Now
+
+{p1/u1}γθ Lemma 8
+
+iamndpli{eps2t/hue2}dγθiabmootnhdpiasrcaollmelprleetdeudcebyto{p{3p/3u/3u}3γθ}sγθ3.bTy hLeeomthmear
+
+7 and so cases are
+
+straightforward.
+
+Corollary 1 (Conﬂuence). The reduction relation is conﬂuent.
+
+Proof. Theorem 2 shows that γ has the diamond property and so the reﬂexivetransitive closure of γ is conﬂuent. Now apply Lemma 2.
+
+7 Conclusion and Further Work
+Pattern-matching provides a natural mechanism for computing with data structures; its expressive power is determined by the nature of the patterns that are allowed. The pure pattern calculus maximises this expressive power by allowing any term to be a pattern. The resulting language supports patterns that are able to match with arbitrary compound data structures (path polymorphism), and patterns that can be assembled dynamically (using free variables to represent patterns) and simpliﬁed into a matchable form (pattern polymorphism). Such patterns will prove useful when manipulating remote data whose structure is only partially known, as illustrated by the example of updating.
+There are a number of open questions concerning the pure pattern calculus itself, and its connections to rewriting, logic, type theory and category theory.
+The matching process may extend to consider matching of cases as well as of data structures, provided the binding variables of cases are treated appropriately. We have not pursued this here as the complexity of the development was not justiﬁed by any new forms of polymorphism. However, it may prove useful in program analysis and transformation.
+It is not yet clear what extensional equality should be for the pattern calculus, as earlier work on extensionally for pattern-matching [Kes97] does not take full account of data structures. For example, the η-equality rule f = λx.f x does not apply in our setting since a data structure is not a case.
+Another issue concerns higher-order rewriting within a formalism with patterns [FK03]. It seems natural to extend such languages to capture the rich dynamics of the patterns presented here.
+In the spirit of [KPT96] it would be interesting to explore a Curry-Howard interpretation for the pure pattern calculus in order to recognise, or develop, the corresponding logic. For example, matching against arbitrary compounds appears to model structural induction [Bur69] in a uniform way.
+The calculus presented here uses a meta-level (or implicit) pattern-matching operation. One could also consider explicit pattern-matching, where the match equations become themselves rewriting rules which can then be interleaved with other reductions [CK99,For02,Kah03,Jay04c].
+It is straightforward to provide simple types and indeed to support parametric polymorphism. Of more interest will be the addition of type specialisations
+
+13
+
+[Jay04c] necessary to type the more complex examples. The calculus will then provide a clean foundation for a typed account of XML paths, as described in [HJS05a,HJS05b] and a platform upon which to model object-orientation, along the lines proposed in [Jay04b].
+The denotational semantics of the pattern calculus also awaits exploration. It is not yet clear how to represent a case in a domain-theoretic setting. As a lambda-abstraction is an arrow in a category then perhaps a case is a span in a category or, rather, the internalisation of a span.
+In conclusion, the pure pattern calculus provides a compact setting in which to handle both functions and data structures in a uniform manner, and so support new forms of polymorphism.
+
+References
+
+[Bar84] Henk Barendregt. The Lambda Calculus: Its Syntax and Semantics, volume
+
+103 of Studies in Logic and the Foundations of Mathematics. North-Holland,
+
+1984. Revised Edition.
+
+[BCKL03] Gilles Barthe, Horatiu Cirstea, Claude Kirchner, and Luigi Liquori. Pure
+
+Pattern Type Systems. In Proceedings of the 30th Annual ACM Symposium
+
+on Principles of Programming Languages (POPL), pages 250–261. ACM,
+
+2003.
+
+[BdMH96] Richard Bird, Oege de Moor, and Paul Hoogendijk. Generic functional
+
+programming with types and relations. Journal of Functional Programming,
+
+6(1):1–28, 1996.
+
+[Bur69] Rod M. Burstall. Proving properties of programs by structural induction.
+
+The Computer Journal, 1969.
+
+[CK98] Horatiu Cirstea and Claude Kirchner. ρ-calculus, the rewriting calculus. In
+
+5th International Workshop on Constraints in Computational Logics (CCL),
+
+1998.
+
+[CK99] Serenella Cerrito and Delia Kesner. Pattern matching as cut elimination. In
+
+Giuseppe Longo, editor, 14th Annual IEEE Symposium on Logic in Com-
+
+puter Science (LICS), pages 98–108. IEEE Computer Society Press, 1999.
+
+[FK03] Julien Forest and Delia Kesner. Expression reduction systems with patterns.
+
+In Robert Nieuwenhuis, editor, 14th International Conference on Rewriting
+
+Techniques and Applications (RTA), volume 2706 of Lecture Notes in Com-
+
+puter Science, pages 107–122. Springer-Verlag, 2003.
+
+[For02] Julien Forest. A weak calculus with explicit operators for pattern matching
+
+and substitution. In Sophie Tison, editor, 13th International Conference
+
+on Rewriting Techniques and Applications (RTA), volume 2378 of Lecture
+
+Notes in Computer Science, pages 174–191. Springer-Verlag, 2002.
+
+[GJ03] Jeremy Gibbons and Johan Jeuring, editors. Generic Programming:
+
+IFIP TC2/WG2.1 Working Conference on Generic Programming July 11-
+
+12,2002, Dagstuhl, Germany. Kluwer Academic Publishers, 2003.
+
+[Has]
+
+The Haskell language. http://www.haskell.org/.
+
+[HJS05a] Freeman Yufei Huang, C. Barry Jay, and David B. Skillicorn. Dealing with
+
+complex patterns in XML processing. Technical Report 2005-497, Queen’s
+
+University School of Computing, 2005.
+
+14
+
+[HJS05b]
+[Jan00]
+[Jay04a] [Jay04b]
+[Jay04c] [JBM98] [JC94]
+[Kah03]
+[Kes97] [Klo80] [KPT96] [Oca] [SML] [syb06]
+
+Freeman Yufei Huang, C. Barry Jay, and David B. Skillicorn. Programming with heterogeneous structures: Manipulating XML data using bondi. Technical Report 2005-494, Queen’s University School of Computing, 2005. To appear in ACSW’06. Patrick Jansson. Functional Polytypic Programming. PhD thesis, Computing Science, Chalmers University of Technology and Go¨teborg University, Sweden, May 2000. C. Barry Jay. Higher-order patterns. Available as www-staff.it.uts.edu. au/~cbj/Publications/higher_order_patterns.pdf, 2004. C. Barry Jay. Methods as pattern-matching functions. In Sophia Drossopoulou, editor, The 11th International Workshop on Foundations of Object-Oriented Languages, 2004. Proc. available as http://www.doc.ic. ac.uk/~scd/FOO.pdf. C. Barry Jay. The pattern calculus. ACM Transactions on Programming Languages and Systems (TOPLAS), 26(6):911–937, November 2004. C. Barry Jay, Gianna Bell`e, and Eugenio Moggi. Functorial ML. Journal of Functional Programming, 8(6):573–619, 1998. C. Barry Jay and J. Robin B. Cockett. Shapely types and shape polymorphism. In D. Sannella, editor, Programming Languages and Systems - ESOP ’94: 5th European Symposium on Programming, Edinburgh, U.K., April 1994, Proceedings, volume 788 of Lecture Notes in Computer Science, pages 302–316. Springer Verlag, 1994. Wolfram Kahl. Basic pattern matching calculi: Syntax, reduction, conﬂuence, and normalisation. Technical Report 16, Software Quality Research Laboratory, McMaster Univ., 2003. Delia Kesner. Reasoning about redundant patterns. Journal of Functional and Logic Programming, 1997(4), June 1997. Jan-Willem Klop. Combinatory Reduction Systems. PhD thesis, Mathematical Centre Tracts 127, CWI, Amsterdam, 1980. Delia Kesner, Laurence Puel, and Val Tannen. A Typed Pattern Calculus. Information and Computation, 124(1):32–61, 1996. The Objective Caml language. http://caml.inria.fr/. Standard ML of New Jersey. http://cm.bell-labs.com/cm/cs/what/ smlnj/. Scrap your boilerplate homepage. http://www.cs.vu.nl/boilerplate/, 2006.
+
+15
+
+
