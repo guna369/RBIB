@@ -1,0 +1,5488 @@
+Developing Realisability Semantics for Intersection Types and Expansion Variables
+Fairouz Kamareddine∗, Karim Nour†, Vincent Rahli‡and J. B. Wells§ February 6, 2008
+Abstract Expansion was invented at the end of the 1970s for calculating principal typings for λ-terms in type systems with intersection types. Expansion variables (E-variables) were invented at the end of the 1990s to simplify and help mechanize expansion. Recently, E-variables have been further simpliﬁed and generalized to also allow calculating other type operators than just intersection. There has been much work on denotational semantics for type systems with intersection types, but none whatsoever before now on type systems with E-variables. Building a semantics for E-variables turns out to be challenging. To simplify the problem, we consider only E-variables, and not the corresponding operation of expansion. We develop a realizability semantics where each use of an E-variable in a type corresponds to an independent level at which evaluation occurs in the λ-term that is assigned the type. In the λ-term being evaluated, the only interaction possible between portions at diﬀerent levels is that higher level portions can be passed around but never applied to lower level portions. We apply this semantics to two intersection type systems. We show these systems are sound, that completeness does not hold for the ﬁrst system, and completeness holds for the second system when only one E-variable is allowed (although it can be used many times and nested). As far as we know, this is the ﬁrst study of a denotational semantics of intersection type systems with E-variables (using realizability or any other approach) and of the diﬃculties involved.
+∗ULTRA Group (Useful Logics, Types, Rewriting, and their Automation), http://www.macs.hw.ac.uk/ultra
+†Universit´e de Savoie, Campus Scientiﬁque, 73378 Le Bourget du Lac, France, email: nour@univ-savoie.fr
+‡Same address as Kamareddine §Same address as Kamareddine
+1
+
+Contents
+
+1 Introduction
+
+3
+
+2 The pure λIN-calculus
+
+4
+
+3 The types and their realisability semantics
+
+10
+
+3.1 The types . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10
+
+3.2 The realisability semantics . . . . . . . . . . . . . . . . . . . . . . . . 12
+
+4 The typing systems 1 and 2
+
+14
+
+4.1 The typing rules . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14
+
+4.2 Failure of subject reduction using 1 . . . . . . . . . . . . . . . . . . 20 4.3 Subject reduction and expansion using 2 . . . . . . . . . . . . . . . 21
+
+5 Soundness of the realisability semantics for 1/ 2 and examples 25
+
+6 Completeness of 2 with one expansion variable
+
+29
+
+7 Conclusion and future work
+
+33
+
+A Introducing eta reduction
+
+B Conﬂuence of
+
+∗ β
+
+and
+
+∗ βη
+
+C Strong normalization of the type systems 1 and 2
+
+D Removing indices from 1
+
+E Removing indices from 2
+
+34 38 40 43 46
+
+2
+
+1 Introduction
+Intersection types were developed in the late 1970s to type λ-terms that are untypable with simple types; they do this by providing a kind of ﬁnitary type polymorphism where the usage of types is listed rather than quantiﬁed over. They have been useful in reasoning about the semantics of the λ-calculus, and have been investigated for use in static program analysis. Coppo, Dezani, and Venneri [4] introduced the operation of expansion on typings (pairs of a type environment and a result type) for calculating the possible typings of a term when using intersection types. Expansion is a crucial part of a procedure for calculating principal typings and thus helps support compositional type inference. As a simple example, the λ-term M = (λx.x(λy.yz)) can be assigned the typing Φ1 = (z : a) (((a→b)→b)→c)→c , which happens to be its principal typing. The term M can also be assigned the typing Φ2 = (z : a1 a2) (((a1→b1)→b1) ((a2→b2)→b2)→c)→c , and an expansion operation can obtain Φ2 from Φ1. Because the early deﬁnitions of expansion were complicated, E-variables were introduced in order to make the calculations easier to mechanize and reason about. For example, in System E [2], the typing Φ1 from above is replaced by Φ3 = (z : ea) (e((a → b) → b) → c) , which diﬀers from Φ1 by the insertion of the E-variable e at two places, and Φ2 can be obtained from Φ3 by substituting for e the expansion term E = (a := a1, b := b1) (a := a2, b := b2). Carlier and Wells [3] have surveyed the history of expansion and also E-variables.
+Various kinds of denotational semantics have helped in reasoning about the properties of entire type systems and of speciﬁc typed terms. E-variables pose serious challenges for semantics. Most commonly, a type’s semantics is given as a set of closed λ-terms with behavior related to the speciﬁcation given by the type. In many kinds of semantics, the meaning of a type T is calculated by an expression [T ]ν that takes two parameters, the type T and also a valuation ν that assigns to type variables the same kind of meanings that are assigned to types. To extend this idea to types with E-variables, we would need to devise some space of possible meanings for E-variables. Given that a type e T can be turned by expansion into a new type S1(T ) S2(T ), where S1 and S2 are arbitrary substitutions (they can be arbitrary further expansions), and that this can introduce an unbounded number of new variables (both E-variables and regular type variables), the situation is complicated.
+Because it is unclear how to devise a space of meanings for expansions and E-variables, we instead develop a space of meanings for types that is hierarchical in the sense of having many levels. When assigning meanings to types, we make each use of E-variables simply change levels. We speciﬁcally avoid trying to give a semantics to the operation of expansion, and instead treat only the E-variables. Although this idea is not perfect, it seems to go quite far in giving an intuition for E-variables, namely that each E-variable acts as a kind of capsule that isolates parts of the λ-term being analyzed by the typing. Parts of the λ-term that are typed inside the uses of the E-variable-introduction typing rule for a particular E-variable e can interact with each other, and parts outside e can only pass the parts inside e around. The E-variable e of course also shows up in the types, and isolates the portions of the types contributed by the portions of the term inside the relevant uses of E-variable-introduction.
+The semantic approach we use is realisability semantics. Atomic types (e.g., type variables) are interpreted as sets of λ-terms that are saturated, meaning in this case that they are closed under β-expansion (i.e., β-reduction in reverse). Arrow and intersection types are interpreted naturally by function spaces and set intersection. Realisability allows showing soundness in the sense that the meaning of a type T contains all closed λ-terms that can be assigned T as their result type. This has been shown useful for characterizing the behavior of typed λ-terms [12]. One also wants to show the converse of soundness which is called completeness, i.e., that
+3
+
+every closed λ-term in the meaning of T can be assigned T as its result type. Hindley [8, 9, 10] was the ﬁrst to study this notion of completeness for a simple
+type system and he showed that all the types of that system have the completeness property. Then, he generalised his completeness proof for an intersection type system [7]. Using his completeness theorem for the realisability semantics based on the sets of λ-terms saturated by βη-equivalence, Hindley has shown that simple types are uniquely realised by the λ-terms which are typable by these types. However, Hindley’s result does not hold for his intersection type system and the completeness theorems were established with the sets of λ-terms saturated by βη-equivalence. In this paper, our completeness result depends instead only on the weaker requirement of β-equivalence, and we have managed to make simpler proofs that avoid needing η-reduction, conﬂuence (a.k.a. Church/Rosser), or strong normalisation (SN) (although we do establish both conﬂuence and SN for both β and βη).
+Other work on realizability we have consulted includes that by Labib-Sami [13], Farkh and Nour [6], and Coquand [5], although none of this work deals with intersection types or E-variables. Related work on realisability that deals with intersection types includes that by Kamareddine and Nour [11], which gives a realisability semantics with soundness and completeness for an intersection type system. This system is quite diﬀerent from the ones in this paper, because it allows the universal type ω. We do not currently know how to build a semantics that supports both ω and E-variables. The method of levels we use in this paper would need to assign ω to every level, which is impossible. Further work will be needed on this point.
+In this paper we study the λI-calculus typed with two representative intersection type systems. The restriction to λI (where in every (λx.M ) the variable x must appear free in M ) is motivated by not knowing how to support the ω type. For one of these systems, we show that subject reduction and hence completeness do not hold whereas for the second system, subject reduction holds and completeness will hold if at most one single E-variable is used. As far as we know, this is the ﬁrst study of a denotational semantics of intersection type systems with E-variables (using realizability or any other approach) and of the diﬃculties involved.
+Section 2 introduces the λIN-calculus, which is the λI-calculus with each variable marked by a natural number degree. Section 3 introduces the syntax and terminology for types, and also the realisability semantics. Section 4 introduces our two intersection type systems with E-variables where in one, the syntax of types is not restricted but in the other it is restricted but then extended with a subtyping relation. We show that subject reduction (SR) and completeness do not hold for the ﬁrst system, and that SR holds for the second system. In section 5 we show the soundness of the realisability semantics for both systems and give a number of examples. Section 6 shows completeness does not hold for the second system if more than one expansion variable is used, but does hold for a restriction of this system to one single E-variable. This is an important study in the semantics of intersection type systems with expansion variables since a unique expansion variable can be used many times and can occur nested. Section 7 concludes. In the appendices we establish conﬂuence and strong normalisation results as well as results related to the usual unindexed λI-calculus.
+2 The pure λIN-calculus
+In this section we give an indexed version of the λI-calculus where indices (which range over the set of natural numbers N) help categorise the so-called good terms (where the degree (or level) of a function is always smaller than that of its arguments). This amounts to having the full λI-calculus at each level (index) and creating new λI-terms through a mixing recipe.
+4
+
+We assume that if a metavariable v ranges over a set S then vi for i ≥ 0 and v , v , etc. also range over S.
+
+Deﬁnition 1 1. Let V be a denumerably inﬁnite set of variables. The set of terms M, the set of good terms M ⊂ M, the set of free variables F V (M ) of a term in M ∈ M, the degree d(M ) of a term M and the joinability M N
+of terms M and N are deﬁned by simultaneous induction:
+
+• If x ∈ V and n ∈ N, then xn ∈ M ∩ M, F V (xn) = {xn}, and d(xn) = n.
+• If M, N ∈ M such that M N (see below), then
+– (M N ) ∈ M, F V ((M N )) = F V (M ) ∪ F V (N ) and d((M N )) = min(d(M ), d(N )) (where min is the minimum)
+– If M ∈ M, N ∈ M and d(M ) ≤ d(N ) then (M N ) ∈ M. • If M ∈ M and xn ∈ F V (M ), then
+– (λxn.M ) ∈ M, F V ((λxn.M )) = F V (M ) \ {xn}, and d(λxn.M1) = d(M1).
+– If M ∈ M then λxn.M ∈ M.
+
+2. • Let M, N ∈ M. We say that M and N are joinable and write M N iﬀ ∀x ∈ V, if xm ∈ F V (M ) and xn ∈ F V (N ), then m = n.
+• If X ⊆ M such that ∀M, N ∈ X , M N , we write, X .
+• If X ⊆ M and M ∈ M such that ∀N ∈ X , M N , we write, M X .
+The property ensures that in any term M , variables have unique degrees.
+We assume the usual deﬁnition ([1, 12]) of subterms and the usual convention for parentheses and their omittance. Note that every subterm of M ∈ M (resp. M) is also in M (resp. M). We let x, y, z, etc. range over V and M, N, P, M1, M2, . . . range over M and use = for syntactic equality.
+
+3. For each n ∈ N, we let: Mn = {M ∈ M / d(M ) = n}
+M≥n = {M ∈ M / d(M ) ≥ n}
+
+M>n = M≥n+1 Mn = M ∩ Mn
+
+4. The usual substitution M [xm := N ] of N ∈ M for all free occurrences of xm in M ∈ M only matters when M N . For n ≥ 0, M [(xni i := Ni)1≤i≤n] (or simply M [(xni i := Ni)n]), the simultaneous substitution of Ni for all free occurrences of xni i in M only matters when X where X = {M } ∪ {Ni/1 ≤ i ≤ n} ⊆ M. Hence we restrict substitution accordingly to incorporate the condition. With X as above, M [(xni i := Ni)n] is only deﬁned when X . We write M [(xni i := Ni)1≤i≤1] as M [xn1 1 := N1] obviously.
+5. On M, we take terms modulo α-conversion given by: λxn.M = λyn.(M [xn := yn])where ∀m, ym ∈ F V (M )
+
+Note here that yn M and hence, M [xn := yn] ∈ M and since xn ∈ F V (M ) then yn ∈ F V (M [xn := yn]). Hence, if λxn.M ∈ M, yn ∈ F V (M ) and yn M then λyn.(M [xn := yn]) ∈ M. Note also that:
+If x = y, then ∀ i, j ∈ N, xi = yj. Moreover, xi = xj iﬀ i = j.
+We use the Barendregt convention (BC) where the names of bound variables diﬀer from the free ones and where we rewrite terms so that not both λxn and λxm co-occur when n = m. BC ensures that: • If M [(xni i := Ni)n] ∈ M then ∀mi, ∀1 ≤ i ≤ n, λxmi i does not occur in M . • If M, N ∈ M, M N and xn ∈ F V (M ) then ∀m, λxm does not occur in N.
+
+5
+
+The next lemma states when an application or an abstraction term is good.
+Lemma 2 1. (M is good and xn ∈ F V (M )) iﬀ λxn.M is good.
+2. (M1 and M2 are good, M1 M2 and d(M1) ≤ d(M2)) iﬀ M1M2 is good. Proof The only if direction is by deﬁnition. The if direction, for each of 1. and 2. is by cases on the derivation λxn.M is good respectively M1M2 is good.
+Since only joinable terms matter, the next lemma states results about .
+Lemma 3 1. On M, is reﬂexive and symmetric but not transitive.
+2. Let M, N, M , N ∈ M such that M is a subterm of M and N is a subterm of N . If M N , then M N .
+3. (a) Let M, (N1N2) ∈ M. We have M {N1, N2} iﬀ M (N1N2). (b) Let M, λxn.N ∈ M. We have M N , iﬀ M (λxn.N ). (c) Let M, N [(xni i := Ni)p] ∈ M and X = {N } ∪ {Ni/1 ≤ i ≤ p} ⊂ M. • If M X , then M N [(xni i := Ni)p].
+4. Let M1[(xni i := Ni)p] ∈ M, M2[(xni i := Ni)p] ∈ M and X = {M1, M2} ∪ {Ni/1 ≤ i ≤ p}. We have: If X then M1[(xni i := Ni)p] M2[(xni i := Ni)p].
+5. Let M ∈ M. We have: d(M ) = min(n ∈ N / xn occurs in M ).
+6. Let X = {M } ∪ {Ni/1 ≤ i ≤ p} ⊂ M. We have: (a) X iﬀ M [(xni i := Ni)p] ∈ M. (b) If X and ∀ 1 ≤ i ≤ p, d(Ni) = ni, then d(M [(xni i := Ni)p]) = d(M ).
+7. Let M, N, P ∈ M. If {M, N, P }, y = x and xn ∈ F V (P ), then M [xn := N ][ym := P ] = M [ym := P ][xn := N [ym := P ]].
+8. Let M, N, P ∈ M. If M P and F V (M ) = F V (N ) then N P .
+9. Let M, N ∈ M where d(N ) = n and xn ∈ F V (M ). We have: M [xn := N ] is good iﬀ M and N are good and M N .
+Proof
+1. For reﬂexivity, we show by induction on M ∈ M that if xn, xm ∈ F V (M ), then n = m. Symmetry is by deﬁnition of . For failure of transitivity take z2, y1 and z3.
+2. Let xm ∈ F V (M ) and xn ∈ F V (N ). If xm ∈ F V (M ) and xn ∈ F V (N ) use M N . The cases a) xm ∈ F V (M ) and λxn occurs in N and b) λxm occurs in M and xn ∈ F V (N ) are not possible by BC. Finally, if λxm occurs in M and λxn occurs in N , then by BC, n = m.
+3. Simple check of the condition using 2.
+4. By 3c, M1 M2[(xni i := Ni)p] and Nj M2[(xni i := Ni)p] ∀ 1 ≤ j ≤ p, and, by 3c again, M1[(xni i := Ni)p] M2[(xni i := Ni)p].
+5. By induction on M .
+6. 6a is by deﬁnition of substitution. 6b is by induction on M .
+7. By induction on M using 3c and 6a.
+6
+
+8. If xn ∈ F V (N ) = F V (M ) and xp ∈ F V (P ) then since M P , n = p.
+
+9. By induction on M .
+
+– By deﬁnition of substitution, xn[xn := N ] is good iﬀ xn and N are good and xn N .
+– (λym.M )[xn := N ] is good ⇔ λym.M [xn := N ] is good and ym ∈ F V (M )\F V (N ) (since λym.M ∈ M using BC) ⇔lemma 2 M [xn := N ] is good, ym ∈ F V (M [xn := N ]) and ym ∈ F V (M ) \ F V (N ) ⇔IH M and N are good, M N , ym ∈ F V (M [xn := N ]) and ym ∈ F V (M ) \ F V (N ) ⇔3b&lemma 2 λym.M and N are good and λym.M N .
+– (M1M2)[xn := N ] is good ⇔ M1[xn := N ]M2[xn := N ] is good and {M1, M2, N } (since (M1M2)[xn := N ] ∈ M) ⇔6b&lemma 2 M1[xn := N ]
+and M2[xn := N ] are good, M1[xn := N ] M2[xn := N ], {M1, M2, N } and d(M1) = d(M1[xn := N ]) ≤ d(M2[xn := N ]) = d(M2) ⇔IH M1, M2 and N are good, {M1, M2, N } and d(M1) ≤ d(M2) ⇔3a&lemma 2 M1, M2 and N are good and (M1M2) N .
+
+Now we deﬁne the beta reduction relation on the λIN-calculus.
+
+Deﬁnition 4 1. A relation R on M is compatible iﬀ for all M, N, P ∈ M:
+
+• If M RN and xn ∈ F V (M ) ∩ F V (N ), then (λxn.M )R(λxn.N ). • If M RN , M P and N P , then (M P )R(N P ) and (P M )R(P N ).
+
+2. The reduction relation β on M is deﬁned as the least compatible relation closed under the rule: (λxn.M )N β M [xn := N ] if d(N ) = n.
+
+3. We denote by
+
+∗ β
+
+the
+
+reﬂexive
+
+and
+
+transitive
+
+closure
+
+of
+
+β. We also denote
+
+by
+
+β the equivalence relation induced by
+
+∗ β
+
+.
+
+The next lemma shows that beta reduction is well deﬁned on the λIN-calculus.
+
+Lemma 5 β is a well deﬁned relation on M. I.e., if M ∈ M and M β N then
+
+N ∈ M. Hence,
+
+∗ β
+
+is
+
+also
+
+a
+
+well
+
+deﬁned
+
+relation
+
+on
+
+M.
+
+Proof By induction on M βN . We only treat the basic case. Let (λxn.M1)M2 β
+
+M1[xn := M2] where d(M2) = n. By Lemmas 3.2 and 3.6a, M1[xn := M2] ∈ M
+
+and M1
+
+M2. We show by induction on M
+
+∗ β
+
+N
+
+that
+
+if
+
+M
+
+∈
+
+M
+
+and
+
+M
+
+∗ β
+
+N
+
+then
+
+N ∈ M.
+
+The next lemma shows that the beta reduction relations preserves the free variables, degrees and goodness of terms.
+
+Lemma 6 Let M, N ∈ M such that M
+
+∗ β
+
+N.
+
+We
+
+have:
+
+1. F V (M ) = F V (N ) and d(M ) = d(N ).
+
+2. M is good iﬀ N is good.
+
+Proof
+
+1. By induction on the derivation of M
+
+∗ β
+
+N
+
+.
+
+We
+
+only
+
+treat the
+
+following:
+
+• Assume (λxn.M1)M2 β M1[xn := M2] where d(M2) = n. Since d(M2) = n, then, by Lemmas 3.6b, d(M1[xn := M2]) = d(M1) = d(λxn.M1) = d((λxn.M1)M2). Also, F V ((λxn.M1)M2) = (F V (M1) \ {xn}) ∪ F V (M2) = F V (M1[xn := M2]).
+
+2. By induction on the length of the derivation M
+
+∗ β
+
+N
+
+.
+
+• If the length of the derivation is 0, nothing to prove.
+
+7
+
+• Case M β N . We do the proof by induction on the derivation of M β N .
+
+– Let M = (λxn.M1)M2 β M1[xn := M2] = N with d(M2) = n. M ∈ M, so xn ∈ F V (M1) and (λxn.M1) M2. Since (λxn.M1) M2, by lemma 3,
+M1 M2.
+∗ Assume N is good. By lemma 3.9, M1 and M2 are good. Since M1 is good and xn ∈ F V (M1), by deﬁnition λxn.M1 is good. Since xn ∈ F V (M1), by lemma 3.5, d(M1) ≤ n, so d(λxn.M1) = d(M1) ≤
+n = d(M2). So, by deﬁnition M is good.
+∗ Assume M is good. Then, by lemma 2, λxn.M1 and M2 are good, and d(λxn.M1) ≤ d(M2). Since (λxn.M1) M2, by lemma 3.2, M1 M2. By lemma 2 and since λxn.M1 is good, M1 is good. Since M1 and M2 are good, xn ∈ F V (M1) and d(M2) = n, by lemma 3.9,
+N is good.
+
+– Let M = P Q β P Q = N and Q β Q , P Q and P Q . Since Q β Q , by lemma 6.1, d(Q) = d(Q ).
+∗ If N is good, then by lemma 2, P and Q are good and d(P ) ≤ d(Q ). Hence, d(P ) ≤ d(Q). Moreover, by IH, Q is good. Hence, by deﬁnition, M is good.
+∗ If M is good then by lemma 2, P and Q are good and d(P ) ≤ d(Q). Hence, d(P ) ≤ d(Q ). Moreover, by IH, Q is good. Hence, by deﬁnition, N is good.
+
+– Let M = P Q β P Q = N and P β P , P Q and P Q. The proof is similar to the previous item.
+– Let M = λym.M β λym.N = N , ym ∈ F V (M ) ∩ F V (N ), and M βN.
+∗ If N is good, then by lemma 2, N is good and by IH, M is good. Hence, by deﬁnition, M is good.
+∗ If M is good then by lemma 2, M is good and by IH, N is good. Hence, by deﬁnition, N is good.
+
+• Case M
+
+β N1
+
+∗ β
+
+N
+
+use
+
+IH.
+
+The next deﬁnition turns terms of degree n into terms of higher degrees and also, if n > 0, they can be turned into terms of lower degrees.
+
+Deﬁnition 7 1. We deﬁne + : M → M and − : M>0 → M by:
+
+(xn)+ = xn+1
+
+(xn)− = xn−1
+
+(M1 M2)+ = M1+ M2+ (λxn.M )+ = λxn+1.M +
+
+(M1 M2)− = M1− M2− (λxn.M )− = λxn−1.M −
+
+2. Let X ⊆ M. If ∀M ∈ X , d(M ) > 0, we write d(X ) > 0. We deﬁne:
+
+X + = {M + / M ∈ X }
+
+If d(X ) > 0, X − = {M − / M ∈ X }.
+
+n
+3. If d(M ) ≥ n > 0, we write M −n for (. . . (M −)− . . .−)−. It is easy to show that M −n is well deﬁned.
+
+The next lemma shows that the lifting of a term to higher or lower degrees, is a well behaved operation with respect to all that matters (free variables, reduction, joinability, substitution, etc.).
+Lemma 8 Let ∈ { , ∗}, p ≥ 0 and M, N, N1, N2, . . . , Np ∈ M.
+1. (a) d(M +) = d(M )+1, (M +)− = M and xn ∈ F V (M +) iﬀ xn−1 ∈ F V (M ).
+
+8
+
+(b) If d(M ) > 0, then M − ∈ M, d(M −) = d(M ) − 1, (M −)+ = M and xn ∈ F V (M −) iﬀ xn+1 ∈ F V (M ).
+(c) Let X ⊂ M. Then,
+i. X iﬀ X +. ii. If d(X ) > 0 then X iﬀ X −. iii. M ∈ X + iﬀ (M − ∈ X and d(M ) > 0).
+(d) M is good iﬀ M + is good. (e) If d(M ) > 0 then M is good iﬀ M − is good.
+
+2. Let X = {M } ∪ {Ni/1 ≤ i ≤ p} ⊂ M. If X , then (M [(xni i := Ni)p])+ = M +[(xni i+1 := Ni+)p].
+3. If d(M ), d(N ) > 0, and M N , then (M [xn+1 := N ])− = M −[xn := N −].
+
+4. If M β N , then M + β N +.
+
+5. If d(M ) > 0 and M β N , then M − β N −.
+
+6. If M β N +, then M − β N .
+
+7. If M + β N , then M β N −.
+
+8. Let P ∈ M. If M β N , P β Q and M P , then N Q.
+
+9. If M β N , M P and d(P ) = n, then M [xn := P ] β N [xn := P ].
+
+10. If N
+11. If M Proof
+
+β P and M
+
+N , then M [xn := N ]
+
+∗ β
+
+M [xn
+
+:=
+
+P ].
+
+∗ β
+
+N,
+
+P
+
+∗ β
+
+P
+
+,
+
+M
+
+P and d(P ) = n, then M [xn := P ]
+
+∗ β
+
+N [xn
+
+:=
+
+P
+
+].
+
+1. 1a and 1b are by induction on M . For 1(c)i use 1a. For 1(c)ii use 1b. As
+to 1(c)iii, if M ∈ X +, then M = P + where P ∈ X and by 1a, d(M ) = d(P ) + 1 > 0 and M − = (P +)− = P . Hence, M − ∈ X and d(M ) > 0. On the other hand, if M − ∈ X and d(M ) > 0 then by 1b, M = P + and (M −)+ = M ∈ X +. Moreover, 1d is by induction on M using 1a, 1(c)i and lemma 2. Finally, for 1e, by 1b and 1d, M = (M −)+ ∈ M ⇔ M − ∈ M.
+
+2. By induction on M (by 1(c)i and lemma 3.6, we have M [(xni i := Ni)p] ∈ M and M +[(xni i+1 := Ni+)p] ∈ M).
+3. By induction on M (by 1(c)ii and lemma 3.6, we have M [xn+1 := N ] ∈ M and M −[xn := N −] ∈ M).
+
+4. The case =
+
+is by induction on M
+
+β N using 1. and 2., case
+
+∗ β
+
+is
+
+by
+
+induction on the length of M
+
+∗ β
+
+N
+
+using
+
+the
+
+result
+
+for
+
+case
+
+β.
+
+5. Similar to 4.
+
+6. By lemma 6.1, 1a and 5, M − N .
+
+7. Similar to 6.
+
+8. Note that, by lemma 6.1, F V (M ) = F V (N ) and F V (P ) = F V (Q).
+
+9. Case =
+
+is by induction on M using lemmas 3.6b and 3.7. Case
+
+∗ β
+
+is
+
+by
+
+induction on the length of M
+
+∗ β
+
+N
+
+using
+
+the
+
+result
+
+for
+
+case
+
+β.
+
+10. Case =
+
+is by induction on M . Case
+
+∗ β
+
+is
+
+by
+
+induction
+
+on
+
+the
+
+length
+
+of
+
+M
+
+∗ β
+
+N
+
+using
+
+the
+
+result
+
+for
+
+case
+
+β.
+
+11. Use 9 and 10.
+
+9
+
+Normal forms are deﬁned as usual.
+
+Deﬁnition 9 1. We say that M ∈ M is in β-normal form (or simply is in normal form) if there is no N ∈ M such that M β N .
+
+2. We say that M ∈ M is β-normalising (or simply normalising) if there is an
+
+N ∈ M such that M
+
+∗ β
+
+N
+
+and
+
+N
+
+is
+
+in
+
+normal
+
+form.
+
+Next we give a lemma that will be used in the rest of the article.
+
+Lemma 10 1. If M [yn := xn] β N then M β N where N = N [yn := xn].
+
+2. If M [yn := xn] has a β-normal form then M has a β-normal form.
+
+3. Let k ≥ 1. If M xn11 ...xnkk is normalizing, then M is normalizing.
+
+4. Let k ≥ 1, 1 ≤ i ≤ k, l ≥ 0, xni i N1...Nl be in normal form and M be
+
+closed. If M xn1 1 ...xnkk
+
+∗ β
+
+xini N1...Nl,
+
+then
+
+for
+
+some
+
+m
+
+≥
+
+i
+
+and
+
+n
+
+≤
+
+l,
+
+M
+
+∗ β
+
+λanxdn1 1N...n.λ+xj nmmβ.xxninmimM++j1j
+
+...Mn where for every 1
+
+n+k = m+l, ≤ j ≤ k − m.
+
+Mj
+
+β Nj for every 1 ≤ j ≤ n
+
+Proof
+
+1. By induction on M [yn := xn] β N .
+
+2. M [yn := xn]
+
+∗ β
+
+P
+
+where
+
+P
+
+is
+
+in
+
+β-normal
+
+form.
+
+The
+
+proof
+
+is
+
+by
+
+induction
+
+on
+
+M [yn := xn]
+
+∗ β
+
+P
+
+using
+
+1.
+
+3. By induction on k ≥ 1. We only prove the basic case. The proof is by cases.
+
+– If M xn1 1
+
+∗ β
+
+M
+
+xn1 1
+
+where M
+
+xn1 1
+
+is in β-normal form and M
+
+∗ β
+
+M
+
+then
+
+M is in β-normal form and M is β-normalising.
+
+– If M xn1 1
+
+∗ β
+
+(λyn1
+
+.N
+
+)
+
+xn1 1
+
+β N [yn1 := xn1 1 ]
+
+∗ β
+
+P
+
+where
+
+P
+
+is
+
+in
+
+β-normal
+
+form and M
+
+∗ β
+
+λy
+
+n1
+
+.N
+
+then
+
+by
+
+2,
+
+N
+
+has
+
+a
+
+β-normal
+
+form
+
+and
+
+so,
+
+λyn1 .N
+
+has a β-normal form. Hence, M has a β-normal form.
+
+4. By 3, M is normalizing, and, since M is closed, its normal form is
+
+λxn1 1 ....λxnmm .zrM1...Mn for n, m ≥ 0.
+
+Since by theorem 68, m ≤ k, xni i N1...Nl
+
+xni i N1...Nl β zrM1...Mn
+
+xβnmm+(+λ11x.n1..1x.nk..k.λ. xHnmemn.czer,Mzr1
+
+...Mn)xn1 1 ...xnkk = xni i , n ≤ l, i
+
+then ≤ m,
+
+l = n + (k − (m + 1)) + 1 = n + k − m, Mj β Nj for every 1 ≤ j ≤ n and
+
+Nn+j
+
+β
+
+xnm+j
+m+j
+
+for
+
+every
+
+1≤j
+
+≤ k − m.
+
+3 The types and their realisability semantics
+In this section, we introduce the basic sets of types we use in our type systems and the notions of a degree of a type and of a good type. We also introduce the realisability semantics where good types can only contain good terms.
+3.1 The types
+This paper studies two type systems. In the ﬁrst system, there are no restrictions on where the arrow occurs. In the second, arrows cannot occur to the left of intersections or expansions. The next deﬁnition introduces these two basic sets of types and the notions of a degree of a type and of a good type.
+Deﬁnition 11 (Types, good types, degree of a type)
+
+10
+
+1. Assume two denumerably inﬁnite sets A (of atomic types) and E (of expansion variables). Let a, b, c, a1, . . . range over A and e range over E.
+2. The set of types T is deﬁned by: T ::= A | T → T | T T | ET .
+
+3. The set of types U is deﬁned by:
+
+U ::= U U | EU | T
+
+where T ::= A | U → T
+
+Note that T ⊆ U ⊆ T and hence, all deﬁnitions on T can be used on U. We let U, V, W, U1, V1, U , T, T1, T2, . . . range over T . We let T, T1, T2, T , . . . range over T and U, V, W, U1, V1, U , . . . range over U.
+We quotient types by taking to be commutative (i.e. U1 U2 = U2 U1), associative (i.e. U1 (U2 U3) = (U1 U2) U3), idempotent (i.e. U U = U ) and the distributivity of expansion variables to (i.e. e(U1 U2) = eU1 eU2).
+
+4. We denote eil . . . ein by ei(l:n) and Un Un+1 . . . Um by mi=nUi (n ≤ m).
+
+5. We deﬁne a function d : T → N by (hence d is also deﬁned on U):
+
+• d(a) = 0
+
+• d(U → T ) = min(d(U ), d(T ))
+
+• d(eU ) = d(U ) + 1
+
+• d(U V ) = min(d(U ), d(V )).
+
+The function d is well deﬁned because: ∀ n, m, k ∈ N,
+
+• min(n, m) = min(m, n). • min(n, min(m, k)) = min(min(n, m), k) = min(n, m, k). • min(n, n) = n. • min(n, m) + 1 = min(n + 1, m + 1).
+
+6. We deﬁne the good types on T by (this also deﬁnes good types on U):
+
+• If a ∈ A, then a is good. • If U, T are good and d(U ) ≥ d(T ), then U → T is good. • If U, V are good and d(U ) = d(V ), then U V is good. • If U is good and e ∈ E, then eU is good.
+
+The next lemma states when arrow, intersection and expansion types are good.
+
+Lemma 12 1. On T (hence on U), we have the following:
+(a) (U, T are good and d(U ) ≥ d(T )) iﬀ U → T is good. (b) (U, V are good and d(U ) = d(V )) iﬀ U V is good. (c) U is good iﬀ eU is good.
+
+2. On U, we have in addition the following:
+
+(a) If T ∈ T, then d(T ) = 0.
+
+(b) If d(U ) = n then U =
+
+k i=1
+
+ei(1:n)Vi
+
+where
+
+k
+
+≥
+
+1
+
+and
+
+∃i.Vi
+
+∈
+
+T.
+
+(c) If U is good and d(U ) = n, then U = ki=1ei(1:n)Ti where k ≥ 1 and ∀ 1 ≤ i ≤ k, Ti ∈ T.
+
+(d) U and T are good iﬀ U → T is good.
+
+Proof
+
+1. The if direction is by deﬁnition. We only do the if direction. 1a. By induction on the derivation of U → T good. 1b. By induction on the derivation of U V good. 1c. By induction on the derivation of eU good.
+
+2. 2a. By induction on T . 2b. By induction on U . 2c. By induction on U . 2d. If) By 1. Only if) By 2, d(U ) ≥ 0 = d(T ). Hence, by 1, U → T is good.
+
+11
+
+We now give the notion of an environment that will be used in our type systems.
+
+Deﬁnition i≤n
+
+13 (Environments) where n ≥ 0 and ∀1 ≤
+
+i,
+
+j
+
+1. ≤
+
+A type n, if i
+
+environment is a = j then xni i =
+
+set xnj j
+
+{xni i : }. We
+
+Ui/1 ≤ denote
+
+such environment (call it Γ) by xn1 1 : U1, xn2 2 : U2, . . . , xnnn : Un or simply by
+
+(xni i : Ui)n and deﬁne dom(Γ) = {xni i /1 ≤ i ≤ n}. We use Γ, ∆, Γ1, . . . to
+
+range over environments and write () for the empty environment.
+
+Of course on T , type environments take variables in V to T . On U, they take
+
+variables in V to U. We say that:
+
+• Γ is good iﬀ , for every 1 ≤ i ≤ k, Ui is good.
+• d(Γ) > 0 iﬀ for every 1 ≤ i ≤ k, d(Ui) > 0 and ni > 0.
+2. If Γ = (xni i : Ui)n and xm ∈ dom(Γ), then we write Γ, xn : U for the type environment xn1 1 : U1, . . . , xnnn : Un, xm : U .
+3. Let Γ1 = (xni i : Ui)n, (yjmj : Vj )m and Γ2 = (xni i : Ui )n, (zkrk : Wk)r. We write Γ1 Γ2 for the type environment (xni i : Ui Ui )n, (yjmj : Vj )m, (zkrk : Wk)r. Note that dom(Γ1 Γ2) = dom(Γ1) ∪ dom(Γ2) and that is commutative, associative and idempotent on environments.
+
+4. Let Γ = (xni i : Ti)n. We let eΓ = (xni i+1 : eTi)n. Note that e(Γ1 Γ2) = eΓ1 eΓ2.
+
+5. We say that Γ1 is joinable with Γ2 and write Γ1 Γ2 iﬀ ∀x ∈ V, if xm ∈ dom(Γ1) and xn ∈ dom(Γ2), then m = n.
+
+3.2 The realisability semantics
+
+Crucial to a realisability semantics is the notion of a saturated set deﬁned below.
+
+Deﬁnition 14 (Saturated sets) Let X , Y ⊆ M.
+
+1. We use P(X ) to denote the powerset of X , i.e. {Y / Y ⊆ X }.
+
+2. We let X Y = {M ∈ M / M N ∈ Y for all N ∈ X such that M N }.
+
+3. We say that X is saturated iﬀ whenever M
+
+∗ β
+
+N
+
+and
+
+N
+
+∈
+
+X,
+
+then
+
+M
+
+∈
+
+X.
+
+4. We say that X Y iﬀ ∀M ∈ X Y, ∃N ∈ X such that M N .
+
+The next lemma shows that saturation is closed under intersection, lifting and arrows. Moreover, the set of good terms of degree n is saturated for every n.
+
+Lemma 15 1. (X ∩ Y)+ = X + ∩ Y+.
+
+2. If X , Y are saturated sets, then X ∩ Y is saturated.
+
+3. If X is saturated, then X + is saturated.
+
+4. If Y is saturated, then, for every set X , X Y is saturated.
+
+5. (a) (X Y)+ ⊆ X + Y+. (b)If X + Y+, then X + Y+ ⊆ (X Y)+.
+
+6. For every n ∈ N, the set Mn is saturated. Proof 1. and 2. are easy.
+
+3. If M
+
+∗ β
+
+N+
+
+where
+
+N
+
+∈
+
+X,
+
+then,
+
+by
+
+lemma
+
+8.6,
+
+M
+
+=
+
+P+
+
+and
+
+P
+
+β N . As X
+
+is saturated, P ∈ X and so P + = M ∈ X +.
+
+12
+
+4. Let M ∈ X
+
+Y and N
+
+∗ β
+
+M.
+
+If
+
+P
+
+∈X
+
+such
+
+that
+
+N
+
+P , then N P
+
+∗ β
+
+MP
+
+and, by lemma 8.8 M P . Since (M P ) ∈ Y and Y is saturated, (N P ) ∈ Y.
+
+Hence, N ∈ X Y.
+
+5. (a) Let M ∈ (X Y)+, then M = N + and N ∈ X Y. If P ∈ X + such that M P , then P = Q+, Q ∈ X and M P = N +Q+ = (N Q)+. By lemma 8.1(c)i, N Q and hence N Q ∈ Y and M P ∈ Y+. Thus M ∈ X + Y+.
+
+(b) let M ∈ X + Y+. There is N ∈ X + such that M N . We have M N ∈ Y+, then M N = P + where P ∈ Y. Hence, M = M1+. Let N1 ∈ X such that M1 N1. By lemma 8.1(c)i, M N1+ and we have (M1N1)+ = M1+N1+ ∈ Y+. Hence M1N1 ∈ Y. Thus M1 ∈ X Y and M = M1+ ∈ (X Y)+.
+
+6. If M
+
+∗ β
+
+N
+
+and
+
+N
+
+∈
+
+M∩
+
+Mn
+
+then
+
+by
+
+lemma
+
+6.(1
+
+and
+
+2),
+
+M
+
+∈
+
+M ∩ Mn.
+
+Now we give the basic step in our realisability semantics: the interpretations and meanings of types.
+
+Deﬁnition 16 (Interpretations and meaning of types) Let V = V1∪V2 where V1 ∩ V2 = ∅ and V1, V2 are both denumerably inﬁnite.
+
+1. Let x ∈ V1 and n ∈ N. We deﬁne Nxn = {xn N1...Nk ∈ M / k ≥ 0}. It is easy to show that if xn N1...Nk ∈ Nxn then ∀ 1 ≤ i ≤ k, d(Ni) ≥ n.
+
+2. An interpretation I : A → P(M0) is a function such that for all a ∈ A: • I(a) is saturated and • ∀x ∈ V1, Nx0 ⊆ I(a) ⊆ M0.
+
+3. Let an interpretation I : A → P(M0) We extend an interpretation I to T
+
+(hence this includes U) as follows: • I(eU ) = I(U )+
+
+• I(U V ) = I(U ) ∩ I(V )
+
+• I(U → T ) = I(U ) I(T )
+
+Since ∩ is commutative, associative and idempotent, then, by lemma 15.1, the function I is well deﬁned.
+
+4. Let U ∈ T (hence U can be in U). We deﬁne the meaning [U ] of U by:
+
+[U ] = {M ∈ M / M is closed and M ∈
+
+I(U )}
+
+I interpretation
+
+The next lemma shows that type interpretations are saturated and interpretations of good types only contain good terms.
+
+Lemma 17 On T (hence also on U) we have the following: 1. For any type U and interpretation I, we have I(U ) is saturated.
+
+2. If U is a good type such that d(U ) = n and I is an interpretation, then ∀x ∈ V1, xn ∈ Nxn ⊆ I(U ) ⊆ Mn.
+Proof 1. By induction on U using lemma 15. 2.Obviously, xn ∈ Nxn. We prove Nxn ⊆ I(U ) ⊆ Mn by induction on U good. Case U = a: by deﬁnition. Case U = U V (resp. U = eU ): use IH since U, V are good and d(U ) = d(V ) (resp. U is good, d(U ) = d(U ) + 1, (Nxn)+ = Nxn+1 and (Mn)+ = Mn+1). Case U = U → T : by deﬁnition, U, T are good and m = d(U ) ≥ d(T ) = n.
+• Let N1, ..., Nk such that xnN1...Nk ∈ M (note that d(xnN1...Nk) = n) and let N ∈ I(U ) such that (xnN1...Nk) N (hence xnN1...NkN ∈ M). By IH, d(N ) = m ≥ n and N ∈ M. Hence, xnN1...NkN ∈ M and xnN1...NkN ∈ Nxn. By IH, xnN1...NkN ∈ I(T ). Thus xnN1...Nk ∈ I(U → T ).
+
+13
+
+• Let M ∈ I(U → T ). Let x ∈ V1 such that ∀ p ∈ N, xp ∈ F V (M ). Hence, M xm. By IH, xm ∈ I(U ). Then M xm ∈ I(T ), and so by IH M xm ∈ Mn. By lemma 2, M is good and d(M ) ≤ m. Since d(M xm) = min(d(M ), m) = n, d(M ) = n and so M ∈ Mn.
+Corollary 18 (Meanings of good types consist of good terms) On T (hence also on U) we have: If U is a good type such that d(U ) = n then [U ] ⊆ Mn. Proof Simply note that by lemma 17, for any interpretation I, I(U ) ⊆ Mn.
+Lemma 19 (The meaning of types is closed under type operations) On T (hence also on U) the following hold:
+1. [eU ] = [U ]+
+2. [U V ] = [U ] ∩ [V ]
+3. If U → T is good, then for any interpretation I, I(U ) I(T ).
+4. On T only (since eU → eT ∈ U), we have: If U → T is good, then [e(U → T )] = [eU → eT ].
+Proof 1. and 2. are easy. 3. Let d(U ) = n and M ∈ I(U ) I(T ). Take x ∈ V1 such that ∀p ∈ N, xp ∈ F V (M ). Hence, M xn. By lemma 12, U is good and by lemma 17, xn ∈ I(U ).
+4. Since U → T is good, then, by lemma 12, U, T are good and d(U ) ≥ d(T ). Again by lemma 12, eU , eT are good, d(eU ) ≥ d(eT ) and eU → eT is good. Hence by 3. above, I(U )+ I(T )+. Thus, by lemma 15.5, for any interpretation I we have I(e(U → T )) = I(eU → eT ).
+4 The typing systems 1 and 2
+In this section we introduce 1 and 2, our two intersection type systems with expansion variables. In 1, types are not restricted and subject reduction fails. In
+2, the syntax of types is restricted in the sense that arrows cannot occur to the left of intersections or expansions. In order to guarantee the subject reduction property for this type system (and hence completeness later on), we introduce a subtyping relation which will allow intersection type elimination (something not available in the ﬁrst type system).
+4.1 The typing rules
+In this section we introduce the typing rules and establish a number of properties including the generation lemma and that when a term is typable then it, and its type and its context are all good and they all satisfy the relevant hierarchy between types and terms and no redexes are blocked.
+Deﬁnition 20 The type system 1 (resp. 2) uses the set T (resp. U) of deﬁnition 11. We follow [3] and write type judgements as M : Γ U instead of the traditional format of Γ M : U . For i ∈ {1, 2}, the typing rules of i are (recall that when used for 1, U and T range over T , and when used for 2, U ranges over U and T ranges over T) given on the lefthand side of ﬁgure 4.1. In the last clause, the binary relation is deﬁned on U by the rules on the righthand side of ﬁgure 4.1. We let Φ denote types in U, or environments Γ or typings Γ 2 U . When Φ Φ , then Φ and Φ belong to the same set (U/environments/typings).
+Let Γ be a type environment, i ∈ {1, 2}, U ∈ T and M ∈ M. We say that:
+14
+
+T good d(T ) = n xn : (xn : T ) 1 T (ax)
+
+T good (ax)
+x0 : (x0 : T ) 2 T
+
+M : Γ, (xn : U ) i T λxn.M : Γ i U → T
+
+(→I )
+
+M1 : Γ1 i U → T M2 : Γ2 i U M1M2 : Γ1 Γ2 i T
+
+Γ1 Γ2 (→E )
+
+M : Γ1 i U1 M : Γ2 i U2 ( ) M : Γ1 Γ2 i U1 U2
+
+M : Γ i U (exp) M + : eΓ i eU
+
+M: Γ 2U Γ 2U M: Γ 2U
+
+Γ 2U ( )
+
+(ref ) ΦΦ
+
+Φ1 Φ2 Φ2 Φ3 (tr) Φ1 Φ3
+
+U2 good U1
+
+d(U1) = d(U2) U2 U1
+
+(
+
+e)
+
+U1 V1 U2 V2 ( ) U1 U2 V1 V2
+
+U2 U1 U1 → T1
+
+T1 T2 U2 → T2
+
+(→)
+
+U1 eU1
+
+U2 eU2
+
+(
+
+exp )
+
+U1 Γ, (yn : U1)
+
+U2 Γ, (yn : U2)
+
+(
+
+c)
+
+U1 U2 Γ2 Γ1
+
+(
+
+Γ1 2 U1
+
+Γ2 2 U2
+
+)
+
+Figure 1: Typing rules / Subtyping rules
+
+• Γ is i-legal iﬀ there are M, U such that M : Γ i U . • Γ i U is good iﬀ Γ and U are good. • d( Γ i U ) > 0 iﬀ d(Γ) > 0 and d(U ) > 0.
+
+The next lemma establishes needed properties of the relation on U.
+
+Lemma 21 U ).
+
+1. If Γ Γ , U U and xn ∈ dom(Γ) then Γ, (xn : U ) Γ , (xn :
+
+2. Γ Γ iﬀ Γ = (xni i : Ui)n, Γ = (xni i : Ui )n and for every 1 ≤ i ≤ n, Ui Ui .
+
+3. Γ 2 U Γ 2 U iﬀ Γ Γ and U U .
+
+4. Let U1 U2.
+
+(a) d(U1) = d(U2).
+
+(b) U1 is good iﬀ U2 is good.
+
+(c) If U2 is good and d(U2) = n, then U1 =
+
+k i=1
+
+ei(1:n)Ti
+
+,
+
+U2
+
+=
+
+p j=1
+
+e
+
+j(1:n)Tj ,
+
+where p, k ≥ 1, ∀1 ≤ i ≤ k Ti ∈ T, ∀1 ≤ j ≤ p Tj ∈ T and ∀1 ≤ j ≤ p,
+
+∃1 ≤ i ≤ k such that ei(1:n) = e j(1:n) and Ti Tj .
+
+(d) Let U1 =
+
+k i=1
+
+ei(1:ni
+
+)
+
+(Vi
+
+→
+
+Ti)
+
+and
+
+U2
+
+=
+
+p j=1
+
+e
+
+j(1:mj )(Vj
+
+→ Tj).
+
+If
+
+U1 is good and d(U1) = n then ∀i, j, ni = mj = n and ∀1 ≤ j ≤ p,
+
+∃1 ≤ i ≤ k such that ei(1:n) = e j(1:n), Vj Vi and Ti Tj .
+
+5. If U V a, then U = U a.
+
+6. If eU V then V = eU where U U .
+
+7. If U → T
+
+V and U → T is good, then V =
+
+p i=1
+
+(Ui
+
+→
+
+Ti)
+
+where
+
+p
+
+≥
+
+1
+
+and
+
+∀1 ≤ i ≤ p, Ui U and T Ti.
+
+8. If
+
+k i=1
+
+ei(1:ni
+
+)
+
+(Vi
+
+→
+
+Ti)
+
+V where V is good, d(V ) = n and k ≥ 1 then
+
+∀i, ni = n and V = pi=1e i(1:n)(Vi → Ti ) where p ≥ 1 and ∀1 ≤ i ≤ p,
+
+∃1 ≤ j ≤ k such that ej(1:n) = e i(1:n), Vi Vj and Tj Ti .
+
+15
+
+9. Let Φ1 Φ2.
+• d(Φ1) > 0 iﬀ d(Φ2) > 0 • Φ1 is good iﬀ Φ2 is good.
+
+10. If U
+11. If Γ Proof
+
+U1 U2 then U = U1 U2 where U1 U1 and U2 U2. Γ1 Γ2 then Γ = Γ1 Γ2 where Γ1 Γ1 and Γ2 Γ2.
+
+1. Show by induction on the derivation of Γ Γ that if Γ Γ and Γ, (xn : U ) is an environment, then Γ, (xn : U ) Γ , (xn : U ). Then use tr.
+
+2. Only if) By induction on the derivation of Γ Γ . If) By induction on n and 1.
+
+3. Only if) By induction on the derivation of Γ 2 U Γ 2 U . If) By .
+
+4. By induction on the derivation of U1 U2 using lemmas 12.2 and 12. We
+
+do case tr of 4d. If
+
+k i=1
+
+ei(1:ni
+
+)
+
+(Vi
+
+→
+
+Ti)
+
+V
+
+k i=1
+
+ei(1:ni
+
+)
+
+(Vi
+
+→
+
+Ti)
+
+V
+
+pj=1e
+
+pj=1e j(1:mj )(Vj → j(1:mj )(Vj → Tj )
+
+Tj )
+
+,
+
+then, by 4c, ∀i, ni = n and V = ql=1e l(1:n)Tl where q ≥ 1 and ∀1 ≤ l ≤ q,
+
+∃1 ≤ i ≤ k, such that e l(1:n) = ei(1:n) and Vi → Ti Tl . If Tl = a, then,
+
+by 5, Vi → Ti = V a. Absurd. Hence, ∀1 ≤ l ≤ q, Tl = Wl → Tl
+
+and V =
+
+q l=1
+
+e
+
+l(1:n)(Wl
+
+→
+
+Tl
+
+).
+
+By IH, ∀1 ≤ l ≤ q, ∃1 ≤ i ≤ k such
+
+that ei(1:n) = e l(1:n), Wl Vi and Ti Tl . Also, by IH, ∀j, mj = m and
+
+∀1 ≤ j ≤ p, ∃1 ≤ l ≤ q, e l(1:n) = e j(1:n), Vj Wl and Tl
+
+Tj. Hence,
+
+∀1 ≤ j ≤ p, ∃1 ≤ i ≤ k, such that e j(1:n) = ei(1:n), Vj Vi and Ti Tj.
+
+5. By induction on U V a.
+
+6. By induction on eU V .
+7. By 4c, V = pi=1Ti where p ≥ 1 and ∀1 ≤ i ≤ p, U → T Ti . If Ti = a, then, by 5, U → T = U a. Absurd. Hence, Ti = Ui → Ti. Hence, by 4d, ∀1 ≤ i ≤ p, Ui U and T Ti.
+8. By 4c, ∀i, ni = n and V = pi=1e i(1:n)Ti where p ≥ 1 and ∀1 ≤ i ≤ p, ∃1 ≤ ji ≤ k such that eji(1:n) = e i(1:n) and Vji → Tji Ti . Let 1 ≤ i ≤ p. If Ti = a, then, by 5, Vji → Tji = U a. Absurd. Hence, Ti = Vi → Ti . By 7, Vi Vji and Tji Ti . We are done.
+9. Using 4. and lemma 21.
+
+10. By induction on U U1 U2.
+
+– Let U1 U2
+
+U1
+
+. U2
+
+By
+
+ref ,
+
+U1
+
+U1 and U2
+
+U2.
+
+U – Let
+
+U U
+
+U U1
+
+U1 U2
+
+U2 . By IH, U = U1
+
+U2 such that U1
+
+and U2 U2. Again by IH, U = U1 U2 such that U1 U1 and U2
+
+So by tr, U1 U1 and U2 U2.
+
+– Let U good & d(U1 (U1 U2) U
+
+U2) = d(U ) . U1 U2
+
+By ref , U1
+
+Moreover:
+
+U1 and U2
+
+U1 U2 .
+U2.
+
+16
+
+∗ If d(U ) = d(U1 U2) = d(U1) then by e, U1 U U1. We are done.
+
+∗ If d(U ) = d(U1 U2) = d(U2) then by e, U2 U U2. We are done.
+
+– If U1 U1 & U2 U2 there is nothing to prove. U1 U2 U1 U2
+
+U – If
+eU
+
+U1 eU1
+
+U2 eU2
+
+then
+
+by
+
+IH
+
+U
+
+=
+
+U1
+
+U2 such that U1
+
+U1 and
+
+U2 U2. So, eU = eU1 eU2 and by exp, eU1 eU1 and eU2 eU2.
+
+11. By induction on Γ Γ1 Γ2.
+
+– Let Γ1 Γ2
+
+Γ1
+
+. Γ2
+
+By
+
+ref ,
+
+Γ1
+
+Γ1 and Γ2
+
+Γ2.
+
+Γ – Let
+
+Γ Γ
+
+Γ Γ1
+
+Γ1 Γ2
+
+Γ2 . By IH, Γ = Γ1
+
+Γ2 such that Γ1
+
+and Γ2 Γ2. Again by IH, Γ = Γ1 Γ2 such that Γ1 Γ1 and Γ2
+
+So by tr, Γ1 Γ1 and Γ2 Γ2.
+
+Γ1 Γ2 .
+
+–
+
+Let
+
+Γ, (yn
+
+U1 : U1)
+
+U2 Γ, (yn
+
+:
+
+U2)
+
+where
+
+Γ, (yn
+
+:
+
+U2)
+
+=
+
+Γ1
+
+Γ2.
+
+∗ If Γ1 = Γ1 , (yn : U2) and Γ2 = Γ2 , (yn : U2 ) such that U2 = U2 U2 , then by 10, U1 = U1 U1 such that U1 U2 and U1 U2 . Hence Γ = Γ1 Γ2 and Γ, (yn : U1) = Γ1 Γ2 where Γ1 = Γ1 , (yn : U1) and Γ2 = Γ2 , (yn : U1 ) such that Γ1 Γ1 and Γ2 Γ2 by c.
+∗ If yn ∈ dom(Γ1) then Γ = Γ1 Γ2 where Γ2 , (yn : U2) = Γ2. Hence, Γ, (yn : U1) = Γ1 Γ2 where Γ2 = Γ2 , (yn : U1). By ref and c, Γ1 Γ1 and Γ2 Γ2.
+∗ If yn ∈ dom(Γ2) then similar to the above case.
+
+The next lemma is both a context lemma and a typability of subterms lemma.
+Lemma 22 Let i ∈ {1, 2} and M : Γ i U . We have:
+1. (a) F V (M ) = dom(Γ). (b) If M : ∆ i V , then dom(Γ) = dom(∆).
+2. If xn : U1 ∈ Γ and ym : U2 ∈ Γ, then: (a) If xn : U1 = ym : U2, then xn = ym. (b) If x = y, then n = m and U1 = U2.
+3. If xn : U1 ∈ Γ and ym : U2 ∈ Γ and xn : U1 = ym : U2, then x = y and xn = ym.
+4. Assume N : ∆ i V . We have Γ ∆ iﬀ M N .
+5. If N is a subterm of M , then there are ∆, V such that N : ∆ i V .
+6. If Γ = Γ1 Γ2 Γ3, then Γ1 Γ2. Proof 1. (a) by induction on the derivation of M : Γ i U , (b) is a corollary of (a). 2. (a) and (b) by induction on the derivation of M : Γ i U using 1. in the i case. 3. is a corollary of 2. 4. use 1. 5. by induction on the derivation of M : Γ i U . 6. Let Γ = (xni i : Ui)n and x ∈ V. If xp ∈ dom(Γ1) ⊆ dom(Γ) and xq ∈ dom(Γ2) ⊆ dom(Γ), then by 2, p=q.
+17
+
+The next lemma shows that all typable terms are good, have good types, and have the same degree as their types. Moreover, all legal contexts are good.
+
+Lemma 23 Let i ∈ {1, 2}. If M : (xni i : Ui)n i U , then 1. ∀ 1 ≤ i ≤ n, Ui is good and d(Ui) = ni ≥ d(M ).
+
+2. U is good and d(M ) = d(U ).
+
+3. M is good. Proof By induction on the derivation of M : (xni i : Ui)n i U .
+
+• ax: 1. and 2. hold by the hypothesis of this rule. 3. holds by deﬁnition.
+
+•
+
+Let
+
+M : Γ, (xm : U ) i T λxm.M : Γ i U → T
+
+where Γ = (xni i : Ui)n. By IH, d(Ui) = ni,
+
+d(U ) = m, d(M ) = d(T ), ni, m ≥ d(M ) and Ui, U, T are good. Hence
+
+d(U ) ≥ d(T ) and, by deﬁnition, U → T is good. Moreover, d(λxm.M ) =
+
+d(M ) = d(T ) = min(d(U ), d(T )) = d(U → T ) and ni ≥ d(λxm.M ). Since by lemma 22, F V (M ) = dom(Γ, (xm : U )), xm ∈ F V (M ) and since by IH, M is
+
+good, by deﬁnition λxm.M is good.
+
+• Let M1 : Γ1 i U → T M2 : Γ2 i U Γ1 Γ2 where M1 M2 : Γ1 Γ2 i T
+Γ1 = (xni i : Ui)n, (yjmj : Vj )m, Γ2 = (xni i : Ui )n, (zkrk : Wk)r and Γ1 Γ2 = (xni i : Ui Ui )n, (yjmj : Vj )m, (zkrk : Wk)r. By IH, d(Ui) = d(Ui ) = ni, d(Vj) = mj, d(Wk) = rk, d(M1) = d(U → T ), d(M2) = d(U ), ni, mj ≥
+d(M1), ni, rk ≥ d(M2) and Ui, Vj, Ui , Wk, U → T, U are good. By deﬁnition, Ui Ui and T are good. Also, d(Ui Ui ) = ni. Since U → T is good, then, by lemma 12, d(U ) ≥ d(T ), d(M1) = d(T ) and d(M1 M2) =
+min(d(M1), d(M2)) = min(d(T ), d(U )) = d(T ). We have ni ≥ d(M1) =
+d(T ) = d(M1 M2), mj ≥ d(M1) = d(M1 M2) and rk ≥ d(M2) = d(U ) ≥
+d(T ) = d(M1 M2). Finally, d(M1) = deg(U → T ) = d(T ) ≤ d(U ) = d(M2),
+by lemma 22, M1M2 ∈ M so M1 M2 and by IH, M1 and M2 are good, so
+by deﬁnition M1M2 is good.
+
+•
+
+M: Let
+
+(xni i : Ui)n i U M : (xni i : Ui
+
+M : (xni i : Vi)n i V Vi)n i U V
+
+(note lemma 22.1). By IH,
+
+d(Ui) = d(Vi) = ni, d(M ) = d(U ) = d(V ), ni ≥ d(M ) and Ui, Vi, U, V are
+
+good. Hence, d(Ui Vi) = ni and d(M ) = d(U V ). Moreover, by deﬁnition,
+
+Ui Vi and U V are good. Finally, by IH, M is good.
+
+•
+
+Let
+
+M : (xni i : Ui)n i U M + : (xni i+1 : eUi)n i eU
+
+.
+
+By IH, d(Ui) = ni, d(M ) = d(U ), ni ≥
+
+d(M ) and Ui, U are good. Hence, d(eUi) = ni + 1, d(M +) = d(eU ) and
+
+ni + 1 ≥ d(M +). Moreover, by deﬁnition, eUi and eU are good. Finally, By
+
+IH, M is good, so by lemma 8.1d, M + is good.
+
+• Let M : Γ
+
+2U Γ 2U M : (xni i : Ui)n
+
+(xni i : Ui)n 2U
+
+2 U . By lemma 21, Γ = (xni i :
+
+Ui )n, for every 1 ≤ i ≤ n, Ui Ui and U U . By IH, U is good,
+
+d(M ) = d(U ) and ∀ 1 ≤ i ≤ n, d(Ui ) = ni, ni ≥ d(M ) and Ui are good. By
+
+lemma 21, U is good, d(M ) = d(U ) and ∀ 1 ≤ i ≤ n, d(Ui) = ni and Ui are
+
+good. Moreover, M is good by IH.
+
+18
+
+Remark 24 The rules i and ax given below are derivable in 2:
+
+M : Γ1 2 U1
+
+M : Γ2 2 U2
+
+M : Γ1 Γ2 2 U1 U2
+
+i
+
+U is good d(U ) = n xn : (xn : U ) 2 U ax
+
+Proof i. Let M : Γ1 2 U1 and M : Γ2 2 U2 . By lemma 22, dom(Γ1) = dom(Γ2). Let Γ1 = (xni i , Vi)n and Γ2 = (xni i , Vi )n. By lemma 23, ∀1 ≤ i ≤ n, Vi and
+
+Vi are good and d(Vi) = d(Vi ) = ni. By e, Vi Vi Vi and Vi Vi Vi . Hence,
+
+by lemma 21.2, Γ1 Γ2 Γ1 and Γ1 Γ2 Γ2 and by and , M : Γ1 Γ2, U1
+
+and M : Γ1 Γ2, U2 . Finally, by i, M : Γ1 Γ2, U1 U2 .
+
+ax . By lemma 12.2, U =
+
+k i=1
+
+ei(1:n)Ti
+
+where
+
+k
+
+≥
+
+1,
+
+and
+
+∀1
+
+≤
+
+i
+
+≤
+
+k,
+
+Ti
+
+∈
+
+T
+
+and
+
+Ti
+
+is good. Let 1 ≤ i ≤ k. By lemma 12.2, d(Ti) = 0 and by ax, x0 : (x0 : Ti) 2 Ti .
+
+Hence, xn : (xn : ei(1:n)Ti) 2 ei(1:n)Ti by n applications of exp. Now, by k − 1
+
+applications of i, xn : (xn : U ) 2 U .
+
+Next, the generation lemma which says how type derivations are generated (re-
+
+call that in T , T ranges over all of T whereas in U, T ranges only over T).
+
+Lemma 25 (Generation for 1) 1. If xn : Γ 1 T , then Γ = (xn : T ).
+
+2. If λxn.M : Γ 1 T1 → T2 , then M : Γ, xn : T1 1 T2 .
+
+3. If M N : Γ 1 T then Γ = Γ1
+
+Γ2, T =
+
+n i=1
+
+ei(1:mi
+
+)
+
+Ti
+
+,
+
+n
+
+≥
+
+1, mi
+
+≥
+
+0,
+
+M : Γ1
+
+1
+
+n i=1
+
+ei(1:mi
+
+)
+
+(Ti
+
+→
+
+Ti)
+
+and N :
+
+Γ2
+
+1
+
+n i=1
+
+ei(1:mi
+
+)
+
+Ti
+
+.
+
+Proof
+
+1. By induction on the derivation of xn : Γ 1 T .
+
+2. First, we prove by induction on the derivation of λxn.M : Γ 1 T1 → T2
+that ∃k ≥ 1, Γ1, Γ2, . . . , Γk, such that Γ = Γ1 Γ2 . . . Γk and ∀ 1 ≤ i ≤ k, M : Γi, xn : T1 1 T2 . We have two cases:
+
+– Case →i: take k = 1.
+
+– Case
+
+i:
+
+Let
+
+λxn.M :
+
+∆ 1 T1 → T2 λxn.M : ∆
+
+λxn.M : Ω 1 T1 → T2 Ω 1 T1 → T2
+
+.
+
+By
+
+IH, ∆ = ∆1 . . . ∆k1 and ∀ 1 ≤ i ≤ k1, M : ∆i, xn : T1 1 T2 and
+
+Ω = Ω1 . . . Ωk2 and ∀ 1 ≤ j ≤ k2, M : Ωj, xn : T1 1 T2 and we are
+
+done.
+
+Now we prove 2. Since Γ = Γ1 Γ2 . . . Γk where ∀ 1 ≤ i ≤ k, M : Γi, xn : T1 T2 , by k − 1 applications of i we get M : Γ, xn : T1 1 T2 .
+
+3. By induction on the derivation of M N : Γ 1 T .
+
+Lemma 26 (Generation for 2)
+
+1. If xn : Γ 2 U , then Γ = (xn : V ) where V U .
+
+2. If λxn.M : Γ 2 U and d(U ) = m, then U = ki=1ei(1:m)(Vi → Ti) where k ≥ 1 and ∀1 ≤ i ≤ k, M : Γ, xn : ei(1:m)Vi 2 ei(1:m)Ti .
+Proof 1. By induction on the derivation of xn : Γ 2 U . 2. By induction on the derivation of λxn.M : Γ 2 U . We have four cases:
+
+•
+
+If
+
+M : Γ, xn λxn.M : Γ
+
+:U 2U
+
+2T →T
+
+, nothing to prove.
+
+19
+
+•
+
+Let
+
+λxn.M : Γ 2 U1 λxn.M : Γ
+
+λxn.M 2 U1
+
+:Γ U2
+
+2 U2 .
+
+By lemma 23, U1
+
+U2 is good
+
+and d(U1) = d(U2) = m. By IH we have: U1 =
+
+k i=1
+
+ei(1:m)
+
+(Vi
+
+→
+
+Ti),
+
+U2 = ki=+kl+1ei(1:m)(Vi → Ti) (hence U1 U2 = ik=+1lei(1:m)(Vi → Ti)) where
+
+k, l ≥ 1 and ∀1 ≤ i ≤ k + l, M : Γ, xn : ei(1:m)Vi 2 ei(1:m)Ti . We are done.
+
+•
+
+Let
+
+λxn.M : Γ 2 U λxn+1.M + : eΓ 2 eU
+
+.
+
+By IH, U =
+
+ki=1ei(1:m−1)(Vi → Ti) (since
+
+d(U ) = m − 1) where k ≥ 1 and ∀1 ≤ i ≤ k, M : Γ, xn : ei(1:m−1)Vi 2
+
+ei(1:m−1)Ti . By e, ∀1 ≤ i ≤ k, M + : Γ, xn + 1 : eei(1:m−1)Vi 2 eei(1:m−1)Ti .
+
+•
+
+Let
+
+λxn.M :
+
+Γ 2U Γ λxn.M : Γ
+
+2U 2U
+
+Γ 2 U . By lemma 21, Γ
+
+Γ and
+
+U U . By lemma 23, U, U are good and d(U ) = d(U ) = m. By IH,
+
+U = ki=1ei(1:m)(Vi → Ti), where k ≥ 1 and M : Γ, xn : ei(1:m)Vi 2 ei(1:m)Ti ∀ 1 ≤ i ≤ k. By lemma 21, U = pi=1e i(1:m)(Vi → Ti ), where p ≥ 1, and
+
+∀1 ≤ i ≤ p, ∃1 ≤ ji ≤ k such that eji(1:m) = e i(1:m), Vi Vji and Tji Ti .
+
+Let 1 ≤ i ≤ p. Since Γ, xn : eji(1:m)Vji 2 eji(1:m)Tji
+
+Γ , xn : e i(1:m)Vi 2
+
+e i(1:m)Ti , by lemma 21, then M : Γ , xn : e i(1:m)Vi 2 e i(1:m)Ti .
+
+The next lemma says that there are no blocked β-redexes in a typable term.
+
+Lemma 27 (No β-redexes are blocked in typable terms) Let i ∈ {1, 2} and M : Γ i U . If (λxn.M1)M2 is a subterm of M , then d(M2) = n and hence (λxn.M1)M2 β M1[xn := M2].
+Proof
+
+• Case 1. By induction on the derivation of M : Γ 1 U . The only inter-
+
+esting case is →e where M = (λxn.M1)M2 is the subterm in question. Here,
+
+λxn.M1 : Γ1 1 T1 → T2 M2 : Γ2 T1 (λxn.M1)M2 : Γ1 Γ2 1 T2
+
+Γ1 Γ2 .
+
+By Lemma 25.2, M1 : Γ1, xn : T1 1 T2 . By lemma 23, n = d(T1) and
+
+d(M2) = d(T1). Hence, n = d(M2) and (λxn.M1)M2 β M1[xn := M2].
+
+• Case 2. By lemma 22.5, (λxn.M1)M2 is typable. By induction on the typing
+
+of (λxn.M1)M2. We consider only the rule →e:
+
+λxn.M1 : Γ1 V → T M2 : Γ2 V (λxn.M1)M2 : Γ1 Γ2 T
+
+Γ1 Γ2 .
+
+By lemma 12.2, d(V → T ) = 0. By Lemma 26.2, V → T = ki=1(Vi → Ti)
+
+where k ≥ 1 and ∀1 ≤ i ≤ k, M1 : Γ1, xn : Vi Ti . Hence k = 1, Vi = V ,
+
+Ti = T and M1 : Γ1, xn : V T . By lemma 23, V is good, d(M2) = d(V )
+
+and d(V ) = n. So, d(M2) = n and (λxn.M1)M2 β M1[xn := M2].
+
+4.2 Failure of subject reduction using 1
+The next lemma shows that the substitution lemma for 1, and subject reduction for β using 1 fail. (See lemma 31 and corollary 33 for the statements of substitution and subject reduction.)
+Lemma 28 (Subject β-reduction fails for 1) Let a, b, c be diﬀerent elements of A. We have:
+1. (λx0.x0x0)(y0z0) β (y0z0)(y0z0)
+20
+
+2. (λx0.x0x0)(y0z0) : y0 : b → ((a → c) a), z0 : b 1 c .
+
+3. x0x0 : x0 : (a → c) a 1 c .
+
+4. It is not possible that
+(y0z0)(y0z0) : y0 : b → ((a → c) a), z0 : b 1 c . Hence, the substitution and subject β-reduction lemmas fail for 1. Proof 1..3 are easy. For 4, assume (y0z0)(y0z0) : y0 : b → ((a → c) b 1 c . By lemma 25.3 twice using lemma 22, lemmas 23 and 25.1:
+
+a), z0 :
+
+• y0z0 : y0 : b → ((a → c) a), z0 : b 1 ni=1(Ti → c) . • y0 : y0 : b → ((a → c) a) 1 b → (a → c) a .
+
+• z0 : z0 : b 1 b .
+
+• ni=1(Ti → c) = (a → c) a.
+
+Hence a = Ti → c for some Ti. Absurd.
+
+4.3 Subject reduction and expansion using 2
+
+In this section we show that the substitution lemma holds for 2 and we use this to show that subject reduction and subject expansion for β using 2 holds. The subject reduction and expansion for β will be used in the proof of completeness (more speciﬁcally in lemma 52 which is basic for the completeness theorem 53).
+Just as we deﬁned the degree decreasing of a term, we do the same for a type.
+
+Deﬁnition 29 1. If d(U ) > 0, we inductively deﬁne the type U − as follows:
+
+(U1 U2)− = U1− U2−
+
+(eU )− = U
+
+n
+
+If d(U ) ≥ n > 0, we write U −n for (. . . (U −)− . . .−)−.
+
+2.
+
+ΓIf−Γ==((xxni nii−i 1:
+
+Ui)k and : Ui−)k.
+
+d(Γ) > 0,
+
+then
+
+we
+
+let
+
+n
+
+If d(Γ) ≥ n > 0, we write Γ−n for (. . . (Γ −)− . . .−)−.
+
+3. If U is a type and Γ is a type environment such that d(Γ) > 0 and d(U ) > 0, then we let ( Γ 2 U )− = ( Γ− 2 U − ).
+
+Lemma 30 1. If d(U ) > 0, then d(U −) = d(U ) − 1.
+2. If d(U ) > 0 and U is a good type, then U − is a good type.
+3. If d(U1) > 0 and U1 U2, then U1− U2−. 4. If d(Φ1) > 0 and Φ1 Φ2, then Φ−1 Φ−2 .
+5. If M : Φ and d(Φ) > 0, then M − : Φ−.
+6. If M + : Γ 2 eU , then M : Γ− 2 U . Proof 1. By induction on U . 2. By induction on U using 1. and lemma 12. 3. By induction on the derivation of U1 U2 using 1, 2 and lemma 21. 4. Use 3 and lemma 21. 5. By induction on the derivation of M : Φ. By lemma 12.2, we have three cases.
+
+21
+
+•
+
+M: Let
+
+Γ 2 W1 M : M : Γ 2 W1
+
+Γ 2 W2 W2
+
+. By lemma 23, d(W1) = d(W2) = d(W1
+
+W2) > 0. By IH, M − : Γ− 2 W1− and M − : Γ− 2 W2− . Hence, by i,
+
+M − : Γ− 2 W1− W2− .
+
+•
+
+Let
+
+M : (xni i : Ui)n 2 U M + : (xni i+1 : eUi)n 2 eU
+
+.
+
+By lemma 8.1a, (M +)− = M .
+
+• Let M : Φ1 Φ1 M : Φ2
+
+Φ2 . By lemma 21, d(Φ1) > 0. Hence, by IH, M − : Φ−1 .
+
+By 4, Φ−1 Φ−1 . Hence, by , M − : Φ−2 .
+
+6. Note that d(eU ) > 0. Hence, by lemma 5, (M +)− : Γ− 2 (eU )− . Hence, by lemma 8.1a, M : Γ− 2 U .
+The next lemma which fails for 1, is needed in the proof of subject reduction for β using 2.
+
+Lemma 31 (Substitution for 2) If M : Γ, xn : U 2 V , N : ∆ 2 U and Γ ∆, then M [xn := N ] : Γ ∆ 2 V .
+Proof By induction on the derivation of M : Γ, xn : U 2 V .
+
+T good • If x0 : (x0 : T )
+
+2T
+
+and N : ∆
+
+2 T , then N = x0[x0 := N ] : ∆
+
+2T .
+
+•
+
+Let
+
+M : Γ, xn : U, ym : U λym.M : Γ, xn : U 2 U
+
+2T →T
+
+.
+
+Since Γ
+
+∆, by BC, Γ, ym : U
+
+∆
+
+and ym ∈ dom(∆). By IH, M [xn := N ] : Γ ∆, ym : U 2 T . By →i,
+
+(λym.M )[xn := N ] = λym.M [xn := N ] : Γ ∆ 2 U → T .
+
+•
+
+Let M1 :
+
+Γ1, xn : U1 2 V → T M2 : Γ2, xn : U2 2 V M1M2 : Γ1 Γ2, xn : U1 U2 2 T
+
+Γ1 Γ2 where xn ∈
+
+F V (M1) ∩ F V (M2), N : ∆ 2 U1 U2 and (Γ1 Γ2) ∆. By e and ,
+
+N : ∆ 2 U1 and N : ∆ 2 U2 . Now use IH and →e.
+
+The cases xn ∈ F V (M1) \ F V (M2) or xn ∈ F V (M2) \ F V (M1) are easy.
+
+•
+
+M: If
+
+Γ, xn : U 2 U1 M : Γ, xn : U M : Γ, xn : U 2 U1 U2
+
+2 U2
+
+use IH and
+
+i.
+
+•
+
+Let
+
+M : Γ, xn : U 2 V M + : eΓ, xn+1 : eU 2 eV
+
+where N : ∆
+
+2 eU and eΓ
+
+∆. By
+
+lemma 23, d(N ) = d(eU ) = d(U ) + 1 > 0. Hence, by lemmas 8.3 and 30.6,
+
+N = P + and P : ∆− 2 U . As eΓ ∆, then Γ ∆−. By IH, M [xn := P ] : Γ ∆− 2 V . By e and lemma 8.2, M +[xn+1 := N ] : eΓ ∆ 2 eV .
+
+•
+
+M: Let
+
+Γ , xn : U
+
+2 V Γ , xn : U 2 V M : Γ, xn : U 2 V
+
+Γ, xn : U 2 V
+
+(note the use of lemma 21). By lemma 21, dom(Γ) = dom(Γ ), Γ ⊆ Γ ,
+
+U ⊆ U and V ⊆ V . Hence Γ ∆, N : ∆ 2 U and, by IH, M [xn :=
+
+N ] : Γ ∆ 2 V . It is easy to show that Γ ∆ ⊆ Γ ∆. Hence,
+
+Γ ∆ 2 V ⊆ Γ ∆ 2 V and M [xn := N ] : Γ ∆ 2 V .
+
+22
+
+Now, we give the basic block in the proof of subject reduction for β.
+
+Theorem 32 If M : Γ 2 U and M β N , then N : Γ 2 U .
+Proof By induction on the derivation of M : Γ 2 U . →i, i and We give the remaining two cases.
+
+are by IH.
+
+• Let M1 : Γ1 2 U → T M2 : Γ2 2 U M1M2 : Γ1 Γ2 2 T
+
+Γ1 Γ2 . For the cases N = M1N2
+
+where M2 β N2 or N = N1M2 where M1 β N1 use IH. Assume M1 = λxn.P
+
+and M1M2 = (λxn.P )M2 β P [xn := M2] = N where d(M2) = n. Since
+
+λxn.P : Γ1 2 U → T and, by lemma 12.2.2a d(U → T ) = 0, then, by
+
+lemma 26.2, P : Γ1, xn : U 2 T . By lemma 31, P [xn := M2] : Γ1 Γ2 2
+
+T.
+
+•
+
+Let
+
+M: M+ :
+
+Γ eΓ
+
+2U 2 eU
+
+.
+
+If M +
+
+β N , then by lemma 6.1, d(M +) = d(N ). By
+
+lemmas 8.1a and 8.3, d(N ) > 0, N = P + and M β P . By IH, P : Γ 2 U
+
+and, by exp, N : eΓ 2 eU .
+
+Corollary 33 (Subject reduction for β)
+
+If M : Γ 2 U and M
+
+∗ β
+
+N,
+
+then
+
+N
+
+:
+
+Γ
+
+2U .
+
+Proof By induction on the length of the derivation of M
+
+32.
+
+∗ β
+
+N
+
+using
+
+theorem
+
+The next lemma will be used in the proof of subject expansion for β.
+
+Lemma 34 Let (λxn.M1)M2 : Γ 2 U then Γ = Γ1 Γ2 and ∃V ∈ U such that M1 : Γ1, (xn : V ) 2 U and M2 : Γ2 2 V .
+
+Proof By induction on the derivation of (λxn.M1)M2 : Γ 2 U .
+
+•
+
+Let λxn.M1 :
+
+Γ1 2 V → T (λxn.M1)M2 :
+
+M2 : Γ2 2 V Γ1 Γ2 2 T
+
+Γ1 Γ2 .
+
+Since d(V → T ) = 0, by lemma 26.2 M1 : Γ1, (xn : V ) 2 T .
+
+•
+
+Let
+
+(λxn.M1)M2 : Γ 2 U1 (λxn.M1)M2
+
+:
+
+(λxn.M1)M2 : Γ 2 U1 U2
+
+Γ
+
+2 U2 . By IH, Γ = Γ1
+
+Γ2 =
+
+Γ1 Γ2, ∃V, V ∈ U, such that M1 : Γ1, (xn : V ) 2 U1 , M2 : Γ2 2 V ,
+
+M1 : Γ1, (xn : V ) 2 U2 and M2 : Γ2 2 V . By lemma 23.1, Γ1, Γ2, Γ1,
+
+Γ2, V and V are all good. By lemma 22.1, dom(Γ1, (xn : V )) = F V (M1) =
+
+dom(Γ1, (xn : V )) so dom(Γ1) = dom(Γ1) and dom(Γ2) = F V (M2) =
+
+dom(Γ2). Hence,by e, and lemma 21, Γ1 Γ1, (xn : V V ) Γ1, (xn : V ),
+
+Γ1 Γ1, (xn : V V ) Γ1, (xn : V ), Γ2 Γ2 Γ2 and Γ2 Γ2 Γ2. By
+
+lemma 21.3 and , M1 : Γ1 Γ1, (xn : V V ) 2 U1 , M1 : Γ1 Γ1, (xn :
+
+V V ) 2 U2 , M2 : Γ2 Γ2 2 V and M2 : Γ2 Γ2 2 V . So by i,
+
+M1 : Γ1 Γ1, (xn : V V ) 2 U1 U2 and M2 : Γ2 Γ2 2 V V .
+
+•
+
+Let
+
+(λxn.M1)M2 : (λxn+1.M1+)M2+ :
+
+Γ2 eΓ
+
+U 2 eU
+
+. By IH, Γ = Γ1
+
+Γ2 and ∃V ∈ U, such that
+
+M1 : Γ1, (xn : V ) 2 U and M2 : Γ2 2 V . So by exp, M1+ : eΓ1, (xn+1 :
+
+eV ) 2 eU and M2+ : eΓ2 2 eV .
+
+•
+
+Let
+
+(λxn.M1)M2 : Γ 2 U (λxn.M1)M2
+
+:
+
+Γ Γ
+
+2U 2U
+
+Γ 2 U . By lemma 21.3, Γ Γ
+
+and U U . By IH, Γ = Γ1 Γ2 and ∃V ∈ U, such that M1 : Γ1, (xn : V ) 2
+
+U and M2 : Γ2 2 V . By lemma 21.11, Γ = Γ1 Γ2 such that Γ1 Γ1 and
+
+Γ2 Γ2. So by , M1 : Γ1, (xn : V ) 2 U and M2 : Γ2 2 V .
+
+23
+
+Now, we give the basic block in the proof of subject expansion for β.
+
+Lemma 35 If N : Γ 2 U and M β N then M : Γ 2 U Proof By induction on the derivation of N : Γ 2 U .
+
+• Let x0 :
+
+T good (x0 : T )
+
+2T
+
+where M
+
+β x0. By cases on M , we can show that
+
+M = (λy0.y0)x0. Since T is good, by ax, y0 : (y0 : T ) 2 T , then by →i,
+
+λy0.y0 : () 2 T → T , and so by →e, (λy0.y0)x0 : (x0 : T ) 2 T .
+
+•
+
+Let
+
+N : Γ, (xn λxn.N : Γ
+
+: U) 2U
+
+2T →T
+
+where M
+
+β λxn.N . By cases on M .
+
+– If M is a variable this is not possible.
+– If M = λxn.M such that M β N and xn ∈ F V (M ) ∩ F V (N ) then by IH, M : Γ, (xn : U ) 2 T and by →i, M : Γ 2 U → T .
+– If M is an application term then the reduction must be at the root. Hence, M = (λym.M1)M2 β M1[ym := M2] = λxn.N where ym ∈ F V (M1). There are two cases (M1 cannot be an application term):
+∗ If M1 = ym then M2 = λxn.N and d(N ) = m. By lemma 23.2, m = d(N ) = d(T ) = 0. So M = (λy0.y0)(λxn.N ). Since by lemma 23.2, U → T is good , by ax, y0 : (y0 : U → T ) 2 U → T , then by →i, λy0.y0 : () 2 (U → T ) → (U → T ) , and so by →e, (λy0.y0)(λxn.N ) : Γ 2 U → T .
+∗ If M1 = λxn.M1 then M1[ym := M2] = λxn.M1[ym := M2] = λxn.N and d(M2) = m. Since (λym.M1)M2 β M1[ym := M2] = N , by IH, (λym.M1)M2 : Γ, (xn : U ) 2 T . By lemma 34, Γ, (xn : U ) = Γ1 Γ2 and ∃V ∈ U such that M1 : Γ1, (ym : V ) 2 T and M2 : Γ2 2 V . Since M ∈ M, ym ∈ F V (M1) and so (since xn ∈ F V (M2)), by lemma 22 Γ = Γ1 Γ2 and Γ1 = Γ1, (xn : U ). Hence by →i, λxn.M1 : Γ1, (ym : V ) 2 U → T , again by →i, λym.λxn.M1 : Γ1 2 V → U → T , and since by lemma 22.6, Γ1 Γ2, by →e, M = (λym.λxn.M1)M2 : Γ 2 U → T .
+
+• Let N1 : Γ1 2 U → T N2 : Γ2 2 U N1N2 : Γ1 Γ2 2 T
+
+Γ1 Γ2 and M β N1N2.
+
+– If M = M1N2 β N1N2 where M1 N2, N1 N2 and M1 β N1 then by IH, M1 : Γ1 2 U → T , and by →e, M : Γ1 Γ2 2 T .
+– If M = N1M2 β N1N2 where N1 M2, N1 N2 and M2 β N2 then by IH, M2 : Γ2 2 U , and by →e, M : Γ1 Γ2 2 T .
+– If M = (λxn.M1)M2 β M1[xn := M2] = N1N2 where d(M2) = n and xn ∈ F V (M1). By cases on M1 (M1 cannot be an abstraction):
+∗ If M1 = xn then M2 = N1N2, d(N1N2) = n and M = (λx0.x0)(N1N2). By lemma 23, n = 0 and T is good. By ax, x0 : (x0 : T ) 2 T , hence by →i, λx0.x0 : () 2 T → T , and by →e, (λx0.x0)(N1N2) : Γ1 Γ2 2 T .
+∗ If M1 = M1M1 then M1[xn := M2] = M1[xn := M2]M1 [xn := M2] = N1N2. So, M1[xn := M2] = N1 and M1 [xn := M2] = N2. · If xn ∈ F V (M1) and xn ∈ F V (M1 ) then (λxn.M1)M2 β N1 and (λxn.M1 )M2 β N2. By IH, (λxn.M1)M2 : Γ1 2 U → T and (λxn.M1 )M2 : Γ2 2 U . By lemma 34 twice, Γ1 = Γ1 Γ1 , Γ2 = Γ2 Γ2 , and ∃V, V ∈ U such that M1 : Γ1, (xn : V ) 2
+
+24
+
+U → T , M2 : Γ1 2 V , M1 : Γ2, (xn : V ) 2 U and M2 : Γ2 2 V . By lemma 23.1, Γ1, Γ2, Γ1 , Γ2 , V and V are all good. By lemma 22.1, dom(Γ1 ) = F V (M2) = dom(Γ2 ). Hence, by e, lemma 21, and i, M2 : Γ1 Γ2 2 V V . Since by lemma 22.6, Γ1 Γ2, by →e, M1M1 : Γ1 Γ2, (xn : V V ) 2 T . So by →i, λxn.M1M1 : Γ1 Γ2 2 (V V ) → T . Finally, by →e and since by lemma 22.6, Γ1 Γ2 Γ1 Γ2 and Γ1 Γ2 = Γ1 Γ2 Γ1 Γ2 , (λxn.M1M1 )M2 : Γ1 Γ2 2 T .
+· If xn ∈ F V (M1) and xn ∈ F V (M1 ) then M1[xn := M2] = N1 and M1 = N2. We have (λxn.M1)M2 β N1, so by IH, (λxn.M1)M2 : Γ1 2 U → T . By lemma 34, Γ1 = Γ1 Γ1 and ∃V ∈ U such that M1 : Γ1, (xn : V ) 2 U → T and M2 : Γ1 2 V . Since by lemma 22.6, Γ1 Γ2, by →e, M1M1 : Γ1 Γ2, (xn : V ) 2 T , and by →i, λxn.M1M1 : Γ1 Γ2 2 V → T . Finally, by →e and since by lemma 22.6, Γ1 Γ2 Γ1 , (λxn.M1M1 )M2 : Γ1 Γ2 2 T .
+· If xn ∈ F V (M1) and xn ∈ F V (M1 ) then the proof is similar to the previous case.
+
+• Let N : Γ 2 U1 N : Γ 2 U2 and M N : Γ 2 U1 U2
+M : Γ 2 U2 , hence by i, M : Γ 2 U1
+
+β N . By IH, M : Γ U2 .
+
+2 U1 and
+
+•
+
+Let
+
+N: N+ :
+
+Γ eΓ
+
+2U 2 eU
+
+and M
+
+β N +. By lemma 8.6, M −
+
+β N , and by IH,
+
+M − : Γ 2 U . By lemma 8.1b, (M −)+ = M and by exp, M : eΓ 2 eU .
+
+•
+
+N: Let
+
+Γ
+
+2U
+
+Γ 2U
+
+N: Γ 2U
+
+and by M : Γ 2 U .
+
+Γ 2 U and M β N . By IH, M : Γ 2 U
+
+Corollary 36 (Subject expansion for β)
+
+If N : Γ
+
+2 U and M
+
+∗ β
+
+N
+
+then
+
+M
+
+:
+
+Γ
+
+2U
+
+Proof
+
+By induction on the length of the derivation of M
+
+∗ β
+
+N
+
+using
+
+lemma
+
+35.
+
+5 Soundness of the realisability semantics for 1/ 2 and examples
+
+Lemma 37 If I be an interpretation and U V , then I(U ) ⊆ I(V ).
+
+Proof By induction of the derivation of U V .
+
+We already gave the realisability semantics for the types in T and U in section 3.2. The next lemma shows that this semantics is sound with respect to 1 and 2.
+
+Lemma 38 (Soundness of 1/ 2) Let i ∈ {1, 2} and M : (xni i : Ui)n i U , I be an interpretation and ∀1 ≤ i ≤ n, Ni ∈ I(Ui). If M [(xni i := Ni)n] ∈ M, then M [(xni i := Ni)n] ∈ I(U ).
+Proof By induction on the derivation of M : (xni i : Ui)n i U . First note, by lemma 23 and lemma 17, ∀1 ≤ i ≤ n, Ui is good and Ni ∈ M.
+
+•
+
+If
+
+T good d(T ) = n xn : (xn : T ) i T
+
+and N
+
+∈ I(T ), then xn[xn := N ] = N ∈ I(T ).
+
+25
+
+•
+
+Let
+
+M : (xni i λxm.M :
+
+(λxm.M )[(xni i
+
+: Ui)n, (xm (xni i : Ui)n := Ni)n] ∈
+
+: U) i T
+iU →T M. Let N
+
+and ∀1 ≤ i ≤ n, Ni ∈ I(Ui) where ∈ I(U ) where (λxm.M )[(xni i := Ni)n]
+
+N . Since (λxm.M [(xni i := Ni)n]) N , by lemma 3, M [(xni i := Ni)n] N
+
+and M [(xni i := Ni)n][xm := N ] = M [(xni i := Ni)n, xm := N ] ∈ M. Hence,
+
+by IH, M [(xni i := Ni)n, xm := N ] ∈ I(T ). By lemma 23, U, T are good
+
+and d(U ) = m. By lemma 17, d(N ) = m and (λxm.M [(xn1 1 := N1)n])N β
+
+M [(xni i := Ni)n, xm := N ] ∈ I(T ). Since, by lemma 17 I(T ) is saturated,
+
+then (λxm.M [(xn1 1 := N1)n])N ∈ I(T ) and hence λxm.M [(xni i := Ni)n] ∈
+
+I(U ) I(T ) = I(U → T ).
+
+• Let M1 : Γ1 i U → T M2 : Γ2 i U Γ1 Γ2 where M1 M2 : Γ1 Γ2 i T
+Γ1 = (xni i : Ui)n, (yjmj : Vj )m, Γ2 = (xni i : Ui )n, (zkrk : Wk)r and Γ1 Γ2 = (xni i : Ui Ui )n, (yjmj : Vj )m, (zkrk : Wk)r.
+Let ∀ 1 ≤ i ≤ n, Pi ∈ I(Ui Ui ), ∀ 1 ≤ j ≤ m, Qj ∈ I(Vj) and ∀ 1 ≤ k ≤ r, Rk ∈ I(Wk) where (M1M2)[(xni i := Pi)n, (yjmj := Qj )m, (zkrk := Rk)r] ∈ M. Let A = M1[(xni i := Pi)n, (yjmj := Qj )m] and B = M2[(xni i := Pi)n, (zkrk := Rk)r].
+By lemma 22, F V (M1) = dom(Γ1) and F V (M2) = dom(Γ2). Hence, (M1M2)[(xni i := Pi)n, (yjmj := Qj )m, (zkrk := Rk)r] = AB. By lemma 3, A ∈ M, B ∈ M, and A B. By IH, A ∈ I(U ) I(T ) and B ∈ I(U ). Hence, AB = (M1M2)[(xni i := Pi)n, (yjmj := Qj )m, (zkrk := Rk)r] ∈ I(T ).
+
+•
+
+M: Let
+
+(xni i : Ui)n M : (xni i
+
+i ≤ n, Ni ∈ I(Ui
+
+iU
+: Ui Vi)
+
+M : (xni i : Vi)n
+Vi)n i U V = I(Ui) ∩ I(Vi)
+
+i V (note lemma 22.1) and ∀ 1 ≤ where M [(xni i := Ni)n] ∈ M.
+
+By IH, M [(xni i := Ni)n] ∈ I(U ) and M [(xni i := Ni)n] ∈ I(V ). Hence,
+
+M [(xni i := Ni)n] ∈ I(U V ).
+
+•
+
+Let
+
+M : (xni i : Ti)n i U M + : (xni i+1 : eTi)n i eU
+
+and ∀ 1 ≤ i ≤ n, Ni ∈ I(eTi) = I(Ti)+
+
+where M +[(xni i+1 := Ni)n] ∈ M. Then ∀ 1 ≤ i ≤ n, Ni = Pi+ where Pi ∈
+
+I(Ti). By lemmas 3 and 8.1(c)i, {M +, N1, . . . , Nn} and {M, P1, . . . , Pn}.
+
+Then, by lemma 3, M [(xni i := Pi)n] ∈ M and, by IH, M [(xni i := Pi)n] ∈ I(U ).
+
+Hence, by lemma 8.2, M +[(xni i+1 := Pi+)n] = (M [(xni i := Pi)n])+ ∈ I(U )+ =
+
+I(eU ).
+
+•
+
+M :Φ Φ
+
+Let
+
+Φ=
+
+(xni Mi :
+
+:Φ Ui )n
+
+Φ
+2
+
+where φ = (xni i : Ui)n 2 U . By U , where for every 1 ≤ i ≤ m, Ui
+
+lemma 21, Ui and U
+
+we have U . By
+
+lemma 37, Ni ∈ I(Ui ), then, by IH, M [(xni i := Ni)n] ∈ I(U ) and, by lemma
+
+37, M [(xni i := Ni)n] ∈ I(U ).
+
+Theorem 39 (Soundness of 1/ 2 for closed terms) If M : () i U , then M ∈ [U ].
+Proof By lemma 38, M ∈ I(U ) for any interpretation I. By lemma 22, F V (M ) = dom(()) = ∅ and hence M is closed. Therefore, M ∈ [U ].
+
+26
+
+The next deﬁnition and lemma put the realisability semantics in use.
+
+Deﬁnition 40 (Examples) Let a, b ∈ A where a = b. We deﬁne:
+
+• Id0 = a → a, Id1 = e(a → a) and Id1 = ea → ea. • D = (a (a → b)) → b.
+
+• N at0 = (a → a) → (a → a), N at1 = e((a → a) → (a → a)), N at1 = e(a → a) → (ea → ea) and N at0 = (ea → a) → (ea → a).
+Moreover, if M, N are terms and n ∈ N, we deﬁne (M )n N by induction on n: (M )0 N = N and (M )m+1 N = M ((M )m N ).
+
+Lemma 41
+
+1. [Id0] = {M ∈ M0 / M
+
+∗ β
+
+λy0.y0}.
+
+2. [Id1] = [Id1] = {M ∈ M1 / M
+
+∗ β
+
+λy1.y1}.
+
+(Note
+
+that
+
+I d1
+
+∈
+
+U.)
+
+3. [D] = {M ∈ M0 / M
+
+∗ β
+
+λy0.y0y0}.
+
+4. [N at0] = {M ∈ M0 / M
+
+∗ β
+
+λf 0.f 0
+
+or
+
+M
+
+∗ β
+
+λf 0.λy0.(f 0)ny0
+
+where
+
+n
+
+≥
+
+1}.
+
+5. [N at1] = [N at1] = {M ∈ M1 / M
+
+∗ β
+
+λf 1.f 1
+
+or
+
+M
+
+∗ β
+
+λf 1.λx1.(f 1)ny1
+
+where
+
+n ≥ 1}. (Note that N at1 ∈ U.)
+
+6. [N at0] = {M ∈ M0 /M
+
+∗ β
+
+λf 0.f 0
+
+or
+
+M
+
+∗ β
+
+λf 0.λy1.f 0y1}.
+
+7. [(a
+
+b) → a] = {M ∈ M0 /M
+
+∗ β
+
+λy0.y0}.
+
+8. It is not possible that λy0.y0 : () 1 (a b) → a .
+
+9. λy0.y0 : () 2 (a b) → a . Proof
+
+1. Let y ∈ V2 and X = {M ∈ M0 / M
+
+∗ β
+
+x0N1...Nk
+
+where
+
+k
+
+≥
+
+0
+
+and
+
+x
+
+∈
+
+V1
+
+or
+
+M
+
+∗ β
+
+y0
+
+}.
+
+X
+
+is
+
+saturated
+
+and
+
+∀x
+
+∈
+
+V1,
+
+Nx0
+
+⊆
+
+X
+
+⊆
+
+M0.
+
+Take
+
+an
+
+interpretation
+
+I such that I(a) = X . If M ∈ [Id0], then M is closed and M ∈ X X . Since
+
+y0 ∈ X and M
+
+y0, then M y0 ∈ X and M y0
+
+∗ β
+
+x0N1...Nk
+
+for
+
+some
+
+x
+
+∈
+
+V1
+
+or
+
+M y0
+
+∗ β
+
+y0.
+
+Since
+
+M
+
+is
+
+closed
+
+and
+
+x0
+
+=
+
+y0,
+
+by
+
+lemma
+
+6.1,
+
+M y0
+
+∗ β
+
+y0.
+
+Hence,
+
+by lemma 10.4, M
+
+∗ β
+
+λy0.y0
+
+and,
+
+by
+
+lemma
+
+6.(1
+
+and
+
+2),
+
+M
+
+∈
+
+M0.
+
+Conversely, let M ∈ M0 be closed and M
+
+∗ β
+
+λy0
+
+.y0.
+
+Let I
+
+be an
+
+interpretation,
+
+N ∈ I(a) and M
+
+N . Since I(a) is saturated and M N
+
+∗ β
+
+N,
+
+MN
+
+∈
+
+I (a)
+
+and hence M ∈ I(a) I(a) . Hence, M ∈ [Id0].
+
+2. By lemma 19 (by lemma 12, a → a is good), [Id1] = [ea → ea] = [e(a → a)] =
+
+[Id1] = [a → a]+ = [Id0]+. By 1., and lemma 8.1d, [Id0]+ = {M ∈ M1 / M
+
+is closed and M
+
+∗ β
+
+λy1.y1}.
+
+3. Let y ∈ V2, X = {M ∈ M0 / M
+
+∗ β
+
+y0
+
+or
+
+M
+
+∗ β
+
+x0N1...Nk
+
+where
+
+k
+
+≥
+
+0
+
+and
+
+x
+
+∈
+
+V1} and Y = {M ∈ M0 / M
+
+∗ β
+
+y0
+
+y0
+
+or
+
+M
+
+∗ β
+
+x0N1...Nk
+
+or
+
+M
+
+∗ β
+
+y0(x0N1...Nk
+
+)
+
+where k ≥ 0 and x ∈ V1}. X , Y are saturated and ∀x ∈ V1, Nx0 ⊆ X , Y ⊆ M0.
+
+Let I be an interpretation such that I(a) = X and I(b) = Y. If M ∈ [D],
+
+then M is closed (hence M y0) and M ∈ (X ∩ (X Y)) Y. Since y0 ∈ X
+
+and y0 ∈ X Y, y0 ∈ X ∩ (X Y) and M y0 ∈ Y. Since M is closed and
+
+x0 = y0, by lemma 6.1, M y0
+
+∗ β
+
+y0y0.
+
+Hence,
+
+by
+
+lemma
+
+10.4,
+
+M
+
+∗ β
+
+λy0.y0y0
+
+and, by lemma 6.(1 and 2), d(M ) = 0 and M ∈ M0.
+
+Conversely, let M ∈ M0 be closed and M
+
+∗ β
+
+λy0.y0y0.
+
+Let
+
+I
+
+be
+
+an
+
+interpre-
+
+tation and N ∈ I(a (a → b)) = I(a) ∩ (I(a) I(b)) (since M is closed,
+
+M
+
+N ). Since I(b) is saturated, N N ∈ I(b) and M N
+
+∗ β
+
+NN,
+
+we
+
+have
+
+M N ∈ I(b) and hence M ∈ I(a (a → b)) I(b). Therefore, M ∈ [D].
+
+27
+
+4. Let f, y ∈ V2 where f = y and take X = {M ∈ M0 / M
+
+∗ β
+
+(f
+
+0 )n (x0 N1 ...Nk )
+
+or M
+
+∗ β
+
+(f 0)ny0
+
+where
+
+k, n ≥ 0 and
+
+x ∈ V1}.
+
+X
+
+is
+
+saturated
+
+and
+
+∀x ∈ V1,
+
+Nx0 ⊆ X ⊆ M0. Let I be an interpretation such that I(a) = X . If M ∈ [N at0], then M is closed and M ∈ (X X ) (X X ). We have f 0 ∈ X X ,
+
+y0 ∈ X and {M, f 0, y0}, then M f 0y0 ∈ X and M f 0 y0
+
+∗ β
+
+(f
+
+0 )n (x0 N1 ...Nk )
+
+or M f 0y0
+
+∗ β
+
+(f
+
+0
+
+)ny
+
+0
+
+where
+
+n
+
+≥
+
+0.
+
+Since
+
+M
+
+is
+
+closed
+
+and
+
+{x0} ∩ {y0, f 0}
+
+=
+
+∅,
+
+by lemma 6.1, M f 0y0
+
+∗ β
+
+(f 0)ny0
+
+where
+
+n
+
+≥
+
+1.
+
+Hence, by lemma 10.4,
+
+M
+
+∗ β
+
+λf
+
+0.f 0
+
+or
+
+M
+
+∗ β
+
+λf
+
+0.λy0
+
+.(f
+
+0
+
+)ny0
+
+where
+
+n
+
+≥
+
+1.
+
+Moreover,
+
+by
+
+lemma
+
+6.(1
+
+and 2), d(M ) = 0 and M ∈ M0.
+
+Conversely, let M ∈ M0 be closed and M
+
+∗ β
+
+λf 0.f 0
+
+or
+
+M
+
+∗ β
+
+λf
+
+0.λy0
+
+.(f
+
+0)ny0
+
+where n ≥ 1. Let I be an interpretation, N ∈ I(a → a) = I(a) I(a),
+
+N ∈ I(a) and N N . We show, by induction on m ≥ 0, that (N )mN ∈ I(a).
+
+Since M N N
+
+∗ β
+
+(N
+
+)mN
+
+where m ≥ 0 and (N )mN
+
+∈ I(a) which is saturated,
+
+then M N N ∈ I(a). Hence, M ∈ (I(a) I(a)) → (I(a) I(a)) and
+
+M ∈ [N at0].
+
+5. By lemma 19, [N at1] = [eN at0] = [N at0]+. Let I be an interpretation.
+
+Since ea → ea and e(a → a) → e(a → a) are good (by lemma 12), then, by
+
+lemmas 15.5 and 19.3, I(e(a → a) → (ea → ea)) = I((a → a) → (a → a))+
+
+and hence [N at1] = [N at0]+. By 4., [N at1] = [N at1] = [N at0]+ = {M ∈ M1
+
+/ M is closed and M
+
+∗ β
+
+λf 1.f 1
+
+or
+
+M
+
+∗ β
+
+λf 1.λy1.(f 1)ny1
+
+where
+
+n
+
+≥
+
+1}.
+
+6. Let f, y ∈ V2 where f = y and take X = {M ∈ M0 / M
+
+∗ β
+
+x0P1...Pk
+
+or
+
+M
+
+∗ β
+
+f0
+
+(x1Q1...Ql)
+
+or
+
+M
+
+∗ β
+
+y0
+
+or
+
+M
+
+∗ β
+
+f 0y1
+
+where
+
+k, l
+
+≥
+
+0,
+
+x
+
+∈
+
+V1
+
+and d(Qi) ≥ 1}. X is saturated and ∀x ∈ V1, Nx0 ⊆ X ⊆ M0. Let I be
+
+an interpretation such that I(a) = X . If M ∈ [N at0], then M is closed and M ∈ (X + X ) (X + X ). Let N ∈ X + such that f 0 N . We
+
+have N
+
+∗ β
+
+x1P1+...Pk+
+
+or
+
+N
+
+∗ β
+
+y1,
+
+then
+
+f0N
+
+∗ β
+
+f 0(x1P1+...Pk+)
+
+∈
+
+X
+
+or
+
+N
+
+∗ β
+
+f 0y1
+
+∈
+
+X,
+
+thus
+
+f0
+
+∈
+
+X+
+
+X . We have f 0 ∈ X +
+
+X , y1 ∈ X + and
+
+{M, f 0, y1}, then M f 0y1 ∈ X . Since M is closed and {x0, x1} ∩ {y1, f 0} = ∅,
+
+by lemma 6.1, M f 0y1
+
+∗ β
+
+f 0y1.
+
+Hence, by lemma 10.4, M
+
+∗ β
+
+λf 0.f 0
+
+or
+
+M
+
+∗ β
+
+λf
+
+0
+
+.λy1.f
+
+0y1.
+
+Moreover,
+
+by
+
+lemma
+
+6.(1
+
+and
+
+2),
+
+d(M )
+
+=
+
+0
+
+and
+
+M
+
+∈
+
+M0.
+
+Conversely, let M ∈ M0 be closed and M
+
+∗ β
+
+λf 0.f 0
+
+or
+
+M
+
+∗ β
+
+λf 0.λy1.f 0y1.
+
+Let I be an interpretation, N ∈ I(ea → a) = I(a)+ I(a) and N ∈ I(a)+
+
+where {M, N, N }. Since M N N
+
+∗ β
+
+N
+
+N
+
+,
+
+NN
+
+∈ I(a) and I(a) is saturated,
+
+then M N N ∈ I(a). Hence, M ∈ (I(a)+ I(a)) → (I(a)+ I(a)) and
+
+M ∈ [N at0].
+
+7. Let y ∈ V2 and take X = {M ∈ M0 / M
+
+∗ β
+
+y0
+
+or
+
+M
+
+∗ β
+
+x0N1...Nk
+
+where
+
+k ≥ 0 and x ∈ V1}. X is saturated and ∀x ∈ V1, Nx0 ⊆ X ⊆ M0. Let I be
+
+an interpretation such that I(a) = I(b) = X . If M ∈ [(a b) → a], then M
+
+is closed and M ∈ X X . Since M y0 ∈ X (as y0 ∈ X and M y0) and
+
+M is closed and x0 = y0, by lemma 6.1, M y0
+
+∗ β
+
+y0.
+
+Hence,
+
+by
+
+lemma
+
+10.4,
+
+M
+
+∗ β
+
+λy0.y0.
+
+By
+
+lemma
+
+6.(1
+
+and
+
+2),
+
+d(M )
+
+=
+
+d(λy0.y0)
+
+=
+
+0
+
+and
+
+M
+
+∈
+
+M0.
+
+Conversely, let M ∈ M0 be closed and M
+
+∗ β
+
+λy0.y0.
+
+Let
+
+I
+
+be
+
+an
+
+interpretation
+
+and N ∈ I(a b) (hence M N ). Since I(a) is saturated, N ∈ I(a) and
+
+MN
+
+∗ β
+
+N,
+
+then
+
+MN
+
+∈
+
+I (a)
+
+and
+
+hence
+
+M
+
+∈
+
+I (a
+
+b)
+
+I(a). Hence,
+
+M ∈ [(a b) → a].
+
+8. If λy0.y0 : () 1 (a b) → a , then, by Lemma 25, y0 : (y0 : a b) 1 a and again, by Lemma 25, y0 : a = y0 : a b. Hence, a = a b. Absurd.
+
+9. Easy.
+
+28
+
+Remark 42 (Failure of completeness for 1) Items 7. and 8. of lemma 41 show that we can not have a completeness result (a converse of theorem 39) for
+1. To type the term λy0.y0 by the type (a b) → a, we need an elimination rule for which we have in 2. However, we will see that we have completeness for 2 only if we are restricted to the use of one single expansion variable.
+6 Completeness of 2 with one expansion variable
+Recall remark 42 where we said that λy0.y0 : () 2 (a b) → a and that we even have completeness for one single expansion variable in the new type system. In this section, we will establish this completeness theorem for one expansion variable. First, we give an example (see lemma 43) which shows why completeness does not work in the presence of more than one expansion variable.
+Lemma 43 Let N at0 = (e1a → a) → (e2a → a) where a ∈ A, e1, e2 ∈ E and e1 = e2. We have:
+1. λf 0.f 0 ∈ [N at0 ].
+2. It is not possible that λf 0.f 0 : () 2 N at0 . Proof 1. For every interpretation I, I(e1a → a) = I(e2a → a) = I(a)+ I(a). 2. If λf 0.f 0 : () 2 N at0 , by lemma 26.2 and 26.1, f 0 : f 0 : e1a → a 2 e2a → a and e1a → a e2a → a. Thus, by lemma 21.7, e2a e1a. Again, by lemma 21.5, e1a = e2U where a U . This is impossible since e1 = e2.
+Hence we have λf 0.f 0 ∈ [N at0 ] but λf 0.f 0 is not typable by N at0 and we do not have completeness in the presence of more than one expansion variable. The problem comes from the fact that for the realizability semantics that we considered, we identify all expansion variables. In order to give a completeness theorem we will in what follows restrict our system to only one expansion variable. In the rest of this section, we assume that the set E contains only one expansion variable ec.
+The need of one single expansion variable is clear in part 2) of the next lemma which would fail if we use more than one single expansion variable. For example, if e1 = e2 then e1(e2a)− = e1a = e2a. The next lemma is crucial for the rest of this section and hence, having a single expansion variable is also crucial.
+Lemma 44 Let U, V ∈ U and d(U ) = d(V ) > 0.
+1. ecU − = U .
+2. If U − = V −, then U = V . Proof 1. By induction on U . 2. If U − = V − then ecU − = ecV − and by 1, U = V .
+In the next deﬁnition and lemma, we divide the set {yn / y ∈ V2} disjointly amongst the types of order n.
+Deﬁnition 45 Let U ∈ U. We inductively deﬁne sets of variables VU by:
+• If d(U ) = 0, then:
+– VU is an inﬁnite set of variables of degree 0. – If y0 ∈ VU , then y ∈ V2. – If U = V and d(U ) = d(V ) = 0, then VU ∩ VV = ∅.
+29
+
+• If d(U ) = n + 1, then we put VU = {yn+1 / yn ∈ VU− }.
+Lemma 46 1. If d(U ) = n, then VU is an inﬁnite set of variables of degree n and if yn ∈ VU , then y ∈ V2.
+2. If U = V and d(U ) = d(V ) = n, then VU ∩ VV = ∅. 3. If yn ∈ VU , then yn+1 ∈ VecU . 4. If yn+1 ∈ VU , then yn ∈ VU− . Proof 1. and 2. By induction on n and using lemma 44. 3. Because (ecU )− = U . 4. By deﬁnition. Our partition of the set V2 as above will enable us to deﬁne useful inﬁnite sets which will contain type environments that will play a crucial role in one particular type interpretation. These inﬁnite sets and type environments are given in the next deﬁnition. Deﬁnition 47 1. Let n ∈ N. We let Gn = {(yn : U ) / U ∈ U, d(U ) = n
+and yn ∈ VU } and Hn = m≥n Gm. Note that Gn and Hn are not type environments because they are inﬁnite sets. 2. Let n ∈ N, M ∈ M and U ∈ U, we write M : Hn 2 U iﬀ there is a type environment Γ ⊂ Hn where M : Γ 2 U Lemma 48 1. If Γ ⊂ Hn, then eΓ ⊂ Hn+1. 2. If Γ ⊂ Hn+1, then Γ− ⊂ Hn. 3. If Γ1 ⊂ Hn, Γ2 ⊂ Hm and m ≥ n, then Γ1 Γ2 ⊂ Hn. Proof 1. resp. 2. By lemma 46.3 resp. 46.4. 3. First note that Hm ⊆ Hn. Let (xp : U1 U2) ∈ Γ1 Γ2 where (xp : U1) ∈ Γ1 ⊂ Hn and (xp : U2) ∈ Γ2 ⊂ Hm ⊆ Hn, then d(U1) = d(U2) = p and xp ∈ VU1 ∩ VU2 . Hence, by lemma 46.2, U1 = U2 and Γ1 Γ2 = Γ1 ∪ Γ2 ⊂ Hn. Now, for every n, we deﬁne the set of the good terms of order n which contain some free variable xi where x ∈ V1 and i ≥ n. Deﬁnition 49 For every n ∈ N, let Vn = {M ∈ Mn / xi ∈ F V (M ) where x ∈ V1 and i ≥ n}. It is easy to see that, for every n ∈ N and for every x ∈ V1, Nxn ⊆ Vn. Lemma 50 1. (Vn)+ = Vn+1. 2. If y ∈ V2 and (M ym) ∈ Vn, then M ∈ Vn. 3. If M ∈ Vn, M N , N ∈ M and d(N ) = m ≥ n, then M N ∈ Vn. 4. If d(M ) = n, m ≥ n, M N , M ∈ M and N ∈ Vm, then M N ∈ Vn. Proof Easy.
+30
+
+Finally, the crucial interpretation I for the proof of completeness is given as follows:
+
+Deﬁnition 51 Let I be the interpretation deﬁned by: for all type variables a, I(a) = V0 ∪ {M ∈ M0 / M : H0 2 a }.
+
+The next lemma shows that I is indeed an interpretation and moreover, the interpretation of a type of order n contains the good terms of order n which are typable in these special environments which are parts of the inﬁnite sets of deﬁnition 47.
+
+Lemma 52 1. I is an interpretation. I.e., ∀a ∈ A, I(a) is saturated and ∀x ∈ V1, Nx0 ⊆ I(a) ⊆ M0.
+
+2. If U ∈ U is good and d(U ) = n, then I(U ) = Vn ∪ {M ∈ Mn / M : Hn 2 U }.
+Proof 1. First we show that I(a) is saturated. Let M
+
+∗ β
+
+N
+
+and
+
+N
+
+∈ I(a).
+
+• If N ∈ V0 then N ∈ M0 and ∃xi such that x ∈ V1, i ≥ 0 and xi ∈ F V (N ). By lemma 15.6, M0 is saturated and so, M ∈ M0. By lemma 6.1, F V (M ) =
+F V (N ) and so, xi ∈ F V (M ). Hence, M ∈ V0
+
+• If N ∈ {M ∈ M0 / M : H0 2 a } then ∃Γ ⊂ H0, such that N : Γ 2 a . By subject expansion corollary 36, M : Γ 2 a and by lemma 6.1, d(M ) = d(N ). Hence, M ∈ {M ∈ M0 / M : H0 2 a }.
+Now we show that ∀x ∈ V1, Nx0 ⊆ I(a) ⊆ M0.
+• Let x ∈ V1 and M ∈ Nx0. Hence, M = x0N1 . . . Nk ∈ M0, and x0 ∈ F V (M ). Thus, M ∈ V0.
+
+• Let M ∈ I(a). If M ∈ V0, then M ∈ M0. Else, ∃Γ ⊂ H0 where M : Γ 2 a . Since by lemma 23, M is good and d(M ) = d(a) = 0, M ∈ M0.
+
+2. By induction on U good.
+
+• U = a: By deﬁnition of I and by 1.
+
+• U = ecV : d(V ) = n − 1 and, by lemma 12, V is good. By IH and lemma 50.1, I(ecV ) = (I(V ))+ = (Vn−1∪{M ∈ Mn−1 / M : Hn−1 2 V })+ = Vn∪({M ∈ Mn−1 / M : Hn−1 2 V })+.
+– If M ∈ Mn−1 and M : Hn−1 2 V , then M : Γ 2 V where Γ ⊂ Hn−1. By exp and lemma 48.1, M + : ecΓ 2 ecV and ecΓ ⊂ Hn. Thus by lemma 23.(3 and 1), M + ∈ Mn and M + : Hn 2 ecV .
+– If M ∈ Mn and M : Hn 2 ecV , then M : Γ 2 ecV where Γ ⊂ Hn. By lemmas 30.5, and 48.2, M − : Γ− 2 V and Γ− ⊂ Hn−1. Thus, by lemma 8.(1b and 1d), M = (M −)+ and M − ∈ Mn−1. Hence, M − ∈ {M ∈ Mn−1 / M : Hn−1 2 V }.
+Hence ({M ∈ Mn−1 / M : Hn−1 2 V })+ = {M ∈ Mn / M : Hn 2 U } and I(U ) = Vn ∪ {M ∈ Mn / M : Hn 2 U }.
+• U = U1 U2: By lemma 12, U1, U2 are good and d(U1) = d(U2) = n. By IH, I(U1 U2) = I(U1) ∩ I(U2) = (Vn ∪ {M ∈ Mn / M : Hn 2 U1 }) ∩ (Vn ∪ {M ∈ Mn / M : Hn 2 U2 }) = Vn ∪ ({M ∈ Mn / M : Hn 2 U1 } ∩ {M ∈ Mn / M : Hn 2 U2 }).
+– If M ∈ Mn, M : Hn 2 U1 and M : Hn 2 U2 , then M : Γ1 2 U1 and M : Γ2 2 U2 where Γ1, Γ2 ⊂ Hn. By remark 24, M : Γ1 Γ2 2 U1 U2 . Since by lemma 48.3, Γ1 Γ2 ⊂ Hn, M : Hn 2 U1 U2 .
+
+31
+
+– If M ∈ Mn and M : Hn 2 U1 U2 , then M : Γ 2 U1 U2 where Γ ⊂ Hn. By , M : Γ 2 U1 and M : Γ 2 U2 . Hence, M : Hn 2 U1 and M : Hn 2 U2 .
+We deduce that I(U1 U2) = Vn ∪ {M ∈ Mn / M : Hn 2 U1 U2 }.
+• U = V → T : By lemmas 12.2, V , T are good and let m = d(V ) ≥ d(T ) = 0. By IH, I(V ) = Vm ∪ {M ∈ Mm / M : Hm 2 V } and I(T ) = V0 ∪ {M ∈ M0 / M : H0 2 T }. Note that I(V → T ) = I(V ) I(T ).
+– Let M ∈ I(V ) I(T ) and by lemma 46.1, let ym ∈ VV such that y ∈ V2, and ∀n, yn ∈ F V (M ). Then ym M . By remark 24, ym : (ym : V ) 2 V . Hence ym : Hm 2 V and so ym ∈ I(V ) and M ym ∈ I(T ).
+∗ If M ym ∈ V0, then since y ∈ V2, by lemma 50.2, M ∈ V0. ∗ If M ym ∈ {M ∈ M0 / M : H0 2 T } then M ym ∈ M0 and
+M ym : H0 2 T . So M ym : Γ 2 T where Γ ⊂ H0. Since ym ∈ F V (M ym) and since by lemma 22, dom(Γ) = F V (M ym), Γ = Γ , (ym : V ) where by lemma 23.1, d(V ) = m. Since (ym : V ) ∈ H0, d(V ) = m and ym ∈ VV , by lemma 46.2, V = V . So M ym : Γ , (ym : V ) 2 T and by lemma 26.1, M : Γ 2 V → T and by lemma 23.(1 and 3), M ∈ M and d(M ) = 0. Since Γ ⊂ H0, M : H0 2 V → T . And so, M ∈ {M ∈ M0 / M : H0 2 V → T }.
+– Let M ∈ V0 ∪ {M ∈ M0 / M : H0 2 V → T } and N ∈ I(V ) = Vm ∪ {M ∈ Mm / M : Hm 2 V } such that M N . Then, d(N ) = m.
+∗ Case M ∈ V0. Since N ∈ M, by lemma 50.3, M N ∈ V0 ⊆ I(T ). ∗ Case M ∈ {M ∈ M0 / M : H0 2 V → T }, so M ∈ M0.
+· If N ∈ Vm, then, by lemma 50.4, M N ∈ V0 ⊆ I(T ). · If N ∈ {M ∈ Mm / M : Hm 2 V }, so M : Γ1 2 V → T
+and N : Γ2 2 V where Γ1 ⊂ H0 and Γ2 ⊂ Hm. Since M N then by lemma 22.4, Γ1 Γ2. So by →e, M N : Γ1 Γ2 2 T . By lemma 48.3, Γ1 Γ2 ⊂ H0. Therefore M N : H0 2 T . By lemma 23, M N ∈ M0. Hence, M N ∈ {M ∈ M0 / M : H0 2 T } ⊆ I(T ).
+Hence, M ∈ I(V → T ).
+We deduce that I(V → T ) = V0 ∪ {M ∈ M0 / M : H0 2 V → T }.
+
+Now we use the special I to show completeness.
+
+Theorem 53 (Completeness) Let U ∈ U be good such that d(U ) = n.
+
+1. [U ] = {M ∈ Mn / M : () 2 U }.
+
+2. [U ] is stable by reduction: i.e., if M ∈ [U ] and M
+
+∗ β
+
+N,
+
+then
+
+N
+
+∈
+
+[U ].
+
+3. [U ] is stable by expansion: i.e., if N ∈ [U ] and M
+
+∗ β
+
+N,
+
+then
+
+M
+
+∈
+
+[U ].
+
+Proof Recall: [U ] = {M ∈ M / M is closed and M ∈ I interpretation I(U )}.
+
+1. Let M ∈ [U ]. Then M is a closed term and M ∈ I(U ). Hence, by lemma 52, M ∈ Vn ∪ {M ∈ Mn / M : Hn 2 U }. Since M is closed, M ∈ Vn. Hence, M ∈ {M ∈ Mn / M : Hn 2 U } and so, M : Γ 2 U where Γ ⊂ Hn. Since M is closed, by lemma 22.1, Γ = () and M : () 2 U .
+Conversely, let M ∈ Mn where M : () 2 U . By lemma 22.1, M is closed. Let I be an interpretation. By soundness lemma 38, M ∈ I(U ). Thus
+M ∈ [U ].
+
+32
+
+2. Let M ∈ [U ] such that M
+
+∗ β
+
+N
+
+.
+
+By
+
+1,
+
+M
+
+∈
+
+Mn
+
+and
+
+M
+
+:
+
+()
+
+2 U . By subject
+
+reduction corollary 33, N : () 2 U . By lemma 6.1, d(N ) = d(M ) = n. By
+
+lemma 23.3, N ∈ M. Hence, by 1, N ∈ [U ].
+
+3. Let N ∈ [U ] such that M
+
+∗ β
+
+N.
+
+By
+
+1,
+
+N
+
+∈
+
+Mn
+
+and
+
+N
+
+:
+
+()
+
+2 U . By subject
+
+expansion corollary 36, M : () 2 U . By lemma 6.1, d(N ) = d(M ) = n. By
+
+lemma 23.3, M ∈ M. Hence, by 1, M ∈ [U ].
+
+7 Conclusion and future work
+In this paper, we studied the λIN-calculus, an indexed version of the λI-calculus. This indexed version was typed using ﬁrst a basic intersection type system with expansion variables but without an intersection elimination rule, and then using an intersection type system with expansion variables and an elimination rule.
+We gave a realisability semantics for both type systems showing that the ﬁrst type system is not complete in the sense that there are types whose semantic meaning is not the set of λIN-terms having this type. In particular, we showed that λy0.y0 is in the semantic meaning of (a b) → a but it is not possible to give λy0.y0 the type (a b) → a. The main reason for the failure of completeness in the ﬁrst system is associated with the failure of the subject reduction property for this ﬁrst system. Hence, we moved to the second system which we show to have the desirable properties of subject reduction and expansion and strong normalisation. However, for this second system, we show again that completeness fails if we use more than one expansion variable but that completeness succeeds if we restrict the system to one single expansion variable.
+Since we show in the appendices that each of these type systems, when restricted to the normal λI-calculus represents a well known intersection type system with expansion variables, our study can be said to be the ﬁrst denotational semantics study of intersection type systems with expansion variables (using realizability or any other approach) and outlines the diﬃculties of doing so. Although we have in this paper limited the study to the λI-calculus, future work will include extending this work to the full λ-calculus and with an ω-type rule as well.
+References
+[1] H. P. Barendregt. The Lambda Calculus: Its Syntax and Semantics. NorthHolland, revised edition, 1984.
+[2] S. Carlier, J. Polakow, J. B. Wells, A. J. Kfoury. System E: Expansion variables for ﬂexible typing with linear and non-linear types and intersection types. In Programming Languages & Systems, 13th European Symp. Programming, vol. 2986 of Lecture Notes in Computer Science. Springer, 2004.
+[3] S. Carlier, J. B. Wells. Expansion: the crucial mechanism for type inference with intersection types: A survey and explanation. In Proc. 3rd Int’l Workshop Intersection Types & Related Systems (ITRS 2004), 2005. The ITRS ’04 proceedings appears as vol. 136 (2005-07-19) of Elec. Notes in Theoret. Comp. Sci.
+[4] M. Coppo, M. Dezani-Ciancaglini, B. Venneri. Principal type schemes and λ-calculus semantics. In J. R. Hindley, J. P. Seldin, eds., To H. B. Curry: Essays on Combinatory Logic, Lambda Calculus, and Formalism. Academic Press, 1980.
+33
+
+[5] T. Coquand. Completeness theorems and lambda-calculus. In 7th Int’l Conf. Typed Lambda Calculi and Applications, vol. 3461 of Lecture Notes in Computer Science, Nara, Japan, 2005. Springer.
+[6] S. Farkh, K. Nour. R´esultats de compl´etude pour des classes de types du syst`eme AF2. Theoretical Informatics and Applications, 31(6), 1998.
+[7] J. R. Hindley. The simple semantics for Coppo-Dezani-Sall´e types. In M. Dezani-Ciancaglini, U. Montanari, eds., International Symposium on Programming, 5th Colloquium, vol. 137 of LNCS, Turin, 1982. Springer-Verlag.
+[8] J. R. Hindley. The completeness theorem for typing λ-terms. Theoretical Computer Science, 22, 1983.
+[9] J. R. Hindley. Curry’s types are complete with respect to F-semantics too. Theoretical Computer Science, 22, 1983.
+[10] J. R. Hindley. Basic Simple Type Theory, vol. 42 of Cambridge Tracts in Theoretical Computer Science. Cambridge University Press, 1997.
+[11] F. Kamareddine, K. Nour. A completeness result for a realisability semantics for an intersection type system. Annals of Pure and Applied Logic, 146, 2007.
+[12] J. Krivine. Lambda-Calcul : Types et Mod`eles. Etudes et Recherches en Informatique. Masson, 1990.
+[13] R. Labib-Sami. Typer avec (ou sans) types auxili`eres.
+
+A Introducing eta reduction
+
+Now we deﬁne the eta reduction relation on the λIN-calculus.
+
+Deﬁnition 54 1. The reduction relation η on M is deﬁned as the least compatible relation closed under the rule: λxn.M xn η M if xn ∈ F V (M ) and
+d(M ) ≤ n.
+
+2. We deﬁne βη = β ∪ η.
+
+3. For r ∈ {η, βη}, we denote by
+
+∗ r
+
+the
+
+reﬂexive
+
+and
+
+transitive
+
+closure
+
+of
+
+r.
+
+We also denote by
+
+r the equivalence relation induced by
+
+∗ r
+
+.
+
+The next lemma shows that these new reduction relations are well deﬁned on the λI N -calculus.
+
+Lemma 55 Let r ∈ {η, βη}. r is a well deﬁned relation on M. I.e., if M ∈ M
+
+and M
+
+r N then N ∈ M. Hence,
+
+∗ r
+
+is
+
+a
+
+also
+
+well
+
+deﬁned
+
+relation
+
+on
+
+M.
+
+Proof The cases r = η are by induction on M r N . We only treat the basic case. Assume λxn.N xn η N where xn ∈ F V (N ) and d(N ) ≤ n. Since N is a subterm of λxn.N xn, then N ∈ M.
+
+Now, βη is a relation since it is the union of two relations. Finally, we show
+
+by induction on M
+
+∗ r
+
+N
+
+that
+
+if
+
+M
+
+∈
+
+M
+
+and
+
+M
+
+∗ r
+
+N
+
+then
+
+N
+
+∈
+
+M.
+
+34
+
+The next lemma shows that the new reduction relations preserve the free variables, degrees and goodness of terms.
+
+Lemma 56 Let M, N ∈ M and r ∈ {η, βη}. Assume M
+
+∗ r
+
+N.
+
+We
+
+have:
+
+1. F V (M ) = F V (N ) and d(M ) = d(N ).
+
+2. M is good iﬀ N is good.
+
+Proof
+
+1. By induction on the derivation of M
+
+∗ r
+
+N
+
+.
+
+We
+
+only
+
+treat
+
+the
+
+following:
+
+• Assume λxn.N xn η N where xn ∈ F V (N ) and d(N ) ≤ n. Obviously, F V (λxn.N xn) = F V (N ) and d(λxn.N xn) = min(d(N ), n) = d(N ).
+
+2. By induction on the length of the derivation M
+
+∗ r
+
+N.
+
+• If the length of the derivation is 0, nothing to prove.
+
+• Case M η N . We do the proof by induction on the derivation of M η N .
+Since the compatibility cases are similar to those of the proof of lemma 6 (when M β N ), we only do the case M = λxn.N xn β N with d(N ) ≤ n and xn ∈ F V (N ). Since M ∈ M, then N xn ∈ M, and so N xn.
+
+– If N is good then since by deﬁnition xn is good, and since d(N ) ≤ n = deg(xn) then by deﬁntion N xn is good. Now, since xn ∈ F V (N xn), λxn.N xn is good by deﬁnition.
+– If M is good then by lemma 2 twice, N is good.
+
+• Case M βη N . Then, either M β N or M η N and we use either lemma 6 or the case above.
+
+• Case M
+
+r N1
+
+∗ r
+
+N
+
+use
+
+IH.
+
+Lemma 57 Let r ∈ {η, βη}, ∈ { , ∗}, p ≥ 0 and M, N ∈ M.
+
+1. If M r N , then M + r N +.
+
+2. If d(M ) > 0 and M r N , then M − r N −.
+
+3. If M r N +, then M − r N .
+
+4. If M + r N , then M r N −.
+
+5. Let P ∈ M. If M r N , P r Q and M P , then N Q.
+
+6. If M r N , M P and d(P ) = n, then M [xn := P ] r N [xn := P ].
+
+7. If N
+8. If M Proof
+
+r P and M
+
+N , then M [xn := N ]
+
+∗ r
+
+M [xn
+
+:=
+
+P ].
+
+∗ r
+
+N,
+
+P
+
+∗ r
+
+P
+
+,
+
+M
+
+P and d(P ) = n, then M [xn := P ]
+
+∗ r
+
+N [xn
+
+:=
+
+P
+
+].
+
+1. The case r ∈ {η} and = is by induction on M r N using lemma 8, for
+
+case
+
+βη use the results for
+
+β (lemma 8) and
+
+η, case
+
+∗ r
+
+is
+
+by
+
+induction
+
+on the length of M
+
+∗ r
+
+N
+
+using
+
+the
+
+result
+
+for
+
+case
+
+r.
+
+2. Similar to 1.
+
+3. By lemma 56.1, lemma 8 and 2 above, M − N .
+
+35
+
+4. Similar to 3.
+
+5. Note that, by lemma 56.1, F V (M ) = F V (N ) and F V (P ) = F V (Q).
+
+6. Case r ∈ {η} and = is by induction on M using lemmas 3.6b and 3.7. For
+
+case
+
+βη use the results for
+
+β (lemma 8) and
+
+η. Case
+
+∗ r
+
+is
+
+by
+
+induction
+
+on the length of M
+
+∗ r
+
+N
+
+using
+
+the
+
+result
+
+for
+
+case
+
+r.
+
+7. Case r ∈ {η} and = is by induction on M . For case βη use the results
+
+for
+
+β (lemma 8) and
+
+η. Case
+
+∗ r
+
+is
+
+by
+
+induction
+
+on
+
+the
+
+length
+
+of
+
+M
+
+∗ r
+
+N
+
+using the result for case r.
+
+8. Use 6 and 7.
+
+The next lemma says that there are no blocked η-redexes in a typable term.
+
+Lemma 58 (No η-redexes are blocked in typable terms) Let i ∈ {1, 2} and M : Γ i U . If λxn.N xn is a subterm of M , then d(N ) ≤ n and hence if xn ∈ F V (N ) then λxn.N xn η N .
+Proof Since N xn is a subterm of M , by lemma 22.5, N xn is typable. By induction on the typing of N xn. We consider only the rule →e:
+
+• Case
+
+N: ∆ 1. Let
+
+1 T1 → T2 xn : (xn : T1) N xn : ∆, (xn : T1) 1 T2
+
+1 T1
+
+(by lemma 25.1).
+
+By lemma 23 and lemma 12.1a, d(N ) = d(T1 → T2) = d(T2) ≤ d(T1) = n.
+
+Hence λxn.N xn η N .
+
+• Case
+
+2.
+
+N:
+
+Γ1 2 V → T xn : (xn : W ) N xn : Γ1, (xn : W ) 2 T
+
+2V .
+
+By lemma 26.1, W V and, by lemma 23, d(N ) = d(V → T ) = 0 ≤ d(V ) =
+
+n. Hence, if xn ∈ F V (N ) then λxn.N xn η N .
+
+The next lemma shows that the substitution lemma for 1, and subject reduction for η using 1 fail.
+Lemma 59 (Subject η-reduction fails for 1) Let a, b, c be diﬀerent elements of A. We have:
+1. λx0.y0x0 η y0.
+2. λx0.y0x0 : y0 : (a → b) (a → c) 1 a → (b c) .
+3. It is not possible that y0 : y0 : (a → b) (a → c) 1 a → (b c) . Hence, subject reduction for η using 1 fails.
+Proof 1 and 2 are easy. For 3, assume y0 : y0 : (a → b) (a → c) 1 a → (b c) . By lemma 25.1, y0 : (a → b) (a → c) = y0 : a → (b c) and hence, (a → b) (a → c) = a → (b c). Absurd.
+
+36
+
+Lemma 60 (Extra Generation for 2)
+
+1. If M xn : Γ, xn : U
+
+2 V , d(V ) = 0 and xn ∈ F V (M ), then V =
+
+k i=1
+
+Ti
+
+where k ≥ 1 and ∀1 ≤ i ≤ k, M : Γ 2 U → Ti .
+
+2. If λxn.M xn : Γ 2 U and xn ∈ F V (M ), then M : Γ 2 U .
+Proof 1. By induction on the derivation of M xn : Γ, xn : U 2 V . We have three cases:
+
+• If M : Γ
+
+2 U → T xn : xn : V 2 U Γ M xn : Γ, xn : V 2 T
+
+(xn : V ) V
+
+U (using lemma 26.1
+
+and lemma 22), then since U → T V → T , we have M : Γ 2 V → T .
+
+•
+
+If
+
+M xn :
+
+Γ, xn : U M xn :
+
+2 U1 M xn : Γ, xn : U Γ, xn : U 2 U1 U2
+
+2 U2 , by lemma 23 U1
+
+U2 is
+
+good and, by lemma 12.1b, d(U1) = d(U2) = 0. By IH, U1 =
+
+k i=1
+
+Ti,
+
+U2
+
+=
+
+k+l i=k+1
+
+Ti
+
+,
+
+where
+
+k, l
+
+≥
+
+1
+
+and
+
+∀
+
+1
+
+≤
+
+i
+
+≤
+
+k
+
++
+
+l,
+
+M
+
+:
+
+Γ
+
+2 U → Ti .
+
+•
+
+M xn : If
+
+Γ, xn : U
+
+2 V Γ, xn : U 2 V M xn : Γ , xn : U 2 V
+
+Γ , xn : U 2 V ,
+
+by lemma 21, Γ Γ, U U and V V . By lemma 21, d(V ) = d(V ) = 0.
+
+By IH, V =
+
+k i=1
+
+Ti
+
+where
+
+k
+
+≥
+
+1
+
+and
+
+∀1
+
+≤
+
+i
+
+≤
+
+k,
+
+M
+
+:
+
+Γ
+
+2 U → Ti . By
+
+lemma 21.4 (since V is good by lemma 23), V = pi=1Ti where 1 ≤ p ≤ k
+
+and ∀1 ≤ i ≤ p, Ti Ti . Since for any 1 ≤ i ≤ p, Γ 2 U → Ti Γ 2
+
+U → Ti , then ∀1 ≤ i ≤ p, M : Γ 2 U → Ti .
+
+2. By lemma 23, m = d(U ) = d(λxn.M xn) = d(M xn) ≤ n. Hence n − m ≥ 0 and
+
+d(M xn) = d(M ) = m. By lemma 26.2, U =
+
+k i=1
+
+ei(1:m)
+
+(Vi
+
+→
+
+Ti)
+
+where
+
+k
+
+≥
+
+1
+
+and
+
+∀1 ≤ i ≤ k, M xn : Γ, xn : ei(1:m)Vi 2 ei(1:m)Ti .
+
+• If m = 0, then ∀1 ≤ i ≤ k, M xn : Γ, xn : Vi 2 Ti and M : Γ 2 Vi → Ti by 1. Hence, by k − 1 applications i, M : Γ 2 U .
+
+• If m > 0, then, by lemma 23 and m-applications of lemma 30.5, ∀1 ≤ i ≤ k, M −mxn−m : Γ−m, xn−m : Vi 2 Ti and, M −m : Γ−m 2 Vi → Ti by 1. Now, by m-applications of exp, M : Γ 2 ei(1:m)(Vi → Ti) . Finally, by
+k-applications of i, M : Γ 2 U .
+
+We also show using the extra generation lemma 60 that subject reduction for η using 2 also holds. First, we give the basic block in the proof of subject reduction for η.
+
+Theorem 61 If M : Γ 2 U and M η N , then N : Γ 2 U .
+
+Proof By induction on the derivation of M : Γ 2 U . →i is by lemma 60.2.
+
+→e, i and are by IH. We only do the exp case.
+
+Let
+
+M: M+ :
+
+Γ eΓ
+
+2U 2 eU
+
+.
+
+If M +
+
+η N , then, by lemma 8.1a, d(M +) > 0 and, by
+
+lemma 56.1, d(N ) > 0. By lemma 8.3, N = P + and M η P . By IH, P : Γ 2 U
+
+and, by exp, N : eΓ 2 eU .
+
+Corollary 62 (Subject reduction for βη)
+
+If M : Γ 2 U and M
+
+∗ βη
+
+N,
+
+then
+
+N
+
+:
+
+Γ
+
+2U .
+
+Proof By induction on the length of the derivation of M
+
+32 and 61.
+
+∗ βη
+
+N
+
+using
+
+theorems
+
+37
+
+B
+
+Conﬂuence of
+
+∗ β
+
+and
+
+∗ βη
+
+In this section we establish the conﬂuence of
+
+∗ β
+
+and
+
+∗ βη
+
+using
+
+the
+
+standard
+
+parallel
+
+reduction method.
+
+Deﬁnition 63 Let r ∈ {β, βη}. We deﬁne on M the binary relation →ρr by:
+
+• M →ρr M
+
+• If M →ρr M and xn ∈ F V (M ), then λxn.M →ρβ λxn.M .
+
+• If M →ρr M , N →ρβ N and M N then M N →ρr M N
+
+• If M →ρr M , N →ρr N , M N , xn ∈ F V (M ) and d(N ) = n, then (λxn.M )N →ρr M [xn := N ]
+
+• If M ρ→βη M , xn ∈ F V (M ) and d(M ) ≤ n, then λxn.M xn ρ→βη M
+We denote the transitive closure of →ρr by →→ρr . When M →ρr N (resp. M →→ρr N ), we can also write N ←ρr M (resp. N ←←ρr M ). If R, R ∈ {→ρr , →→ρr , ←ρr , ←←ρr }, we write M1RM2R M3 instead of M1RM2 and M2R M3.
+
+Lemma 64 Let r ∈ {β, βη} and M ∈ M.
+
+1. If M r M , then M →ρr M .
+
+2. If M →ρr M , then M ∈ M, M
+
+∗ r
+
+M
+
+,
+
+FV
+
+(M )
+
+=
+
+F V (M
+
+)
+
+and
+
+d(M )
+
+=
+
+d(M
+
+).
+
+3. If M →ρr M , N →ρr N and M N , then M N .
+
+Proof 1. By induction on the derivation of M r M . 2. By induction on the derivation of M →ρr M using lemmas 6.1, 56.1, 8.11 and 57.8. 3. M N since by 2, F V (M ) = F V (M ) and F V (N ) = F V (N ) and M N .
+
+Lemma 65 Let r ∈ {β, βη}, M, N ∈ M, N →ρr N and M N . We have:
+1. M [xn := N ] →ρr M [xn := N ].
+2. If M →ρr M and d(N ) = n, then M [xn := N ] →ρr M [xn := N ]. Proof 1. By induction on M using lemmas 3.2, 3.4 and 3.6a. 2. By induction on M →ρr M using 1, lemmas 3.2, 3.4, 3.6a and 64.3. We only do one interesting case where (λym.M1)M2 →ρβ M1[ym := M2], M1 →ρβ M1, M2 →ρβ M2, M1 M2, ym ∈ F V (M1) and d(M2) = m. Then:
+a. M1[xn := N ] →ρβ M1[xn := N ], by IH and lemma 3.2. b. M2[xn := N ] →ρβ M2[xn := N ], by IH and lemma 3.2.
+c. M1[xn := N ] M2[xn := N ], by lemmas 3.2 and 3.4.
+d. M1[xn := N ] M2[xn := N ], by a., b., c., and lemma 64.3.
+e. ym ∈ F V (M1[xn := N ]).
+f. d(M2[xn := N ]) = m, by lemmas 3.2.
+g. ym ∈ F V (N ), by BC and by lemma 3.7, M1[xn := N ][ym := M2[xn := N ]] = M1[ym := M2][xn := N ].
+Hence, (λym.M1[xn := N ])M2[xn := N ] →ρβ M1[xn := N ][ym := M2[xn := N ]] and so, ((λym.M1)M2)[xn := N ] →ρβ M1[ym := M2][xn := N ].
+
+38
+
+Lemma 66 Let r ∈ {β, βη}. Note that:
+1. If xn →ρr N , then N = xn.
+2. If λxn.P →ρβ N , then N = λxn.P where P →ρβ P and xn ∈ F V (P ) ∩ F V (P ).
+3. If λxn.P ρ→βη N then one of the following holds:
+• N = λxn.P where P ρ→βη P and xn ∈ F V (P ) ∩ F V (P ). • P = P xn where xn ∈ F V (P ) ∪ F V (N ), d(P ) ≤ n and P ρ→βη N .
+4. If P Q →ρr N , then one of the following holds:
+• N = P Q , P →ρr P , Q →ρr Q , P Q, and P Q . • P = λxn.P , N = P [xn := Q ], xn ∈ F V (P ) ∩ F V (P ), d(Q) =
+d(Q ) = n, P →ρr P , Q →ρr Q , P Q and P Q . Proof 1. By induction on the derivation of xn →ρr N . 2. By induction on the derivation of λxn.P →ρβ N using lemma 64.2. 3. By induction on the derivation of λxn.P ρ→βη N using lemma 64.2. 4. By induction on the derivation of P Q →ρr N using lemma 64.2 and 64.3.
+Lemma 67 Let r ∈ {β, βη} and M, M1, M2 ∈ M. 1. If M2 ←ρr M →ρr M1, then there is M ∈ M such that M2 →ρr M ←ρr M1. 2. If M2 ←←ρr M →→ρr M1, then there is M ∈ M such that M2 →→ρr M ←←ρr M1.
+Proof 1. Both cases by induction on M . We only do the βη case making discriminate use of lemma 66.
+• If M = xn, by lemma 66, M1 = M2 = xn. Take M = xn. • If N2P2 ρ←βη N P ρ→βη N1P1 where N2 ρ←βη N ρ→βη N1, P2 ρ←βη P ρ→βη P1, N P ,
+N1 P1 and N2 P2, then, by IH, ∃N , P such that N2 ρ→βη N ρ←βη N1 and P2 ρ→βη P ρ←βη P1. Hence, N2P2 ρ→βη N P ρ←βη N1P1. • If (λxn.P1)Q1 ρ←βη (λxn.P )Q ρ→βη P2[xn := Q2] where λxn.P ρ→βη λxn.P1, P ρ→βη P2, Q1 ρ←βη Q ρ→βη Q2, λxn.P1 Q1, λxn.P Q, P Q, P2 Q2, xn ∈ F V (P ) ∩ F V (P2), d(Q) = d(Q2) = n, then, by lemma 66, xn ∈ F V (P ) ∩ F V (P1) and P ρ→βη P1. By IH, ∃P , Q such that P1 ρ→βη P ρ←βη P2 and Q1 ρ→βη Q ρ←βη Q2. By lemma 64.2, d(Q1) = d(Q) = n. By lemma 3.2, P1 Q1. Hence, (λxn.P1)Q1 ρ→βη P [xn := Q ]. Moreover, since P2 ρ→βη P , Q2 ρ→βη Q , P2 Q2, and d(Q2) = n, then, by lemma 65.2, P2[xn := Q2] ρ→βη P [xn := Q ].
+• If P1[xn := Q1] ρ←βη (λxn.P )Q ρ→βη P2[xn := Q2] where P1 ρ←βη P ρ→βη P2, P Q, P1 Q1, P2 Q2, Q1 ρ←βη Q ρ→βη Q2, xn ∈ F V (P ) ∩ F V (P1) ∩ F V (P2) and d(Q) = d(Q1) = d(Q2) = n, then, by IH, ∃P , Q where P1 ρ→βη P ρ←βη P2 and Q1 ρ→βη Q ρ←βη Q2. Hence, by lemma 65.2, P1[xn := Q1] ρ→βη P [xn := Q ] ρ←βη P2[xn := Q2].
+• If λxn.N2 ρ←βη λxn.N ρ→βη λxn.N1 where N2 ρ←βη N ρ→βη N1 and xn ∈ F V (N1) ∩ F V (N2) ∩ F V (N ), by IH, there is N such that N2 ρ→βη N ρ←βη N1. Hence, λxn.N2 ρ→βη λxn.N ρ←βη λxn.N1.
+39
+
+• If M1 ρ←βη λxn.P xn ρ→βη M2, xn ∈ F V (P ) ∪ F V (M1) ∪ F V (M2) and d(P ) ≤ n, then, by IH, there is M such that M2 ρ→βη M ρ←βη M1.
+• If M1 ρ←βη λxn.P xn ρ→βη λxn.P , where P ρ→βη M1, P xn ρ→βη P , d(P ) ≤ n and xn ∈ F V (P ) ∪ F V (M1). By lemma 66, P = P xn and P ρ→βη P . By IH, there is M such that P ρ→βη M ρ←βη M1. By lemma 64.2, xn ∈ F V (P ) and d(P ) ≤ n. Hence, M2 = λxn.P xn ρ→βη M ρ←βη M1.
+2. First show by induction on M →ρ→r M1 (and using 1) that if M2 ←ρr M →ρ→r M1, then there is M such that M2 →ρ→r M ←ρr M1. Then use this to show 2 by induction on M →ρ→r M2.
+
+Theorem 68 (Conﬂuence of
+
+∗ β
+
+/
+
+∗ βη
+
+)
+
+Let r ∈ {β, βη}, M, M1, M2 ∈ M.
+
+1. If M
+
+∗ r
+
+M1
+
+and
+
+M
+
+∗ r
+
+M2
+
+,
+
+then
+
+there
+
+is
+
+M
+
+such that M1
+
+∗ r
+
+M
+
+and M2
+
+∗ r
+
+M
+
+.
+
+2. M1
+
+β M2 iﬀ there is a term M such that M1
+
+∗ β
+
+M
+
+and
+
+M2
+
+∗ β
+
+M.
+
+Proof
+
+1. By lemma 67.2, →ρ→r is conﬂuent. By lemma 64.1 and 64.2, M →ρ→r N iﬀ M
+
+∗ r
+
+N
+
+.
+
+Then
+
+∗ r
+
+is
+
+conﬂuent.
+
+2. If) is by deﬁnition of β. Only if) is by induction on M1 β M2 using 1.
+
+C Strong normalization of the type systems 1 and
+
+2
+
+To show the strong normalisation of our two type systems, we will use the wellknown reducibility method. First, we deﬁne the sets of strongly normalising terms for each degree n.
+
+Deﬁnition 69 1. We say that M ∈ M is strongly normalising if there are no inﬁnite derivations M β M1 β . . ..
+
+2.
+
+For
+
+every
+
+n
+
+∈ N,
+
+we
+
+deﬁne
+
+n
+SN
+
+= {M
+
+∈
+
+Mn
+
+/
+
+M
+
+is
+
+strongly
+
+normalizing}
+
+and and
+
+SN =
+
+n
+SN
+
+=
+
+i∈N SNi. Note SN ∩ Mn.
+
+that
+
+SN
+
+=
+
+{M
+
+∈
+
+M
+
+/
+
+M
+
+is
+
+strongly
+
+normalizing}
+
+Remark 70 We can show that since we work with the λIN-calculus, strong normalisation is equivalent to weak normalisation. However, since this result is not needed for this paper, we do not discuss it further.
+
+The next lemma shows that some terms are strongly normalising if they are parts or β-expansions of strongly normalising terms.
+Lemma 71 1. If M xn ∈ SN, then M ∈ SN.
+2. Let d(N ) = n. If M [xn := N ] ∈ SN, then M ∈ SN.
+3. Let k ≥ 0 and d(N ) = n. If M, N, N1, ..., Nk, M [xn := N ] N1...Nk ∈ SN, then (λxn.M )N N1...Nk ∈ SN.
+
+40
+
+Proof 1. If M β M1 β . . . is an inﬁnite derivation, then M xn β M1xn β . . .
+
+is an inﬁnite derivation. Absurd.
+
+2. Since M [xn := N ] ∈ M, then M N by BC and lemma 3.2. If M β M1 β . . .
+
+is an inﬁnite derivation, then, by lemma 8.8, Mi N for every i ≥ 1. By lemma 8.9,
+
+M [xn := N ] β M1[xn := N ] β . . . is an inﬁnite derivation. Absurd.
+
+3. As M [xn := N ] ∈ M, then M N by BC and lemma 3.2. Since M, N, N1, . . . ,
+
+Nk ∈ SN, any inﬁnite β-derivation starting at (λxn.M )N N1 . . . Nk has the form:
+
+(λxn.M )N
+
+∗ β
+
+M
+
+[xn
+
+:=
+
+N
+
+]N1
+
+. . . Nk
+
+β . . . where M
+
+∗ β
+
+M
+
+,
+
+N
+
+∗ β
+
+N
+
+,
+
+∀
+
+1
+
+≤
+
+i
+
+≤
+
+k,
+
+Ni
+
+∗ β
+
+Ni
+
+and
+
+the
+
+inﬁnite
+
+derivation
+
+continues
+
+from
+
+M
+
+[xn
+
+:=
+
+N
+
+]N1 . . . Nk.
+
+By
+
+lemma 8.11, M [xn := N ]
+
+∗ β
+
+M
+
+[xn
+
+:=
+
+N
+
+].
+
+Hence M [xn := N ]N1 . . . Nk
+
+∗ β
+
+M
+
+[xn
+
+:=
+
+N
+
+]N1 . . . Nk
+
+and
+
+there
+
+is
+
+an
+
+inﬁnite
+
+derivation starting at M [xn := N ]N1 . . . Nk ∈ SN. Absurd.
+
+Strong normalisation is closed under the lifting and decreasing of the degree of
+
+a term.
+
+Lemma 72 1. M ∈ SN iﬀ M + ∈ SN.
+
+2. If d(M ) > 0, M ∈ SN iﬀ M − ∈ SN.
+
+3.
+
+For
+
+every
+
+n ∈ N,
+
+(SNn)+
+
+=
+
+n+1
+SN
+
+and
+
+(SNn+1)−
+
+= SNn.
+
+Proof 1. Only if): Let M ∈ SN. If M + ∈ SN, take an inﬁnite derivation
+M + β N1 β N2 β . . .. By lemma 8.1a and lemma 6.1, d(M +) > 0 and ∀i ≥ 1, d(Ni) > 0. By lemmas 8.3 and 8.1b, ∀i ≥ 1, ∃Mi = Ni− such that Ni = Mi+ and
+M β M1 β M2 β . . . is an inﬁnite derivation. Absurd. If): Let M + ∈ SN. If M ∈ SN, take an inﬁnite derivation M β M1 β M2 β . . .. By lemma 8.4, M + β M1+ β M2+ β . . . is an inﬁnite derivation. Absurd. 2. By lemma 8.3, M = (M −)+. By 1. M − ∈ SN iﬀ M = (M −)+ ∈ SN.
+
+3. Use 1. and 2.
+
+Now we deﬁne SN -saturated sets and establish some of their properties.
+
+Deﬁnition 73 We say that X ⊆ M is SN -saturated iﬀ whenever M, N, N1, ..., Nk ∈ SN, xn ∈ F V (M ), d(N ) = n and M [xn := N ]N1...Nk ∈ X , then (λxn.M )N N1...Nk ∈
+X.
+
+Lemma 74
+
+1.
+
+For
+
+every
+
+n ∈ N,
+
+the
+
+set
+
+n
+SN
+
+is
+
+SN -saturated.
+
+2. If X , Y are SN -saturated sets, then X ∩ Y is SN -saturated.
+
+3. If X is SN -saturated, then X + is SN -saturated.
+
+4. If Y is SN -saturated, then, for every set X ⊆ SN, X Y is SN -saturated. Proof
+
+1. Let M, N, N1, ..., Nk ∈ SN such that d(N ) = m, xm ∈ F V (M ) and M [xm :=
+
+N ]N1...Nk
+
+∈
+
+n
+SN
+
+.
+
+Since (λxm.M )N N1...Nk
+
+β M [xm := N ]N1...Nk and
+
+d(M [xm := N ]N1...Nk) = n, then, by lemma 6.1,
+
+d((λxm.M )N N1...Nk) = n. Since M, N, N1, ..., Nk, M [xm := N ]N1...Nk ∈
+
+SN, then, by lemma 71, (λxm.M )N N1...Nk ∈ SN.
+
+2. Easy.
+
+3. If M, N, N1, ..., Nk ∈ SN, xn ∈ F V (M ), d(N ) = n and M [xn := N ] N1...Nk ∈ X +, then, by lemma 8.1(c)iii, (M [xn := N ])−N1−...Nk− ∈ X . Since M N (by lemma 3), n > 0 and for each P ∈ {M, N, N1, . . . , Nk}, d(P ) > 0, then, by lemma 8.3 (M [xn := N ])− = M −[xn−1 := N −] and, by lemma 72.2,
+M −, N −, N1−, ..., Nk− ∈ SN. Moreover, xn−1 ∈ F V (M −) and by lemma 8.3 d(N −) = n − 1. Hence since X is SN -saturated,
+(λxn−1.M −)N −N1−...Nk− ∈ X and, by lemma 8.3, (λxn.M )N N1...Nk ∈ X +.
+
+41
+
+4. If M, N, N1, ..., Nk ∈ SN, xn ∈ F V (M ), d(N ) = n, M [xn := N ] N1...Nk ∈ X Y and P ∈ X ⊆ SN such that (λxn.M )N N1...Nk P , then, by lemma 8.8 M [xn := N ]N1...Nk P and hence M [xn := N ] N1...NkP ∈ Y. Since Y is SN -saturated, (λxn.M )N N1...NkP ∈ Y. Thus (λxn.M N ) N1...Nk ∈ X Y.
+
+Now we deﬁne the so-called SN -interpretation of types.
+
+Deﬁnition 75 1. Let x ∈ V and n ∈ N. We deﬁne
+
+n
+SNx
+
+=
+
+{xn
+
+N1...Nk
+
+∈
+
+M
+
+/
+
+k
+
+≥
+
+0
+
+and
+
+∀1
+
+≤
+
+i
+
+≤
+
+k,
+
+Ni
+
+∈
+
+SNmi
+
+and
+
+mi
+
+≥
+
+n}.
+
+2. An SN -interpretation I : A → P(M0) is a function such that for all a ∈ A:
+
+• I(a) is SN -saturated
+
+•
+
+∀x
+
+∈
+
+V,
+
+0
+SNx
+
+∩
+
+M
+
+⊆
+
+I (a)
+
+⊆
+
+0
+SN
+
+∩
+
+M
+
+3. We extend an SN -interpretation I to T (hence also to U) as follows: • I(eU ) = I(U )+ • I(U1 U2) = I(U1) ∩ I(U2) • I(U → T ) = I(U ) I(T ).
+
+Lemma 76 1. For every x ∈ V, SNnx ⊆ SNn.
+2. On T (and hence on U), we have: If U is a type and I is an SN -interpretation then:
+
+(a) I(U ) is SN -saturated.
+
+(b)
+
+Let x ∈ V.
+
+If U
+
+is good
+
+and
+
+d(U )
+
+=
+
+n,
+
+then
+
+xn
+
+∈
+
+n
+SNx
+
+∩
+
+M
+
+⊆
+
+I(U )
+
+⊆
+
+n
+SN
+
+∩
+
+M.
+
+Proof
+
+1. For every x ∈ V and for every M ∈ SNnx, d(M ) = n and M ∈ SN, then
+
+M
+
+∈
+
+n
+SN
+
+.
+
+2a. By induction on U type using lemma 74.
+
+2b. Obviously, xn ∈ SNnx ∩ M. We show SNnx ∩ M ⊆ I(U ) ⊆ SNn ∩ M by induction on U good.
+
+Case U = a: by deﬁnition. Case U = U1 U2 (resp. U = eV ): use IH
+
+since, by lemma 12, U1, U2 are good and d(U1) = d(U2) (resp. V is good,
+
+d(U )
+
+=
+
+d(V
+
+)
+
++
+
+1,
+
+(SNnx )+
+
+=
+
+n+1
+SNx
+
+and,
+
+by
+
+lemma
+
+72.3
+
+(SNn)+
+
+=
+
+SNn+1).
+
+Case U = V → T : by lemma 12, V, T are good and m = d(V ) ≥ d(T ) =
+
+d(U ) = n.
+
+– Let k ≥ 0 and xnN1...Nk ∈ SNnx ∩ M where ∀1 ≤ i ≤ k, Ni ∈ SNmi and
+
+mi ≥ n. Take N ∈ I(V ) such that (xnN1...Nk) N (hence xnN1...NkN ∈
+
+M).
+
+By
+
+IH,
+
+I(V )
+
+⊆
+
+m
+SN
+
+∩M
+
+and
+
+d(N )
+
+=
+
+m
+
+≥
+
+n.
+
+Again, by IH,
+
+xn N1 ...Nk N
+
+∈
+
+n
+SNx
+
+∩
+
+M
+
+⊆
+
+I (T
+
+).
+
+Thus
+
+xnN1...Nk
+
+∈ I(V
+
+→ T ).
+
+– Let M ∈ I(V → T ) and x ∈ V such that ∀p ∈ N, xp ∈ F V (M ). Hence,
+
+M
+
+xm.
+
+Since
+
+xm
+
+∈
+
+m
+SNx
+
+∩
+
+M,
+
+by
+
+IH,
+
+xm
+
+∈
+
+I(V ).
+
+Then
+
+M xm
+
+∈
+
+I(T )
+
+⊆
+
+SNn ∩ M by IH, and d(M xm) = min(d(M ), m) = n. Since M xm ∈ M,
+
+by lemma 2, M is good and d(M ) ≤ m. Thus d(M ) = n and, by
+
+lemma
+
+71.1,
+
+M
+
+∈
+
+n
+SN
+
+∩
+
+M.
+
+Lemma 77 If I be an SN -interpretation and U V , then I(U ) ⊆ I(V ). Proof By induction on the derivation of U V .
+
+42
+
+Lemma 78 Let i ∈ {1, 2} and M : (xni i : Ui)n i U , I be an SN -interpretation and ∀1 ≤ i ≤ n, Ni ∈ I(Ui). If M [(xni i := Ni)n] ∈ M, then M [(xni i := Ni)n] ∈ I(U ).
+
+Proof By induction on the derivation of M : (xni i : Ui)n i U . The proof is similar to that of lemma 38. We use lemma 77 for the typing rule . We only look
+
+at the typing rule →i.
+
+Let i≤
+
+M : (xni i : Ui)n, xm λxm.M : (xni i : Ui)n n, Ni ∈ I(Ui). Let N
+
+:V iT iV →T
+
+where (λxm.M )[(xni i
+
+∈ I(V ) where (λxm.M )[(xni i :=
+
+:= Ni)n] ∈ Ni)n] N .
+
+M
+
+and
+
+∀
+
+1
+
+≤
+
+Since (λxm.M [(xni i := Ni)n]) N , by lemma 3, M [(xni i := Ni)n] N and M [(xni i :=
+
+Ni)n][xm := N ] = M [(xni i := Ni)n, xm := N ] ∈ M. By IH, M [(xni i := Ni)n, xm :=
+
+N ] ∈ I(T ). By lemma 12, V, T are good and d(V ) = m. Hence, by lemma 76,
+
+d(N ) = m and (λxm.M [(xn1 1 := N1)n])N β M [(xni i := Ni)n, xm := N ] ∈ I(T ). By lemma 76, I(T ), I(V ) ⊆ SN and so N , M [(xni i := Ni)n, xm := N ] ∈ SN. Hence M [(xni i := Ni)n] ∈ SN by lemma 71, and since I(T ) is SN -saturated (lemma 76), we get by deﬁnition 73 that (λxm.M [(xn1 1 := N1)n])N ∈ I(T ). Hence, λxm.M [(xni i :=
+
+Ni)n] ∈ I(V ) I(T ).
+
+Theorem 79 Let i ∈ {1, 2}. If M : (xni i : Ui)n i U , then M is strongly normalizing.
+
+Proof Let d(U ) = k and take, by lemmas 74.1 and 76.1, the SN -interpretation
+
+I deﬁned by: for all a ∈ A, I(a) = SN0. By lemma 23, U is good and ∀1 ≤ i ≤ n,
+
+Ui is good and d(Ui) = ni. By lemma 76, xni i ∈ SNnxii ∩ M ⊆ I(Ui) ∀1 ≤ i ≤ n and
+
+I(U )
+
+⊆
+
+k
+SN
+
+.
+
+Hence,
+
+by
+
+lemma
+
+78,
+
+M
+
+=
+
+M [(xni i
+
+:=
+
+xni i )n]
+
+∈
+
+I(U )
+
+⊆
+
+k
+SN
+
+and
+
+M
+
+is
+
+strongly normalizing.
+
+D Removing indices from 1
+
+We assume familiarity with the λI-calculus (the λIN-calculus without indices). We use the same syntax of types for the λI-calculus and we deﬁne λI-environments to be exactly those of the λIN-calculus but where all upper indices disappear from the variables. We use the same meta-variables in the λI- and λIN-calculi. If Γ1 and Γ2 are two λI-environments, then we deﬁne Γ1 Γ2 as usual. Moreover, if Γ = (xi : Ti)n is a λI-environment, then we deﬁne eΓ = (xi : eTi)n.
+Deﬁnition 80 1. We deﬁne the very good types on T by:
+
+• If a ∈ A, then a is very good. • If U, T are very good and d(U ) = d(T ), then U → T and U
+good. • If U is very good and e ∈ E, then eU is very good.
+
+T are very
+
+Note that if U is very good then U is very good.
+
+◦
+2. We deﬁne to be the typing relation on the λIN-calculus given by all the rules
+of 1 except for ax which is replaced by:
+
+T very good d(T ) = n xn : (xn : T ) 1 T
+
+ax◦
+
+Deﬁnition 81 1. Let r ∈ {s, v}. We deﬁne the typing system r for the λIcalculus, based on the rules {axr, →ir, →er, ir, expr} given as follows:
+
+x : (x : T ) s T axs
+
+T very good x : (x : T ) v T axv
+
+43
+
+M : Γ, (x : T1) r T2 λx.M : Γ r T1 → T2
+
+→ir
+
+M1 : Γ1 r T1 → T2 M2 : Γ2 r T1 M1 M2 : Γ1 Γ2 r T2
+
+→er
+
+M : Γ1 s T1 M : Γ2 s T2 M : Γ1 Γ2 s T1 T2
+
+is
+
+M : Γ1 v T1 M : Γ2 v T2 d(T1) = d(T2) M : Γ1 Γ2 v T1 T2
+
+iv
+
+M: Γ rT M : eΓ r eT
+
+expr
+
+2. We associate to each λIN-term M a λI-term M by induction as follows:
+
+xn = x
+
+M1 M2 = M1 M2
+
+λxn.M = λx.M
+
+3. If Γ = (xni i : Ti)k, then we let Γ = (xi : Ti)k.
+
+Lemma 82 1. (a) M + = M .
+
+(b) eΓ = eΓ
+
+(c) Let m ∈ N. If M = N and all subterms of M have degree m then M is
+
+the unique such term of degree m (i.e., if M = N and all subterms of M
+
+have degree m then M = M ).
+
+2. If Γ = (xni i : Ti)n and M : Γ 1 T , then Γ = (xi : Ti)n is a λI-environment.
+
+3. If Γ1, Γ2 and Γ1 Γ2 are 1-legal, then Γ1 Γ2 = Γ1 Γ2.
+
+4. If M : (xi : Ti)n v T then M : (xi : Ti)n s T , T is very good, ∀ 1 ≤ i ≤ n, Ti is very good and d(Ti) = d(T ).
+◦
+5. If M : (xni i : Ti)n T then M : (xni i : Ti)n 1 T , T is very good, ∀ 1 ≤ i ≤ n, Ti is very good, d(Ti) = ni = d(T ) = d(M ) and if N is a subterm of M then d(N ) = d(M ).
+Proof
+
+1 (a) and (c) are by induction on M and (b) is trivial.
+
+2 by lemma 22.3, if i = j, then xi = xj and hence Γ = (xi : Ti)n is a λIenvironment.
+3 Let Γ1 = (xni i : Ui)n, (yjmj : Vj )m and Γ2 = (xni i : Ui )n, (zkrk : Wk)r. Γ1 Γ2 = (xni i : Ui Ui )n, (yjmj : Vj )m, (zkrk : Wk)r. By 2, Γ1 = (xi : Ui)n, (yj : Vj )m, Γ2 = (xi : Ui )n, (zk : Wk)m and Γ1 Γ2 = (xi : Ui Ui )n, (yj : Vj )m, (zk : Wk)r are λI-environments and xi = yj and xi = zk ∀i, j, k. Hence, Γ1 Γ2 = (xi : Ui Ui )n, (yj : Vj)m, (zk : Wk)r = Γ1 Γ2.
+4. By induction on the derivation of M : (xi : Ti)n v T .
+◦
+5. By induction on the derivation of M : (xni i : Ti)n T .
+
+44
+
+The next lemma shows that if indices are removed from a legal typing judgement, then the resulting typing judgement is legal in the λI-calculus using the corresponding intersection type system. The lemma also establishes the result in the other direction for very good types.
+
+Lemma 83 1. If M : Γ 1 T , then M : Γ s T .
+
+2. If M : Γ v T , then there are M , Γ such that M = M , Γ = Γ and
+◦
+M : Γ T . Moreover, such M and Γ are unique.
+Proof
+
+1. By induction on the derivation of M : Γ 1 T using lemma 82.
+
+• ax is trivial.
+
+•
+
+M: Let λxm.M :
+
+Γ, (xm : T1) 1 T2 (xni i : Ui)n 1 T1 → T2
+
+where Γ = (xni i : Ui)n.
+
+By lemma 82 and IH, Γ = (xi : Ui)n and M : Γ, x : T1 s T2 .
+
+Hence, by →i, λx.M : Γ s T1 → T2 .
+
+• M1 : Γ1 1 T1 → T2 M2 : Γ2 1 T1 Γ1 Γ2 . (M1 M2) : Γ1 Γ2 1 T2
+By IH, M1 : Γ1 s T1 → T2 and M2 : Γ2 s T1 . Thus, by →e and lemma 82, M1 M2 : Γ1 Γ2 = Γ1
+
+Γ2 s T2 .
+
+• Let M : Γ1 1 T1 M : Γ2 1 T2 . M : Γ1 Γ2 1 T1 T2
+
+By IH, M :
+
+Γ1
+
+s T1 and M :
+
+Γ2 s T2 , thus, by i and lemma 82, M : Γ1 Γ2 = Γ1 Γ2 s T1 T2 .
+
+•
+
+M: Let M + :
+
+Γ eΓ
+
+1T 1 eT
+
+. By IH, exp and lemma 82, M :
+
+eΓ = eΓ
+
+s eT .
+
+2. First, we prove the existence of M and Γ by induction on the derivation of M : Γ v T using lemma 82.
+
+• axv is trivial.
+
+• Let M : Γ, (x : T1) v T2 . By IH, there are M , Γ such that Γ = Γ, λx.M : Γ v T1 → T2
+◦
+M = M , and M : Γ , xm : T1 T2 .
+◦
+Hence, by →i, λxm.M : Γ T1 → T2 .
+
+• Let M1 : Γ1 v T1 → T2 (M1 M2) : Γ1
+
+M2 : Γ2 Γ2 v T2
+
+v T1 . By IH, there are M1, M2,
+
+◦
+
+Γ1, Γ2, such that M1 = M1, M2 = M2, Γ1 = Γ1, Γ2 = Γ2, M1 : Γ1
+
+◦
+
+T1 → T2 and M2 : Γ2 T1 . By lemma 82.(4 and 5), T1 → T2 is
+
+very good (hence d(T1) = d(T2)) and if xn ∈ F V (M1), xm ∈ F V (M2)
+
+then d(xn) = n = d(M1) and d(xm) = m = d(M2). By lemma 82.5 and
+
+lemma 23, d(M1) = d(T1 → T2) = d(T2) and d(M2) = d(T2). Hence,
+◦
+
+m = n. By lemma 22.4, Γ1 Γ2, Hence, by →e, M1M2 : Γ1 Γ2 T2 .
+
+•
+
+M: Let
+
+Γ1
+
+v T1
+
+M : Γ2 v T2
+
+d(T1) = d(T2) .
+
+M : Γ1 Γ2 v T1 T2
+
+By IH, there are M , M , Γ1, Γ2 such that M = M = M , Γ1 = Γ1,
+◦◦
+
+Γ2 = Γ2, M : Γ1 T1 , and M : Γ2 T2 . By lemma 82.(1 and 5),
+◦
+
+M = M and hence by i, M : Γ1 Γ2 T1 T2 .
+
+45
+
+•
+
+M: Let M + :
+
+Γ eΓ
+
+vT v eT
+
+. Use IH, exp and lemma 82.
+
+Now we prove unicity of M and Γ . Assume that there are M , Γ such that
+◦
+M = M , Γ = Γ and M : Γ T . By lemma 82.(1 and 5) and lemma 23,
+M = M . Moreover, since Γ = Γ = Γ then let Γ = (xni i : Ui)n, Γ = (xmi i : Ui)n and Γ = (xi : Ui)n. By lemma 82.5, ∀1 ≤ i ≤ n, m1 = ni = d(T ).
+Hence, Γ = Γ .
+
+E Removing indices from 2
+
+In this section we show that our results for 2 can be translated to the λI-calculus (i.e., where indices are removed). We use the notations of section D.
+Deﬁnition 84 1. The typing rules of the λI-calculus are given as follows:
+
+ax x : (x : T ) 2 T
+
+M : Γ, (x : U ) 2 T λx.M : Γ 2 U → T
+
+→i
+
+M1 : Γ1 2 U → T
+
+M2 : Γ2 2 U
+
+M1M2 : Γ1 Γ2 2 T
+
+→e
+
+M : Γ 2 U1
+
+M : Γ 2 U2
+
+M : Γ 2 U1 U2
+
+i
+
+M : Γ 2 U exp M : eΓ 2 eU
+
+M: Γ 2U
+
+Γ 2U
+
+M: Γ 2U
+
+Γ 2U
+
+In the last clause, the binary relation is deﬁned by the following rules: ref
+ΦΦ
+
+Φ1 Φ2
+
+Φ2 Φ3 tr
+
+Φ1 Φ3
+
+U1 U2 U1 e
+
+U1 V1 & U2 V2 U1 U2 V1 V2
+
+U2 U1 & T1 T2 → U1 → T1 U2 → T2
+
+U1 U2 eU1 eU2
+
+exp
+
+46
+
+U1 U2 Γ, (y : U1) Γ, (y : U2)
+
+c
+
+U1 U2 & Γ2 Γ1
+
+Γ1 2 U1
+
+Γ2 2 U2
+
+2. We deﬁne M and Γ as in deﬁnition 81. If Γ 2 U is a typing, then we let Γ 2 U = Γ 2 U .
+
+Lemma 85 1. If U U then U U .
+
+2. If Γ Γ , U U and x ∈ dom(Γ) then Γ, (x : U ) Γ , (x : U ).
+
+3. Γ Γ iﬀ Γ = (xi : Ui)n, Γ = (xi : Ui )n and for every 1 ≤ i ≤ n, Ui Ui .
+
+4. Γ 2 U
+
+Γ 2 U iﬀ Γ Γ and U U .
+
+Proof 1. By induction on U U . The rest is similar to the proof of lemma 21.
+
+Lemma 86 1. (a) M + = M .
+
+(b) eΓ = eΓ.
+
+2. If Γ = (xni i : Ui)n and M : Γ 2 U , then Γ = (xi : Ui)n is a λI-environment.
+
+3. If Γ1, Γ2 and Γ1 Γ2 are 2-legal, then Γ1 Γ2 = Γ1 Γ2.
+
+4. If Γ Γ , then Γ Γ .
+
+5. If Γ 2 U Γ 2 U , then Γ 2 U
+
+Γ 2U .
+
+Proof For 1, 2, 3, see lemma 82. 4. use lemmas 21.2, 85.1 and 85.3.
+
+5. use lemmas 21.3, 4, 85.1 and 85.4.
+
+Lemma 87 If M : Γ 2 U , then M : Γ 2 U
+
+Proof By induction on the derivation of M : Γ 2 U using lemma 86.3 in →e
+
+and lemma 86.5 in . We examine the rule .
+
+M: Γ Let
+
+2U
+
+Γ 2U
+
+M: Γ 2U
+
+Γ 2 U . By IH, M : Γ 2 U , and, by
+
+lemma 86.5, Γ 2 U
+
+Γ 2 U , then M : Γ 2 U .
+
+47
+
+
