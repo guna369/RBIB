@@ -1,0 +1,1783 @@
+UMIACS-TR-93-134 CS-TR-3193
+
+November, 1992 Revised April, 1993
+
+A Framework for Unifying Reordering Transformations
+
+Wayne Kelly
+wak@cs.umd.edu
+Dept. of Computer Science
+
+William Pugh
+pugh@cs.umd.edu
+Institute for Advanced Computer Studies Dept. of Computer Science
+
+Univ. of Maryland, College Park, MD 20742
+
+Abstract
+We present a framework for unifying iteration reordering transformations such as loop interchange, loop distribution, skewing, tiling, index set splitting and statement reordering. The framework is based on the idea that a transformation can be represented as a schedule that maps the original iteration space to a new iteration space. The framework is designed to provide a uniform way to represent and reason about transformations. As part of the framework, we provide algorithms to assist in the building and use of schedules. In particular, we provide algorithms to test the legality of schedules, to align schedules and to generate optimized code for schedules.
+This work is supported by an NSF PYI grant CCR-9157384 and by a Packard Fellowship.
+
+1 Introduction
+
+Optimizing compilers reorder iterations of statements to improve instruction scheduling, register use, and
+
+cache utilization, and to expose parallelism. Many di erent reordering transformations have been developed
+
+and studied, such as loop interchange, loop distribution, skewing, tiling, index set splitting and statement
+
+reordering AK87, Pol88, Wol89b, Wol90, CK92].
+
+Each of these transformations has its own special legality checks and transformation rules. These checks
+
+and rules make it hard to analyze or predict the e ects of compositions of these transformations, without
+
+performing the transformations and analyzing the resulting code.
+
+Unimodular transformations Ban90, WL91a] go some way towards solving this problem. Unimodular
+
+transformations is a uni ed framework that is able to describe any transformation that can be obtained
+
+by composing loop interchange, loop skewing, and loop reversal. Such a transformation is described by a
+
+unimodular linear mapping from the original iteration space to a new iteration space. For example, loop
+
+interchange in a doubly nested loop maps iteration i; j] to iteration j; i]. This transformation can be
+
+described using a unimodular matrix:
+
+"0 1
+
+1 0
+
+#"
+
+i j
+
+#"
+=
+
+j i
+
+#
+
+Unfortunately, unimodular transformations are limited in two ways: they can only be applied to perfectly nested loops, and all statements in the loop nest are transformed in the same way. They can therefore not represent some important transformations such as loop fusion, loop distribution and statement reordering.
+
+1.1 Schedules
+The points in the iteration space resulting from a unimodular transformation will be executed in lexicographic order. Thus a unimodular transformation implicitly speci es a new order or schedule for the points in the original iteration space. We use this idea of a schedule as the basis for our uni ed reordering transformation framework. This framework is more general than unimodular transformations as it can describe a larger class of mappings (or schedules) from the old iteration space to the new iteration space.
+A schedule has the following general form:
+T : i1; : : :; im] ! f1; : : :; fn] j C
+where: The iteration variables i1; : : :; im represent the loops nested around the statement(s). The fj0s are functions of the iteration variables.
+C is an optional restriction on the domain of the schedule. This schedule represents the fact that iteration i1; : : :; im] in the original iteration space is mapped to iteration f1; : : :; fn] in the new iteration space if condition C is true. For example the above unimodular transformation would be represented by the schedule:
+T : i; j] ! j; i]
+In the case of unimodular transformations:
+All statements are mapped using the same schedule. The fj0s are linear functions of the iteration variables.
+
+1
+
+The schedule is invertable and unimodular (i.e., 1-1 and onto).
+
+The dimensionality of the old and new iteration spaces are the same (i.e., m = n).
+
+There is no restriction C on the domain.
+
+In our framework we generalize unimodular transformations in the following ways:
+
+We specify a separate schedule for each statement We allow the fj0s to include a constant term (possibly symbolic).
+
+We require the schedules to be invertable, but not necessarily unimodular (i.e., 1-1 but not necessarily onto).
+
+We allow the dimensionality of the old and new iteration spaces to be di erent.
+
+SWieTapilljowCpti hwehsecrheetdhueleTspitoj
+
+be piecewise (as suggested by Cpi's are schedules with disjoint
+
+Lu91]): we domains.
+
+can
+
+specify
+
+a
+
+schedule
+
+Tp
+
+as
+
+We allow the fj0s to be functions that include integer division and modular operations provided the denominator is a known integer constant.
+
+By generalizing in these ways, we can represent a much broader set of reordering transformations, including any transformation that can be obtained by some combination of:
+
+loop interchange loop reversal loop skewing, statement reordering loop distribution loop fusion loop alignment ACK87] loop interleaving ST92] loop blocking1 (or tiling) AK87] index set splitting1 Ban79] loop coalescing1 Pol88] loop scaling1 LP92]
+
+1.2 Examples
+Figure 1 gives some interesting examples of schedules.
+1.3 Overview
+Our framework is designed to provide a uniform way to represent and reason about reordering transformations. The framework itself is not designed to decide which transformation should be applied. The framework should be used within some larger system, such as an interactive programming environment or an optimizing compiler. It is this surrounding system that is nally responsible for deciding which transformation should be applied. The framework does however provide some algorithms that would aid the surrounding system in its task.
+1Our current implementation cannot handle all cases of these transformations.
+
+2
+
+Code adapted from OLDA in Perfect club (TI) B+89] LU Decomposition without pivoting
+
+Original code
+
+Original code
+
+do 20 mp = 1, np do 20 mq = 1, mp do 20 mi = 1, morb
+10 xrsiq(mi,mq)=xrsiq(mi,mq)+ $ xrspq((mp-1)*mp/2+mq)*v(mp,mi)
+20 xrsiq(mi,mp)=xrsiq(mi,mp)+ $ xrspq((mp-1)*mp/2+mq)*v(mq,mi)
+Schedule (for parallelism)
+
+TT1200
+
+: :
+
+f f
+
+mp; mp;
+
+mq; mq;
+
+mi ] mi ]
+
+! !
+
+mi; mi;
+
+mq; mp;
+
+mp; mq;
+
+0]g 1]g
+
+Transformed code
+
+parallel do 20 mi = 1,morb parallel do 20 t2 = 1,np do 10 t3 = 1,t2-1
+10 xrsiq(mi,t2)=xrsiq(mi,t2) + $ xrspq((t3-1)*t3/2+t2)*v(t3,mi) xrsiq(mi,t2)=xrsiq(mi,t2) + $ xrspq((t2-1)*t2/2+t2)*v(t2,mi) xrsiq(mi,t2)=xrsiq(mi,t2) + $ xrspq((t2-1)*t2/2+t2)*v(t2,mi) do 20 t3 = t2+1,np
+20 xrsiq(mi,t2)=xrsiq(mi,t2) + $ xrspq((t2-1)*t2/2+t3)*v(t3,mi)
+
+Transformations required normally
+index set splitting loop distribution triangular loop interchange loop fusion
+Code adapted from CHOSOL in the Perfect club (SD) Original code
+
+do 20 k = 1, n do 10 i = k+1, n
+10 a(i,k) = a(i,k) / a(k,k) do 20 j = k+1, n
+20 a(i,j) = a(i,j) - a(i,k) * a(k,j)
+
+Schedule (for locality)
+
+TT1200
+
+: f k;i ] ! : f k;i; j] !
+
+64((k?1) div 64((k?1) div
+
+64)+1;64(i div 64);k; k; i]g 64)+1;64(i div 64);j; k; i]g
+
+Transformed code
+
+do 30 kB = 1, n-1, 64 do 30 iB = kB-1, n, 64 do 5 i = max(iB, k+1), min(iB+63, n)
+5 a(i,kB)=a(i,kB)/a(kB,kB) do 20 t3 = kB+1, min(iB+62,n) do 10 k = kB, min(t3-1, kB+63) do 10 i = max(k+1,iB), min(iB+63,n)
+10 a(i,t3)=a(i,t3)-a(i,k)*a(k,t3) do 20 i = max(iB,t3+1), min(iB+63,n)
+20 if (t3<=kB+63) a(i,t3)=a(i,t3)/a(t3,t3) do 30 t3 = iB+63, n do 30 k = kB to min(iB+62,kB+63) do 30 i = max(k+1,iB), iB+63
+30 a(i,t3)=a(i,t3)-a(i,k)*a(k,t3)
+Transformations required normally
+strip mining index set splitting loop distribution imperfectly nested triangular loop interchange
+Banded SYR2K LP92] adapted from BLAS JDH90]
+Original code
+
+do 30 i=2,n 10 sum(i) = 0.
+do 20 j=1,i-1 20 sum(i) = sum(i) + a(j,i)*b(j) 30 b(i) = b(i) - sum(i)
+
+Schedule (for parallelism)
+
+TTT123000
+
+: : :
+
+f f
+
+i] i;
+
+f i]
+
+j]
+
+! ! !
+
+0; 1; 1;
+
+i; j; i ? 1;
+
+0; 0; 1;
+
+0 i
+
+] ]
+
+g g
+
+0]g
+
+Transformed code
+
+do 10 i = 1, n do 10 j = i, min(i+2*b-2,n) do 10 k = max(i-b+1,j-b+1,1),min(i+b-1,j+b-1,n)
+10 C(i,j-i+1) = C(i,j-i+1) + $ alpha*A(k,i-k+b)*B(k,j-k+b) + $ alpha*A(k,j-k+b)*B(k,i-k+b)
+Schedule (for locality and parallelism)
+T10 : f i; j; k] ! j ? i + 1; k ? j; k ] g
+Transformed code
+
+parallel do 10 i = 2,n 10 sum(i) = 0.
+do 30 t2 = 1, n-1 parallel do 20 i = t2+1,n
+20 sum(i) = sum(i) + a(t2,i)*b(t2) 30 b(t2+1) = b(t2+1) - sum(t2+1)
+Transformations required normally
+loop distribution imperfectly nested triangular loop interchange
+
+parallel do 10 t1 = 1, min(n,2*b-1) do 10 t2 = max(1-b,1-n), min(b-t1, n-t1) parallel do 10 k = max(1,t1+t2), min(n+t2,n)
+10 C(-t1-t2+k+1,t1) = C(-t1-t2+k+1,t1) + $ alpha*A(k,-t1-t2+b+1)*B(k,-t2+b) + $ alpha*A(k,-t2+b)*B(k,-t1-t2+b+1)
+Transformations required normally
+loop skewing triangular loop interchange
+
+Figure 1: Example Codes, Schedu3les, and Resulting Transformations
+
+operation Description
+
+De nition
+
+F G The composition of F with G
+
+x!z 2 F G , 9y s:t: x!y 2 F ^ y !z 2 G
+
+F(S) Apply the relation F to the set S
+
+y 2 F(S) , 9x s:t: x!y 2 F ^ x 2 S
+
+F?1 The inverse of F
+
+x!y 2 F?1 , y !x 2 F
+
+F \ G The intersection of F and G
+
+x!y 2 F \G , x!y 2 F ^x!y 2 G
+
+S \ T The intersection of S and T
+
+x2S\T ,x2S^x2T
+
+domain(F) The domain of F
+
+x 2 domain(F) , 9y s:t: x!y 2 F
+
+range(F) The range of F
+
+y 2 range(F) , 9x s:t: x!y 2 F
+
+1;:::;v S The projection of S onto variables 1; : : :; v feasible(S) True if S is not empty
+
+x 2 1;:::;fveSas,ibljex(jS=) ,v ^9x9y2sS:t: xy 2 S
+
+Table 1: Operations on tuple sets and relations, where F and G are tuple relations and S and T are tuple sets
+In Section 2 we describe how dependences and schedules are represented. In Section 3 we demonstrate that a large class of traditional transformations can be represented using schedules. In Section 4 we describe an algorithm that tests whether a schedule is legal. A surrounding system that is able to come up with a complete schedule by itself need only use this schedule legality test. Other systems may need the schedule component legality test and schedule alignment algorithm described in Section 5 to build a complete schedule.
+In Section 6 we describe our code generation algorithm. This algorithm takes a schedule and produces optimized code corresponding to the transformation represented by that schedule. By making use of the gist operation PW92] we are able to produce code with a minimal number of conditionals and loop bounds.
+In Section 7 we extend our schedule syntax to allow us to denote the fact that a schedule produces fully-permutable loop nests WL91a, WL91b]. Given a permutable schedule, it is easy to reorder or tile the loops for parallelism and locality without continual concern about legality.
+In Section 8 we discuss surrounding systems and the interface between surrounding systems and our framework. Finally we discuss related work, give our implementation status and state our conclusions.
+2 Representing Dependences and Schedules
+Most of the previous work on program transformations uses data dependence directions and distances to summarize dependences between array references. For our purposes, these abstractions are too crude. We evaluate and represent dependences exactly using linear constraints over integer variables. We use the Omega test Pug92, PW92] to manipulate and simplify these constraints. This approach allows us to accurately compose dependences and provides more information about which transformations are allowable.
+The following is a brief description of integer tuple relations and dependence relations.
+2.1 Integer tuple relations and sets
+An integer k-tuple is simply a point in Zk. A tuple relation is a mapping from tuples to tuples. A single
+tuple may be mapped to zero, one or more tuples. A relation can be thought of as a set of pairs, each pair consisting of an input tuple and its associated output tuple. All the relations we consider map from k-tuples to k0-tuples for some xed k and k0. The relations may involve free variables such as n in the
+following example: f i] ! i + 1] j 1 i < n g. These free variables correspond to symbolic constants or parameters in the source program. We use Sym to represent the set of all symbolic constants. Table
+1 gives a brief description of the operations on integer tuple sets and relations that we have implemented.
+
+4
+
+See Pug91] for a more thorough description.
+
+2.2 Simple relations
+Internally, a relation is represented as the union of a set of simple relations: relations that can be described by the conjunction of a set of linear constraints. We can represent simple relations containing non-convex
+constraints such as f i] ! i] j i even g by introducing wildcard variables (denoted by greek letters): f i] ! i] j 9 s:t: i = 2 g.
+
+2.3 Control dependence
+We require that conditionals be removed using if-conversion AKPW83] and that all loop bounds be a ne functions of surrounding loop variables and symbolic constants. All control dependences can therefore be implicitly represented by describing the iteration space using a set of linear inequalities on the loop variables and symbolic constants.
+Alternatively, structured if statements can be handled by treating them as atomic states. In future research we plan handle a larger class of control dependences.
+
+2.4 Data dependence
+From now on, when we refer to dependences, we will be implicitly referring to data dependences. We use astupn)pdltejoraesrlqaejtit]outnphsleetnso).trheWeprteeusdpeolnetnrdoeetlapdteiniosdntienndgcpueqissr.heIpfbreetshtweenreteeinnisgdaithdeeerpedenentpdekeninndcdeesncforeofsmdfersoppmeni]ds(epin.teco.e,ssitq(ei.rwea.it,lilonmowaip,oof ius]ttaptotuetmja]enn(dti anti-dependences) because they all impose ordering constraints on the iterations in the same way. It is possible to remove output and anti-dependences using techniques such as array and scalar expansion; we assume that this has already been done if it is desirable, and that the dependences have been updated. An alternative approach is to annotate the dependence information in such a way that certain dependences are ignored under the presumption that they can be removed if necessary.
+
+2.5 Transitive dependence
+
+IdfeptWheneerdeceanilcsceualfardtoeemptersnapndise]inttcioveesfrdreokpm].ensdpeni]cetso
+
+sq j] and from sq j] to sr k], then and store them in a graph called the
+
+we say there is a transitive transitive dependence graph.
+
+Our algorithms would work if applied to the normal dependence graph rather than the transitive depen-
+
+dence graph, but by using the transitive dependence graph we can determine earlier that a schedule is
+
+illegal.
+
+Computing the transitive closure of the dependences can be expensive, and it is not always possible
+
+to nd a closed form. Since the transitive dependences are needed only to improve e ciency, we can
+
+avoid computing a complete transitive closure when it appears too expensive or we can't nd a closed
+
+form. A rough approximation of transitive closure works well for the applications to which we put it (the
+
+approximation has to be a lower bound on the transitive closure).
+
+2.6 The gist and approx operations
+We make use of the gist operation that was originally developed in PW92]. Intuitively, (gist p given q) is de ned as the new information contained in p, given that we already know q. More formally, if p ^ q is satis able then (gist p given q) is a conjunction containing a minimal subset of the constraints in p such that ((gist p given q) ^ q) = (p ^ q)). For example gist 1 i 10 given i 5 is 1 i. If p ^ q is not
+satis able then (gist p given q) is False.
+
+5
+
+The approx operation is de ned so that approx (p) p and approx (p) is convex. Within these constraints, approx (p) is made as tight as possible; if p is convex, approx (p) = p. The original set of constraints p may involve wildcard variables which may cause the region described by p to be non-convex. The approx (p) operation works by simplifying the constraints in p under the assumption that the wildcard variables can take on rational values. This allows us to eliminate all wildcard variables.
+
+2.7 Schedules
+
+We associate a separate schedule with each statement, we therefore need a way to refer to the schedules of
+
+individual statements. We represent the schedule associated with statement sp as:
+
+Tp : i1p; : : :; imp p] ! fp1; : : :; fpn] j Cp
+
+The that
+
+fapilleoxfprtehsesisocnhsedaurelecsahllaedvescnhecdoumlepocnomenptosn. eWntes.reFfoerr
+
+simplicity but without loss to each of the positions 1;
+
+of ::
+
+generality we :; n as levels.
+
+require A level
+
+can also be thought of as all of the schedule components at a particular position.
+
+We will use the term schedule to refer to both the schedules of individual statements and the set of
+
+schedules associated with all statements.
+
+3 Representing Traditional Transformations as Schedules
+
+In this section we demonstrate how schedules can be used to represent all transformations that can be
+
+obtained by applying any sequence of the traditional transformations listed in Section 1.
+
+We will describe how to construct schedules to represent traditional transformations by describing how
+
+to modify schedules that correspond to the normal sequential execution of programs. When constructing
+
+these schedules we categorize schedule components as being either syntactic components (always an integer
+
+constant) or loop components boolean function which is true
+
+(a function of the i fpi is a symbolic
+
+loop variables for that component (loop(fpi) is
+
+dsetanteemd eannta)l.agsoyunstlayc)t.ic(fpi)
+
+is
+
+a
+
+The schedule that corresponds to the normal sequential execution of a program, can be constructed by a
+
+recursive descent of the abstract syntax tree (AST). Nodes in the AST have three forms: loops, statement
+
+lists and guarded assignment statements. The function schedule(S; ] ! ]) returns a schedule for each of
+
+the assignment statements in S:
+
+The common syntactic level (csl) of two statements sp and sq is de ned as:
+
+csl(sp; sq) minfi ? 1 j 1 i ^ fpi 6= fqi ^ syntactic(fpi) ^ syntactic(fqi)g
+
+Intuitively, the common syntactic level of two statements is the deepest loop which surrounds both statements. Figure 2 describes how to construct schedules to represent traditional transformations by describing how to modify the schedules we have just described. Since the rules described in Figure 2 can be applied repeatedly, we can represent not only standard transformations but also any sequence of standard transformations.
+
+4 Schedule Legality Test
+
+In this section we describe an algorithm that tests whether a schedule is legal. A schedule is legal if the
+
+transformation it describes preserves the semantics of the original code. This is true if the new ordering
+
+of the iterations respects all of the dependences in the original code.
+
+sexq,eTcaunhtdeedltehgbeaelfdioterypereTenqqd(uejinr)ec:me erneltaitsioan8sifd;opjlql;opiwn; qds:;icSIafytimesisita!hnajtit2tehradetrpieqoni)soafTsdpte(apit)eenmdeTennqt(cjse)pfaronmd
+
+j i
+
+an to
+
+iteration of statement j then Tp(i) must be
+(1)
+
+6
+
+Distribution Distribute loop at depth L over the statements D, with statement sp going into rpth loop.
+
+Requirements: 8sp; sq Transformation: 8sp 2
+
+sp 2 D ^ sq 2 D, replace Tp
+
+Dby)fp1lo; :o:p:(;ffpLp()L?^1L);
+
+csl(sp; sq) syntactic(rp);
+
+fpL;
+
+:
+
+:
+
+:
+
+;
+
+fpn]
+
+Statement Reordering Reorder statements D at level L so that new position of statement sp is rp.
+
+Requirements:
+
+8sp; sq
+
+sp
+
+2
+
+D
+
+^
+
+sq
+
+2
+
+D
+
+)s(yLntacctsilc((sfppL; s)q^)
+
+L ,
+
+rpc=sl(rsqp);
+
+sq)
+
++
+
+1^
+
+Transformation: 8sp 2 D, replace Tp by fp1; : : :; fp(L?1); syntactic(rp); fp(L+1); : : :; fpn]
+
+Fusion Fuse the loops at level L for the statements D with statement sp going into the rpth loop.
+
+Requirements:
+
+8sp;
+
+sq
+
+sp
+
+2
+
+D
+
+^
+
+sq
+
+2
+
+D
+
+)syntactic(fp(L?1)) ^ (L ? 2 < csl(sp; sq)
+
+l+oo2p)(fpLr)p
+
+^L? = rq)
+
+2
+
+csl(sp; sq) + 2^
+
+Transformation: 8sp 2 D, replace Tp by fp1; : : :; fp(L?2); syntactic(rp); fp(L); fp(L?1); fp(L+1); : : :; fpn]
+
+Unimodular Transformation Apply a k k unimodular transformation U to a perfectly nested loop
+containing statements D at depth L : : :L + k. Note: Unimodular transformations include loop interchange, skewing and reversal Ban90, WL91b].
+Requirements: 8i; sp; sq sp 2 D ^ sq 2 D ^ L i L + k ) loop(fpi) ^ L + k csl(sp; sq)) Transformation: 8sp 2 D, replace Tp by fp1; : : :; fp(L?1); U fp(L); : : :fp(L+k)]>; fp(L+k+1); : : :; fpn]
+
+Strip-mining Strip-mine the loop at level L for statements D with block size B
+
+Requirements: 8sp; sq sp 2 D ^sq 2 D ) loop(fpL)^L csl(sp; sq))^B is a known integer constant Transformation: 8sp 2 D, replace Tp by fp1; : : :; fp(L?1); B(fp(L) div B); fp(L); : : :; fpn]
+
+Index Set Splitting Split the index set of statements D using condition C
+
+Requirements: C is a ne expression of symbolic constants and indexes common to statements D.
+
+Transformation: 8sp 2 D, replace Tp by (Tp j C) (Tp j :C)
+
+Figure 2: Using schedule transformations to achieve standard reordering transformations
+
+where Sym is the set of all symbolic constants in the equation, and is the lexicographic ordering operator. We verify this by equivalently computing:
+
+:9i; j; p; q; Sym s:t: i!j 2 dpq ^ Tp(i) Tq(j)
+
+We also require that the schedule be 1-1 so that the new program performs exactly the same set of computations as the original program:
+
+8p; q; i; j; Sym (p = q ^ i = j) , Tp(i) = Tq(j)
+
+(2)
+
+which can be easily veri ed.
+
+5 Aids to Building Schedules
+
+A surrounding system that is able to come up with a complete schedule by itself need only use the schedule legality test. Other systems may need help in building a complete schedule. In this section we describe
+
+7
+
+function schedule(S, i1; :::; ik] ! f1; :::; fa])
+
+case S of
+
+\\\fSaos1rs;irrSigkeen2+tt;muu1:rr:e=nnn: ;tSS:Sc:#mpmh:=pe"1dd": :ouSlcSeh(1eS"d1:u;le(i1S;p:;:
+
+:; ik; i1; :
+
+ik+1] ! : :; ik] !
+
+f1; : : :; fa; ik+1]) f1; : : :; fa; p])
+
+return fTp : i1; : : :; ik] ! f1; : : :; fa]g
+
+the schedule component legality test and schedule alignment algorithm, which aid the surrounding system in building a complete schedule.
+
+5.1 Level by level philosophy
+
+Our algorithms that aid in the construction of schedules assume that the surrounding system is using the following basic philosophy. Schedules are constructed in a step by step manner:
+
+1. Initially it is only known which statements are being scheduled and what their iteration variables are. None of the fpi's have been speci ed; we may not even know the depth (n) of the new iteration space.
+2. At each step some of the unspeci ed fpi's are speci ed.
+
+3. At each step we require that it be possible to extend the current partially speci ed schedule into a complete legal schedule by specifying the remaining unspeci ed fpi's.
+
+The third requirement places some restrictions on the order in which the schedule components can
+
+be speci ed. For example if fpn was speci ed before specifying fp1; : : :; fpn?1 then there would be no easy
+
+way to determine whether this partially speci ed schedule could be extended to a complete legal schedule.
+
+Therefore, we require that the schedule components be speci ed level by level starting at the rst level,
+
+(i.e., during step k, Kennedy's codegen
+
+fa1lkg;o:r:i:t;hfmpk
+
+are speci AK87].
+
+ed).
+
+This
+
+strategy,
+
+is
+
+in
+
+some
+
+ways
+
+a
+
+generalization
+
+of
+
+Allen
+
+and
+
+5.2 Ensuring legality
+
+If we use Tpk to represent the schedule: i1p; : : :; imp p] ! fp1; : : :; fpk]
+
+then after each step k we require that:
+
+8i; j; p; q; Sym i!j 2 dpq ) Tpk(i) Tqk(j)
+
+(3)
+
+We can simplify this condition by noting that at level k we can ignore dependences carried at levels less than k:
+
+8r; i; j; p; q; Sym 1 r k ^ i!j 2 drpq ) trp(i) where trp = i1p; : : :; imp p] ! fpr] d1pq = dpq drpq = dpr?q 1 \ ((tqr?1)?1 tpr?1)
+
+trq(j)
+
+(4)
+
+8
+
+(if i!
+before
+
+jst2epdkpkq).thIefnthTepk?re1q(iu)ir6 emTeqkn?t1(dje)s,cir.ieb.,eddkpbq yisEtqhueasteitonof4dhepaesnbdeeenncems ainintdapiqntehdadt uhraivnegns'ttebpesen1
+
+satis ed through
+
+k ? 1 then at step k we need only ensure that:
+
+8i; j; p; q; Sym i!j 2 dkpq ) tkp(i) tkq(j)
+
+(5)
+
+The step by step process of specifying additional levels must continue until the schedule is 1-1. The condition that the schedule is 1-1 (Equation 2) together with Equation 3 and the following property of dependence relations:
+:9i; p; Sym s:t: i!i 2 dpp
+
+imply the legality condition (Equation 1).
+
+5.3 Variable and constant parts
+We distinguish two parts of a schedule component: the variable part and the constant part. The variable part is the largest subexpression of the schedule component that is a linear function of the iteration variables. The rest of the expression is called the constant part. For example in the schedule
+i; j] ! 2i + j + n + 1; 0; j] the level 1 schedule component has variable part 2i + j and constant part n + 1.
+The variable parts of a schedule are of primary importance in determining the parallelism and data locality of the code resulting from a schedule. The constant parts of a schedule will often a ect the schedule's legality, but will generally have minimal a ect on the resulting parallelism and locality.
+It is therefore reasonable to require that the surrounding system specify the variable parts of the schedule, and let algorithms provided with our framework select constant parts that make the schedule legal.
+
+5.4 Component legality test
+
+The following sections describe how step k of the schedule construction process would proceed when using
+
+our schedule alignment algorithm. The surrounding system speci es the variable parts of the level k
+
+schedule components (one for each statement). Before we try to align (i.e., nd constant parts for) the
+
+variable parts, we can test each variable part finorcluadsintagteamnyenttrasnps,itiifveussienlgf-ditepaesndaensccheesd. ule
+
+to see if it is \legal" in component would not
+
+isolation. A violate any
+
+svealfr-idaebpleenpdaerntcVepsk1
+
+is legal on sp,
+
+If a variable part is illegal for a given statement at a given level then it cannot be used in any schedule
+
+component in that context.
+
+More formally, a variable part Vpk for statement sp is considered legal at level k i :
+
+8i; j; Sym i!j 2 dkpp ) vpk(i) vpk(j)
+
+(6)
+
+wheFroervepkxa: mi1pp;l:e:,
+
+:; imp p] ! Vpk] and dkpq
+in the following code
+
+is de i and
+
+ned as it was in j are both legal
+
+Equation 4. variable parts
+
+for
+
+statement
+
+1
+
+at
+
+level
+
+1,
+
+but
+
+?i and ?j are illegal.
+
+do 2 i = 1, n do 2 j = 1, n
+1 a(i,j) = b(i,j-1) + a(i-1,j) 2 b(i,j) = a(i,j-1)
+1A self-dependence is a dependence from one iteration of a statement to another iteration of the same statement.
+
+9
+
+Using legal variable parts is necessary but not su cient to ensure that they can be aligned. For example i is a legal variable part for statement 1 at level 1 and j is a legal variable part for statement 2 at level 1, but they cannot be aligned with one another.
+If we are not able (or willing) to compute the exact transitive closure, then it is important that the approximation we use be a subset of the actual dependences. This approximation may cause some illegal variable parts to be accepted but importantly won't reject any legal variable parts. It is acceptable to accept illegal variable parts at this stage as we will latter determine that they are illegal. In other words, the component legality test is only an initial lter designed to improve the e ciency of the rest of the algorithm.
+
+5.5 Schedule alignment algorithm
+
+We now assume that we possible, select constant
+
+have been parts that
+
+given align
+
+tahleegvaalrivaabrlieabplaerptsar(ti.eV.p,ksfaotrisefyacEhqsutaattieomne5n)t. sp.
+
+It
+
+is
+
+our
+
+job
+
+to,
+
+if
+
+We create that must be
+
+a new added
+
+vtaortiahbelevacrkpiafbolre
+
+each statement parts to make
+
+tshpe.mThaleisgennwewithvaornieabalnesotrheeprr.esMenotrethpereccoinsesltya,ntthois
+
+sets can
+
+be stated as that any set
+
+fopkf
+
+c=onVsptka+ntckpo.
+
+We set
+
+construct a set of constraints involving these constant o values that satisfy the constraints will properly align the
+
+set variables, such variable parts.
+
+We simple
+
+rst consider the constraints dependence relation d dkpq.
+
+on a pair of Equation 5
+
+constant o set tells us that:
+
+variables
+
+ckp
+
+and
+
+ckq ,
+
+that
+
+are
+
+imposed
+
+by
+
+a
+
+8i; j; Sym i!j 2 d ) tkp(i) tkq(j)
+
+By substituting vpk(i) + ckp for tkp and removing the quanti cation on Sym, we get:
+
+8i; j s:t: i!j 2 d ) vpk(i) + ckp vqk(j) + ckq
+
+which is the set of dependence relation
+
+dco. nTsthreasientcsonosntrcakpin,tsckqcaanndbethdeescsryimbebdoleicquciovanlsetnatnlyts
+
+that as:
+
+are
+
+imposed
+
+by
+
+the
+
+simple
+
+A : :(9i; j s:t: i!j 2 d ^ vpk(i) + ckp > vqk(j) + ckq)
+
+(7)
+
+Unfortunately, the negation in Equation 7 usually produces a disjunction of several constraints. Our goal now, is to deduce from 7 a system of linear constraints for the alignment constants. The conditions, D, under which the dependence exists are:
+
+D : 9i; j s:t: i!j 2 d
+
+(8)
+
+Since :D ) A, we know that A (D ) A). We transform A as follows:
+
+A D)A :(D ^ :A) :(D ^ gist :A given D) D ) :gist :A given D
+
+Therefore Equation 7 is equivalent to:
+
+9i; j s:t: i!j 2 d ) :(gist 9i; j s:t: i!j 2 d ^ vpk(i) + ckp > vqk(j) + ckq given 9i; j s:t: i!j 2 d) (9)
+Usually, the gist in Equation 9 will produce a single inequality constraint. There are cases where this does not occur. For example, in the following code,
+
+10
+
+do 2 i = 1, min(n,m) 1 a(i) = ... 2 ... = ... a(i) ...
+attempting to align V11 = i and V21 = 0 gives: 1 n ^ 1 m ) (c12 ? c11 n _ c12 ? c11 m)
+In practice we have found that this very seldomly occurs. When the gist produces a disjunction of inequality constraints, we strengthen the condition by throwing away all but one of the inequalities produced by the gist.
+Unfortunately, Equation 9 also contains an implication operator. We describe two approaches to nding constant terms to satisfy Equation 9. The rst, described in Section 5.5.1, is a fast and simple method that seems to handle the problems that arise in practice. The second, described in Section 5.5.2, is a more sophisticated method that is complete provided the gist in Equation 9 produces a single inequality constraint.
+
+5.5.1 A fast and simple but incomplete technique
+
+Rather than constructing the set of constraints described by Equation 9, we construct a slightly stronger set of constraints by changing the antecedent to true:
+
+:(gist 9i; j s:t: i!j 2 d ^ vpk(i) + ckp > vqk(j) + ckq given 9i; j s:t: i!j 2 d)
+
+(10)
+
+If an acceptable set of constant o set values can be found that satisfy these stronger constraints, these
+
+o sets must satisfy the weaker constraints, and therefore align the variable parts.
+
+For a given pair of alignment constraints
+
+(sEtqatueamtieonnts10s)p
+
+raensdultsiqn,gwferofmormallasisminpgllee
+
+dseetpeonfdceonncsetrraeilnattsioAnskpqbbetywceoemn btihnoinseg
+
+the two
+
+statements. We then combine alignment constraints formed
+
+stohefaAr kpaqrecosnasttirsaianbtlseofnoer
+
+statement at a time, checking at each all values of the symbolic constants:
+
+stage
+
+that
+
+the
+
+function AlignSchedule (vp being considered)
+
+for each statement p
+
+Convdpkit=iovnps
+
+being considered = true
+
+p]
+
+for each statement p
+
+for each statement q < p
+
+Calculate Akpq Conditions = Conditions if nroettu(8rnSyfamlse(9ck1; : : :; ckp
+
+^Akpq s:t: Conditions)
+
+then
+
+return Conditions
+
+Figure 3 gives an example of aligning schedules using this technique. Having obtained a set of alignment constraints, we can either return this set of constraints for use by an external system, or we can nd a set of constant o set values that satisfy the alignment constraints. In nding this set of satisfying values, we could consider optimality criteria such as locality or lack of loop carried dependences.
+
+11
+
+Original Code:
+do 2 i = 1, n do 2 j = 1, n
+1 a(i,j) = b(i,j-2) 2 b(i,j) = a(i,j-3)
+
+Example of variable parts being considered at level one: v11 i; j] = j; v21 i; j] = j
+
+(We use the normal dependence graph rather than the transitive dependence graph)
+
+Alignment d112
+
+constraints
+: f i; j] !
+
+fri;ojm+s31 ]tjo
+
+1s2:
+
+i
+
+n; 1
+
+j
+
+n ? 3g
+
+A112
+
+,
+
+:
+
+(gist 9
+given
+
+i; 9
+
+j]; i0; i; j];
+
+j0] s:t: i; i0; j0] s:t:
+
+j] i;
+
+! i0; j0] 2 d j]! i0; j0] 2
+
+^ d)
+
+v11(
+
+i;
+
+j
+
+])
+
++
+
+c11
+
+>
+
+v21(
+
+i0;
+
+j0])
+
++
+
+c12
+
+,
+
+: (gist 9 i; j]; i0; j0] s:t: i0 = i ^ j0 = j + 3 ^ 1 i given 9 i; j]; i0; j0] s:t: i0 = i ^ j0 = j + 3 ^ 1
+
+n ^ 1 j n ? 3 ^ j + c11 > j0 + c12 i n ^ 1 j n ? 3)
+
+, : (gist 4 n ^ 4 + c12 c11 given 4 n) /* simpli ed using the Omega test */ , : (4 + c12 c11) , c11 3 + c12
+
+Alignment d121
+
+constraints
+: f i; j] !
+
+fri;ojm+s22 ]tjo
+
+1s1:
+
+i
+
+n; 1
+
+j
+
+n ? 2g
+
+A121 , : (gist 9 i; j]; i0; j0] s:t: i; j] ! i0; j0] 2 d ^ v21( i; j]) + c12 > v11( i0; j0]) + c11
+
+given 9 i; j]; i0; j0] s:t: i; j]! i0; j0] 2 d)
+
+,
+
+: (gist 9 i; j]; i0; j0] s:t: i0 = i ^ j0 = j + 2 ^ 1 given 9 i; j] i0; j0] s:t: i0 = i ^ j0 = j + 2 ^ 1
+
+i i
+
+n^1 n^1
+
+j j
+
+n ? 2 ^ j + c12 > j0 + c11 n ? 2)
+
+, : (gist 3 n ^ 3 + c11 c12 given 3 n) /* simpli ed using the Omega test */ , : (3 + c11 c12) , c12 2 + c11
+
+These variable parts can be aligned because:
+8Sym (9c11; c12 s:t: A112 ^ A121) , 8n (9c12; c11 s:t: c11 3 + c12 ^ c12 2 + c11) , 8n (9c12; c11 s:t: c12 ? 2 c11 c12 + 3) , 8n True , True
+
+Figure 3: Example of Aligning Schedules 12
+
+5.5.2 A complete technique
+
+If we wish to construct exactly the set of constraints described by Equation 9 then we can use the following
+
+techniques proposed by Quinton Qui87]. The vertex method Qui87] relies on the fact that a linear
+
+constraint holds everywhere inside a polyhedron if and only if it holds at all vertices of the polyhedron.
+
+Therefore, we can convert Equation 9 into a conjunction of constraints by determining the vertices
+
+of Equation 8 and adding the constraint that the consequent of Equation 9 is true at each of those
+
+paCsoo:innPsttsr.mia=iT1notspoiaSbrtiea+tinhecpno0nfwosrthmreareinedttsohnoentShteih'se pacir'kpes'srtahintehteoerrrimtghisnaanolftshtyhemecbkpo'otshl.iceWrvseayrcmioabmbolbelsiicnaecnotdhnestthcaeonntsstp, riw'asienatrrseepgnreeensweernavttaeerdaiacfbhrloecmskp.
+
+all dependence relations, and then use any integer programming technique to This solution for the pi's can then be used to form a solution for the ckp's.
+
+nd a solution for the
+
+pi's.
+
+6 Optimized Code Generation
+
+In this section we describe an algorithm to generate e cient source code for a schedule. As an example, we consider changing the KIJ version of Gaussian Elimination (without pivoting) into the IJK version.
+
+do 20 k = 1, n do 10 i = k+1, n
+10 a(i,k) = a(i,k)/a(k,k) do 20 j = k+1, n
+20 a(i,j) = a(i,j)-a(k,j)*a(i,k)
+
+The version refers to the nesting of the loops around the inner most statement. Michael Wolfe notes that this transformation requires imperfect triangular loop interchange, distribution, and index set splitting Wol91]. We can also produce the IJK ordering using the following schedule:
+
+TT1200
+
+: :
+
+f f
+
+k; k;
+
+i i; j
+
+]! ]!
+
+i; k; 1; 0 ]g i; j; 0; k ]g
+
+A naive code generation strategy that only examined the minimum and maximum value at each level would
+
+produce the following code:
+
+do 20 t0 = 2, n
+
+do 20 t1 = 1, n
+
+do 20 t2 = 0, 1
+
+do 20 t3 = 0, n
+
+10 if (t1<t0.and.t2=1.and.t3=0)
+
+$ a(t0,t1) = a(t0,t1)/a(t1,t1)
+
+if (t3<t0.and.t3<t1.and.t2=0)
+
+20 $
+
+a(t0,t1) = a(t0,t1)-a(t3,t1)*a(t0,t3)
+
+This is, of course, undesirable. This section explains how we produce the following more e cient code:
+
+do 40 i = 2,n a(i,1) = a(i,1)/a(1,1) do 30 t2 = 2,i-1 do 20 k = 1,t2-1
+20 a(i,t2) = a(i,t2)-a(k,t2)*a(i,k) 30 a(i,t2) = a(i,t2)/a(t2,t2)
+
+13
+
+do 40 j = i,n do 40 k = 1,i-1
+40 a(i,j) = a(i,j)-a(k,j)*a(i,k)
+
+To simplify the discussion we do not consider piecewise schedules in this section (they can be handled by considering each piece of the schedule as a separate statement).
+
+6.1 Old and new iteration spaces
+
+We are currently able to transform programs that consist of guarded assignment statements surrounded by afstisrthnoaegmtaiesvrtmbetaniherttnerbiatnyl.rogyITofppnpto(uhIibmnepot)bsu.fcenohrTdreohsdtfihusapelnenordesaewsssistsbtoielotycpefirsaitamthiteniipdsoteonsrwefseaictpcthtiatolucysnept.anlietseessmrteeetepdnrIetlposseoptnphtsiaes.dtTFdpion,ertstecehrraenicnbaheltlssyhtetaahtsseetmaaoteserneimgttienosnapftl'lwsiinteneeeacrwaortmciitoobennirnsatsetrpiaioanincnfeotsrspomaafacntetdhioJainpst
+In the example above, the original iteration space is:
+
+II2100
+
+: :
+
+f k; i]j1 k n ^ k + 1 i ng f k; i; j]j1 k n ^ k + 1 i n ^ k + 1
+
+j
+
+ng
+
+and the new iteration space is:
+
+II1200
+
+: :
+
+f i; k; 1; 0]j1 f i; j; 0; k]j1
+
+k k
+
+n^k+1 n^k+1
+
+i i
+
+ng n^k+1
+
+j
+
+ng
+
+6.2 Code generation for a single level
+
+Our code generation algorithm builds the transformed code recursively, level by level (see Figure 4). In this sub-section we describe how code is generated for a single level L. WjgLeen.WecrEaeanxtipnenroatetrssossediitnmugocpfeltcyhaoepnnrsteotigrwjaehictnitentsdJstepJxppLoonvstatshoirbaiajtlebLrle,uepbprjepeLcesaertunoastesnbdttehhleiuoswsvewaedlriullfebosoornoultfnyhjdiLgssivfoloeenvruewjls.LhaicmbFhsoaorsyltueartateeceqhmuupiesrptneaettrusespaminnsehdgnotleuoxslwdpper,brewesbseeoioxunnenecsdeudsttheoatdnot. involve index variables from earlier levels. So we instead calculate the projection:
+
+1;:::;L(Jp) This set contains constraints on jL, on index variables from earlier levels (j1; : : :; jL?1), and on symbolic constants. Many of these constraints are redundant because the code we generated at earlier levels enforce them. We remove these redundant constraints and simplify others by making use of the information that is know about the values of index variables from earlier levels. So we have
+
+JpL = gist 1;:::;L(Jp) given knownL?1
+
+theTjhLelJopoLpsetthsaftoritdeiraetreesnotvsetrattehmatenotvsemrlaapy,
+
+in general, overlap. range must contain
+
+If JpL both
+
+iterations will not be executed in lexicographic order as required). In
+
+and JqL overlap over some range, then gsteanteermale,nittsissnp oatnpdosssqib(loethtoergweinseertahtee
+
+aaloroleopoc.poTncshotenratpainrinotsbinloegfmmthioseretfhotarhmtaninjoLgne=ensectraatle+tmhsee,nJwtpLhthesareettsitweriisalltaehsawvoievldeicrnaceroxdmacvptaalrytiaibtbhlleee.cJopLTnhssteerstaesinostofsrt.thsMeosoftdacutolenomstceronantissnttirsnaictnahtnes
+
+astpeppesawr hinicJhpLarife
+
+the not
+
+coe 1.
+
+cients
+
+of
+
+the
+
+schedule
+
+components
+
+are
+
+not
+
+1, or if the original program contains
+
+14
+
+procedure GenerateCode() for each (stmt) J stmt] = T stmt](I stmt]) GenerateCodeRecursively(1, fall stmtsg, True, True)
+
+procedure GenerateCodeRecursively(level, was active, required, known)
+
+for each (stmt) 2 was active
+
+JL stmt] = gist J stmt]1;:::;level given known
+
+M stmt] = approx (JL stmt,level])
+
+for JL)
+
+each (interval) R = required
+
+i^n(tVemstpmotr2awl aosrdaecrtive
+
+appropriate
+
+range(stmt,
+
+interval)
+
+^
+
+greatest
+
+common
+
+step(interval,
+
+if j fstmt : stmt is active in intervalg j = 1
+
+R = R ^ J stmt active in interval]
+
+R = gist R given known
+
+if feasible(R)
+
+for each (stmt)
+
+active stmt] = was active stmt] ^ (stmt is active in interval) ^ feasible(JL stmt] ^ R ^ known)
+
+parallel = no dependences between active statements carried at this level
+
+output loop(level, R, parallel)
+
+new known = known ^ information in R represented by loop
+
+new required = gist R given new known
+
+if last level
+
+stmt = only active statement
+
+output guard(new required)
+
+output statement(stmt)
+
+else
+
+GenerateCodeRecursively(level+1, active, new required, new known)
+
+Figure 4: The Code Generation algorithm
+
+15
+
+We solve this problem by removing all modulo constraints from the JpL sets, and to worry about adding them later. To remove the modulo constraints, we use approx :
+
+MpL = approx (JpL)
+
+we
+
+The constraints in de ne (but do not
+
+cJopLmnpouwte)d:escribe
+
+a
+
+continuous
+
+range
+
+of
+
+values
+
+for
+
+jL.
+
+For
+
+purposes
+
+of
+
+explanation
+
+EL = p MpL
+
+Having removed the modulo constraints, we can now put more than one statement into a loop, but
+
+there is still one problem remaining: If we were to generate a single jL loop iterating over all points in E
+
+and containing all statements, then we would possibly still execute some statements with values of jL not
+
+in their MpL ranges. We could overcome this problem by adding guards around the elementary assignment
+
+statements. However, we prefer a more e cient solution.
+
+We would like to partition EL into disjoint intervals such that, if a statement is active at any point in
+
+an interval, then it is active at every point in that interval. We could then generate a separate jL loop for
+
+each interval, and put into those loops exactly the set of statements that are active at every point in that
+
+loop. If we did so we would not need to add guards around elementary assignment statements, because
+
+theUcnofnosrttruaninattselsyp,eictiisendoitnatlwheayMs ppLorsasinbgleestowpoaurldtitbioenreEpLreisnenttheisd
+
+entirely by the bounds of the loops. way, because we may not know at compile
+
+time how the execution periods of statements relate to one another. This is the case when the bounds in the
+
+MaspLporsasnibglees
+
+involve symbolic constants or mins and maxs. In in the loop bounds, and represent any remaining
+
+these cases we information in
+
+represent as much information guards around the elementary
+
+assignment statements.
+
+beaocuIhnndstgsaettnheemartaelnwteialslcphbweoerfeatprhbreeitsrMeanrptLielydracinnhgoteohsseewlaoilollophwabevroeubnmoduusnl.tdiTpllpLheea(nrnedomnaa-nrienudipnupgnedbraobnuotn)udnusdpipfueLparnfyaronwmdilllMobwpLee.rrTebphoreuessneednastr.eedFthoiner
+
+guards. For each and ALp , that are
+
+statement sp, the two points lpL and uLp divide EL into three disjoint intervals: \before", \during" and \after" the execution of the statement respectively.
+
+BpL,
+
+DpL
+
+DBAppLpLL
+
+: : :
+
+ft ft ft
+
+j j j
+
+t< llppLL
+
+lpLtg^ t^
+
+t uLp
+
+<uLptgg
+
+We partition E into disjoint intervals by forming combinations of these intervals from di erent state-
+
+ments. Each combination is made up of one had two statements we would enumerate the
+
+ofof lBlopLw,inDgpLinotrerAvaLplsf:rom
+
+each
+
+statement
+
+sp.
+
+For
+
+example
+
+if
+
+we
+
+B1L#B2L ! B1L#D2L ! B1L#AL2 D1L#B2L ! D1L#D2L ! D1L#AL2 AL1 B2L ! AL1 D2L ! AL1 AL2 whahviAcehtsotthabetereemgaeernneternsaopteaidsctfsiovareidtshttaeosteebmeineatnectrtsviva(eels..gin.,TaBhne1LriBent2LeexroivrsatBls 1iLafAntL2ho)abtvairioneutnesorpvtaaalrctwtiaualaslolfyrodreemnrueomdneuirnsaittneegrdvDaalsspLc.(oadIsnesthedroovweasnlsnboinyt
+the arrows above), and we generate the code for the intervals in a total order compatible with that partial order.
+
+16
+
+deietthFNeeroromrwBienpatLehc,dhaDtbipLnywteoienrrktvnAearolLpswe,icdewtexienpageccntatldlhycieunwlgaahptoiepcnhrCowspiLthraei|tatethmeetrehinnesttpesrraivasnargbelseeafooocfftrietvv,haedeluiunsertsiaantogpefmaojrreLtniactcfusto.lerarrTreishninpettoehanrpidvspainirln,ogtpwetrreoivaamttlhe.aeyinitbneterevaravblalelf.otroCsiLapdiidss
+
+some of the modulo constraints may contribute a single modulo
+
+that we removed earlier. Each statement constraint that was removed earlier:
+
+sp
+
+that
+
+is
+
+active
+
+in
+
+this
+
+interval
+
+jL = aLp pL + bLp wcohnesrteanatLps)i.s a constant, pL is a wildcard variable and bLp is a constant term (possibly involving symbolic
+The greatest common step of this interval is:
+
+gcsLi = gcd(faLp j sp is activeg fgcd(bLq ? bp) j sq is active ^ sp is activeg)
+
+In performing these calculations, the gcd of an expression is de ned to be the gcd of all of the coe cients in the expression.
+We pick an arbitrary statement sp that is active in the interval, and add to CiL the modulo constraint:
+
+jL = gcsLi + bLp
+
+We can safely add this constraint since if jL satis es the modulo constraint of any active statement then it will also satisfy this constraint.
+The greatest common step will later be extracted from these constraints and used as the step for the loop corresponding to this interval. In general the step will not enforce all of the modulo constraints, but it is the best we can do at this level. The remaining modulo constraints (if any) will have to be enforced at deeper levels.
+fwteoiatssBhiimbetlfhpeoelrtiefhiynaefnctothrucemoacdalloteynioigssnternntaeohirtnaattgtseiinsningekrcnCaootiLdweedbnfyfoaormbrtoathuhkitsiisntignhinteuteeirsnrvevdaoael,flx.wtvhIefaemr(iiCanubfiLsoltercs^mhaaektctnikeooantwrhliainnetLrkt?lhne1evo)ewpilsrsno.fLepI?aof1ss(i.ebCdWlieLreat^hncegankelcnCuwoliLewatmniesLac?yo1nb)seiissatnebnolett
+
+RLi = gist CiL given knownL?1
+
+a
+
+mIof dRuLiloiscofneastsribalientwteogCeniLertahteen
+
+a do loop to we may still
+
+iterate have a
+
+over the modulo
+
+appropriate values of jL. constraint of the form:
+
+If
+
+we
+
+earlier
+
+added
+
+jL = g + c
+
+. If this is the case we enforce the constraint by using a non-unit step in the loop. In order to do this
+
+however, we must ensure that the loop's lower bound satis es the modulo constraint.
+
+The loop's conditions are
+
+lower true:
+
+bound
+
+is
+
+derived
+
+from
+
+constraints
+
+in
+
+RLi
+
+of
+
+the
+
+form:
+
+lower
+
+m jL. If the following
+
+knownL?1 ) lower = m lower = m jL ^ knownL?1 ) jL = g + c
+
+then we can use:
+
+lower=m
+
+as a lower bound of the loop, otherwise we will have to use:
+
+g
+
+lower ? c m mg
+
++c
+
+17
+
+(if RLi doesn't contain a modulo constraint then g is 1 The loop's upper bound is derived from constraints
+use upper=n as an upper bound of the loop.
+
+and c in RLi
+
+is 0) of the
+
+form:
+
+n
+
+jL
+
+upper. It is su cient to
+
+The loop we generate at depth L, corresponding to interval i has the form:
+
+do jL = max(x1; : : :; xp); min(y1; : : :; yq); g :::
+
+where the xi's and yi's are the loop bounds described above. If we can determine that the loop contains at most a single iteration, we perform the obvious simpli cations to the code.
+We generate a sequential loop if there exists a data dependence that is carried by the loop. Otherwise we generate a parallel loop.
+Within each interval i which contains at least one iteration, we recursively generate code for level L+1. At level L + 1 we only consider statements that were active at level L. This process continues until we reach level n, at which time we generate the elementary assignment statements.
+
+6.3 Elementary statements
+Once we have generated code for all levels, only a single statement will be active. We generate code to guard the statement from any conditions not already handled in loop bounds. If not all of the modulo constraints could be expressed as loop steps, then these guards will contain mod expressions.
+Finally, we output the transformed assignment statement. The statement has the same form as in the original code, except that the original index variables are replaced by expressions involving the new index variables. We determine these replacement expressions by using the Omega test to invert the scheduling relation and extract expressions corresponding to each of the original index variables. For example, if the
+schedule is i1; i2] ! i1 + i2; i1] then i1 is replaced by j2 and i2 is replaced by j1 ? j2.
+
+7 Permutable Schedules
+Some codes have only a handful of legal schedules, while other codes have an enormous number of legal schedules. LU decomposition is a typical example of code with a large number of legal schedules.
+
+do 20 k = 1, n do 20 i = k+1, n
+10 a(i,k)=a(i,k)/a(k,k) do 20 j = k+1, n
+20 a(i,j)=a(i,j)-a(k,j)*a(i,k)
+
+A large number of legal schedules exist, including:
+
+TTTTTT111111000000
+
+: : : : : :
+
+k; i] ! k; i] ! k; i] ! k; i] ! k; i] ! k; i] !
+
+k; i; k]; k; k; i]; i; k; k]; i; k; k]; k; k; i]; k; i; k];
+
+TTTTTT222222000000
+
+: : : : : :
+
+k; i; j] ! k; i; j] ! k; i; j] ! k; i; j] ! k; i; j] ! k; i; j] !
+
+k; i; j] k; j; i] i; k; j] i; j; k] j; k; i] j; i; k]
+
+This situation is common and is typi ed by a nested set of adjacent loops that are fully permutable
+
+WL91a, WL91b]. A set of loops is fully permutable i all permutations of the loops are legal. We have
+
+developed an extension to our schedule syntax that allows us to succinctly describe a large number of
+
+18
+
+related schedules. Expressions in this extended syntax are called permutable schedules. A permutable schedule represents a set of normal schedules and has the following general form:
+Tp : i1p; : : :; imp p] ! gp1; : : :; gpnp] where the gpj are either schedule components or permutations lists. Permutation lists have the form
+he1; : : :; evix
+where the ej are schedule components. A permutable schedule represents all of the normal schedules that can be obtained by replacing each of its permutation lists by some permutation of the schedule components in that permutation list. For example the permutable schedule:
+k; i; j] ! k; hi; ji; 1]
+
+represents the following two normal schedules:
+k; i; j] ! k; j; i; 1] and k; i; j] ! k; i; j; 1]
+
+A permutable schedule is legal if and only if all of the schedules it represents are legal. This fact allows us to prove an important property of permutable schedules: all schedules represented by a legal permutable schedule will produce fully permutable loop nests. Recognizing that a schedule will produce fully permutable loop nests is useful for a number of reasons, including those described in Section 7.1.
+It is not unusual to nd multiple statements, each of which has a set of fully permutable loop nests, but due to alignment constraints choosing any permutation for one of the statement results in only one of the permutations for the other statements being legal. In this situation we still want to use our permutation syntax, but we need to indicate that the permutable schedule only represents those schedules that can be obtained by using the same permutation for all of these permutation lists. We indicate this by giving these permutation lists the same subscript. For example the following is a legal permutable schedule for LU decomposition:
+
+T10 : k; i] ! hk; k; ii1]; T20 : k; i; j] ! hk; j; ii1]
+We use the term permutation list set to refer to a set of permutation lists with the same subscript.
+
+7.1 Schedules for blocking/tiling
+
+Direct generation of blocked or tiled loops is only possible if there exists a fully permutable loop nest WL91a, Wol89a]. A permutable schedule represents a set of schedules, all of which produce fully permutable loop nests. It is therefore easy to build a schedule corresponding to a blocking transformation from a permutable schedule.
+Given a fully permutable loop nest, we need to decide which loops will be blocked, what their blocking factors will be, and which permutation of the loops will be used. These choices must be made consistently for all permutation lists in a permutation list set. We have therefore developed a syntax that speci es these blocking speci cations for a permutation list set. For a permutation list set x, with v positions, a blocking speci cation has the form:
+x : h1; : : :; hw]
+
+The and
+
+hj expressions c is a blocking
+
+have either the unblocked form k or factor (a known integer constant2).
+
+the blocked form k:c where k is a position (1; : : :; v) The blocked expressions specify which loops will be
+
+blocked and what their blocking factors will be. The order of the expressions speci es which permutation
+
+2We are currently working on techniques to allow symbolic constants to be used.
+
+19
+
+procedure BuildSchedule(Level) for each Statement
+LegalVariableParts = flist of pro table legal variable partsg
+for each Combination of LegalVariableParts (1 from each statement) AlignConstraints = AlignSchedule(Combination)
+AlignedSchedules = fset of aligned schedules derived from AlignConstraintsg
+for each AlignedSchedule if AlignedSchedule is complete then
+if fWorthAcceptingg then
+add AlignedSchedule to list of accepted schedules else
+if fWorthContinuingg then
+BuildSchedule(Level+1) Start by calling: BuildSchedule(1)
+
+Figure 5: General form of surrounding system, in collaborative setting
+
+of the loops will be used. Every position must appear exactly once as an unblocked expression, and any blocked instance of a loop must come before the unblocked instance. For example the following is a blocking speci cation for the LU decomposition permutable schedule above:
+
+1 : 1:64; 3:64; 2; 1; 3]
+
+Given a permutable schedule and a blocking speci cation we can build a schedule that produces blocked code as follows: We use the schedule components outside of the permutation lists unchanged. We replace each permutation list by a number of normal levels, creating a new level for each entry hi in the blocking speci cation for that permutation list. For an unblocked expression k we use the k'th schedule component
+in the permutation list. For a blocked expression k : c we use c ((E ? L) div c) + L, where E is the k'th schedule component in the permutation list, and L is a constant expression chosen by our system to simplify
+the loop bounds. For example, the above blocking speci cation will produce the following schedule:
+
+TT1200
+
+: :
+
+f f
+
+k; i ] ! k; i; j] !
+
+64((k?1) div 64)+1; 64(i div 64((k?1) div 64)+1; 64(i div
+
+64); k; k; i]g 64); j; k; i]g
+
+which produces the code given in Figure 1.
+
+8 The Surrounding System
+Our framework is designed to provide a uniform way to represent and reason about transformations. The framework itself is not designed to decide which transformation should be applied. The framework should be used within some larger system, such as an interactive parallelizing environment or an automatic parallelizing compiler. This surrounding system is nally responsible for deciding which transformation should be applied. In this section we discuss surrounding systems and the interface between surrounding systems and our framework.
+Our framework can be used in two di erent settings. In the rst of these settings, the surrounding system interacts with algorithms of Section 5 to build a schedule. In the second setting, the surrounding system decides on a transformation by itself, that is then represented as a schedule and used to generate code using our code generation algorithm.
+
+20
+
+8.1 Collaborative schedule generation
+As mentioned in Section 5, it is reasonable to require that the surrounding system specify the variable parts of the schedule, and allow algorithms provided with the framework to select constant parts that make the schedule legal. Figure 5 gives the general form of a surrounding system in such a setting. The code fragments in curly braces are the parts that would change from one implementation to another. In its most general form, this is a recursive backtracking algorithm. It is therefore capable of generating more than one schedule. By generating a set of schedules rather than a single schedule we have a greater chance of nding the \best" schedule. Of course the problem then is to decide which of the generated schedules to use. If the generated set of schedules is relatively small, a schedule can be chosen by applying traditional performance estimation or by having the user select among a set of transformed codes.
+If the code fragments in curly braces consider only one legal variable part per statement and only one alignment per set of alignment constraints, then no backtracking will occur and only one schedule will be generated. Such an implementation would be potentially very e cient. However, to nd the \best" transformation, the algorithms that choose the legal variable parts and the alignments would have to be very intelligent.
+8.2 Using permutable schedules
+In circumstances where a large number of legal schedules exist, we rst generate permutable schedules. These permutable schedules can then be used to generate code that is optimized for parallelism and locality. This approach has the advantage that fewer combinations are considered when generating permutable schedules. Using permutable schedules to generate optimized code is also easy because we know that all permutations are legal, so we can concentrate on performance issues while ignoring legality.
+9 Related Work
+The framework of Unimodular transformations Ban90, WL91a, ST92, KKB92] has the same goal as our work, in that it attempts to provide a uni ed framework for describing loop transformations. It is limited by the facts that it can only be applied to perfectly nested loops, and that all statements in the loop nest are transformed in the same way. It can therefore not represent some important transformations such as loop fusion, loop distribution and statement reordering.
+Unimodular transformations are generalized in LP92, Ram92] to include mappings that are invertable but not unimodular. This allows the resulting programs to have steps in their loops, which can be useful for optimizing locality.
+Unimodular transformations are combined with blocking in WL91a, ST92]. A similar approach, although not using a unimodular framework, is described in Wol89a].
+Lu describes in Lu91] a classi cation of scheduling techniques into various generality classes. Using their classi cation scheme, our schedules t into the Mixed-Nonuniform class which is the most general class.
+Our previous paper Pug91] gives techniques to represent loop fusion, loop distribution and statement reordering in addition to the transformations representable by unimodular transformations. Because it uses only single level a ne schedules and requires that all dependences be carried by the outer loop, it can only be applied to programs that can be executed in linear time on a parallel machine. It uses less sophisticated methods for aligning schedules than our current techniques, and does not give methods to generate e cient code.
+Paul Feautrier Fea92a, Fea92b] generates the same type of schedules that we do (generating a separate schedule for each statement). His methods are designed to generate a single schedule that produces code with a \maximal" amount of parallelism. These schedules will often not be optimal in practice because of
+21
+
+issues such as granularity, data locality and code complexity. Our framework attempts to provide a setting in which multiple performance issues can be traded-o . Feautrier does not give methods for generating code corresponding to the schedules.
+
+10 Implementation Status
+
+Prototype versions of most of the algorithms described in this paper are currently implemented in our extension of Michael Wolfe's tiny tool, and we are continuing to expand and strengthen our implementation. Our extension of tiny is available via anonymous ftp from ftp.cs.umd.edu in the directory pub/omega.
+
+11 Conclusions
+
+We have presented a framework for unifying reordering transformations such as loop interchange, distribution, skewing, tiling, index set splitting and statement reordering. The framework is based on the idea that a transformation can be represented as a schedule that maps the original iteration space to a new iteration space. We have demonstrated that schedules are able to represent traditional reordering transformations, such as those above. We believe that using schedules is the purest or most fundamental way to describe arbitrary reordering transformations.
+The framework is designed to provide a uniform way to represent and reason about transformations. The framework does not solve the fundamental problem of deciding which transformation to apply, but it does provide a simpler setting in which to solve this problem. We therefore believe that production systems would bene t from using our framework, rather than an arbitrary set of unrelated traditional transformations.
+We have provided algorithms that assist in the building and use of schedules. In particular we have provided algorithms to test the legality of schedules, to align schedules, and to generate optimized code for schedules. Our code generation algorithm can be used to produce code that avoids and/or eliminates many of the guards that can occur around statements when performing reordering transformations. This makes our code generation algorithm useful for other applications such as the generation of code for distributed memory machines and the generation of code for traditional transformations.
+
+References
+
+ACK87]
+
+ReLxa.encAguultlaeiognne,s.D, p.InaCgaCeslola6nh3fea{rn7e6,n,acJenadRnuKeca.oryrKd1en9o8nf 7etd.hye.
+
+Automatic decomposition of Fourteenth ACM Symposium
+
+scienti c programs for parallel on Principles of Programming
+
+AK87]
+
+J. R. tions
+
+AonllePnroagnrdamKm. KinegnLneadnyg.uaAguetsoamnadtiScytsrtaenmssla, t9io(4n):o4f9F1o{r5t4r2a,nOpcrtoogbrearm1s9t8o7.vector
+
+form.
+
+ACM
+
+Transac-
+
+AKPW83]
+
+JdJ.aeRpn.uenaAdrylelne1nc9e,8.3KI.n.
+
+Kennedy, C. Porter eld, and Conf. Rec. Tenth ACM Symp.
+
+J. on
+
+Warren. Principles
+
+CofonPvreorgsriaomn moifncgoLnatrnogluadgeepse,npdaegnecse1t7o7{d1a8t9a,
+
+B+89] IMn.teBrnerartyioentaal lJ.oTuhrneaPl EoRf SFuEpCerTcoCmlpuubtibnegncAhpmplairckasti:oEns,e3ct(i3v)e:5p{e4r0f,orMmaarnchce1e9v8a9l.uation of supercomputers.
+
+Ban79] UUr.bBaannae-Crjehea.mSppaeiegdnu,pOocftoOberdri1n9a7ry9.Programs. PhD thesis, Dept. of Computer Science, U. of Illinois at
+
+Ban90] LUa.nBgaunaegrejseea.nUdnCimomodpuillearrstfroarnsPfoarrmalaletlioCnosmofpdutoiunbgl,eplaogoepss.1I9n2{P2r1o9c,. Iorfvtihnee,3CrdAW, Aorukgsuhsotp1o9n90P.rogramming
+
+CK92] pSutetivnegC'9a2r,rpaangdesK1e1n4{K1e2n5n, eMdyin. nCeaopmopliisle,rMbilnonckeasobtiali,tyNoofvn1u9m92e.rical algorithms. In Proceedings Supercom-
+
+22
+
+Fea92a]
+Fea92b]
+JDH90] KKB92]
+LP92]
+Lu91] Pol88] Pug91] Pug92] PW92]
+Qui87]
+Ram92] ST92]
+WL91a] WL91b] Wol89a] Wol89b] Wol90] Wol91]
+
+pdPuiambu.elinbsFipoe.anfuartlr:itieibrm.pe/.repSIoonrmtt.se/Jm.easocifi.eP9n2ta/ra7sl8ole.lulptsiP.orZno.sgratmo mtihneg, a21(n5e), sOchcetdu1l9in9g2. prPobolsetmsc,ripPt aartvaiIla, blOe naes-
+
+Paul Feautrier. Some e cient solutions to the a ne scheduling problem, Part II, Multidimpuebn.siiobnpa.lfrt:imibep./reIpnotr.tsJ/. maosf iP.9a2ra/l2l8el.pPsr.oZg.ramming, 21(6), Dec 1992. Postscript available as
+
+I. Du ACM
+
+TJr.aJn.sD. oonngMarartah,.JS. oDftu.,C1r6o:z1{a1n7d,
+
+SM. aHrachm1m9a9r0l.ing.
+
+A
+
+set
+
+of
+
+level
+
+3
+
+basic
+
+linear
+
+algebra
+
+subprograms.
+
+KoSnu.phGeire.croKamcuipcmuatalirnp,ga,Drap.lalKegleusmlk8aa2rc{nh9ii,2n,easJnuidnlyAp1.o9lB9y2na.osum.iaDl teirmivei.ngIngoPordoct.raonf stfhoerm1a9t9i2onIsntfeorrnmatiaopnpailngConnefsetreedncloeoopns
+
+WAInue5gituLhsitWa1n9od9rk2Ks.heoshpaovnPLinagnagluia. gAessianngdulCaormlopoiplertsrafnosrfoPrmaraatllieolnCfroammpeuwtionrgk, bpaasgeeds o2n49n{o2n6-0s,inYgaulelaUr mniavterriscietys,.
+
+Lee-Chung SIGPLAN
+
+Lu. A uni Symposium
+
+oendPfrrianmciepwleosrkanfodrPsryasctteimceaotifcPlaoroaplletlraPnrsofgorrammamtioinngs,.
+
+pIangePs r2o8c{.3o8f,
+
+Athperi3lr1d99A1C. M
+
+C. Polychronopoulos. Parallel Programming and Compilers. Kluwer Academic Publishers, 1988.
+
+WcomillpiaumtinPg,upghag. eUs n3i4f1o{rm352te, cChonlioqgunees, fGorerlmooapnyo,pJtuimneiz1a9ti9o1n.. In 1991 International Conference on Super-
+
+aWnialllyiasmis. PCuogmh.muTnhiceaOtiomnesgoafttehset:AaCMfas,t8:a1n0d2{p1r1a4c,tiAcaulguinstte1g9e9r2p.rogramming algorithm for dependence
+
+eWPolfLimiMDlliiaIna'rma9yt2leaPcnfoaudnlg,sfheeCrdeoaanlnltcedaeg.edDePapvaeirndkd,eWDncoeecnsen.maTcboeectrht.1n9ic9Ga2lo.iRnAegnpobereatyrloCineSrd-TvieRnrts-ei3og1ne9r1o,pfDrtohegipsrta.pmoafpmeCirnogampwppuiettaherretdShceaietOntchmee,eSgUaInGitvPeesLrtsAittNyo
+
+eP1d9ai8tt7roi.rcse,QAuuitnotmoant.aTnheetwsyosrtkesminatCicodmepsuigtneroSf csiyesntcoeli,cpaargreasy2s.29In{2F6.0F. oMgaenlmchaens,teYr.URnoibveerrts,itaynPdrMess.,TDscehceumenbteer,
+
+JN.oRveammbaenru1ja9m92..Non-unimodular transformations of nested loops. In Supercomputing `92, pages 214{223,
+
+VI1n8i7vA,ekCSaMSnarSFkIraGarnPacnLisdAcoRN,a'C9d2ahliiCkfoaornTnfiheare,ekJnkucaentho1.n9A9P2g.reongrearamlmfrianmg eLwaonrgkufaogreitDereastiigonn-arneodrdImerpinlegmleonotpattiroann,sfpoarmgeast1io7n5s{.
+
+Michael E. Conference
+
+Wolf and Monica S. Lam. on Programming Language
+
+DAesidgantaanlodcIamlitpylemopetnimtaitzioinng,
+
+1a9lg9o1r.ithm.
+
+In
+
+ACM SIGPLAN'91
+
+pMaircahlaleellisEm.. WInoIlfEaEnEdTMraonnsiaccatiSo.nsLaomn .PaArallloeolpantdraDnsifsotrrimbuatteidonSytshteeomrys, aJnudlya1n99a1lg. orithm to maximize
+
+Michael Wolfe. More iteration space tiling. In Proc. Supercomputing 89, pages 655{664, November 1989.
+
+Michael Wolfe. Optimizing Supercompilers for Supercomputers. Pitman Publishing, London, 1989.
+
+Michael Wolfe. Massive parallelism through program restructuring. Massively Parallel Computation, pages 407{415, October 1990.
+
+In Symposium on Frontiers on
+
+Michael Parallel
+
+PWroolcfees.siTnhg,e ptaingyesloIIo{p4r6es{trIuI{c5tu3r,i1n9g91re.search
+
+tool.
+
+In
+
+Proc
+
+of
+
+1991
+
+International
+
+Conference
+
+on
+
+23
+
+
