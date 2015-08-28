@@ -1,0 +1,853 @@
+Synthesis of Operation-Centric Hardware Descriptions
+James C. Hoe
+Dept. of Electrical and Computer Engineering
+Carnegie Mellon University
+jhoe@ece.cmu.edu
+Arvind
+Laboratory for Computer Science
+Massachusetts Institute of Technology
+arvind@lcs.mit.edu
+Abstract
+Most hardware description frameworks, whether schematic
+or textual, use cooperating finite state machines (CFSM) as
+the underlying abstraction. In the CFSM framework, a de-
+signer explicitly manages the concurrency by scheduling the
+exact cycle-by-cycle interactions between multiple concur-
+rent state machines. Design mistakes are common in co-
+ordinating interactions between two state machines because
+transitions in different state machines are not semantically
+coupled. It is also difficult to modify one state machine with-
+out considering its interaction with the rest of the system.
+This paper presents a method for hardware synthesis from
+an “operation centric” description, where the behavior of a
+system is described as a collection of “atomic” operations in
+the form of rules. Typically, a rule is defined by a predicate
+condition and an effect on the state of the system. The atom-
+icity requirement simplifies the task of hardware description
+by permitting the designer to formulate each rule as if the
+rest of the system is static.
+An implementation can execute several rules concur-
+rently in a clock cycle, provided some sequential execution
+of those rules can reproduce the behavior of the concurrent
+execution. In fact, detecting and scheduling valid concurrent
+execution of rules is the central issue in hardware synthe-
+sis from operation-centric descriptions. The result of this
+paper shows that an operation-centric framework offers sig-
+nificant reduction in design time, without loss in implemen-
+tation quality.
+1 Introduction
+1.1 Operation-Centric Hardware Descriptions
+Digital hardware designs inherently embody highly con-
+current behaviors. Any non-trivial design invariably con-
+sists of a collection of cooperating finite state machines
+(CFSM). Hence, most hardware description frameworks,
+whether schematic or textual, use CFSM as the underly-
+ing abstraction. In a CFSM framework, a designer explic-
+itly manages the concurrency by scheduling the exact cycle-
+by-cycle interactions between multiple concurrent state ma-
+chines. Design mistakes are common in coordinating inter-
+actions between two state machines because transitions in
+different state machines are not semantically coupled. It is
+also difficult to modify one state machine without consider-
+ing its interaction with the rest of the system.
+This paper presents a method for hardware synthesis from
+an “operation centric” description, where the behavior of a
+system is described as a collection of “atomic” operations in
+the form of rules. Typically, a rule is defined by a predicate
+condition and an effect on the state of the system. In an exe-
+cution, a rule “reads” the state of the system in one step, and
+if enabled, the effect of the rule updates the state in the same
+step. If several rules are enabled at the same time, any one
+of the rules can be nondeterministically selected to update
+the state in one step, and afterwards, a new step begins with
+the updated state. The atomicity requirement simplifies the
+task of hardware description by permitting the designer to
+formulate each rule as if the rest of the system is static.
+Describing the instruction reorder buffer (ROB)1 of a
+modern out-of-order microprocessor poses a great chal-
+lenge if concurrency needs to be managed explicitly. An
+operation-centric description captures the behavior of an
+ROB more perspicuously as a collection of rules for oper-
+ations like dispatch, complete, commit, etc. [1]. For exam-
+ple, the dispatch operation is specified to take place if there
+exists an instruction that has all of its operands and is wait-
+ing to execute, and furthermore, the execution unit needed
+by the instruction is available. The effect of the dispatch op-
+eration is to send the instruction to the execution unit. The
+rule specification of the dispatch operation does not have to
+include information about how to resolve potential conflicts
+arising from the concurrent execution with other operations.
+The sequential and atomic interpretation of a description
+does not prevent a legal implementation from executing sev-
+eral rules concurrently in a clock cycle, provided some se-
+quential execution of those rules can reproduce the behavior
+of the concurrent execution. In fact, detecting and schedul-
+ing valid concurrent execution of rules is the central issue in
+hardware synthesis from operation-centric descriptions.
+1.2 Comparison to Other High-level Frameworks
+Behavioral descriptions typically describe hardware, or hard-
+ware/software systems, as multiple threads of computation
+that communicate via a message-passing or shared-memory
+paradigm [13, 4, 14, 17, 5]. As in CFSM frameworks, de-
+signers of behavioral descriptions still need to manage the
+interactions between concurrent computations explicitly. In
+reconfigurable computing, both sequential and parallel pro-
+gramming paradigms have been used to capture function-
+alities for hardware implementation. Transmagrifier-C [6]
+and HardwareC [16] are specification languages based on C
+syntax plus additional constructs to convey hardware-related
+information such as clocking. Sequential C and Fortran pro-
+grams have been automatically parallelized to target an ar-
+ray of configurable structures [3]. Data-parallel C languages
+1Refer to [9] for background information.
+have been used to program an array of FPGA’s in Splash 2 [8]
+and CLAy [7]. More formal representations have also been
+used to describe hardware for verification. Windley uses
+the language from the HOL theorem proving system to de-
+scribe a pipelined processor [19]. Matthews et al. have de-
+veloped the Hawk language to create executable specifica-
+tions of processors [15].
+Paper Organization: This section introduced the concept
+and advantages of operation-centric hardware description.
+The next section presents an example. Section 3 explains the
+synthesis of operation-centrically described hardware, while
+Section 4 explains the concurrent scheduling of conflict-
+free rules. Section 5 presents a comparison of designs syn-
+thesized from operation-centric descriptions vs. hand-coded
+RTL descriptions. Section 6 summarizes the key contribu-
+tions of this paper.
+2 An Operation-Centric Example
+2.1 Description of a Pipelined Processor
+We describe a two-stage pipelined processor where a
+pipeline buffer is inserted between the fetch stage and the
+execute stage. We use a bounded FIFO of unspecified size
+to model the pipeline buffer. The FIFO provides the isola-
+tion to allow the operations in the two stages to be described
+independently. Although the description reflects an asyn-
+chronous and elastic pipeline, our synthesis can infer a legal
+implementation that is fully-synchronous and has stages sep-
+arated by simple registers.
+Our operation-centric description framework borrows the
+notation of Term Rewriting Systems (TRS) [2]. A two-stage
+pipelined processor can be specified as a TRS whose terms
+have the signature Proc(pc,rf,bf,imem,dmem). The five
+fields of the processor term are pc the program counter, rf
+the register file (an array of integer values)2, bf the pipeline
+buffer (a FIFO of fetched instructions), imem the instruc-
+tion memory (an array of instructions), and dmem the data
+memory (an array of integer values).
+Instruction fetching in the fetch stage can be described
+by the rule:
+Fetch Rule:
+Proc(pc,rf,bf,imem,dmem)
+! Proc(pc+1,rf,enq(bf,imem[pc]),imem,dmem)
+The execution of the different instructions in the execute
+stage can be described by separate rules. First consider the
+Add instruction:
+Add Exec Rule:
+Proc(pc,rf,bf,imem,dmem)
+where Add(rd,r1,r2)=first(bf)
+! Proc(pc,rf[rd:=v],deq(bf),imem,dmem)
+where v=rf[r1]+rf[r2]
+The Fetch rule fetches instructions from consecutive instruc-
+tion memory locations and enqueues them into bf. The Fetch
+rule is not concerned with what happens if a branch is taken,
+2In an expression, rf[r] gives the value stored in location r of rf, and
+rf[r:=v] gives the new value of the array after location r has been updated by
+the value v.
+or if the pipeline encounters an exception. The Add Exec
+rule, on the other hand, processes the next pending instruc-
+tion in bf as long as it is an Add instruction. Next, consider
+the two possible executions of a Bz (branch if zero) instruc-
+tion:
+Bz-Taken Exec Rule:
+Proc(pc, rf, bf, imem, dmem)
+if (rf[rc]=0) where (Bz(rc,ra)=first(bf))
+! Proc(rf[ra], rf, clear(bf), imem, dmem)
+Bz-Not-Taken Exec Rule:
+Proc(pc, rf, bf, imem, dmem)
+if (rf[rc] 6=0) where (Bz(rc,ra)=first(bf))
+! Proc(pc, rf, deq(bf), imem, dmem)
+The Fetch rule performs a weak form of branch speculation
+by always incrementing pc. Consequently, in the execute
+stage, if a branch is resolved to be taken, besides setting pc
+to the branch target, all speculatively fetched instructions in
+bf need to be discarded.
+In this pipeline description, the Fetch rule and an exe-
+cute rule can be ready to fire simultaneously. Even though
+conceptually only one rule should be fired in each step, an
+implementation of this processor description must carry out
+the effect of both rules in the same clock cycle. Without con-
+current execution, the implementation does not behave like
+a pipeline. However, the implementation must also ensure
+that a concurrent execution of multiple rules produces the
+same result as a sequential execution. In particular, consider
+the concurrent firing of the Fetch rule and the Bz-Taken Exec
+rule. Both rules affect pc and bf. In such a case, the imple-
+mentation has to guarantee that these rules fire in some se-
+quential order. The choice of ordering determines how many
+bubbles are inserted after a taken branch, but it does not af-
+fect the processor’s ability to correctly execute a program.
+2.2 State-Transformer View
+In a TRS, the state of the system is represented by a collec-
+tion of values, and a rule rewrites values to values. Given a
+collective state value s, a TRS rule computes a new value s’
+such that
+s’=if π(s) then δ(s) else s
+where the π function captures the firing condition and the δ
+function captures the effect of a rule. It is also possible to
+view a rule as a state-transformer in a state-based system. In
+this paper, we are going to concentrate on the synthesis of
+state-based systems with three types of state elements: reg-
+isters (R), arrays (A) and FIFOs (F). The state elements are
+depicted in Figure 1. A register can store an integer value
+up to a specified maximum word size. The value stored in
+a register can be referenced using the side-effect-free get()
+query and updated to v using the set(v ) action. The en-
+try of an array can be referenced using the side-effect-free
+a-get(idx) query and updated to v using the a-set(idx ,v ) ac-
+tion. The oldest value in a FIFO can be referenced using
+the side-effect-free first() query, and can be removed by the
+deq() action. A new value v can be added to a FIFO using
+the enq(v ) action. In addition, the contents of a FIFO can
+be cleared using the clear() action. The status of a FIFO can
+be queried using the side-effect-free notfull() and notempty()
+..
+.
+.
+.
+.
+F
+first
+_full
+_empty(clear enable) CE
+(enq data) ED
+(enq enable) EE
+Clk
+(deq enable) DE
+A
+RD
+RD
+RD
+2
+1
+n
+2
+1
+n(read addr) RA
+(read addr) RA
+(read addr) RA
+(read data)
+(read data)
+(read data)
+R Q
+Clk
+(write data) WD
+(write enable) WED
+LE
+Clk
+(write addr) WA
+Figure 1: Synchronous state elements
+queries. A rule is restricted to perform at most one action on
+each state element per rewrite.
+In the state-transformer view, the applicability of a rule is
+determined by computing the π function on the current state.
+However, the next-state logic consists of a set of actions that
+alter the contents of the state elements to match δ(s). The
+processor rules in Section 2.1 can be restated in terms of
+actions:
+πFetch = notfull(bf)
+aFetch;pc = set(pc+1)
+aFetch;bf = enq(imem[pc])
+πAdd = (first(bf)=Add(rd,r1,r2))
+^notempty(bf)
+aAdd;rf = a-set(rd,rf[r1]+rf[r2])
+aAdd;bf = deq()
+πBzTaken = (first(bf)=Bz(rc,ra))^(rf[rc]=0)
+^notempty(bf)
+aBzTaken;pc = set(rf[ra])
+aBzTaken;bf = clear()
+πBzNotTaken = (first(bf)=Bz(rc,ra))^(rf[rc]6=0)
+^notempty(bf)
+aBzNotTaken;bf = deq()
+Null actions, represented as ε, on a state element
+are omitted from the action list above. The com-
+plete list of actions implied by the Add Execute rule
+is αAdd=hapc,arf ,abf ,aimem,admemi where apc, aimem and
+a
+dmem
+are ε’s.
+3 Hardware State Machine Synthesis
+Implementing an operation-centric TRS description as a
+finite-state machine (FSM) involves combining the actions
+of all rules to form the FSM’s next-state logic. The actions of
+a rule need to be qualified by the rule’s π signal. For perfor-
+mance reasons, an implementation should carry out multiple
+rules concurrently while still maintaining a behavior that is
+consistent with a sequential execution of the atomic opera-
+tions that the rules represent. We will describe such a con-
+current scheduler in the next section.
+AT S = hS, So, X i
+S = h R1,...,RNR, A1,...,ANA, F1,...,FNF i
+So = h vR1 ,...,vRNR, vA1 ,...,vANA vF1 ,...,vFNF i
+X = f T1,...,TM g
+T = h π, α i
+π = exp
+α = h aR1 ,...,aRNR , aA1 ,...,aANA, aF1 ,...,aFNF i
+aR = ε [] set(exp)
+aA = ε [] a-set(expidx, expdata)
+aF = ε [] enq(exp) [] deq() [] en-deq(exp) [] clear()
+exp = constant [] Primitive-Op(exp1, ..., expn)
+[] R.get() [] A.a-get(idx)
+[] F.first() [] F.notfull() [] F.notempty()
+Figure 2: ATS summary
+3.1 Abstract Transition Systems (ATS)
+ATS is the formalization of a state-based intermediate rep-
+resentation of operation-centric descriptions. An ATS is de-
+fined a triple hS, So, X i where S is a list of state elements,
+So is a list of initial values for the elements in S, and X is a
+list of operation-centric transitions where each transition is
+represented by a pair, hπ, αi. The components of an ATS
+is summarized in Figure 2. Besides registers, arrays and FI-
+FOs, ATS includes register-like state elements for input and
+output. An input state element (I) is like a register but with-
+out the set() action. A get() query on an input element returns
+the value of an external input. An output state element (O)
+supports both set() and get(), and its content is visible from
+outside of the ATS.
+3.2 Reference Implementation of an ATS
+One straightforward implementation of an ATS is a FSM that
+executes one transition per clock cycle. The elements of S
+are the state of the FSM. The transitions in X are combined
+to form the next-state logic of the FSM in three steps.
+Step 1: All value expressions in the ATS are mapped to
+combinational signals on the current state of the state el-
+ements. In particular, this step creates a set of signals,
+πT1 ,...,πTM , that are the π signals of transitions T1,...,TM of an
+M-transition ATS. The logic mapping in this step assumes
+all required combinational resources are available. RTL op-
+timizations can be employed to simplify the combinational
+logic and to share duplicated logic.
+Step 2: In the second step, a scheduler is created to gener-
+ate the set of arbitrated enable signals, φT1 ,...,φTM , based on
+πT1 ,...,πTM . (The block diagram of a scheduler is shown in
+Figure 3.) Any valid scheduler must, at least, ensure that for
+any s,
+1. φTi ) πTi(s)
+2. πT1 (s)_..._πTM (s) ) φT1_..._φTM
+The reference implementation scheduler asserts only one φ
+signal in each clock cycle, reflecting the selection of one ap-
+plicable transition. A priority encoder is a valid scheduler
+for the reference implementation.
+Step 3: In the final step, one conceptually creates M inde-
+pendent versions of the next-state logic, each corresponding
+to one of the M transitions in the ATS. Next, the M sets of
+next-state logic are merged, state-element by state-element,
+using the φ signals for arbitration. For example, a register
+may have N transitions that could affect it over time. (N M
+because some transitions may not affect the register.) The
+register takes on a new value if any of the N relevant tran-
+sitions is enabled in a clock cycle. Thus, the register’s latch
+enable is the logical-OR of the φ signals of the N relevant
+transitions. The new value of the register is selected from the
+N candidate next-state values via a multiplexer controlled by
+the φ signals. Figure 4 illustrates the merge circuit for a reg-
+ister that can be affected by the set actions from two transi-
+tions. The scheme assumes at most one transition’s action
+needs to be applied to a particular element in a clock cycle.
+Furthermore, all the actions of a selected transition should be
+enabled in the same clock cycle to achieve the appearance of
+an atomic transition.
+The merge circuit for the three state element types are
+given next as RTL equations. For each R, the set of transi-
+tions that update R is fTxi j aRTxi =set(expxi)gwhere a
+R
+Txi
+is the
+action by Txi on R. R’s data (D) and latch enable (LE) inputs
+are
+D = φTx1 expx1 + ... + φTxn expxn
+LE = φTx1_..._φTxn
+For each A, the set of transitions that write A is
+fTxi j aATxi =a-set(idxxi , dataxi)g. A’s write address (WA),
+data (WD) and enable (WE) inputs are
+WA = φTx1 idxx1 + ... + φTxn idxxn
+WD = φTx1 datax1 + ... + φTxn dataxn
+WE = φTx1_..._φTxn
+The set of transitions that enqueues a new value into F is
+fTxi j (aFTxi =enq(expxi))_(a
+F
+Txi
+=en-deq(expxi))g.
+ED = φTx1 expx1 + ... + φTxn expxn
+EE = φTx1_..._φTxn
+The set of transitions that dequeues from F is
+fTxi j (aFTxi =deq())_(a
+F
+Txi
+=en-deq(expxi))g.
+DE = φTx1_..._φTxn
+Similarly, the set of transitions that clears the contents of F
+is fTxi j aFTxi =clear()g.
+CE = φTx1_..._φTxn
+3.3 Correctness of the Reference Implementation
+The reference implementation is said to implement an ATS
+correctly if
+1. The implementation’s sequence of state transitions
+corresponds to some execution of the ATS.
+2. The implementation maintains liveness.
+A correct implementation is not necessarily equivalent to the
+source ATS. Unless the scheduler employs true randomiza-
+Scheduler
+2π 2
+πM φM
+1 1φπ
+φ
+Figure 3: A monolithic scheduler for an M-transition ATS.
+LE
+D
+QR
+latch enable
+2
+1
+1φ φ2
+φ
+δ2
+1δ
+φ
+Figure 4: Circuits for combining two transitions’ actions on
+the same state element.
+tion, the reference implementation is deterministic. In other
+words, the implementation can only embody one of the be-
+haviors allowed by the ATS. Thus, the implementation can
+enter a livelock if the ATS depends on non-determinism to
+make progress. The reference implementation can use a
+round-robin priority encoder to ensure weak-fairness, that
+is, if a transition remains applicable for a sufficient number
+of consecutive cycles then it is guaranteed to be selected at
+least once.
+Although the semantics of an ATS require an execution
+in sequential and atomic update steps, a hardware imple-
+mentation can exploit the underlying parallelism and execute
+multiple transitions concurrently in one clock cycle. For a
+pipelined processor, it is necessary to execute transitions for
+different pipeline stages concurrently to achieve pipelined
+execution.
+4 Concurrent Scheduling of Conict-Free Transitions
+In a multiple-transitions-per-cycle implementation, the state
+transition in each clock cycle must correspond to a sequen-
+tial execution of the ATS transitions in some order. If two
+transitions Ta and Tb become applicable in the same clock
+cycle when S is in state s, πTa (δTb(s)) or πTb(δTa (s)) must
+be true for an implementation to correctly select both tran-
+sitions for execution. Otherwise, executing both transitions
+would be inconsistent with any sequential execution in two
+atomic update steps.
+There are two approaches to execute the actions of Ta and
+Tb in the same clock cycle. The first approach cascades the
+combinational logic from the two transitions. However, arbi-
+trary cascading does not always improve circuit performance
+since it may lead to a longer cycle time. In our approach, Ta
+and Tb are executed in the same clock cycle only if the cor-
+rect final state can be reconstructed from an independent and
+parallel evaluation of their combinational logic on the same
+starting state.
+This section develops a scheduling algorithm based on
+the conflict-free relationship (<>CF). <>CF is a symmet-
+rical relationship that imposes a stronger requirement than
+necessary for executing two transitions concurrently. How-
+ever, the symmetry of <>CF permits a straightforward im-
+plementation that concurrently executes multiple transitions
+if they are pairwise<>CF . An analysis based on the Sequen-
+tial Composibility (<SC) relationship can further increase
+hardware concurrency [10]. The intuition behind <SC, an
+asymmetrical relationship, is that concurrent execution does
+not need to produce the same result as all possible sequential
+executions, just one.
+4.1 Conict-Free Transitions
+The conflict-free relationship and the parallel composition
+function PC are defined in Definition 1 and Definition 2.
+Definition 1 (Conflict-Free Relationship)
+Two transitions Ta and Tb are said to be conflict-free
+(Ta <>CF Tb) if
+8 s. πTa(s)^ πTb (s)) πTb(δTa(s)) ^ πTa(δTb (s)) ^(δTb(δTa(s)) == δTa(δTb (s))
+== δPC(s))
+where δPC is the functional equivalent of PC(αTa , αTb ).
+2
+The function PC computes a new α by composing two
+α’s that do not contain conflicting actions on the same state
+element.
+Definition 2 (Parallel Composition)
+PC(αa,αb)= hpcR(aR1 ,bR1),..., pcA(aA1 ,bA1),...,
+pcF (aF1 ,bF1),...i
+where αa=haR1 ,...aA1 ,...aF1,...i,
+and αb=hbR1 ,...bA1,...bF1,...i
+pcR(a, b)=case a, b of a, ε) a
+ε, b ) b
+... ) undefined
+pcA(a, b)=case a, b of a, ε) a
+ε, b ) b
+... ) undefined
+pcF (a, b)=case a, b of a, ε) a
+ε, b ) b
+enq(exp), deq() ) en-deq(exp)
+deq(), enq(exp) ) en-deq(exp)
+... ) undefined
+2
+Suppose Ta and Tb become applicable in the same state s.
+Ta <>CF Tb implies that the two transitions can be applied in
+either order in two successive steps to produce the same final
+state s’. Ta <>CF Tb further implies that an implementation
+could produce s’ by applying the parallel composition of αTa
+and αTb to the same initial state s. Theorem 1 extends this
+result to multiple pairwise <>CF transitions.
+Theorem 1 (Composition of <>CF Transitions)
+Given a collection of n transitions applicable in state s, if
+all n transitions are pairwise conflict-free, then the following
+holds for any ordering Tx1 ,...,Txn :
+πTx2 (δTx1 (s)) ^ ... ^
+πTxn (δTxn 1 ( ...δTx3 (δTx2 (δTx1 (s))) ... )) ^
+(δTxn (δTxn 1 ( ...δTx3 (δTx2 (δTx1 (s))) ... ))== δPC(s))
+where δPC is the functional equivalent of the parallel compo-
+sitions of αTx1 ,...,αTxn , in any order. A proof for Theorem 1
+can be found in [10].
+2
+4.2 Static Deduction of <>CF
+The scheduling algorithm given in this section can work with
+a conservative test for <>CF , that is, if the test fails to iden-
+tify a pair of transitions as <>CF , the algorithm might gen-
+erate a less optimal, but still correct implementation.
+A static determination of<>CF can be made by compar-
+ing the domains and ranges of the transitions. The domain
+of a transition is the set of state elements in S “read” by the
+expressions in either π or α. The domain of a transition can
+be further sub-classified as π-domain and α-domain depend-
+ing on whether the state element is read by the π-expression
+or an expression in α. The range of a transition is the set of
+state elements in S that are acted on by α. For this analysis,
+the head and the tail of a FIFO are considered to be separate
+elements. Using D(T) and R(T), a sufficient condition that
+ensures two transitions are <>CF is given by the following
+theorem.
+Theorem 2 (Sufficient Condition for<>CF)
+Given Ta and Tb,
+( (D(πTa)[D(αTa )) 6 \ R(αTb ) ) ^( (D(πTb)[D(αTb )) 6 \ R(αTa ) ) ^( R(αTa) 6 \ R(αTb ) )
+) (Ta <>CF Tb)
+2
+If the domain and range of two transitions do not overlap,
+then the two transitions do not have any data dependences.
+Since their ranges do not overlap, a valid parallel composi-
+tion of αTa and αTb must exist.
+Definition 3 (Mutually Exclusive Relationship)
+If two transitions never become applicable on the same state,
+then they are said to be mutually exclusive, i.e.,
+Ta <>ME Tb if 8 s. :(πTa(s)^πTb(s))
+2
+Two transitions that are <>ME satisfy the definition of
+<>CF trivially. An exact test for <>ME requires deter-
+mining the satisfiability of the expression (πTa(s)^πTb(s)).
+Fortunately, the π expression is usually a conjunction of re-
+lational constraints on the current values of state elements.
+A conservative test that scans two π expressions for contra-
+dicting constraints on any one state element works well in
+practice.
+T3
+T2T1
+T3
+T1 T2
+T6
+T5 T4
+T6
+T5 T4
+(a) (b)
+Scheduling Group 1 Scheduling Group 2
+Scheduling Group 3
+Figure 5: Scheduling Conflict-free Rules: (a) Conflict-free
+graph (b) Corresponding conflict graph and its connected
+components
+4.3 Scheduling of <>CF Transitions
+Using Theorem 1, instead of selecting a single transition per
+clock cycle, a scheduler can select a number of applicable
+transitions that are pairwise conflict-free. In other words, in
+each clock cycle, the φ signals should satisfy the condition:
+φTa ^ φTb ) Ta <>CF Tb
+where φT is the arbitrated transition enable signal for transi-
+tion T. Given a set of applicable transitions in a clock cycle,
+many different subsets of pairwise conflict-free transitions
+could exist. Selecting the optimum subset requires evaluat-
+ing the relative importance of the transitions. Alternatively,
+an objective metric simply optimizes the number of transi-
+tions executed in each clock cycle.
+Partitioned Scheduler: In a partitioned scheduler, transi-
+tions in X are first partitioned into as many disjoint schedul-
+ing groups, P1,...,Pk, as possible such that
+(Ta 2 Pa) ^ (Tb 2 Pb) ) Ta <>CF Tb
+Transitions in different scheduling groups are conflict-free,
+and hence each scheduling group can be scheduled inde-
+pendently of other groups. For a given scheduling group
+containing Tx1 ,...,Txn , φTx1 ,...,φTxn can be generated from
+πTx1 (s),...,πTxn (s) using a priority encoder. In the best case,
+a transition T is conflict-free with every other transition in
+X . Hence, T is in a scheduling group by itself, and φT=πT
+without arbitration.
+X can be partitioned into scheduling groups by find-
+ing the connected components of an undirected graph
+whose nodes are transitions T1,...,TM and whose edges are
+f(Ti, Tj) j :(Ti <>CF Tj)g. Each connected component is a
+scheduling group. For example, the undirected graph (a) in
+Figure 5 depicts the <>CF relationships in an ATS with six
+transitions. Graph (b) in Figure 5 gives the corresponding
+conflict graph where two nodes are connected if they are not
+<>CF , i.e. two unconnected nodes Ti and Tj imply Ti <>CF
+Tj. The conflict graph has three connected components, cor-
+responding to the three<>CF scheduling groups. The φ sig-
+nals corresponding to T1, T4 and T6 can be generated using
+a priority encoding of their corresponding π’s. Scheduling
+group 2 also requires a scheduler to ensure φ2 and φ5 are not
+asserted in the same clock cycle. However, φT3 =πT3 without
+any arbitration.
+πT1 πT4 πT6 φT1 φT4 φT6
+0 0 0 0 0 0
+0 0 1 0 0 1
+0 1 0 0 1 0
+0 1 1 0 1 0
+1 0 0 1 0 0
+1 0 1 1 0 1
+1 1 0 1 0 0
+1 1 1 1 0 1
+Figure 6: Enumerated encoder table.
+Enumerated Scheduler: Scheduling group 1 in Figure 5
+contains three transitions fT1, T4, T6g such that T1 <>CF T6
+but neither T1 nor T6 is <>CF with T4. Although the three
+transitions cannot be scheduled independently of each other,
+T1 and T6 can be selected together as long as T4 is not se-
+lected in the same clock cycle. This selection is valid be-
+cause T1 and T6 are <>CF between themselves and every
+transition selected by the other groups. In general, the sched-
+uler for each group can independently select multiple transi-
+tions that are pairwise <>CF within the scheduling group.
+For a scheduling group with transitions Tx1 ,...,Txn ,φTx1 ,...,φTxn can be computed by a 2nn lookup table indexed
+by πTx1 (s),...,πTxn (s). The data value d1,...,dn at the table en-
+try with index b1,...,bn can be determined by finding a clique
+in an undirected graph whose nodes N and edges E are de-
+fined as follows:
+N = fTxi j bi is assertedg
+E = f(Txi , Txj ) j (Txi2N ) ^ (Txj2N ) ^
+(Txi <>CF Txj )g
+For each Txi that is in the clique, assert di. For example,
+scheduling group 1 from Figure 5 can be scheduled by an
+enumerated encoder (Figure 6) that allows T1 and T6 to ex-
+ecute concurrently. The construction of an enumerated en-
+coder is not necessarily unique. For example, in this exam-
+ple, row “011” in Figure 6 could also contain the data value
+“001”.
+4.4 Performance Gain
+When X can be partitioned into scheduling groups, the par-
+titioned scheduler is smaller and faster than the monolithic
+encoder used in the reference implementation. The parti-
+tioned scheduler also reduces wiring cost and delay since
+π’s and φ’s of unrelated transitions are not brought together
+for arbitration.
+The property of the parallel composition function ensures
+that transitions are <>CF only if their actions on state ele-
+ments do not conflict. Hence, the state update logic from the
+reference implementation can be used with a <>CF sched-
+uler without any modification, and consequently, combina-
+tional delay of the next-state logic is not increased by this
+optimization. All in all, the <>CF-scheduled implementa-
+tion achieves better performance than the reference imple-
+mentation by allowing more transitions to execute in a clock
+cycle without increasing the cycle time.
+5 Synthesis Results
+The synthesis procedures in the previous section have been
+implemented in the Term Rewriting Architectural Compiler
+(TRAC). TRAC accepts TRSPEC descriptions and outputs
+synthesizable structural descriptions in the Verilog Hard-
+ware Description Language [18]. The TRSPEC language
+is an adaptation of TRS for operation-centric hardware de-
+scription [11]. This section discusses the synthesis of a five-
+stage pipelined implementation of the MIPS R2000 ISA (as
+described in [12]). The TRSPEC description implements
+all of the MIPS R2000 integer ISA except: multiple/divide;
+partial-word or non-aligned load/stores; coprocessor inter-
+faces; privileged and exception modes. The delay semantics
+of the memory load and branch/jump instructions have also
+been removed. The TRSPEC description can be compiled by
+TRAC into a synthesizable Verilog RTL description in less
+than 15 seconds on a 266 MHz Pentium II processor. The
+TRAC-generated Verilog description can then be compiled
+by Synopsys Design Compiler to target both Synopsys CBA
+and LSI Logic 10K Series technology libraries.
+5.1 Input and Output
+The example from Section 2.1 described a simple proces-
+sor whose instruction memory and data memory are storage
+arrays internal to the system. The description can be synthe-
+sized, as is, to a processor with an internal instruction ROM
+and an internal data RAM. However, as a realistic design
+for synthesis, the MIPS processor accesses external memory
+through input and output ports. TRSPEC allows I/O seman-
+tics to be assigned to terms as part of the type definition for
+a term.
+5.2 Synchronous Pipeline Synthesis
+As in the processor from Section 2.1, the MIPS processor is
+described as an asynchronous and elastic pipeline. The de-
+scription of the processor does not depend on the exact depth
+of the pipeline FIFOs. This allows TRAC to instantiate one-
+deep FIFOs, i.e. a single register, as pipeline buffers. Flow
+control logic is added to ensure a FIFO is not overflowed
+or underflowed by enqueue and dequeue actions. In a naive
+construction, the one-deep FIFO is full if its register holds
+valid data; the FIFO is empty if its register holds a bubble.
+With only local flow control between neighboring stages, the
+overall pipeline would contain a bubble in every other stage
+in a steady-state execution. For example, if pipeline buffer
+K and K+1 are occupied and buffer K+2 is empty in some
+clock cycle, the operation in stage K + 1 would be enabled
+to advance at the clock edge, but the operation in stage K is
+held back because buffer K+1 appears full during the clock
+cycle. The operation in stage K is not enabled until the next
+clock cycle when buffer K+1 has been emptied.
+TRAC creates a flow control logic that includes a combi-
+national multi-stage feedback path that propagates from the
+last pipeline stage to the first pipeline stage. The cascaded
+feedback scheme shown in Figure 7 allows stage K to ad-
+vance both when pipeline buffer K+1 is actually empty and
+when buffer K + 1 is going to be dequeued at the coming
+clock edge. This scheme allows the entire pipeline to ad-
+empty? empty? empty?enq enqenq
+Logic Logic Logic
+1-deep FIFO
+deq deq deq
+_full?_full?_full?
+Stage K+1Stage K Stage K+2
+Figure 7: Synchronous pipeline with combinational multi-
+stage feedback flow control.
+CBA tc6a LSI 10K
+area speed area speed
+version (cell) (MHz) (cell) (MHz)
+TRSPEC 9059 96.6 34674 41.9
+Hand-coded RTL 7168 96.0 26543 42.1
+Figure 8: Summary of MIPS core synthesis results
+vance synchronously on each clock cycle. A stall in an inter-
+mediate pipeline stage causes all up-stream stages to stall at
+once. If a pipeline stage never stalls, i.e., always dequeues,
+its feedback can be removed by combinational logic opti-
+mization.
+5.3 Analysis and Discussion
+The table in Figure 8 summarizes the pre-layout area and
+speed estimates reported by Synopsys. The row labeled
+“TRSPEC” characterizes the implementation synthesized
+from the TRSPEC description. The row labeled “Hand-
+coded RTL” characterizes the implementation synthesized
+from a hand-coded Verilog description of the same microar-
+chitecture. The data indicates that the TRSPEC description
+results in an implementation that is similar in size and speed
+to the result of the hand-coded Verilog description. This sim-
+ilarity should not be surprising because, after all, both de-
+scriptions are describing the same microarchitecture, albeit
+using very different design abstractions and methodologies.
+The same conclusion has also been reached on comparisons
+of other designs and when we targeted the designs for im-
+plementation on FPGAs [10].
+The TRSPEC and the hand-coded Verilog description are
+similar in length (790 vs. 930 lines of source code), but
+the TRSPEC description is developed in less than one day
+(eight hours), whereas the hand-coded Verilog description
+required nearly five days to complete. The TRSPEC de-
+scription can be translated in a literal fashion from an ISA
+manual. Whereas, the hand-coded Verilog description has a
+much weaker correlation to the ISA specification. The hand-
+coded RTL description also requires circuit implementation
+information, which the RTL designer has to improvise. This
+does not only create more work for the RTL designer but
+also creates more opportunities for error. In a TRSPEC de-
+sign flow, the designer can rely on TRAC to correctly supply
+the implementation-related information.
+6 Conclusion
+The operation-centric view of hardware has existed in many
+forms of informal hardware specification, usually to convey
+high-level architectural concepts. This research improves
+the usefulness of an operation-centric hardware description
+by developing a formal description framework and by en-
+abling automatic synthesis to an efficient circuit implemen-
+tation. The result of this paper shows that an operation-
+centric framework offers significant reduction in design time
+and effort without loss in implementation quality.
+7 Acknowledgements
+This paper describes research done at the MIT Laboratory
+for Computer Science. Funding for this work is provided in
+part by the Defense Advanced Research Projects Agency of
+the Department of Defense under the Ft. Huachuca contract
+DABT63-95-C-0150 and by the Intel Corporation. James C.
+Hoe is supported in part by an Intel Foundation Graduate
+Fellowship during this research.
+References
+[1] Arvind and X. Shen. Using term rewriting systems to
+design and verify processors. IEEE Micro Special Issue
+on Modeling and Validation of Microprocessors, May
+1999.
+[2] F. Baader and T. Nipkow. Term Rewriting and All That.
+Cambridge University Press, 1998.
+[3] J. Babb, M. Rinard, C. A. Moritz, W. Lee, M. Frank,
+R. Barua, and S. Amarasinghe. Parallelizing appli-
+cations into silicon. In Proceedings of the 7th IEEE
+Symposium on Field-Programmable Custom Comput-
+ing Machines (FCCM’99), Napa Valley, CA, April
+1999.
+[4] G. Berry. The foundations of Esterel. In Proof, Lan-
+guage and Interaction: Essays in Honour of Robin Mil-
+ner. MIT Press, 1998.
+[5] D. D. Gajski, J. Zhu, R. Do¨mer, A. Gerslauer, and
+S. Zhao. SpecC Specification Language and Methodol-
+ogy. Kluwer Academic Publishers, 2000.
+[6] D. Galloway. The Transmogrifier C hardware descrip-
+tion language and compiler for FPGAs. In Proceedings
+of IEEE Workshop on FPGAs for Custom Computing
+Machines (FCCM’95), Napa Valley, CA, April 1995.
+[7] M. Gokhale and E. Gomersall. High level compila-
+tion for fine grained FPGAs. In Proceedings of the
+IEEE Symposium on FPGA-based for Custom Com-
+puting Machines (FCCM’97), Napa Valley, CA, April
+1997.
+[8] M. Gokhale and R. Minnich. FPGA computing in a
+data parallel C. In Proceedings of IEEE Workshop on
+FPGAs for Custom Computing Machines (FCCM’93),
+Napa Valley, CA, April 1993.
+[9] J. L. Hennessy and D. A. Patterson. Computer Archi-
+tecture: A Quantitative Approach. Morgan Kaufmann,
+2nd edition, 1996.
+[10] J. C. Hoe. Operation-Centric Hardware Description
+and Synthesis. PhD Thesis, Massachusetts Institute of
+Technology, June 2000.
+[11] J. C. Hoe and Arvind. Hardware synthesis from term
+rewriting systems. In Proceedings of X IFIP Interna-
+tional Conference on VLSI (VLSI 99), Lisbon, Portugal,
+November 1999.
+[12] G. Kane. MIPS R2000 RISC Architecture. Prentice
+Hall, 1987.
+[13] L. Lavagno and E. Sentovich. ECL: A specification
+environment for system-level design. In Proceedings
+of the 36th ACM/IEEE Design Automation Conference
+(DAC’99), New Orleans, LA, June 1999.
+[14] S. Liao, S. Tjinag, and R. Gupta. An efficient imple-
+mentation of reactivity for modeling hardware in the
+Scenic design environment. In Proceedings of the 34th
+ACM/IEEE Design Automation Conference (DAC’97),
+Anaheim, CA, June 1997.
+[15] J. Matthews, J. Launchbury, and B. Cook. Micro-
+processor specification in Hawk. In Proceedings of
+the 1998 International Conference on Computer Lan-
+guages, Chicago, IL, 1998.
+[16] Stanford University. HardwareC – A Language for
+Hardware Design, December 1990.
+[17] D. E. Thomas, J. K. Adams, and H. Schmit. A
+model and methodology for hardware-software code-
+sign. IEEE Design and Test of Computers, September
+1993.
+[18] D. E. Thomas and P. R. Moorby. The Verilog Hardware
+Description Language. Kluwer Academic Publishers,
+3rd edition, 1996.
+[19] P. J. Windley. Verifying pipelined microprocessors. In
+Proceedings of the 1995 IFIP Conference on Hard-
+ware Description Languages and their Applications
+(CHDL’95), Tokyo, Japan, 1995.

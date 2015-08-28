@@ -1,0 +1,2220 @@
+Proofbased Synthesis
+of Sorting Algorithms for Trees
+Isabela Dr mnesc
+1
+, Tudor Jebelean
+2
+and Sorin Stratulat
+3
+1
+Department of Computer Science
+West University, Timisoara, ROMANIA
+idramnesc@info.uvt.ro
+2
+Research Institute for Symbolic Computation
+Johannes Kepler University, Linz, AUSTRIA
+Tudor.Jebelean@jku.at
+3
+LITA, Department of Computer Science
+Université de Lorraine, Metz, FRANCE
+sorin.stratulat@univ-lorraine.fr
+Abstract. We develop various proof techniques for the synthesis of sorting
+algorithms on binary trees, by extending our previous work on the synthe-
+sis of algorithms on lists. Appropriate induction principles are designed and
+various specific prove-solve methods are experimented, mixing rewriting with
+assumption-based forward reasoning and goal-based backward reasoning à la
+Prolog.
+The proof techniques are implemented in the Theorema system and are used for
+the automatic synthesis of several algorithms for sorting and for the auxiliary
+functions, from which we present few here. Moreover we formalize and check
+some of the algorithms and some of the properties in the Coq system.
+1 Introduction
+Program synthesis is currently a very active area of programming language and veri-
+fication communities. Generally speaking, the program synthesis problem consists in
+finding an algorithm which satisfies a given specification. We focus on the proof-based
+synthesis of functional algorithms, starting from their formal specification expressed
+as two predicates: the input condition I[X] and the output condition O[X,T ]. The de-
+sired function F must satisfy the correctness condition (∀X)(I[X] =⇒ O[X,F [X]]).4
+We are interested to develop proof-based methods for finding F and to build for-
+mal tools for mechanizing and (partially) automatizing the proof process, by following
+constructive theorem proving and program extraction techniques to deductively syn-
+thesize F as a functional program [6]. The way the constructive proof is built is
+essential since the definition of F can be extracted as a side effect of the proof. For
+example, case splits may generate conditional branches and induction steps may pro-
+duce recursive definitions. Hence, the use of different case reasoning techniques and
+induction principles may output different definitions of F . The extraction procedure
+guarantees that F satisfies the specification.
+4
+The square brackets have been used for function and predicate applications instead of
+round brackets.
+Non-trivial algorithms, as for sorting [16], are generated when X is a recursively-
+defined unbounded data structure, as lists and trees. In this paper, we apply the
+deductive approach to synthesize binary tree algorithms, extending similar results for
+lists [912]. In order to do this, we introduce new induction principles, proof strategies
+and inference rules based on properties of binary trees. Numerous new algorithms
+have been synthesized. The correctness of the discovered algorithms is ensured by the
+soundness of the induction principles, the specific inference rules and proof strategies
+introduced in this paper.
+The implementations of the new prover and extractor, as well as of the case stu-
+dies presented in this paper are carried out in the frame of the Theorema system
+5
+and e.g., [5] which is itself implemented in Mathematica [24]. Theorema offers signif-
+icant support for automatizing the algorithm synthesis; in particular, the new proof
+strategies and inference rules have been quickly prototyped, tested and integrated in
+the system thanks to its extension features. Also, the proofs are easier to understand
+since they are presented in a human-oriented style. Moreover the synthesized algo-
+rithms can be directly executed in the system. The implementation files are presented
+in Section 5.
+Additionally we have formalized part of the theory presented here and mechani-
+cally checked that some extracted algorithms satisfy the correctness condition in the
+frame of the Coq system [3].
+1.1 Related Work
+For an overview of the most common approaches used to tackle the synthesis problem,
+the reader may consult [13]. Synthesis methods and techniques similar to our proof-
+based approach are extensively presented in [12]. It can be noticed that most of the
+proof methods are based on expressive and undecidable logics that integrate induction
+principles.
+The proof environments underlying deductive synthesis frameworks are usually
+supporting both automated and interactive proof methods. Those based on ab-
+stract datatype and computation refinements [2, 23] integrate techniques that are
+mainly executed manually and implemented by higher-order proof assistants like Is-
+abelle/HOL [19] or more synthesis-oriented tools as Specware [20]. On the other hand,
+automated proof steps can be performed with decision procedures, e.g., for linear
+arithmetics, or SAT and SMT solvers as those integrated in Leon [15]. The generated
+algorithms can be checked for conformity with the input specification by validating
+the proof trails for each refinement process, for example using the Coq library Fiat [8]
+to ensure the soundness of the validation step by certification with the Coq kernel. [7]
+presents a different Coq library using datatype refinement to verify parameterized al-
+gorithms for which the soundness proof of some version can be deduced from that of a
+previous (less efficiently implemented) version. Generally speaking, generating proofs
+and implementing inference rules and strategies directly in Coq is a rather difficult
+task and does not fit for rapid prototyping and testing new ideas.
+5
+https://www.risc.jku.at/research/theorema/software/
+2 The Proof-based Synthesis Method
+This section introduces the algorithm synthesis problem and presents the proof-based
+synthesis techniques which we use.
+2.1 Our Approach
+Basic notions and notations. Similar to the Theorema style, we use square brackets
+for function and for predicate application (e.g., f[x] instead of f(x) and P[a] instead
+of P(a)). Moreover the quantified variables are written under the quantifier, that is ∀
+x
+(for all x) and ∃
+T
+(exists T ). Sometimes the place under the quantifier also contains
+a property of the quantified object. New formulas can be obtained from universally
+quantified formulas ∀
+x
+F [x] by using substitutions that map subsets of free variables
+from F [x] with terms, of the form {x1 7→ t1, . . . xn 7→ tn}, where x1, . . . , xn are free
+variables from F [x]. We denote the application of a substitution σ to a formula F
+by Fσ and say that Fσ is an instance of F . An identity substitution, generically
+denoted by σid, maps any free variable from a formula to itself. The composition of
+two substitutions σ1 and σ2 is denoted by σ1σ2. Similarly, substitutions can be applied
+to terms and vector of terms.
+The types of the objects are implicit (some objects have type tree), by using
+predicate and function symbols which are not overloaded. Lower-case letters (e.g.,
+a, b, n) represent tree elements, and upper-case letters (e.g.,X,T, Y, Z) represent trees.
+The provers generate metavariables (denoted usually by starred symbols  e.g., T ∗,
+T ∗1 , Z
+∗
+) and Skolem constants (e.g., X0, X1, a0).
+The ordering between tree elements is denoted by the usual ≤, and the ordering
+between a tree and an element is denoted by:  (e.g., T  z states that all the
+elements from the tree T are smaller or equal than the element z, z  T states that
+z is smaller or equal than all the elements from the tree T ). We use two constructors
+for binary trees, namely: ε for the empty tree, and the triplet 〈L, a,R〉 for non-empty
+trees, where L and R are trees and a is the root element.
+A tree is a sorted (or search, or ordered) tree if it is either ε or of the form 〈L, a,R〉
+such that i) L  a  R, and ii) L and R are sorted trees.
+Functions: RgM, LfM, Concat, Insert,Merge have the following interpretations,
+respectively: RgM[〈L, n,R〉] (resp. LfM[〈L, n,R〉]) returns the last (resp. first) vis-
+ited element by traversing the tree 〈L, n,R〉 using the in-order (symmetric) traversal;
+Concat[X,Y ] concatenates X with Y (namely, when X is of the form 〈L, n,R〉 adds
+Y as a right subtree of the element RgM[〈L, n,R〉]); Insert[n,X] inserts an element n
+in a tree X (if X is sorted, then the result is also sorted); Merge[X,Y ] combines trees
+X and Y into a new tree (if X,Y are sorted then the result is also sorted).
+Predicates: ≈ and IsSorted have the following interpretations, respectively: X ≈ Y
+states that X and Y have the same elements with the same number of occurrences
+(but may have different structures), i.e., X is a permutation of Y ; IsSorted[X] states
+that X is a sorted tree.
+The formal definitions of these functions and predicates are:
+Definition 1. ∀
+n,m,L,R,S
+(
+RgM[〈L, n, ε〉] = n
+RgM[〈L, n, 〈R,m, S〉〉] = RgM[〈R,m, S〉]
+)
+Definition 2. ∀
+n,m,L,R,S
+(
+LfM[〈ε, n,R〉] = n
+LfM[〈〈L, n,R〉,m, S〉] = LfM[〈L, n,R〉]
+)
+Definition 3. ∀
+n,L,R,S
+(
+Concat[ε,R] = R
+Concat[〈L, n,R〉, S] = 〈L, n,Concat[R,S]〉
+)
+Definition 4. ∀
+L,m,R(
+IsSorted[ε]
+(IsSorted[L] ∧ IsSorted[R] ∧ RgM[L] ≤ m ≤ LfM[R])⇐⇒ IsSorted[〈L,m,R〉]
+)
+A formal definition of ≈ is not given, however we use the properties of ≈ as
+equivalence implicitly in our inference rules and strategies. In particular, we use in
+our prover the fact that equivalent trees have the same multiset of elements, which
+translates into equivalent treeexpressions having the same multiset of constants and
+variables.
+The functions LfM and RgM do not have a definition for the empty tree, however
+we assume that: ∀
+m
+(
+RgM[ε] ≤ m ≤ LfM[ε]
+)
+.
+A first simple property which can be proven inductively from Definition 3 is the
+following:
+Property 1. ∀
+L
+(
+Concat[L, ε] = L
+)
+Moreover the following two properties are explicitly used in the proofs:
+Property 2. ∀
+z,T
+(
+IsSorted[T ] =⇒ (T  z ⇐⇒ RgM[T ] ≤ z)
+)
+Property 3. ∀
+z,T
+(
+IsSorted[T ] =⇒ (z  T ⇐⇒ z ≤ LfM[T ])
+)
+All the statements used at object level in our experiments are formally just predi-
+cate logic formulae, however for this presentation we will call them differently depend-
+ing on their role: a definition or an axiom is given as an initial piece of the theory,
+considered to hold; a property is a logical consequence of the definitions and axioms; a
+proposition is a formula which we sometimes assume, and sometimes prove, depending
+of the current experiment scenario; and a conjecture is something we want to prove.
+The synthesis problem. As stated in the introduction, the specification of the
+target function F consists of two predicates: the input condition I[X] and the output
+condition O[X,T ], and the correctness property for F is ∀
+X
+(I[X]⇒ O[X,F [X]]). The
+synthesis problem is expressed by the conjecture: ∀
+X
+∃
+T
+(I[X] ⇒ O[X,T ]). Proof-based
+synthesis consists in proving this conjecture in a constructive way and then extracting
+the algorithm for the computation of F from this proof.
+In the case of sorting the input condition specifies the type of the input, therefore
+it is missing since the type is implicit using the notations presented above (e.g., X
+is a tree). The output condition O[X,T ] is X ≈ T ∧ IsSorted[T ] thus the synthesis
+conjecture becomes:
+Conjecture 1. ∀
+X
+∃
+T
+(X ≈ T ∧ IsSorted[T ])
+This conjecture can be proved in several ways. Each constructive proof is different
+depending on the applied induction principle and the content of the knowledge base.
+Hence, different algorithms are extracted from different proofs.
+Synthesis scenarios. The simple scenario is when the proof succeeds, because the
+properties of the auxiliary functions which are necessary for the implementation of
+the algorithm are already present in the knowledge base. The auxiliary algorithms
+used for tree sorting are Insert[a,A] (insert element a into sorted tree A, such that
+the result is sorted) andMerge[A,B] (merge two sorted trees into a sorted tree). Their
+necessary properties are:
+Proposition 1. ∀
+T
+(
+Insert[n, T ] ≈ 〈ε, n, T 〉
+)
+Proposition 2. ∀
+T
+(
+IsSorted[T ] =⇒ IsSorted[Insert[n, T ]]
+)
+Proposition 3. ∀
+L,R
+(
+(IsSorted[L] ∧ IsSorted[R]) =⇒ IsSorted[Merge[L,R]]
+)
+Furthermore the following properties are used to simplify the expression of some
+algorithms:
+Proposition 4. ∀
+T
+(
+Merge[T, ε] ≈ T
+)
+Proposition 5. ∀
+T
+(
+Merge[ε, T ] ≈ T
+)
+More complex is the scenario where the auxiliary functions are not present in the
+knowledge base. In this case the prover fails and on the failing proof situation we apply
+cascading: we create a conjecture which would make the proof succeed, and it also
+expresses the synthesis problem for the missing auxiliary function. In this scenario,
+the functions Insert and Merge are synthesized in separate proofs, and the main
+proof is replayed with a larger knowledge base which contains their properties.
+2.2 Induction Principles and Algorithm Extraction
+The illustration of the induction principles and algorithm extraction in this subsection
+is similar to the one from [9], but the induction principles are adapted for trees and
+the extracted algorithms are more complex.
+The following induction principles are direct term-based instances of the Noethe-
+rian induction principle [21] and can be represented using induction schemas. Consider
+the domain of binary trees with a well-founded ordering <t and denote by <<t the
+multiset extension [1] of <t as a well-founded ordering over vectors of binary trees. An
+induction schema to be applied to a predicate ∀
+x
+P [x] defined over a vector of tree vari-
+ables x is a conjunction of instances of P [x] called induction conclusions that `cover'
+∀
+x
+P [x], i.e., for any value v from the domain of x, there is an instance of an induction
+conclusion P [t] that equals P [v], where t is a vector of trees. An induction schema may
+attach to an induction conclusion P [t], as induction hypotheses, any instance P [t′] of
+∀
+x
+P [x] as long as t′ <<t t. The induction conclusions without (resp., with) attached
+induction hypotheses are base (resp., step) cases of the induction schema.
+In the current presentation we will use the number of elements as the measure
+of binary trees. Checking strict ordering E <t E
+′
+between two expressions E,E′
+representing trees reduces to check strict inclusion between the multisets of symbols
+(constants and variables except ε) occurring in the expressions. This is because the
+expressions representing trees contain only functions which preserve the number of
+elements in the tree (Concat, Insert, Merge).
+In our experiments we use the following induction principles for proving P as
+unary predicate over binary trees.
+Induction-1:
+(
+P [ε]
+∧ ∀
+n,L,R
+(
+(P [L] ∧ P [R]) =⇒ P [〈L, n,R〉])) =⇒ ∀
+X
+P [X]
+The `covering' property of the two induction conclusions P [ε] and P [〈L, n,R〉] is
+satisfied since any binary tree is either ε or of the form 〈L, n,R〉. P [L] and P [R] are
+induction hypotheses attached to P [〈L, n,R〉], and it is very easy to see that their
+terms are smaller than the one of the induction conclusion.
+In order to synthesize the sorting algorithm as a function F [X], we consider the
+output condition O[X,T ] :
+(
+X ≈ T ∧ IsSorted[T ]). Induction-1 can be applied to
+prove the synthesis conjecture ∀
+X
+∃
+T
+O[X,T ] by taking P [X] as ∃
+T
+O[X,T ].
+The proof is structured as follows:
+Base case: We prove ∃
+T
+O[ε, T ]. If the proof succeeds to find a ground witness =1
+such that O[ε,=1], then we know that F [ε] = =1.
+Step case: For arbitrary but fixed n, L0 and R0 (new constants), we prove
+∃
+T
+O[〈L0, n,R0〉, T ]. We assume as induction hypotheses ∃
+T
+O[L0, T ] and ∃
+T
+O[R0, T ],
+which are Skolemized by introducing two new constants T1 and T2 for each existential
+T. The existential quantified variable from the goal becomes the metavariable T ∗
+(for which we need to find a substitution term). If the proof succeeds to find a witness
+T ∗ = =2[n,L0, R0, T1, T2] (term depending on n,L0, R0, T1 and T2), then we know
+that F [〈L, n,R〉] = =2[n,L,R, F [L], F [R]]. (T1 and T2 are replaced by F [L] and F [R],
+respectively.)
+The extracted algorithm from the proof is expressed as:
+∀
+n,L,R
+(
+F [ε] = =1
+F [〈L, n,R〉] = =2[n,L,R, F [L], F [R]]
+)
+This function definition expressed as two equalities can be easily transformed into
+a functional program by using appropriate decomposition functions which extract the
+root, the left branch, and the right branch from the tree.
+The theoretical basis and the correctness of this proof-based synthesis scheme is
+well known  see for instance [6].
+For the following induction principles, the proof and the algorithm extraction
+are similar to Induction-1, therefore we give only the structure of the extracted
+algorithm for each induction principle.
+Induction-2:
+(
+P [ε]
+∧ ∀
+n,L
+(
+P [L] =⇒ P [〈L, n, ε〉])∧ ∀
+n,L,R
+(
+(P [〈L, n, ε〉] ∧ P [R]) =⇒
+P [〈L, n,R〉])) =⇒ ∀
+X
+P [X]
+The extracted algorithm is:
+∀
+n,L,R
+ F [ε] = =1F [〈L, n, ε] = =3[n,L, F [L]]
+F [〈L, n,R〉] = =5[n,L,R, F [〈L, n, ε〉], F [R]]
+
+Induction-3:(
+P [ε]
+∧ ∀
+n
+(P [〈ε, n, ε〉])∧ ∀
+n,L
+(P [L] =⇒ P [〈L, n, ε〉])∧ ∀
+n,R
+(P [R] =⇒ P [〈ε, n,R〉])∧
+∀
+n,L,R
+((P [L] ∧ P [R]) =⇒ P [〈L, n,R〉])
+)
+=⇒ ∀
+X
+P [X]
+In the formula above, L and R are assumed to be nonempty. In order to en-
+code this conveniently during the proof, they are replaced by 〈A, a,B〉 and 〈C, b,D〉,
+respectively. The extracted algorithm is:
+∀
+n,a,b,A,B,C,D
+
+F [ε] = =1
+F [〈ε, n, ε〉] = =2[n]
+F [〈〈A, a,B〉, n, ε〉] = =3[n,A, a,B, F [〈A, a,B〉]]
+F [〈ε, n, 〈C, b,D〉〉〉] = =4[n,C, b,D, F [〈C, b,D〉]]
+F [〈〈A, a,B〉, n, 〈C, b,D〉〉] = =5[n, a, b, A,B,C,D,
+F [〈A, a,B〉], F [〈C, b,D〉]]
+
+Induction schema discovery. In some examples (e.g. synthesis of Merge[X,Y ]),
+it is not possible to find a witness term using only the constants and functions present
+in the proof situation. In such cases the prover allows the use of terms containing
+the function to be synthesized, by assuming that it fulfils the desired specification.
+However, the call of this function must apply to arguments which are strictly smaller
+(w.r.t. <<t) then the arguments of the main call of the function which is currently
+synthesized.
+2.3 Special Inference Rules and Proof Strategies
+SLDresolution style. The SLDresolution style of proving, introduced in [17] and
+described in [18], is used in Prolog. A first version of our provers uses a similar strategy,
+even as we do not classify formulae and we aim to generate natural style proofs. The
+use of Prologlike reasoning is possible because we use first order predicate logic, and
+most of the formulae are essentially Horn: a possible empty conjunction of atoms
+implying one single atom. Moreover the goal is always a conjunction of atoms.
+The inference rules for quantified formulae are: Skolemization for existential as-
+sumptions and universal goals, metavariable for existential goal, and instantiation
+with backtracking for universal assumptions. By Skolemization new constants are
+introduced. Metavariables stand for terms which have to be found, and they are
+essentially equivalent to the variables of resolution calculus. In our examples the goal
+may contain only such variables. Note however that we use metavariables only for
+existential goals, and not for universal assumptions. A universal assumptions is used
+only if the conclusion of the implication unifies with a conjunct of the goal: in this
+case the instantiated premises of the implication will replace the respective conjunct.
+More details on these proving strategies are given in [12].
+However, applying the SLDresolution style easily leads to an explosion of the
+search space, because one has to generate branches for all possible matchings, like
+in Prolog. Moreover, certain properties (like e. g. the transitivity and reflexivity of
+equivalence relations) easily create infinite loops. In practice this proving mechanism is
+not able to generate complex proofs because the exhaustion of time or space resources.
+In order to make the proving process more efficient and to avoid the search space
+explosion we use certain special inference rules and strategies. These increase the
+efficiency of proving in a very significant way, and in fact one of the main results of
+our experiments is the discovery and the demonstration of such specific inference rules
+and strategies for the theory of binary trees.
+The inference rules which we present below are specific to the theory of binary trees
+because they are based on the definitions and on the properties of specific predicates
+and functions: ≈, IsSorted,Concat.
+Some of the inference rules and strategies described in this subsection are similar
+to the ones for lists, see [9] and [10], but the ones described in this paper apply to
+binary trees and are more complex.
+Specific Inference Rules. IR-1: Generate Microatoms. We call microatoms those
+atoms whose arguments do not contain function symbols, except for few special ones
+ in the case of the current experiments we allow the functions RgM and LfM in
+microatoms.
+Based on the specific properties of our functions and predicates, certain atoms can
+be transformed into a conjunction of microatoms. For instance, IsSorted[〈T1, n, T2〉] is
+transformed into (IsSorted[T1]∧ IsSorted[T2]∧RgM[T1] ≤ n∧n ≤ LfM[T2]). Similarly,
+x  〈A, b, C〉 is transformed into x  A ∧ x ≤ b ∧ x  C.
+The transformation is performed differently depending on where the atom to be
+transformed occurs in the proof situation. If the atom is an assumption, then the rule
+generates as many microatoms as possible, as individual assumptions. If the atom
+is [part of] a goal, then the rule generates as few microatoms as possible, and they
+become conjuncts in the goal. In this way, some of the goal conjuncts will match some
+of the assumptions, and the goal is simplified. Moreover, some of these microatoms
+will become conditional assumptions in the synthesized algorithm (see IR-5 below).
+IR-2: Eliminate-Ground-Formulae-from-Goal. If the goal contains a ground for-
+mula which is identical to (or an instance of) one of the assumptions, then this ground
+formula is deleted from the goal. Example: one of the assumptions is IsSorted[T2] and
+the goal is 〈T1, n, T2〉 ≈ T ∗ ∧ IsSorted[T1] ∧ IsSorted[T2]. The goal is transformed
+into: 〈T1, n, T2〉 ≈ T ∗ ∧ IsSorted[T1]. This is a simple refinement of the Prolog style
+mechanism, which increases the efficiency of proving.
+IR-3: Replace-Equivalent-Term-in-Goal. If t1 ≈ t2 is an assumption, and t1 occurs
+in a goal as argument of a predicate which is preserved by equivalence (≈, ), then
+it can be replaced by t2.
+Example: among the assumptions are: 〈L1, n1, R1〉 ≈ T1 and 〈L2, n2, R2〉 ≈ T2
+and the goal is: 〈〈L1, n1, R1〉, n, 〈L2, n2, R2〉〉 ≈ T ∗, then the new goal becomes:
+〈T1, n, T2〉 ≈ T ∗. These replacements are performed according to certain heuristics:
+for instance in the example above T1, T2 correspond in the final algorithm to the re-
+cursive calls, so it is natural to try to include them in the goal, because we expect
+these recursive calls to be part of the synthesized algorithm.
+This rule has several refinements which we present below.
+IR-3a: Replace-Equivalent-Tree-Expression-in-Goal This generalizes the previous
+strategy, by constructing a different tree expression which is equivalent.
+IR-3b: Replace-Equivalent-Expression-in-Goal This rule generalizes IR-3a, by
+allowing similar replacements when the expressions contain function symbols different
+from the tree constructor.
+IR-3c: Replace-Equivalent-Atom-in-Goal This rule takes into account the inter-
+play between the equivalence relation ≈, the orderings, and the functions RgM, LfM
+in order to perform similar replacements.
+Note that in all these transformations it is not guaranteed that the new goal is
+provable, therefore they are applied by generating proof alternatives.
+The next rule is applied only after all the transformation rules presented above
+have been applied. This is because it generates many branches in the proof tree.
+IR-4: Generate permutations. When the goal is of the form Expression ≈ T ∗ ∧
+IsSorted[T ∗], the prover generates permutations of the list of nonempty arguments
+present in Expression and for each permutation it generates witnesses as a tree ex-
+pressions containing these elements. These expressions can contain: the constructor
+〈. . .〉, and the functions Insert, Concat, Merge, and Sort.
+Since each such expression must represent a sorted tree, generate for each expres-
+sion the corresponding condition as a set of microatoms (see IR-1). For instance the
+expression 〈L, x, ε〉 needs the conditions IsSorted[L] and L  x.
+Such a condition together with the corresponding expression represents a possible
+clause in the generated algorithm. These clauses are simplified (see Section 3) accord-
+ing to various criteria, and the remaining set of clauses can be used for the generation
+of various algorithms, each algorithm being composed of a certain subset of clauses.
+Of course if the original expression contains more symbols then the resulting ex-
+pressions will be more complicated and also quite many.
+The prover tries an alternative for each generated witness as a solution for the
+T ∗ metavariable, and an additional alternative if the proof does not succeed  see
+strategy S-3.
+Remark: The use of this rule is optional, depending on the preferences set by
+the user. Moreover, the user can specify which functions are to be used for generating
+the expressions. In particular, one may use Insert, Merge and Sort
+6
+only in certain
+situations. For instance, Merge cannot be used if it is not yet defined, except in the
+synthesis of Merge itself, but then the prover checks that the arguments of its usage
+6
+Note that we use F1, F2, etc. for different versions of Sort
+are smaller (w. r. t. the multiset of symbols) than the arguments of the expression
+which is synthesized on the current branch of the induction  see formula (55).
+The advantage of applying this rule is that one obtains various solutions for some
+branches of the algorithm, which may lead to more efficient computation when the
+input has certain specific properties. More details about generating the permutations
+are given in Section 3.
+IR-5: Simple-Goal-Conditional-Assumption. When the goal is ground, no further
+simplification of it is possible, and the goal does not contain tree constants except
+inside the functions RgM, and LfM, then this goal becomes a conditional assumption
+representing the condition attached to the corresponding branch of the synthesized
+algorithm, and the current branch is considered successful (see also strategy S-3). The
+reason for the selection of such formulae as conditional assumptions is that they can
+be easily evaluated (an expression which does not contain tree expressions is evaluated
+in constant time, and the functions RgM and LfM, are evaluated in linear time).
+Example 1: The goal is: m ≤ n.
+Example 2: The goal is: RgM[〈A2, z2, B2〉] ≤ n ∧m ≤ LfM[〈A2, z2, B2〉].
+Strategies. S-1: Quantifier reduction. This strategy organizes the inference rules for
+quantifiers (see IR-1), in situations where it is clear that several such rules are to be
+performed in sequence (e. g. when applying an induction principle), and it is more
+effective on goals. The application of this strategy for Induction-1 is presented in
+Subsection 2.2. Note that for the soundness of the prover it is necessary to keep track
+of the order in which Skolem constants and metavariables have been introduced,
+because a Skolem constant which cannot be generated before a certain metavariable
+cannot be used in a solution for that metavariable.
+S-2: Priority-of-Local-Assumptions. The local assumptions are the assumptions
+(usually ground formulae) generated during the current proof, and therefore only
+true in the context of the proof. The global assumptions are (usually quantified
+formulae) definitions and propositions that are part of the theory, and therefore al-
+ways true. The strategy consists in using with priority the local assumptions, and
+in particular never performing an inference which involves only global assumptions.
+This strategy is essentially equivalent with the set of support strategy in clausal
+resolution.
+S-3: Case-Distinction. The prover generates several proof branches using rule
+IR-4, follows each branch in turn and produces a set of conditional witnesses which
+becomes a multiple branch in the synthesized algorithm. The final proof is successful
+if the disjunction of all conditions is true  this means that the algorithm covers all
+possible cases. Example: on one branch one obtains the condition m ≤ n and on
+another branch the condition n ≤ m.
+3 Combinatorial Technique
+This section details the combinatorial technique which we use in order to synthesize
+the function for merging of sorted binary trees into a sorted one. Remarkably, merging
+requires a nested recursion, for which an appropriate induction principle is difficult
+to guess. Our method is able to find it automatically by using a general Noetherian
+induction and this combinatorial technique.
+3.1 Refining Induction by Combinatorial Techniques and Lazy
+Reasoning
+As shown e. g. in [21], sometimes the concrete induction principle which is used for
+proving does not succeed. In this case one needs to think about a more powerful
+principle and reiterate the proof attempt. We present here a technique which is able
+to find automatically and in a lazy way, during the proof, new concrete induction
+principles which are necessary, and which are instances of the general Noetherian
+induction principle.
+This technique is based on combinatorial principles: we generate all possible
+terms which are solutions of the metavariable (corresponding to the existential
+goal), and in these terms we also accept the function symbol to be synthesized,
+as long as it is applied on arguments which are smaller then the arguments of the
+main call of the current synthesis step. For instance, during synthesis of Merge, in
+the step case (see above), the main call corresponds to the term F [〈L0, n,R0〉, Y ].
+If, during the development of the term, F [L0, Y ] is encountered, we can consider
+P [L0, Y ] ⇒ P [〈L0, n,R0〉, Y ] as an induction case for the new explicit induction
+schema associated to F [X,Y ].
+In general, when we want to prove a formula ∀
+x
+F [x] by lazy induction, where x
+is a vector of variables, we start to instantiate variables from x, then transform the
+resulted instances by using deductive rules. The instantiation and deduction steps
+can be intertwined up to the moment when instances of F [x] are encountered. An
+instance F [t] can be used as induction hypothesis for the induction case F [x]θ if t is
+smaller than xθ.
+The substitution θ, called cumulative substitution, is built from the proof. To il-
+lustrate its computation, we represent the proof derivation as a tree for which the root
+node is labeled by F [x]. Two kinds of non-root nodes are distinguished: instantiation
+nodes and deductive nodes. The instantiation nodes are direct successors of a node N
+labeled by a formula with free variables for which some of them are instantiated with
+terms whose variables are fresh. The set of instance formulas labeling all the instanti-
+ation nodes should cover the formula labeling N and can be built from the sort of the
+instantiated variables. For example, if N is labeled by the formula F [X], a covering
+set of instance formulas is {F{X 7→ }, F{X 7→ 〈L, n,R〉}}, where L, n, R are fresh
+variables. In the graphical representation of a proof tree, the relation between a node
+and its direct instantiation nodes are represented by downward solid arrows anno-
+tated by the corresponding instantiation substitution. The deductive nodes are direct
+successors of nodes to which a deductive operation has been applied. These relations
+are graphically represented as curly arrows annotated by identity substitutions. The
+cumulative substitution is the composition of the substitutions annotating the nodes
+from the path leading from the root node, in our case the node labeled by F [x], to
+the node labeled by the induction hypothesis, in our case F [t]. This scenario can be
+illustrated as below:
+F [x]
+θk1
+
+θ1
+
+F [x]θk1 . . . F [x]θ1
+θ2
+
+G[y]
+θn−1
+.
+.
+. 
+θk3
+ . . . G[y]θn−1
+θn
+
+F [t]
+ll
+In our scenario, F [t] is an instance of F [x]. In addition, it can be used as an
+induction hypothesis if t is smaller than xθ1θ2 · · · θn−1θn.
+Example 1. By lazy induction, one can benefit of more effective induction reasoning,
+involving only useful induction hypotheses.
+Let us assume the following scenario for processing a formula F [X], where X is a
+binary tree:
+F [X]
+{X 7→}
+
+{X 7→〈L,n,R〉}
+  
+F [] F [〈L, n,R〉]
+θid
+
+F [R]
+qq
+where θid is the identity substitution {L 7→ L;n 7→ n;R 7→ R}. F [R] can be used
+as induction hypothesis in the proof of the case F [〈L, n,R〉] because R has a number
+of elements smaller than 〈L, n,R〉.
+The corresponding explicit induction principle is:(
+P [ε]
+∧ ∀
+n,L,R
+(
+P [R]) =⇒ P [〈L, n,R〉])) =⇒ ∀
+X
+P [X]
+Example 2. More specific induction schemas can also be generated by lazy induction,
+as shown in the following scenario:
+F [X]
+{X 7→}
+||
+{X 7→〈L,n,R〉}
+%%
+F [] F [〈L, n,R〉]
+{R 7→〈...〉}yy
+{R 7→}
+  
+θid //
+θid
+uu
+F [〈L, n, 〉]
+ss
+F [R]
+EE
+F [〈L, n, 〈. . .〉〉] F [〈L, n, 〉]
+θid
+
+F [L]
+uu
+The corresponding explicit induction principle is:(
+P [ε]
+∧ ∀
+n,L
+(
+P [L] =⇒ P [〈L, n, ε〉])∧
+∀
+n,L,R
+(
+(P [〈L, n, ε〉] ∧ P [R]) =⇒ P [〈L, n,R〉])) =⇒ ∀
+X
+P [X]
+Notice that it is a stronger version of Induction-1 that has been useful for our
+experiments.
+3.2 Synthesis of Merge
+The prover automatically generates the proof of Conjecture 4, which we present below
+and which illustrates the combinatorial technique and the lazy induction.
+The proof applies Induction-1 on the first argument of the function Merge to be
+synthesized.
+Proof. After applying Induction-1 and S-1 to eliminate the existential quantifier,
+we get:
+Base case: The witness found is {T ∗ → 〈Concat[ε,R0]}, which is {T ∗ → R0}.
+Induction step:
+Using strategy S-1, after Skolemization of the existential variables into T1, T2, the
+induction hypotheses become:
+P [L] :
+(
+(IsSorted[L] ∧ IsSorted[S]) =⇒
+(Concat[L, S] ≈ T1 ∧ IsSorted[T1])
+)
+(1)
+P [R] :
+(
+(IsSorted[R] ∧ IsSorted[S]) =⇒
+(Concat[R,S] ≈ T2 ∧ IsSorted[T2])
+)
+(2)
+and the induction goal (to prove) is:
+P [〈L, n,R〉] :
+(
+(IsSorted[〈L, n,R〉] ∧ IsSorted[S]) =⇒
+(Concat[〈L, n,R〉, S] ≈ T ∗ ∧ IsSorted[T ∗])
+) (3)
+where T ∗ is the meta-variable obtained from the existential variable, for which the
+prover needs to find a witness term. The right hand side of the target implication is
+proven by assuming the left hand side, which by IR-1 is decomposed into microatoms:
+IsSorted[L] (4)
+IsSorted[R] (5)
+L  n (6)
+n  R (7)
+L R (8)
+IsSorted[S] (9)
+Using modus ponens from (1) and (2) by (4) and (5) further assumptions are obtained:
+Concat[L, S] ≈ T1 (10)
+IsSorted[T1] (11)
+Concat[R,S] ≈ T2 (12)
+IsSorted[T2] (13)
+The goal is:
+Concat[〈L, n,R〉, S] ≈ T ∗ ∧ IsSorted[T ∗] (14)
+We need to find a witness for a sorted T ∗ such that it has the same elements as
+Concat[〈L, n,R〉, S]. (Note that this corresponds to the main call Merge[〈L, n,R〉, S].)
+Since IR-3b can be applied on (51) in two different ways, we generate two alter-
+natives:
+Alternative-1: By applying IR-3b using (50), the goal is transformed into:
+〈T1, n,R〉 ≈ T ∗ ∧ IsSorted[T ∗] (15)
+In this moment the prover uses the combinatorial technique, namely it applies
+IR-4 and generates all the permutations of 〈T1, n,R〉 and to each permutation all
+possible expressions containing all the symbols in the list, composed by using the
+tree constructors and the functions Concat, Insert, and Merge. For each expression
+the corresponding conditions are generated as a set of microatoms  IR-1 (except the
+ones of the form IsSorted, which are already known for the tree symbols occurring in
+the expressions). In this case 42 such clauses are generated.
+Some examples of clauses are:
+{RgM[T1] ≤ n} =⇒ 〈T1, n,R〉
+{RgM[T1] ≤ LfM[R],RgM[T1] ≤ n} =⇒ Concat[T1, Insert[n,R]]
+{RgM[T1] ≤ LfM[R],RgM[T1] ≤ ε,RgM[T1] ≤ n}
+=⇒ Concat[T1,Merge[〈ε, n, ε〉, R]]
+{RgM[T1] ≤ LfM[R],RgM[T1] ≤ ε,RgM[T1] ≤ n, ε ≤ LfM[R]}
+=⇒ Concat[T1,Concat[〈ε, n, ε〉, R]]
+{RgM[T1] ≤ LfM[R],RgM[T1] ≤ ε,RgM[T1] ≤ n}
+=⇒ Concat[T1, 〈ε, n,R〉]
+{} =⇒ Merge[T1, Insert[n,R]]
+{} =⇒ Merge[T1,Merge[〈ε, n, ε〉, R]]
+{ε ≤ LfM[R]} =⇒ Merge[T1,Concat[〈ε, n, ε〉, R]]
+{RgM[R] ≤ LfM[T1]} =⇒ Insert[n,Concat[R, T1]]
+{RgM[R] ≤ LfM[T1],RgM[R] ≤ ε,RgM[R] ≤ n, ε ≤ LfM[T1], n ≤ LfM[T1]}
+=⇒ Concat[R,Concat[〈ε, n, ε〉, T1]]
+The conditions are simplified by removing the conditions involving ε (which are
+true by the properties of ) and by removing those conditions which are already
+assumed in the current proof situation.
+Furthermore the logical consequences (by transitivity) of the conditions and of
+the current proof assumptions are computed. If the consequence includes t  t for
+some term t, this means that both t  t′ and t′  t are present for some term t′ in
+the list of conditions and assumptions. This is possible only in very special cases of
+the application of the algorithm, therefore we remove such clauses. Furthermore we
+remove from the set of conditions those which are implied by themselves (redundant).
+The list of clauses is simplified by removing each clause containing a subterm of
+the form Merge[t2, t1] if the expression of another clause contains Merge[t1, t2] in a
+similar expression at the same level. This because the function Merge is symmetric
+and the conditions are not influenced by the order of its arguments.
+The following simplification are also applied because they improve the respective
+expressions from the computational point of view:
+Merge[〈ε, n, ε〉, X] −→ Insert[n,X],
+Merge[X, 〈ε, n, ε〉] −→ Insert[n,X],
+Concat[〈L, n, ε〉, R] −→ 〈L, n,R〉.
+(16)
+Each expression is further processed by replacing each occurrence of T1 byMerge[L, S]
+ according to (1), and also by replacing the conditions involving T1 with the ap-
+propriate conditions involving L, S. Finally the duplicate clauses are removed and we
+obtain a list of 8 clauses (conditions involving LfM, RgM are presented as simpler
+equivalent ones for brevity, but the algorithm will of course use them).
+{} =⇒ Merge[〈ε, n,R〉,Merge[L, S]] (17)
+{} =⇒ Merge[Insert[n,R],Merge[L, S]] (18)
+{} =⇒ Insert[n,Merge[Merge[L, S], R]] (19)
+{} =⇒ Merge[Insert[n,Merge[L, S]], R] (20)
+{S  n} =⇒ 〈Merge[L, S], n,R〉 (21)
+{S  R} =⇒ Insert[n,Concat[Merge[L, S], R]] (22)
+{S  n} =⇒ Merge[〈Merge[L, S], n, ε〉, R] (23)
+{S  n} =⇒ Concat[Merge[L, S], Insert[n,R]] (24)
+Note that the clauses (17), (18), (20) do not fulfill the termination criterion: the
+first recursive call to Merge has the same multiset of symbols as the main call
+Merge[〈L, n,R〉], S].
+From these clauses various algorithms can be extracted. Each algorithm contains
+one of the clauses without conditions as the unique or the last clause in the algorithm
+ but termination is insured only for (19). Additionally the algorithm may contain
+one of clauses (21), (23), (24), conditioned by S  n and may contain the clause
+(22) conditioned by S  R. Note that the conditioned clauses will lead to more
+efficient computations (because they have fewer occurrences of the more expensive
+Insert, Merge), but only when the conditions of the respective clauses are fulfilled.
+The choice of the algorithm is therefore a tradeoff between simplicity and efficiency.
+One possible algorithm which appears to be a good choice is based on clauses (21),
+(22), (19) (in this order):
+Algorithm 1
+∀
+n,L,R,S
+
+Merge[ε, S] = S
+Merge[〈L, n,R〉, S] =
+
+〈Merge[L, S], n,R〉, if RgM[S] ≤ n
+Insert[n,Concat[Merge[L, S], R]],
+if RgM[S] ≤ LfM[R]
+Insert[n,Merge[Merge[L, S], R]], otherwise
+
+Alternative-2: By applying IR-3b using (12), the goal is transformed into:
+〈L, n, T2〉 ≈ T ∗ ∧ IsSorted[T ∗] (25)
+The proof proceeds similarly as in Alternative-1 and similar cases are generated, the
+only difference consists in using the recursive call Merge[R,S] instead of Merge[L, S]
+as in Alternative 1.
+The list of the clauses obtained after all the simplification steps are:
+{} =⇒ Merge[Insert[n,L],Merge[R,S]] (26)
+{} =⇒ Merge[〈L, n, ε〉,Merge[R,S]] (27)
+{} =⇒ Insert[n,Merge[L,Merge[R,S]]] (28)
+{} =⇒ Merge[Insert[n,Merge[R,S]], L] (29)
+{L S} =⇒ 〈Insert[n,Concat[L,Merge[R,S]]] (30)
+{L S} =⇒ Concat[L, Insert[n,Merge[R,S]]] (31)
+{n  S} =⇒ Merge[〈ε, n,Merge[R,S]〉, L] (32)
+{n  S} =⇒ 〈L, n,Merge[R,S]〉 (33)
+The most important clause generated here and which is the analogous of (19), is (28).
+Any algorithm composed from such conditional clauses must fulfill two important
+conditions: proper ordering of clauses and coverage of all cases. One possible algorithm
+is based on clauses (33),(31),(28) (in this order):
+Algorithm 2
+∀
+n,L,R,S
+
+Merge[ε, S] = S
+Merge[〈L, n,R〉, S] =
+
+〈L, n,Merge[R,S]〉, if n ≤ LfM[S]
+Concat[L, Insert[n,Merge[R,S]]],
+if RgM[L] ≤ LfM[S]
+Insert[n,Merge[L,Merge[R,S]]], otherwise
+
+Proper ordering of clauses means that a clause which is more general  like e.
+g. (19) must be placed after the ones which are less general  like e. g. after (22),
+otherwise the more special clause will never be used. In our case this is very easily
+ensured by ordering the clauses increasingly by the number of conditions, because
+due to the nature of he microatoms, a more general clause always has fewer elements
+than a more special one. Of course at most one clause with empty condition can be
+present.
+Coverage of all cases means that the disjunctions of all sets of conditions (each set
+is a conjunction of atoms) must be valid. This is ensured if at least one clause with
+empty condition is present, and this will always be the case for the merging on binary
+trees. Validity cannot otherwise be ensured because the induced ordering relations 
+on elements vs. trees, and  on trees vs. trees are not total. However the situation is
+different in the case of lists  e. g. merging of sorted lists into a sorted one, because
+there we use as conditions only comparisons between domain elements (not lists). In
+this case the check of validity can be performed in the following way: (1) each set
+of conditions is completed with the conditions from the current proof assumptions
+and with all the transitive consequences; (2) all sets of conditions (as conjunctions)
+are composed into a disjunction, and its CNF is computed; (3) for validity, each
+disjunctive clause must be valid, therefore it must contain both a ≤ b and b ≤ a for
+some a, b.
+In the resulting algorithms the conditions are tested using the functions LfM,
+RgM. In a program with several clauses, multiple calls to these functions can be
+easily avoided by computing their values before the evaluation of the clauses (the
+functional let from lisp). However their use still remains quite expensive, because the
+recursive calls will repeat the descending of the tree. This problem (suggested by the
+automatically generated algorithms) can be solved by changing the data structure: one
+can store the respective values in each node of the tree (preprocessing for computing
+them will be linear), and then LfM, RgM will be evaluated in constant time.
+4 Experiments
+4.1 Synthesis of Sort-1
+In this subsection we present the automatically generated proof of Conjecture 1 in
+the Theorema system. Note that the statement which has to be proven by induction
+is:
+P [X] : ∃
+T
+(X ≈ T ∧ IsSorted[T ]).
+Proof. Start to prove Conjecture 1 using the current knowledge base and by applying
+Induction-3, then S-1 to eliminate the existential quantifier.
+Base case 1: Prove: ε ≈ T ∗ ∧ IsSorted[T ∗].
+One obtains the substitution {T ∗ → ε} and the new goal is IsSorted[ε], which is true
+by Definition 4.
+Base case 2: Prove: 〈ε, n, ε〉 ≈ T ∗ ∧ IsSorted[T ∗].
+One obtains the substitution {T ∗ → 〈ε, n, ε〉}. The new goal is IsSorted[〈ε, n, ε〉] which
+is true by Definition 4.
+Induction case 1: Assume:
+∃
+T
+(L0 ≈ T ∧ IsSorted[T ]) (34)
+and prove:
+∃
+T
+(〈L0, n, ε〉 ≈ T ∧ IsSorted[T ]) (35)
+Apply S-1 on (34) and (35) to eliminate the existential quantifiers. The induction
+hypothesis are:
+L0 ≈ T1, IsSorted[T1] (36)
+and the goal is:
+〈L0, n, ε〉 ≈ T ∗ ∧ IsSorted[T ∗] (37)
+Apply IR-3 and rewrite our goal (37) by using the first conjunct of the assumption
+(36). The goal becomes:
+〈T1, n, ε〉 ≈ T ∗ ∧ IsSorted[T ∗] (38)
+Apply IR-4 (to generate permutations of 〈T1, n, ε〉) and S-3 and prove alterna-
+tives:
+Alternative-1: One obtains the substitution {T ∗ → 〈T1, n, ε〉} to get:
+IsSorted[〈T1, n, ε〉] (39)
+Apply IR-1 on (39) and prove:
+IsSorted[T1] ∧ RgM[T1] ≤ n (40)
+Apply IR-2 using (36) and the new goal is:
+RgM[T1] ≤ n (41)
+Apply IR-5 and the goal (41) becomes the conditional assumption on this branch.
+Alternative-2: One obtains the substitution {T ∗ → 〈ε, n, T1〉}. The proof is similar
+and one has to prove:
+n ≤ LfM[T1] (42)
+which becomes the conditional assumption on this branch.
+Alternative-3: Since the disjunction of the conditions 41 and 42 is not provable,
+the prover generates a further alternative. This depends on the synthesis scenario
+(see the end of Section 2.1). If the properties of the function Insert are present in
+the knowledge base, then the prover generates the substitution {T ∗ → Insert[n, T1]}
+based on these properties.
+If the properties of Insert are not present, then the prover generates a failing
+branch. From the failure Conjecture 3 - displayed in Subsection 4.3 - is generated,
+and this is used for the synthesis of Insert as shown in Subsection 4.3. Then we replay
+the current proof with knowledge about this auxiliary function and the proof will
+proceed further.
+Induction case 2: Similar to Induction case 1 one obtains:
+Alternative-1: {T ∗ → 〈ε, n, T2〉} and the conditional assumption is: n ≤ LfM[T2].
+Alternative-2: {T ∗ → 〈T2, n, ε〉} and the conditional assumption is: RgM[T2] ≤ n.
+Alternative-3: Since the auxiliary function Insert is already known, the proof will
+succeed with the substitution: {T ∗ → Insert[n, T2]}.
+Induction case 3: Assume:
+L1 ≈ T3, IsSorted[T3], R1 ≈ T4, IsSorted[T4] (43)
+and prove:
+〈L1, n,R1〉 ≈ T ∗ ∧ IsSorted[T ∗] (44)
+Apply IR-3 and rewrite our goal (44) by using the first and the third conjunct of the
+assumption (43) and the new goal is:
+〈T3, n, T4〉 ≈ T ∗ ∧ IsSorted[T ∗] (45)
+Apply IR-4 and S-3 and obtain the permutations of the list 〈T3, n, T4〉, for each
+permutation a number of possible tree expressions as witness for T ∗, and for each wit-
+ness an alternative possibly generating a condition as goal. Note that we can use Insert
+because it was already generated. For instance the permutation 〈T3, n, T4〉 generates
+the tree expression 〈T3, n, T4〉 with conditions RgM[T3] ≤ n ≤ LfM[T4], as well as
+the expression Concat[T3, Insert[n, T4]] with similar conditions. If the function Merge
+is present in the knowledge base, then also the expression Merge[T3, Insert[n, T4]] is
+generated. The latter does not need conditions, thus the proof succeeds. Note that the
+first two branches are computationally cheaper, but they can be applied only when
+the input satisfies certain conditions.
+If the function Merge is not present, then the branch corresponding to Concat will
+be followed by a failing branch which has the same witness. From this failing branch
+we generate Conjecture 4 which can be used for the synthesis of the function Merge.
+For the purpose of this presentation we use only the alternative branch generated
+by the list 〈n, T3, T4〉 with expression Insert[n,Concat[T3, T4]]. This generates the same
+conjecture for the synthesis of Merge and also the last branch in the following sorting
+algorithm (which was also certified in Coq):
+∀
+n,L,R
+
+F1[ε] = ε
+F1[〈ε, n, ε〉] = 〈ε, n, ε〉
+F1[〈L, n, ε〉] =
+ 〈F1[L], n, ε〉, if RgM[F1[L]] ≤ n〈ε, n, F1[L]〉, if n ≤ LfM[F1[L]]
+Insert[n, F1[L]], otherwise
+F1[〈ε, n,R〉] =
+ 〈ε, n, F1[R]〉, if n ≤ LfM[F1[R]]〈F1[R], n, ε〉, if RgM[F1[R]] ≤ n
+Insert[n, F1[R]], otherwise
+F1[〈L, n,R〉] = Insert[n,Merge[F1[L], F1[R]]]
+
+4.2 Additional Certification of the Synthesized Algorithm F1
+Even if our approach theoretically guarantees the soundness of the synthesized al-
+gorithms, the implementation of the presented rules in Theorema is error-prone. To
+check the soundness of the implementation, we have mechanically verified that the
+algorithm F1 satisfies the correctness condition, by using the Coq proof assistant
+(https://coq.inria.fr). The Coq formalization of the LfM and RfM functions has
+slightly changed from the partial definitions given here, as Coq requires that the func-
+tions be total. The conversion into total functions is possible if the components of the
+triplet given as argument are represented as the new arguments, as below.
+Definition 5. ∀
+n,m,L,R,S
+(
+RgM[L, n, ε] = n
+RgM[L, n, 〈R,m, S〉] = RgM[R,m, S]
+)
+Definition 6. ∀
+n,m,L,R,S
+(
+LfM[ε, n,R] = n
+LfM[〈L, n,R〉,m, S] = LfM[L, n,R]
+)
+The proof effort was non-trivial, involving significant user interaction. The certifi-
+cation proofs used rules and proof strategies completely different from those generating
+the synthesized algorithms, requiring additionally 2 induction schemas and 15 lem-
+mas. The full Coq script can be found at: http://web.info.uvt.ro/~idramnesc/
+ICTAC2015/coq.v
+4.3 Synthesis of Insert and Merge
+If the necessary properties required for the proof to succeed are missing from the
+knowledge base (e.g., some auxiliary sub-algorithms are missing), then the proof fails
+and the new conjecture is generated. Formally, the new conjecture is a universally
+quantified implication, by transforming back the Skolem constants into universal vari-
+ables. The LHS of the implication consists of the current assumptions and the RHS
+is the failed goal, where the metavariable becomes an existentially quantified vari-
+able. This corresponds to the synthesis problem of a sub-algorithm needed in the
+main algorithm, following the cascading principle, described for lists in [12] and
+is an extension of the method presented in [4]. According to this principle this new
+synthesis problem is simpler than the original problem because the input has more
+properties (in our cases the input trees are sorted). This process of reducing problems
+into simpler ones can be repeated and is finished when the functions to synthesize are
+present in the knowledge base. In this case the whole synthesis process succeeds.
+During the synthesis of the algorithm Sort-1 presented in Subsection 4.1, if the
+functions Insert and Merge are not present in the knowledge base, then the prover
+generates automatically from (43) and (45) the following conjecture:
+Conjecture 2. ∀
+n,L,R
+IsSorted[L],IsSorted[R]
+∃
+T
+(
+〈L, n,R〉 ≈ T ∧ IsSorted[T ]
+)
+We manually decompose this conjecture in two sub-problems:
+Conjecture 3. ∀
+n,R
+IsSorted[R]
+∃
+T
+(
+〈ε, n,R〉 ≈ T ∧ IsSorted[T ]
+)
+Conjecture 4. ∀
+L,R
+IsSorted[L],IsSorted[R]
+∃
+T
+(
+Concat[L,R] ≈ T ∧ IsSorted[T ]
+)
+The following proofs of these conjectures constitute the synthesis of the two aux-
+iliary functions Insert and Merge.
+The prover automatically generates the proof of Conjecture 3 by applying
+Induction-1 (on the second argument) and the specific inference rules and strategies
+from Subsection 2.3. We describe below the most important steps of the proof. Note
+that the statement which has to be proven by induction is:
+P [X] : IsSorted[X] =⇒ (∃
+T
+(〈ε, n,X〉 ≈ T ∧ IsSorted[T ])).
+Proof. After applying Induction-1 and S-1 to eliminate the existential quantifier,
+we get:
+Base case: The witness found is {T ∗ → 〈ε, n, ε〉}.
+Induction step: We assume:
+IsSorted[L] =⇒ (〈ε, n, L〉 ≈ T1 ∧ IsSorted[T1]) (46)
+IsSorted[R] =⇒ (〈ε, n,R〉 ≈ T2 ∧ IsSorted[T2]) (47)
+and we prove:
+IsSorted[〈L,m,R〉] =⇒ (〈ε, n, 〈L,m,R〉〉 ≈ T ∗ ∧ IsSorted[T ∗]) (48)
+We prove the RHS of the above implication, by assuming the LHS, which using IR-1
+is decomposed into:
+IsSorted[L], IsSorted[R], RgM[L] ≤ m, m ≤ LfM[R], L  m, m  R (49)
+Using modus ponens from (49) by (46) and (47) we obtain:
+〈ε, n, L〉 ≈ T1, IsSorted[T1], 〈ε, n,R〉 ≈ T2, IsSorted[T2] (50)
+The goal is:
+〈ε, n, 〈L,m,R〉〉 ≈ T ∗ ∧ IsSorted[T ∗] (51)
+Since IR-3a can be applied on (51) in two different ways, we generate two alter-
+natives:
+Alternative-1: By applying IR-3a using the first two assumptions from (50), the
+goal is transformed into:
+〈T1,m,R〉 ≈ T ∗ ∧ IsSorted[T ∗] (52)
+Obtain substitution {T ∗ −→ 〈T1,m,R〉} and prove: IsSorted[〈T1,m,R〉]. Apply IR-1
+and the goal becomes:
+IsSorted[T1] ∧ IsSorted[R] ∧ RgM[T1] ≤ m ∧m ≤ LfM[R] (53)
+Eliminate the first two conjuncts of the goal (apply IR-2 using (50), (49)) and the
+new goal is: RgM[T1] ≤ m ∧ m ≤ LfM[R]. Apply IR-3c using (50) and the goal
+becomes: n ≤ m∧L  m∧m ≤ LfM[R]. Apply IR-2 using (49) and the new goal is:
+n ≤ m. This goal fulfils the rule IR-5 and thus it becomes the conditional assumption
+on this branch.
+Alternative-2: By applying IR-3a using the last two assumptions from (50) the
+new goal is:
+〈L,m, T2〉 ≈ T ∗ ∧ IsSorted[T ∗] (54)
+Similar to the previous case and by using Property 2 we obtain the substitution
+{T ∗ −→ 〈L,m, T2〉} and the last goal is: m ≤ n, which becomes the conditional
+assumption on this branch.
+The synthesized algorithm is:
+∀
+n,m,L,R
+ Insert[n, ε] = 〈ε, n, ε〉
+Insert[n, 〈L,m,R〉] =
+{ 〈Insert[n,L],m,R〉, if n ≤ m
+〈L,m, Insert[n,R]〉, otherwise
+
+In a similar manner the synthesis of Merge is also performed, by proving Conjec-
+ture 4 using Induction-1 on the first argument. A significant difference w.r.t. the
+previous proofs is that this function needs a nested recursion, which cannot be gene-
+rated by applying only the induction principles presented here. In order to synthesize
+the algorithm, we need to allow for the function Merge to be used in the expressions
+generated by various permutations, as well as its property, although we want to syn-
+thesize exactly this function. The algorithms generated are still terminating, because
+we allow the use ofMerge only when the first argument is smaller (has fewer elements)
+than the argument of the main call of the function. The proof uses the inference IR-4
+and the strategy S-3, which are more complex and are presented in detail in Sec-
+tion 3, together with the respective proof. Similarly to the situation in the synthesis
+of Sort-1 (see proof step after formula (45)) numerous algorithms can be synthesized.
+We present here one of the algorithms, where one can see that our method allows
+to discover new structures of the recursion which are not specified by the induction
+principle, and moreover allows to discover algorithms with nested recursion:
+∀
+n,L,R,S
+(
+Merge[ε,R] = R
+Merge[〈L, n,R〉, S] = Insert[n,Merge[L,Merge[R,S]]]
+)
+(55)
+4.4 Synthesis of Other Sorting Algorithms
+Sort-2. The prover generated automatically the proof of Conjecture 1 by applying
+Induction-2 and by using the current knowledge base (Definition 4, Proposition 2,
+and 3), including the following property:
+Proposition 6. ∀
+n,L,R,A,B
+((〈L, n, ε〉 ≈ A ∧R ≈ B) =⇒ 〈L, n,R〉 ≈ Merge[A,B])
+The proof is similar with the ones presented above and from this proof the following
+algorithm is extracted automatically:
+∀
+n,L,R
+
+F2[ε] = ε
+F2[〈L, n, ε〉] =
+ 〈F2[L], n, ε〉, if RgM[F2[L]] ≤ n〈ε, n, F2[L]〉, if n ≤ LfM[F2[L]]
+Insert[n, F2[L]], otherwise
+F2[〈L, n,R〉]=Merge[F2[〈L, n, ε〉], F2[R]]
+
+Sort-3. The proof of Conjecture 1 is generated automatically by applying
+Induction-3 and by using properties from the knowledge base (including proper-
+ties of Concat).
+The corresponding algorithm which is extracted automatically from the proof is
+similar to F1 excepting the last branch, which is:
+F3[〈L, n,R〉] = Insert[n, F3[Concat[L,R]]]
+Sort-4. The prover automatically generates the proof of Conjecture 1 by applying
+Induction-3 and by using properties from the knowledge base (including properties
+of Insert, Merge) and applies the inference rule IR-4 which generates permutations.
+The automatically extracted algorithm is similar to F1 excepting the last branch,
+where F4 has three branches:
+F4[〈L, n,R〉] =
+ 〈F4[L], n, F4[R]〉, if (RgM[F4[L]] ≤ n ∧ n ≤ LfM[F4[R]])〈F4[R], n, F4[L]〉, if (RgM[F4[R]] ≤ n ∧ n ≤ LfM[F4[L]])
+Insert[n,Merge[F4[L], F4[R]]], otherwise
+Sort-5. The prover generates automatically the proof of Conjecture 1 by applying
+Induction-3 and by using properties from the knowledge base (including properties
+of Insert, Concat) and applies the inference rule IR-4 which generates permutations.
+The algorithm which is extracted automatically from the proof is similar to F3
+excepting the last branch, where F5 has three branches:
+F5[〈L, n,R〉] =
+ 〈F5[L], n, F5[R]〉, if RgM[F5[L]] ≤ n ∧ n ≤ LfM[F5[R]]〈F5[R], n, F5[L]〉, if RgM[F5[R]] ≤ n ∧ n ≤ LfM[F5[L]]
+Insert[n, F5[Concat[L,R]]], otherwise
+The automatically generated proofs corresponding to these algorithms, their extrac-
+tion process and the computations with the extracted algorithms in Theorema are
+fully presented in the next section.
+The following table presents the synthesized sorting algorithms. For each of them
+Conjecture 1 has been proved using the induction principles from the first column.
+The second column specifies the auxiliary function used and the third column shows
+whether the rule IR-4 (which generates the permutations and witnesses) is used or
+not.
+Induction Auxiliary used Uses Extracted
+principle functions IR-4 algorithm
+Induction-2 LfM, RgM, Insert, Merge No F2
+Induction-3
+LfM, RgM, Insert, Merge No F1
+LfM, RgM, Insert, Merge Yes F4
+LfM, RgM, Insert, Concat No F3
+LfM, RgM, Insert, Concat Yes F5
+5 Theorema files
+This section includes the files from the Theorema system. The file demo-trees.nb is the
+user's file. In this file: one loads the Theorema system; one loads the prover (TreeSyn-
+thesizer) which the authors implemented in the Theorema, and which is used for
+proving; one adds the definitions and the properties; one calls the loaded prover to
+generate automatically some proofs; after the proofs succeed one calls the extractor
+which extracts from the proofs the corresponding algorithms, and one can compute
+with the extracted algorithms. All the other files (Sort-1-proof.nb, Insert-proof.nb,
+Sort-4-proof.nb, Sort-2-proof.nb, Sort-3-proof.nb, and Sort-5.nb) are generated auto-
+matically by our prover (TreeSynthesizer).
+Needs@"Theorema‘"D
+Get@"Theorema‘Provers‘UserProvers‘TreeSynthesizer‘"D
+TS_In[1406]:=
+Use@XBuilt|in@"Connectives"D, Built|in@"Numbers"D\D
+à Knowledge base
+TS_In[312]:=
+SetGlobals@TraceLevel0, FormatMetas ® "Subscripted"D;
+TS_In[313]:=
+DefinitionB"Right Most Element", any@n, m, L, S, RD,
+RgM@XL, n, Ε\D = n
+RgM@XL, n, XR, m, S\\D = RgM@XR, m, S\DF
+TS_In[314]:=
+DefinitionB"Left Most Element", any@n, m, L, S, RD,
+LfM@XΕ, n, R\D = n
+LfM@XXL, n, R\, m, S\D = LfM@XL, n, R\DF
+TS_In[315]:=
+DefinitionB"Concat", any@n, L, R, SD,
+Concat@Ε, RD = R
+Concat@XL, n, R\, SD = XL, n, Concat@R, SD\F
+TS_In[1433]:=
+DefinitionB"Merge", any@n, L, R, SD,
+Merge@Ε, RD = R
+Merge@XL, n, R\, SD = Insertion@n, Merge@Merge@L, RD, SDDF
+TS_In[317]:=
+DefinitionB"IsSorted", any@m, L, RD,
+IsSorted@ΕDHIsSorted@LD ì IsSorted@RD ì RgM@LD £ mì m £ LfM@RDLIsSorted@XL, m, R\D
+F
+TS_In[318]:=
+PropositionB"RgM empty",
+"
+m
+HRgM@ΕD £ mLF
+TS_In[319]:=
+PropositionB"LfM empty",
+"
+m
+Hm £ LfM@ΕDLF
+demo-trees.nb 1
+TS_In[320]:=
+PropositionB"1",
+"
+n,L
+HXL, n, Ε\ » Insertion@n, LDLF
+TS_In[322]:=
+PropositionB"1-1",
+"
+n,L,R
+HXL, n, R\ » Insertion@n, Merge@L, RDDLF
+TS_In[323]:=
+PropositionB"1-2",
+"
+n,L,R
+HXL, n, R\ » Insertion@n, Concat@L, RDDLF
+TS_In[325]:=
+PropositionB"1-5",
+"
+n,L,R,A,B
+HHXL, n, Ε\ » A ì R » BLHXL, n, R\ » Merge@A, BDLLF
+TS_In[326]:=
+PropositionB"1-6",
+"
+n,L,R,A,B,C
+HHL » A ì R » Bì Concat@L, RD » CL
+HXA, n, B\ » Insertion@n, CDLLF
+TS_In[327]:=
+PropositionB"2",
+"
+n,L
+HIsSorted@LDIsSorted@Insertion@n, LDDLF
+TS_In[328]:=
+PropositionB"3",
+"
+L,R
+HHIsSorted@LD ì IsSorted@RDLIsSorted@Merge@L, RDDLF
+PropositionB"3-1",
+"
+L,R
+HHIsSorted@LD ì IsSorted@RD ì L a RLIsSorted@Concat@L, RDDLF
+TS_In[330]:=
+PropositionB"4",
+"
+T
+HMerge@T, ΕD » TLF
+TS_In[331]:=
+PropositionB"5",
+"
+T
+HMerge@Ε, TD » TLF
+demo-trees.nb 2
+TS_In[332]:=
+PropositionB"Problem of Sorting",
+"
+X
+$
+T
+HX » Tì IsSorted@TDLF
+à Synthesis of Sort-1
+TS_In[1436]:=
+Prove@Proposition@"Problem of Sorting"D,
+by ® TreeSynthesizer, SearchDepth ® 25,
+using ® XDefinition@"IsSorted"D, Proposition@"RgM empty"D,
+Proposition@"LfM empty"D, Proposition@"1-1"D, Proposition@"2"D,
+Proposition@"3"D\, TransformBy ® ProofSimplifier,
+TransformerOptions ® 8branches -> Proved<,
+ProverOptions ® 8Induction3 ® True<D  Last  Timing
+TS_Out[1436]=
+84.634, proved<
+The proof is generated in a separate window (which is the Theorema proof object). Please see Sort-1-
+proof.nb
+From this proof we automatically extract the corresponding algorithm by calling the function 
+AlgorithmFromProof
+AlgorithmFromProof@"Induction3", $TmaProofObjectD
+TS_In[1437]:=
+AlgorithmB"Sort-1", any@n, L, RD,
+F1@ΕD = Ε
+F1@XΕ, n, Ε\D = XΕ, n, Ε\HRgM@F1@LDD £ nLHF1@XL, n, Ε\D = XF1@LD, n, Ε\LHn £ LfM@F1@LDDLHF1@XL, n, Ε\D = XΕ, n, F1@LD\L
+F1@XL, n, Ε\D = Insertion@n, F1@LDDHn £ LfM@F1@RDDLHF1@XΕ, n, R\D = XΕ, n, F1@RD\LHRgM@F1@RDD £ nLHF1@XΕ, n, R\D = XF1@RD, n, Ε\L
+F1@XΕ, n, R\D = Insertion@n, F1@RDD
+F1@XL, n, R\D = Insertion@n, Merge@F1@LD, F1@RDDD
+F
+demo-trees.nb 3
+ Compute with Sort-1
+TS_In[1438]:=
+Compute@F1@XXΕ, 9, Ε\, 18, XXΕ, 19, Ε\, 14, Ε\\D,
+using ® XAlgorithm@"Sort-1"D, Definition@"Right Most Element"D,
+Definition@"Left Most Element"D,
+Definition@"Insert"D, Definition@"Merge"D\D
+TS_Out[1438]=
+XXΕ, 9, Ε\, 14, XXΕ, 18, Ε\, 19, Ε\\
+TS_In[1439]:=
+Compute@F1@XXXXΕ, 100, Ε\, 10, Ε\, 10, XΕ, 11, Ε\\, 3, Ε\D,
+using ® XAlgorithm@"Sort-1"D, Definition@"Right Most Element"D,
+Definition@"Left Most Element"D,
+Definition@"Insert"D, Definition@"Merge"D\D
+TS_Out[1439]=
+XΕ, 3, XXXΕ, 10, Ε\, 10, Ε\, 11, XΕ, 100, Ε\\\
+à Synthesis of Insertion
+TS_In[1444]:=
+PropositionB"Conjecture-1",
+"
+n,R
+IsSorted@RD
+$
+T
+HXΕ, n, R\ » Tì IsSorted@TDLF
+TS_In[1445]:=
+PropositionB"Conjecture 1",
+"
+n,R
+JIsSorted@RD$
+T
+HXΕ, n, R\ » Tì IsSorted@TDLNF
+TS_In[2064]:=
+Prove@Proposition@"Conjecture 1"D,
+by ® TreeSynthesizer, SearchDepth ® 35, using ®XDefinition@"IsSorted"D, Proposition@"1"D, Proposition@"1-1"D,
+Proposition@"2"D, Proposition@"3"D, Proposition@"RgM empty"D,
+Proposition@"LfM empty"D\, TransformBy ® ProofSimplifier,
+TransformerOptions ® 8branches -> Proved<, ProverOptions ®8Induction1 ® True, ExtendAssm ® True<D  Last  Timing
+TS_Out[2064]=
+82.247, proved<
+The proof is generated in a separate window. Please see Insert-proof.nb
+AlgorithmFromProof@"Induction1", $TmaProofObjectD
+The extracted algorithm from the proof is :
+demo-trees.nb 4
+The extracted algorithm from the proof is :
+TS_In[1447]:=
+DefinitionB"Insert", any@n, m, L, RD,
+Insertion@n, ΕD = XΕ, n, Ε\Hn £ mLHInsertion@n, XL, m, R\D = XInsertion@n, LD, m, R\LHm £ nLHInsertion@n, XL, m, R\D = XL, m, Insertion@n, RD\LF
+ Compute with Insert
+TS_In[1448]:=
+Compute@Insertion@2, XΕ, 10, Ε\D, using ® Definition@"Insert"DD
+TS_Out[1448]=
+XXΕ, 2, Ε\, 10, Ε\
+TS_In[1449]:=
+Compute@Insertion@12, XΕ, 10, Ε\D, using ® Definition@"Insert"DD
+TS_Out[1449]=
+XΕ, 10, XΕ, 12, Ε\\
+TS_In[1450]:=
+Compute@Insertion@10, XΕ, 10, Ε\D, using ® Definition@"Insert"DD
+TS_Out[1450]=
+XXΕ, 10, Ε\, 10, Ε\
+TS_In[1451]:=
+Compute@Insertion@8, XXΕ, 9, XΕ, 12, Ε\\, 10, Ε\D,
+using ® Definition@"Insert"DD
+TS_Out[1451]=
+XXXΕ, 8, Ε\, 9, XΕ, 12, Ε\\, 10, Ε\
+TS_In[1452]:=
+Compute@Insertion@18, XXΕ, 9, XΕ, 12, Ε\\, 10, Ε\D,
+using ® Definition@"Insert"DD
+TS_Out[1452]=
+XXΕ, 9, XΕ, 12, Ε\\, 10, XΕ, 18, Ε\\
+demo-trees.nb 5
+à Synthesis of Sort-4
+TS_In[1440]:=
+Prove@Proposition@"Problem of Sorting"D,
+by ® TreeSynthesizer, SearchDepth ® 25,
+using ® XDefinition@"IsSorted"D, Proposition@"1-1"D,
+Proposition@"2"D, Proposition@"3"D, Proposition@"RgM empty"D,
+Proposition@"LfM empty"D\, TransformBy ® ProofSimplifier,
+TransformerOptions ® 8branches -> Proved<,
+ProverOptions ® 8Induction3 ® True, IR4 ® True<D  Last  Timing
+TS_Out[1440]=
+85.179, proved<
+The automated proof is generated in a separate window. Please see Sort-4-proof.nb. 
+The difference between Sort-1 and Sort-4 is at the last branch, where IR-4 generates permutations of a 
+tree and Sort-4 has three branches.   
+From this proof we automatically extract the following algorithm:
+AlgorithmFromProof2@"Induction3", $TmaProofObjectD
+TS_In[1441]:=
+AlgorithmB"Sort-4", any@n, L, RD,
+F4@ΕD = Ε
+F4@XΕ, n, Ε\D = XΕ, n, Ε\HRgM@F4@LDD £ nLHF4@XL, n, Ε\D = XF4@LD, n, Ε\LHn £ LfM@F4@LDDLHF4@XL, n, Ε\D = XΕ, n, F4@LD\L
+F4@XL, n, Ε\D = Insertion@n, F4@LDDHn £ LfM@F4@RDDLHF4@XΕ, n, R\D = XΕ, n, F4@RD\LHRgM@F4@RDD £ nLHF4@XΕ, n, R\D = XF4@RD, n, Ε\L
+F4@XΕ, n, R\D = Insertion@n, F4@RDDHRgM@F4@LDD £ nì n £ LfM@F4@RDDLHF4@XL, n, R\D = XF4@LD, n, F4@RD\LHRgM@F4@RDD £ nì n £ LfM@F4@LDDLHF4@XL, n, R\D = XF4@RD, n, F4@LD\L
+F4@XL, n, R\D = Insertion@n, Merge@F4@LD, F4@RDDD
+F
+ Compute with Sort-4
+TS_In[1442]:=
+Compute@F4@XXΕ, 9, Ε\, 18, XXΕ, 19, Ε\, 14, Ε\\D,
+using ® XAlgorithm@"Sort-4"D, Definition@"Right Most Element"D,
+Definition@"Left Most Element"D,
+Definition@"Insert"D, Definition@"Merge"D\D
+TS_Out[1442]=
+XXXΕ, 9, Ε\, 14, XΕ, 18, Ε\\, 19, Ε\
+demo-trees.nb 6
+TS_In[1443]:=
+Compute@F4@XXXXΕ, 100, Ε\, 10, Ε\, 10, XΕ, 11, Ε\\, 3, Ε\D,
+using ® XAlgorithm@"Sort-4"D, Definition@"Right Most Element"D,
+Definition@"Left Most Element"D,
+Definition@"Insert"D, Definition@"Merge"D\D
+TS_Out[1443]=
+XXXΕ, 3, Ε\, 10, Ε\, 10, XXΕ, 11, Ε\, 100, Ε\\
+à Synthesis of Sort-2
+TS_In[1453]:=
+Prove@Proposition@"Problem of Sorting"D,
+by ® TreeSynthesizer, SearchDepth ® 25,
+using ® XDefinition@"IsSorted"D, Proposition@"1-5"D,
+Proposition@"2"D, Proposition@"3"D\, TransformBy ®
+ProofSimplifier, TransformerOptions ® 8branches -> Proved<,
+ProverOptions ® 8Induction2 ® True<D  Last  Timing
+TS_Out[1453]=
+81.841, proved<
+The proof is generated in a separate window. Please see Sort-2-proof.nb
+AlgorithmFromProof@"Induction2", $TmaProofObjectD
+The extracted algorithm from the proof is :
+TS_In[1454]:=
+AlgorithmB"Sort-2", any@n, L, RD,
+F2@ΕD = ΕHRgM@F2@LDD £ nLHF2@XL, n, Ε\D = XF2@LD, n, Ε\LHn £ LfM@F2@LDDLHF2@XL, n, Ε\D = XΕ, n, F2@LD\L
+F2@XL, n, Ε\D = Insertion@n, F2@LDD
+F2@XL, n, R\D = Merge@F2@XL, n, Ε\D, F2@RDD
+F
+ Compute with Sort-2
+TS_In[1455]:=
+Compute@F2@XXΕ, 9, Ε\, 18, XXΕ, 19, Ε\, 14, Ε\\D,
+using ® XAlgorithm@"Sort-2"D, Definition@"Right Most Element"D,
+Definition@"Left Most Element"D,
+Definition@"Insert"D, Definition@"Merge"D\D
+TS_Out[1455]=
+XXΕ, 9, Ε\, 14, XXΕ, 18, Ε\, 19, Ε\\
+demo-trees.nb 7
+TS_In[1456]:=
+Compute@F2@XXXXΕ, 100, Ε\, 10, Ε\, 10, XΕ, 11, Ε\\, 3, Ε\D,
+using ® XAlgorithm@"Sort-2"D, Definition@"Right Most Element"D,
+Definition@"Left Most Element"D,
+Definition@"Insert"D, Definition@"Merge"D\D
+TS_Out[1456]=
+XΕ, 3, XXXΕ, 10, Ε\, 10, Ε\, 11, XΕ, 100, Ε\\\
+à Synthesis of Sort-3
+TS_In[1526]:=
+Prove@Proposition@"Problem of Sorting"D,
+by ® TreeSynthesizer, SearchDepth ® 25,
+using ® XDefinition@"IsSorted"D, Proposition@"RgM empty"D,
+Proposition@"LfM empty"D, Proposition@"2"D, Proposition@"1-6"D\,
+TransformBy ® ProofSimplifier, TransformerOptions ®8branches -> Proved<, ProverOptions ®8Induction3 ® True, ExtendAssm ® True<D  Last  Timing
+TS_Out[1526]=
+85.007, proved<
+Please see Sort-3-proof.nb
+AlgorithmFromProof@"Induction3", $TmaProofObjectD
+The extracted algorithm from the proof is :
+TS_In[1527]:=
+AlgorithmB"Sort-3", any@n, L, RD,
+F3@ΕD = Ε
+F3@XΕ, n, Ε\D = XΕ, n, Ε\HRgM@F3@LDD £ nLHF3@XL, n, Ε\D = XF3@LD, n, Ε\LHn £ LfM@F3@LDDLHF3@XL, n, Ε\D = XΕ, n, F3@LD\L
+F3@XL, n, Ε\D = Insertion@n, F3@LDDHn £ LfM@F3@RDDLHF3@XΕ, n, R\D = XΕ, n, F3@RD\LHRgM@F3@RDD £ nLHF3@XΕ, n, R\D = XF3@RD, n, Ε\L
+F3@XΕ, n, R\D = Insertion@n, F3@RDD
+F3@XL, n, R\D = Insertion@n, F3@Concat@L, RDDD
+F
+demo-trees.nb 8
+ Compute with Sort-3
+TS_In[1528]:=
+Compute@F3@XXΕ, 9, Ε\, 18, XXΕ, 19, Ε\, 14, Ε\\D,
+using ® XAlgorithm@"Sort-3"D, Definition@"Right Most Element"D,
+Definition@"Left Most Element"D,
+Definition@"Insert"D, Definition@"Concat"D\D
+TS_Out[1528]=
+XXXΕ, 9, Ε\, 14, XΕ, 18, Ε\\, 19, Ε\
+TS_In[1529]:=
+Compute@F3@XXXXΕ, 100, Ε\, 10, Ε\, 10, XΕ, 11, Ε\\, 3, Ε\D,
+using ® XAlgorithm@"Sort-3"D, Definition@"Right Most Element"D,
+Definition@"Left Most Element"D,
+Definition@"Insert"D, Definition@"Concat"D\D
+TS_Out[1529]=
+XXXXXΕ, 3, Ε\, 10, Ε\, 10, Ε\, 11, Ε\, 100, Ε\
+à Synthesis of Sort-5
+The proof for Sort-5 is similar to the proof of Sort-3, but for Sort-5 one uses IR-4 for generating the 
+permutations of a tree.
+Prove@Proposition@"Problem of Sorting"D,
+by ® TreeSynthesizer, SearchDepth ® 25,
+using ® XDefinition@"IsSorted"D, Proposition@"RgM empty"D,
+Proposition@"LfM empty"D, Proposition@"1-6"D, Proposition@"2"D\,
+TransformBy ® ProofSimplifier,
+TransformerOptions ® 8branches -> Proved<,
+ProverOptions ® 8Induction3 ® True, IR4 ® True<D  Last  Timing
+TS_Out[1420]=
+85.179, proved<
+Please see sort-5-proof.nb
+AlgorithmFromProof@"Induction3", $TmaProofObjectD
+The extracted algorithm from the proof is :
+demo-trees.nb 9
+TS_In[1530]:=
+AlgorithmB"Sort-5", any@n, L, RD,
+F5@ΕD = Ε
+F5@XΕ, n, Ε\D = XΕ, n, Ε\HRgM@F5@LDD £ nLHF5@XL, n, Ε\D = XF5@LD, n, Ε\LHn £ LfM@F5@LDDLHF5@XL, n, Ε\D = XΕ, n, F5@LD\L
+F5@XL, n, Ε\D = Insertion@n, F5@LDDHn £ LfM@F5@RDDLHF5@XΕ, n, R\D = XΕ, n, F5@RD\LHRgM@F5@RDD £ nLHF5@XΕ, n, R\D = XF5@RD, n, Ε\L
+F5@XΕ, n, R\D = Insertion@n, F5@RDDHRgM@F5@LDD £ nì n £ LfM@F5@RDDLHF5@XL, n, R\D = XF5@LD, n, F5@RD\LHRgM@F5@RDD £ nì n £ LfM@F5@LDDLHF5@XL, n, R\D = XF5@RD, n, F5@LD\L
+F5@XL, n, R\D = Insertion@n, F5@Concat@L, RDDD
+F
+The algorithm is similar to F3 except the last case where F5 has three branches.
+ Compute with Sort-5
+TS_In[1531]:=
+Compute@F5@XXΕ, 9, Ε\, 18, XXΕ, 19, Ε\, 14, Ε\\D,
+using ® XAlgorithm@"Sort-5"D, Definition@"Right Most Element"D,
+Definition@"Left Most Element"D,
+Definition@"Insert"D, Definition@"Concat"D\D
+TS_Out[1531]=
+XΕ, 9, XXΕ, 14, XΕ, 18, Ε\\, 19, Ε\\
+TS_In[1532]:=
+Compute@F5@XXXXΕ, 100, Ε\, 10, Ε\, 10, XΕ, 11, Ε\\, 3, Ε\D,
+using ® XAlgorithm@"Sort-5"D, Definition@"Right Most Element"D,
+Definition@"Left Most Element"D,
+Definition@"Insert"D, Definition@"Concat"D\D
+TS_Out[1532]=
+XXXXXΕ, 3, Ε\, 10, Ε\, 10, Ε\, 11, Ε\, 100, Ε\
+demo-trees.nb 10
+Prove:
+(Proposition (Problem of Sorting)) "
+X
+$
+T
+HX » T ì IsSorted@TDL,
+under the assumptions:
+(Definition (IsSorted): 1) IsSorted@ΕD,
+(Definition (IsSorted): 2)
+"
+m,L,R
+HIsSorted@LD ì IsSorted@RD ì RgM@LD £ m ì m £ LfM@RD Þ IsSorted@XL, m, R\DL,
+(Proposition (RgM empty)) "
+m
+HRgM@ΕD £ mL,
+(Proposition (LfM empty)) "
+m
+Hm £ LfM@ΕDL,
+(Proposition (1-1)) "
+n,L,R
+HXL, n, R\ » Insertion@n, Merge@L, RDDL,
+(Proposition (2)) "
+n,L
+HIsSorted@LD Þ IsSorted@Insertion@n, LDDL,
+(Proposition (3)) "
+L,R
+HIsSorted@LD ì IsSorted@RD Þ IsSorted@Merge@L, RDDL.
+We prove (Proposition (Problem of Sorting)) by Induction on X . 
+1. Base case 1: We have to find witness such that:  
+(1) Ε » T* ì IsSorted@T*D .
+ Apply IR4 and one obtains the substitution 8T* ® Ε< and the new goal is: 
+(15) IsSorted@ΕD .
+Our goal (15) is proved because it is identical to our assumption (Definition (IsSorted): 1) and we are done. 
+2. Base case 2: We have to find witness such that: 
+(2) XΕ, n0, Ε\ » T* ì IsSorted@T*D .
+ Apply IR4 and one obtains the substitution 8T* ® XΕ, n0, Ε\< and the new goal is: 
+(17) IsSorted@XΕ, n0, Ε\D .
+In order to prove (17) by (Definition (IsSorted): 2) using substitution 8L ® Ε, m ® n0, R ® Ε<, it is sufficient to prove:
+(18) IsSorted@ΕD ì IsSorted@ΕD ì RgM@ΕD £ n0 ì n0 £ LfM@ΕD .
+ Using (Definition (IsSorted): 1)our goal(18) becomes: 
+(19) IsSorted@ΕD ì RgM@ΕD £ n0 ì n0 £ LfM@ΕD .
+ Using (Definition (IsSorted): 1)our goal(19) becomes: 
+Sort-1-proof.nb 1
+(20) RgM@ΕD £ n0 ì n0 £ LfM@ΕD .
+In order to prove (20), by (Proposition (RgM empty)) using substitution 8m ® n0<, it is sufficient to prove:
+(21) n0 £ LfM@ΕD .
+Goal (21) is proved because is an instance of universal assumption (Proposition (LfM empty)) so we are done.
+3. Induction case 1: Let the induction hypothesis be: 
+(3) L0 » T1,
+(4) IsSorted@T1D,
+ and find witness such that: 
+(5) XL0, n0, Ε\ » T* ì IsSorted@T*D
+We rewrite our goal (5) by using the assumption (3) and it is sufficient to prove: 
+(23) XT1, n0, Ε\ » T* ì IsSorted@T*D . 
+Generate the corresponding permutations and prove by cases: 
+Case 1: One obtains the substitution 8T* ® XT1, n0, Ε\< and the new goal is: 
+(26) IsSorted@XT1, n0, Ε\D . 
+We transform our goal (26) into proving: 
+(29) IsSorted@T1D ì RgM@T1D £ n0 . 
+ Using (4)our goal(29) becomes: 
+(30) RgM@T1D £ n0 .
+ When we reach a goal like (30) it becomes the conditional assumption on this branch! 
+Case 2: One obtains the substitution 8T* ® XΕ, n0, T1\< and the new goal is: 
+(27) IsSorted@XΕ, n0, T1\D . 
+We transform our goal (27) into proving: 
+(31) IsSorted@T1D ì n0 £ LfM@T1D . 
+ Using (4)our goal(31) becomes: 
+(32) n0 £ LfM@T1D .
+ When we reach a goal like (32) it becomes the conditional assumption on this branch! 
+Case 3: One obtains the substitution 8T* ® Insertion@n0, T1D< and the new goal is: 
+(28) IsSorted@Insertion@n0, T1DD . 
+In order to prove (28) by (Proposition (2)) using substitution 8n ® n0, L ® T1<, it is sufficient to prove:
+Sort-1-proof.nb 2
+In order to prove (28) by (Proposition (2)) using substitution 8n ® n0, L ® T1<, it is sufficient to prove:
+(33) IsSorted@T1D .
+Our goal (33) is proved because it is identical to our assumption (4) and we are done. 
+4. Induction Case 2: Let the induction hypothesis be: 
+(6) R0 » T2,
+(7) IsSorted@T2D,
+ and find witness such that: 
+(8) XΕ, n0, R0\ » T* ì IsSorted@T*D
+We rewrite our goal (8) by using the assumption (6) and it is sufficient to prove: 
+(34) XΕ, n0, T2\ » T* ì IsSorted@T*D . 
+Generate the corresponding permutations and prove by cases: 
+Case 1: One obtains the substitution 8T* ® XΕ, n0, T2\< and the new goal is: 
+(37) IsSorted@XΕ, n0, T2\D . 
+We transform our goal (37) into proving: 
+(40) IsSorted@T2D ì n0 £ LfM@T2D . 
+ Using (7)our goal(40) becomes: 
+(41) n0 £ LfM@T2D .
+ When we reach a goal like (41) it becomes the conditional assumption on this branch! 
+Case 2: One obtains the substitution 8T* ® XT2, n0, Ε\< and the new goal is: 
+(38) IsSorted@XT2, n0, Ε\D . 
+We transform our goal (38) into proving: 
+(42) IsSorted@T2D ì RgM@T2D £ n0 . 
+ Using (7)our goal(42) becomes: 
+(43) RgM@T2D £ n0 .
+ When we reach a goal like (43) it becomes the conditional assumption on this branch! 
+Case 3: One obtains the substitution 8T* ® Insertion@n0, T2D< and the new goal is: 
+(39) IsSorted@Insertion@n0, T2DD . 
+In order to prove (39) by (Proposition (2)) using substitution 8n ® n0, L ® T2<, it is sufficient to prove:
+(44) IsSorted@T2D .
+Sort-1-proof.nb 3
+(44) IsSorted@T2D .
+Our goal (44) is proved because it is identical to our assumption (7) and we are done. 
+5. Induction Case 3: Assume: 
+(9) L1 » T3,
+(10) IsSorted@T3D,
+(11) R1 » T4,
+(12) IsSorted@T4D,
+ and find witness such that: 
+(13) XL1, n0, R1\ » T* ì IsSorted@T*D
+We rewrite our goal (13) by using both the assumptions (9) and (11) and it suffices to prove: 
+(45) XT3, n0, T4\ » T* ì IsSorted@T*D . 
+In order to prove (45), by (Proposition (1-1)) using substitution 
+8L ® T3, n ® n0, R ® T4, T* ® Insertion@n0, Merge@T3, T4DD<, it is sufficient to prove:
+(49) IsSorted@Insertion@n0, Merge@T3, T4DDD .
+The new assumption[s] is/[are]: 
+In order to prove (49) by (Proposition (2)) using substitution 8n ® n0, L ® Merge@T3, T4D<, it is sufficient to prove:
+(51) IsSorted@Merge@T3, T4DD .
+In order to prove (51) by (Proposition (3)) using substitution 8L ® T3, R ® T4<, it is sufficient to prove:
+(52) IsSorted@T3D ì IsSorted@T4D .
+ Using (10)our goal(52) becomes: 
+(53) IsSorted@T4D .
+Our goal (53) is proved because it is identical to our assumption (12) and we are done. 
+á
+Sort-1-proof.nb 4
+Prove:
+(Proposition (Conjecture 1)) "
+n,R
+KIsSorted@RD Þ $
+T
+HXΕ, n, R\ » T ì IsSorted@TDLO,
+under the assumptions:
+(Definition (IsSorted): 1) IsSorted@ΕD,
+(Definition (IsSorted): 2)
+"
+m,L,R
+HIsSorted@LD ì IsSorted@RD ì RgM@LD £ m ì m £ LfM@RD Þ IsSorted@XL, m, R\DL,
+(Proposition (1)) "
+n,L
+HXL, n, Ε\ » Insertion@n, LDL,
+(Proposition (1-1)) "
+n,L,R
+HXL, n, R\ » Insertion@n, Merge@L, RDDL,
+(Proposition (2)) "
+n,L
+HIsSorted@LD Þ IsSorted@Insertion@n, LDDL,
+(Proposition (3)) "
+L,R
+HIsSorted@LD ì IsSorted@RD Þ IsSorted@Merge@L, RDDL,
+(Proposition (RgM empty)) "
+m
+HRgM@ΕD £ mL,
+(Proposition (LfM empty)) "
+m
+Hm £ LfM@ΕDL.
+We prove (Proposition (Conjecture 1)) by Induction on R. 
+1. Base case: We have to find witness such that:  
+(1) IsSorted@ΕD Þ XΕ, n0, Ε\ » T* ì IsSorted@T*D .
+In order to prove (1), we assume: 
+(5) IsSorted@ΕD,
+ and we have to prove: 
+(6) XΕ, n0, Ε\ » T* ì IsSorted@T*D
+ Apply IR4 and one obtains the substitution 8T* ® XΕ, n0, Ε\< and the new goal is: 
+(9) IsSorted@XΕ, n0, Ε\D .
+In order to prove (9) by (Definition (IsSorted): 2) using substitution 8L ® Ε, m ® n0, R ® Ε<, it is sufficient to prove:
+(10) IsSorted@ΕD ì IsSorted@ΕD ì RgM@ΕD £ n0 ì n0 £ LfM@ΕD .
+ Using (5)our goal(10) becomes: 
+(11) IsSorted@ΕD ì RgM@ΕD £ n0 ì n0 £ LfM@ΕD .
+ Using (5)our goal(11) becomes: 
+(12) RgM@ΕD £ n0 ì n0 £ LfM@ΕD .
+Insert-proof.nb 1
+(12) RgM@ΕD £ n0 ì n0 £ LfM@ΕD .
+In order to prove (12), by (Proposition (RgM empty)) using substitution 8m ® n0<, it is sufficient to prove:
+(13) n0 £ LfM@ΕD .
+Goal (13) is proved because is an instance of universal assumption (Proposition (LfM empty)) so we are done.
+2. Induction step: Assume: 
+(2) IsSorted@L0D Þ XΕ, n0, L0\ » T1 ì IsSorted@T1D,
+(3) IsSorted@R0D Þ XΕ, n0, R0\ » T2 ì IsSorted@T2D,
+ and find witness such that: 
+(4) IsSorted@XL0, m0, R0\D Þ XΕ, n0, XL0, m0, R0\\ » T* ì IsSorted@T*D
+In order to prove (4), we assume: 
+(15) IsSorted@XL0, m0, R0\D,
+ and we have to prove: 
+(16) XΕ, n0, XL0, m0, R0\\ » T* ì IsSorted@T*D
+We transform the assumption (15) into: 
+(17) IsSorted@L0D,
+(18) IsSorted@R0D,
+(19) RgM@L0D £ m0,
+(20) m0 £ LfM@R0D . 
+We apply Modus Ponens on (17) and on (2) and the new assumption is:
+(21) XΕ, n0, L0\ » T1 ì IsSorted@T1D,
+We apply Modus Ponens on (18) and on (3) and the new assumption is:
+(22) XΕ, n0, R0\ » T2 ì IsSorted@T2D,
+We split the conjunction (21) into its individual conjuncts: 
+(23) XΕ, n0, L0\ » T1,
+(24) IsSorted@T1D,
+We split the conjunction (22) into its individual conjuncts: 
+(25) XΕ, n0, R0\ » T2,
+(26) IsSorted@T2D,
+From the existing assumption (19) the following assumption is generated:
+Insert-proof.nb 2
+From the existing assumption (19) the following assumption is generated:
+(27) L0  m0 . 
+From the existing assumption (20) the following assumption is generated:
+(28) m0  R0 . 
+Since our goal (16) matches both (23) and (25) we generate two alternatives:
+Case 1: One obtains the substitution 8T* ® XT1, m0, R0\< and the new goal is:
+(29) IsSorted@XT1, m0, R0\D . 
+We transform our goal (29) into proving: 
+(31) IsSorted@T1D ì IsSorted@R0D ì RgM@T1D £ m0 ì m0 £ LfM@R0D . 
+ Using (24)our goal(31) becomes: 
+(32) IsSorted@R0D ì RgM@T1D £ m0 ì m0 £ LfM@R0D .
+ Using (18)our goal(32) becomes: 
+(33) RgM@T1D £ m0 ì m0 £ LfM@R0D .
+ Using (20)our goal(33) becomes: 
+(34) RgM@T1D £ m0 .
+ By matching (23) and (19)our goal (34) becomes: 
+(35) n0 £ m0 ì L0  m0 . 
+ Using (27)our goal(35) becomes: 
+(36) n0 £ m0 .
+ When we reach a goal like (36) it becomes the conditional assumption on this branch! 
+Case 2: One obtains the substitution 8T* ® XL0, m0, T2\< and the new goal is:
+(30) IsSorted@XL0, m0, T2\D . 
+We transform our goal (30) into proving: 
+(37) IsSorted@L0D ì IsSorted@T2D ì RgM@L0D £ m0 ì m0 £ LfM@T2D . 
+ Using (17)our goal(37) becomes: 
+(38) IsSorted@T2D ì RgM@L0D £ m0 ì m0 £ LfM@T2D .
+ Using (26)our goal(38) becomes: 
+(39) RgM@L0D £ m0 ì m0 £ LfM@T2D .
+ Using (19)our goal(39) becomes: 
+Insert-proof.nb 3
+ Using (19)our goal(39) becomes: 
+(40) m0 £ LfM@T2D .
+ By matching (25) and (20)our goal (40) becomes: 
+(41) m0 £ n0 ì m0  R0 . 
+ Using (28)our goal(41) becomes: 
+(42) m0 £ n0 .
+ When we reach a goal like (42) it becomes the conditional assumption on this branch! 
+á
+Insert-proof.nb 4
+Prove:
+(Proposition (Problem of Sorting)) "
+X
+$
+T
+HX » T ì IsSorted@TDL,
+under the assumptions:
+(Definition (IsSorted): 1) IsSorted@ΕD,
+(Definition (IsSorted): 2)
+"
+m,L,R
+HIsSorted@LD ì IsSorted@RD ì RgM@LD £ m ì m £ LfM@RD Þ IsSorted@XL, m, R\DL,
+(Proposition (1-1)) "
+n,L,R
+HXL, n, R\ » Insertion@n, Merge@L, RDDL,
+(Proposition (2)) "
+n,L
+HIsSorted@LD Þ IsSorted@Insertion@n, LDDL,
+(Proposition (3)) "
+L,R
+HIsSorted@LD ì IsSorted@RD Þ IsSorted@Merge@L, RDDL,
+(Proposition (RgM empty)) "
+m
+HRgM@ΕD £ mL,
+(Proposition (LfM empty)) "
+m
+Hm £ LfM@ΕDL.
+We prove (Proposition (Problem of Sorting)) by Induction on X . 
+1. Base case 1: We have to find witness such that:  
+(1) Ε » T* ì IsSorted@T*D .
+ Apply IR4 and one obtains the substitution 8T* ® Ε< and the new goal is: 
+(15) IsSorted@ΕD .
+Our goal (15) is proved because it is identical to our assumption (Definition (IsSorted): 1) and we are done. 
+2. Base case 2: We have to find witness such that: 
+(2) XΕ, n0, Ε\ » T* ì IsSorted@T*D .
+ Apply IR4 and one obtains the substitution 8T* ® XΕ, n0, Ε\< and the new goal is: 
+(17) IsSorted@XΕ, n0, Ε\D .
+In order to prove (17) by (Definition (IsSorted): 2) using substitution 8L ® Ε, m ® n0, R ® Ε<, it is sufficient to prove:
+(18) IsSorted@ΕD ì IsSorted@ΕD ì RgM@ΕD £ n0 ì n0 £ LfM@ΕD .
+ Using (Definition (IsSorted): 1)our goal(18) becomes: 
+(19) IsSorted@ΕD ì RgM@ΕD £ n0 ì n0 £ LfM@ΕD .
+ Using (Definition (IsSorted): 1)our goal(19) becomes: 
+Sort-4-proof.nb 1
+(20) RgM@ΕD £ n0 ì n0 £ LfM@ΕD .
+In order to prove (20), by (Proposition (RgM empty)) using substitution 8m ® n0<, it is sufficient to prove:
+(21) n0 £ LfM@ΕD .
+Goal (21) is proved because is an instance of universal assumption (Proposition (LfM empty)) so we are done.
+3. Induction case 1: Let the induction hypothesis be: 
+(3) L0 » T1,
+(4) IsSorted@T1D,
+ and find witness such that: 
+(5) XL0, n0, Ε\ » T* ì IsSorted@T*D
+We rewrite our goal (5) by using the assumption (3) and it is sufficient to prove: 
+(23) XT1, n0, Ε\ » T* ì IsSorted@T*D . 
+Generate the corresponding permutations and prove by cases: 
+Case 1: One obtains the substitution 8T* ® XT1, n0, Ε\< and the new goal is: 
+(26) IsSorted@XT1, n0, Ε\D . 
+We transform our goal (26) into proving: 
+(29) IsSorted@T1D ì RgM@T1D £ n0 . 
+ Using (4)our goal(29) becomes: 
+(30) RgM@T1D £ n0 .
+ When we reach a goal like (30) it becomes the conditional assumption on this branch! 
+Case 2: One obtains the substitution 8T* ® XΕ, n0, T1\< and the new goal is: 
+(27) IsSorted@XΕ, n0, T1\D . 
+We transform our goal (27) into proving: 
+(31) IsSorted@T1D ì n0 £ LfM@T1D . 
+ Using (4)our goal(31) becomes: 
+(32) n0 £ LfM@T1D .
+ When we reach a goal like (32) it becomes the conditional assumption on this branch! 
+Case 3: One obtains the substitution 8T* ® Insertion@n0, T1D< and the new goal is: 
+(28) IsSorted@Insertion@n0, T1DD . 
+In order to prove (28) by (Proposition (2)) using substitution 8n ® n0, L ® T1<, it is sufficient to prove:
+Sort-4-proof.nb 2
+In order to prove (28) by (Proposition (2)) using substitution 8n ® n0, L ® T1<, it is sufficient to prove:
+(33) IsSorted@T1D .
+Our goal (33) is proved because it is identical to our assumption (4) and we are done. 
+4. Induction Case 2: Let the induction hypothesis be: 
+(6) R0 » T2,
+(7) IsSorted@T2D,
+ and find witness such that: 
+(8) XΕ, n0, R0\ » T* ì IsSorted@T*D
+We rewrite our goal (8) by using the assumption (6) and it is sufficient to prove: 
+(34) XΕ, n0, T2\ » T* ì IsSorted@T*D . 
+Generate the corresponding permutations and prove by cases: 
+Case 1: One obtains the substitution 8T* ® XΕ, n0, T2\< and the new goal is: 
+(37) IsSorted@XΕ, n0, T2\D . 
+We transform our goal (37) into proving: 
+(40) IsSorted@T2D ì n0 £ LfM@T2D . 
+ Using (7)our goal(40) becomes: 
+(41) n0 £ LfM@T2D .
+ When we reach a goal like (41) it becomes the conditional assumption on this branch! 
+Case 2: One obtains the substitution 8T* ® XT2, n0, Ε\< and the new goal is: 
+(38) IsSorted@XT2, n0, Ε\D . 
+We transform our goal (38) into proving: 
+(42) IsSorted@T2D ì RgM@T2D £ n0 . 
+ Using (7)our goal(42) becomes: 
+(43) RgM@T2D £ n0 .
+ When we reach a goal like (43) it becomes the conditional assumption on this branch! 
+Case 3: One obtains the substitution 8T* ® Insertion@n0, T2D< and the new goal is: 
+(39) IsSorted@Insertion@n0, T2DD . 
+In order to prove (39) by (Proposition (2)) using substitution 8n ® n0, L ® T2<, it is sufficient to prove:
+(44) IsSorted@T2D .
+Sort-4-proof.nb 3
+(44) IsSorted@T2D .
+Our goal (44) is proved because it is identical to our assumption (7) and we are done. 
+5. Induction Case 3: Assume: 
+(9) L1 » T3,
+(10) IsSorted@T3D,
+(11) R1 » T4,
+(12) IsSorted@T4D,
+ and find witness such that: 
+(13) XL1, n0, R1\ » T* ì IsSorted@T*D
+We rewrite our goal (13) by using both the assumptions (9) and (11) and it suffices to prove: 
+(45) XT3, n0, T4\ » T* ì IsSorted@T*D . 
+Generate the corresponding permutations and prove by cases: 
+Case 1: One obtains the substitution 8T* ® XT3, n0, T4\< and the new goal is: 
+(49) IsSorted@XT3, n0, T4\D . 
+We transform our goal (49) into proving: 
+(52) IsSorted@T3D ì IsSorted@T4D ì RgM@T3D £ n0 ì n0 £ LfM@T4D . 
+ Using (10)our goal(52) becomes: 
+(53) IsSorted@T4D ì RgM@T3D £ n0 ì n0 £ LfM@T4D .
+ Using (12)our goal(53) becomes: 
+(54) RgM@T3D £ n0 ì n0 £ LfM@T4D .
+ When we reach a goal like (54) it becomes the conditional assumption on this branch! 
+Case 2: One obtains the substitution 8T* ® XT4, n0, T3\< and the new goal is: 
+(50) IsSorted@XT4, n0, T3\D . 
+We transform our goal (50) into proving: 
+(55) IsSorted@T4D ì IsSorted@T3D ì RgM@T4D £ n0 ì n0 £ LfM@T3D . 
+ Using (12)our goal(55) becomes: 
+(56) IsSorted@T3D ì RgM@T4D £ n0 ì n0 £ LfM@T3D .
+ Using (10)our goal(56) becomes: 
+(57) RgM@T4D £ n0 ì n0 £ LfM@T3D .
+Sort-4-proof.nb 4
+(57) RgM@T4D £ n0 ì n0 £ LfM@T3D .
+ When we reach a goal like (57) it becomes the conditional assumption on this branch! 
+Case 3: One obtains the substitution 8T* ® Insertion@n0, Merge@T3, T4DD< and the new goal is: 
+(51) IsSorted@Insertion@n0, Merge@T3, T4DDD . 
+In order to prove (51) by (Proposition (2)) using substitution 8n ® n0, L ® Merge@T3, T4D<, it is sufficient to prove:
+(58) IsSorted@Merge@T3, T4DD .
+In order to prove (58) by (Proposition (3)) using substitution 8L ® T3, R ® T4<, it is sufficient to prove:
+(59) IsSorted@T3D ì IsSorted@T4D .
+ Using (10)our goal(59) becomes: 
+(60) IsSorted@T4D .
+Our goal (60) is proved because it is identical to our assumption (12) and we are done. 
+á
+Sort-4-proof.nb 5
+Prove:
+(Proposition (Problem of Sorting)) "
+X
+$
+T
+HX » T ì IsSorted@TDL,
+under the assumptions:
+(Definition (IsSorted): 1) IsSorted@ΕD,
+(Definition (IsSorted): 2)
+"
+m,L,R
+HIsSorted@LD ì IsSorted@RD ì RgM@LD £ m ì m £ LfM@RD Þ IsSorted@XL, m, R\DL,
+(Proposition (1-5)) "
+n,L,R,A,B
+HXL, n, Ε\ » A ì R » B Þ XL, n, R\ » Merge@A, BDL,
+(Proposition (2)) "
+n,L
+HIsSorted@LD Þ IsSorted@Insertion@n, LDDL,
+(Proposition (3)) "
+L,R
+HIsSorted@LD ì IsSorted@RD Þ IsSorted@Merge@L, RDDL.
+We prove (Proposition (Problem of Sorting)) by Induction on X . 
+1. Base case 1: We have to find witness such that:  
+(1) Ε » T* ì IsSorted@T*D .
+ Apply IR4 and one obtains the substitution 8T* ® Ε< and the new goal is: 
+(11) IsSorted@ΕD .
+Our goal (11) is proved because it is identical to our assumption (Definition (IsSorted): 1) and we are done. 
+2. Base case 2: Assume: 
+(2) L0 » T1,
+(3) IsSorted@T1D,
+ and find witness such that: 
+(4) XL0, n0, Ε\ » T* ì IsSorted@T*D
+We rewrite our goal (4) by using the assumption (2) and it is sufficient to prove: 
+(12) XT1, n0, Ε\ » T* ì IsSorted@T*D . 
+Generate the corresponding permutations and prove by cases: 
+Case 1: One obtains the substitution 8T* ® XT1, n0, Ε\< and the new goal is: 
+(15) IsSorted@XT1, n0, Ε\D . 
+We transform our goal (15) into proving: 
+(18) IsSorted@T1D ì RgM@T1D £ n0 . 
+ Using (3)our goal(18) becomes: 
+Sort-2-proof.nb 1
+ Using (3)our goal(18) becomes: 
+(19) RgM@T1D £ n0 .
+ When we reach a goal like (19) it becomes the conditional assumption on this branch! 
+Case 2: One obtains the substitution 8T* ® XΕ, n0, T1\< and the new goal is: 
+(16) IsSorted@XΕ, n0, T1\D . 
+We transform our goal (16) into proving: 
+(20) IsSorted@T1D ì n0 £ LfM@T1D . 
+ Using (3)our goal(20) becomes: 
+(21) n0 £ LfM@T1D .
+ When we reach a goal like (21) it becomes the conditional assumption on this branch! 
+Case 3: One obtains the substitution 8T* ® Insertion@n0, T1D< and the new goal is: 
+(17) IsSorted@Insertion@n0, T1DD . 
+In order to prove (17) by (Proposition (2)) using substitution 8n ® n0, L ® T1<, it is sufficient to prove:
+(22) IsSorted@T1D .
+Our goal (22) is proved because it is identical to our assumption (3) and we are done. 
+3. Induction step: Assume as induction hypotheses: 
+(5) XL1, n0, Ε\ » T2,
+(6) IsSorted@T2D,
+(7) R0 » T3,
+(8) IsSorted@T3D,
+ and find witness such that: 
+(9) XL1, n0, R0\ » T* ì IsSorted@T*D
+In order to prove (9) by (Proposition (1-5)) using substitution 9L ® L1, n ® n0, R ® R0, T* ® MergeAA**, B**E=, it is 
+sufficient to prove:
+(26) XL1, n0, Ε\ » A** ì R0 » B** ì IsSorted@Merge@A**, B**DD .
+In order to prove (26) by (5) using substitution 9A** ® T2=, it is sufficient to prove:
+(27) R0 » B** ì IsSorted@Merge@T2, B**DD .
+In order to prove (27) by (7) using substitution 9B** ® T3=, it is sufficient to prove:
+(28) IsSorted@Merge@T2, T3DD .
+Sort-2-proof.nb 2
+(28) IsSorted@Merge@T2, T3DD .
+In order to prove (28) by (Proposition (3)) using substitution 8L ® T2, R ® T3<, it is sufficient to prove:
+(29) IsSorted@T2D ì IsSorted@T3D .
+ Using (6)our goal(29) becomes: 
+(30) IsSorted@T3D .
+Our goal (30) is proved because it is identical to our assumption (8) and we are done. 
+á
+Sort-2-proof.nb 3
+Prove:
+(Proposition (Problem of Sorting)) "
+X
+$
+T
+HX » T ì IsSorted@TDL,
+under the assumptions:
+(Definition (IsSorted): 1) IsSorted@ΕD,
+(Definition (IsSorted): 2)
+"
+m,L,R
+HIsSorted@LD ì IsSorted@RD ì RgM@LD £ m ì m £ LfM@RD Þ IsSorted@XL, m, R\DL,
+(Proposition (RgM empty)) "
+m
+HRgM@ΕD £ mL,
+(Proposition (LfM empty)) "
+m
+Hm £ LfM@ΕDL,
+(Proposition (2)) "
+n,L
+HIsSorted@LD Þ IsSorted@Insertion@n, LDDL,
+(Proposition (1-6))
+"
+n,L,R,A,B,C
+HL » A ì R » B ì Concat@L, RD » C Þ XA, n, B\ » Insertion@n, CDL.
+We prove (Proposition (Problem of Sorting)) by Induction on X . 
+1. Base case 1: We have to find witness such that:  
+(1) Ε » T* ì IsSorted@T*D .
+ Apply IR4 and one obtains the substitution 8T* ® Ε< and the new goal is: 
+(15) IsSorted@ΕD .
+Our goal (15) is proved because it is identical to our assumption (Definition (IsSorted): 1) and we are done. 
+2. Base case 2: We have to find witness such that: 
+(2) XΕ, n0, Ε\ » T* ì IsSorted@T*D .
+ Apply IR4 and one obtains the substitution 8T* ® XΕ, n0, Ε\< and the new goal is: 
+(17) IsSorted@XΕ, n0, Ε\D .
+In order to prove (17) by (Definition (IsSorted): 2) using substitution 8L ® Ε, m ® n0, R ® Ε<, it is sufficient to prove:
+(18) IsSorted@ΕD ì IsSorted@ΕD ì RgM@ΕD £ n0 ì n0 £ LfM@ΕD .
+ Using (Definition (IsSorted): 1)our goal(18) becomes: 
+(19) IsSorted@ΕD ì RgM@ΕD £ n0 ì n0 £ LfM@ΕD .
+ Using (Definition (IsSorted): 1)our goal(19) becomes: 
+(20) RgM@ΕD £ n0 ì n0 £ LfM@ΕD .
+In order to prove (20), by (Proposition (RgM empty)) using substitution 8m ® n0<, it is sufficient to prove:
+Sort-3-proof.nb 1
+In order to prove (20), by (Proposition (RgM empty)) using substitution 8m ® n0<, it is sufficient to prove:
+(21) n0 £ LfM@ΕD .
+Goal (21) is proved because is an instance of universal assumption (Proposition (LfM empty)) so we are done.
+3. Induction case 1: Let the induction hypothesis be: 
+(3) L0 » T1,
+(4) IsSorted@T1D,
+ and find witness such that: 
+(5) XL0, n0, Ε\ » T* ì IsSorted@T*D
+We rewrite our goal (5) by using the assumption (3) and it is sufficient to prove: 
+(23) XT1, n0, Ε\ » T* ì IsSorted@T*D . 
+Generate the corresponding permutations and prove by cases: 
+Case 1: One obtains the substitution 8T* ® XT1, n0, Ε\< and the new goal is: 
+(26) IsSorted@XT1, n0, Ε\D . 
+We transform our goal (26) into proving: 
+(29) IsSorted@T1D ì RgM@T1D £ n0 . 
+ Using (4)our goal(29) becomes: 
+(30) RgM@T1D £ n0 .
+ When we reach a goal like (30) it becomes the conditional assumption on this branch! 
+Case 2: One obtains the substitution 8T* ® XΕ, n0, T1\< and the new goal is: 
+(27) IsSorted@XΕ, n0, T1\D . 
+We transform our goal (27) into proving: 
+(31) IsSorted@T1D ì n0 £ LfM@T1D . 
+ Using (4)our goal(31) becomes: 
+(32) n0 £ LfM@T1D .
+ When we reach a goal like (32) it becomes the conditional assumption on this branch! 
+Case 3: One obtains the substitution 8T* ® Insertion@n0, T1D< and the new goal is: 
+(28) IsSorted@Insertion@n0, T1DD . 
+In order to prove (28) by (Proposition (2)) using substitution 8n ® n0, L ® T1<, it is sufficient to prove:
+(33) IsSorted@T1D .
+Sort-3-proof.nb 2
+(33) IsSorted@T1D .
+Our goal (33) is proved because it is identical to our assumption (4) and we are done. 
+4. Induction Case 2: Let the induction hypothesis be: 
+(6) R0 » T2,
+(7) IsSorted@T2D,
+ and find witness such that: 
+(8) XΕ, n0, R0\ » T* ì IsSorted@T*D
+We rewrite our goal (8) by using the assumption (6) and it is sufficient to prove: 
+(34) XΕ, n0, T2\ » T* ì IsSorted@T*D . 
+Generate the corresponding permutations and prove by cases: 
+Case 1: One obtains the substitution 8T* ® XΕ, n0, T2\< and the new goal is: 
+(37) IsSorted@XΕ, n0, T2\D . 
+We transform our goal (37) into proving: 
+(40) IsSorted@T2D ì n0 £ LfM@T2D . 
+ Using (7)our goal(40) becomes: 
+(41) n0 £ LfM@T2D .
+ When we reach a goal like (41) it becomes the conditional assumption on this branch! 
+Case 2: One obtains the substitution 8T* ® XT2, n0, Ε\< and the new goal is: 
+(38) IsSorted@XT2, n0, Ε\D . 
+We transform our goal (38) into proving: 
+(42) IsSorted@T2D ì RgM@T2D £ n0 . 
+ Using (7)our goal(42) becomes: 
+(43) RgM@T2D £ n0 .
+ When we reach a goal like (43) it becomes the conditional assumption on this branch! 
+Case 3: One obtains the substitution 8T* ® Insertion@n0, T2D< and the new goal is: 
+(39) IsSorted@Insertion@n0, T2DD . 
+In order to prove (39) by (Proposition (2)) using substitution 8n ® n0, L ® T2<, it is sufficient to prove:
+(44) IsSorted@T2D .
+Our goal (44) is proved because it is identical to our assumption (7) and we are done. 
+Sort-3-proof.nb 3
+Our goal (44) is proved because it is identical to our assumption (7) and we are done. 
+5. Induction Case 3: Assume: 
+(9) L1 » T3,
+(10) IsSorted@T3D,
+(11) R1 » T4,
+(12) IsSorted@T4D,
+ and find witness such that: 
+(13) XL1, n0, R1\ » T* ì IsSorted@T*D
+From the existing assumptions (9) (10) (11) and (12) the following assumptions are generated: 
+(45) Concat@L1, R1D » T5,
+(46) IsSorted@T5D . 
+We rewrite our goal (13) by using both the assumptions (9) and (11) and it suffices to prove: 
+(47) XT3, n0, T4\ » T* ì IsSorted@T*D . 
+In order to prove (47) by (Proposition (1-6)) using substitution 9A ® T3, n ® n0, B ® T4, T* ® InsertionAn0, C**E=, it is 
+sufficient to prove:
+(52) L** » T3 ì R** » T4 ì Concat@L**, R**D » C** ì IsSorted@Insertion@n0, C**DD .
+In order to prove (52) by (9) using substitution 9L** ® L1=, it is sufficient to prove:
+(53) R** » T4 ì Concat@L1, R**D » C** ì IsSorted@Insertion@n0, C**DD .
+In order to prove (53) by (11) using substitution 9R** ® R1=, it is sufficient to prove:
+(54) Concat@L1, R1D » C** ì IsSorted@Insertion@n0, C**DD .
+In order to prove (54) by (45) using substitution 9C** ® T5=, it is sufficient to prove:
+(55) IsSorted@Insertion@n0, T5DD .
+In order to prove (55) by (Proposition (2)) using substitution 8n ® n0, L ® T5<, it is sufficient to prove:
+(56) IsSorted@T5D .
+Our goal (56) is proved because it is identical to our assumption (46) and we are done. 
+á
+Sort-3-proof.nb 4
+6 Conclusions and Further Work
+Our results are: a new theory of binary trees, an arsenal of special strategies and
+specific inference rules based on properties of binary trees, a new prover in the The-
+orema system which generates all the presented synthesis proofs, an extractor in the
+Theorema system which is able to extract from a proof the corresponding algorithms
+(including if-then-else algorithms), the synthesis of numerous sorting algorithms
+and auxiliary algorithms. We have also certified by Coq the soundness property of F1
+with the current implementation of the auxiliary functions. The certification proof is
+more complex and its generation less automatic than for the Theorema proof that
+helped for extracting F1, by using different inference rules and additional properties.
+The problem of sorting binary trees does not appear to have an important practical
+significance, and in fact the algorithms we synthesize are not very efficient. (For
+instance it appears to be more efficient to extract the elements of the tree in a list,
+to sort it by a fast algorithm, and then to construct the sorted tree.) However, the
+problem itself poses interesting algorithmic problems, and also the proof techniques
+are more involved than the ones from lists. This is very relevant for our research,
+because our primary goal is not to generate the most efficient algorithms, but to
+study interesting examples of proving and synthesis, from which we can discover new
+proof methods for algorithm synthesis.
+Our experiments done in the Theorema system show that by applying different
+induction principles and by choosing different alternatives in the proofs one can dis-
+cover numerous algorithms for the same functions, differing in efficiency and complex-
+ity. This case study illustrates that the automation of the synthesis problem is not a
+trivial one.
+As further work, for a fully automatization of the synthesis process, we want to
+use other systems in order to automatically generate the induction principles, which
+in the Theorema system are given as inference rules in the prover. We also want to
+use the method presented in this paper on more complex recursive data structures
+(e.g. red-black trees). In the near future, we intend to certify the correctness property
+for the other synthesized sorting algorithms. One of our long-term goals is to define
+procedures for translating the Theorema proofs directly into Coq scripts, by following
+similar translation procedures as those used for implicit induction proofs [14,22].
+Acknowledgements
+Isabela Dr mnesc: This work was partially supported by the strategic grant POS-
+DRU/159/1.5/S/137750, Project Doctoral and Postdoctoral programs support for
+increased competitiveness in Exact Sciences research cofinanced by the European So-
+cial Fund within the Sectoral Operational Programme Human Resources Development
+2007  2013.
+References
+1. F. Baader and T. Nipkow. Term Rewriting and All That. Cambridge University Press,
+1998.
+2. R.-J. Back and J. von Wright. Refinement Calculus. Springer Verlag, 1998.
+3. Y. Bertot and P. Casteran. Interactive Theorem Proving and Program Development
+Coq'Art: The Calculus of Inductive Constructions, volume XXV of Texts in Theoretical
+Computer Science. An EATCS. Springer, 2004.
+4. B. Buchberger. Algorithm Invention and Verification by Lazy Thinking. In Analele
+Universitatii de Vest, Timisoara, Ser. Matematica - Informatica, volume XLI, pages
+4170, 2003.
+5. B. Buchberger, A. Craciun, T. Jebelean, L. Kovacs, T. Kutsia, K. Nakagawa, F. Piroi,
+N. Popov, J. Robu, M. Rosenkranz, and W. Windsteiger. Theorema: Towards Computer-
+Aided Mathematical Theory Exploration. Journal of Applied Logic, 4(4):470504, 2006.
+6. A. Bundy, L. Dixon, J. Gow, and J. Fleuriot. Constructing Induction Rules for Deductive
+Synthesis Proofs. Electron. Notes Theor. Comput. Sci., 153:321, March 2006.
+7. C. Cohen, M. Dénès, and A. Mörtberg. Refinements for free! In Georges Gonthier and
+Michael Norrish, editors, Certified Programs and Proofs, volume 8307 of Lecture Notes
+in Computer Science, pages 147162. Springer International Publishing, 2013.
+8. B. Delaware, C. P. Claudel, J. Gross, and A. Chlipala. Fiat: Deductive Synthesis of
+Abstract Data Types in a Proof Assistant. In Proceedings of the 42nd Annual ACM
+SIGPLAN-SIGACT Symposium on Principles of Programming Languages, POPL '15,
+pages 689700, New York, NY, USA, 2015. ACM.
+9. I. Dramnesc and T. Jebelean. Proof Techniques for Synthesis of Sorting Algorithms.
+In Proceedings of the 13th International Symposium on Symbolic and Numeric Algo-
+rithms for Scientific Computing, number ISBN 978-0-7695-4630-8, pages 101109. IEEE
+Computer Society, September 2011.
+10. I. Dramnesc and T. Jebelean. Discovery of Inductive Algorithms through Automated
+Reasoning: A Case Study on Sorting. In Proceedings of IEEE 10th Jubilee International
+Symposium on Intelligent Systems and Informatics, number ISBN 978-1-4673-4751-8,
+pages 293  298. IEEE Xplore, September 2012.
+11. I. Dramnesc and T. Jebelean. Theory Exploration in Theorema: Case Study on Lists. In
+Proceedings of IEEE 7th International Symposium on Applied Computational Intelligence
+and Informatics, number ISBN 978-1-4673-1013-0, pages 421426. IEEE Xplore, May
+2012.
+12. I. Dramnesc and T. Jebelean. Synthesis of list algorithms by mechanical proving. Journal
+of Symbolic Computation, 68:6192, 2015.
+13. S. Gulwani. Dimensions in program synthesis. In Proceedings of the 12th International
+ACM SIGPLAN Symposium on Principles and Practice of Declarative Programming,
+PPDP '10, pages 1324, New York, NY, USA, 2010. ACM.
+14. A. Henaien and S. Stratulat. Performing implicit induction reasoning with certifying
+proof environments. In A. Bouhoula, T. Ida, and F. Kamareddine, editors, Proceedings
+Fourth International Symposium on Symbolic Computation in Software Science, Gam-
+marth, Tunisia, 15-17 December 2012, volume 122 of Electronic Proceedings in Theoret-
+ical Computer Science, pages 97108. Open Publishing Association, 2013.
+15. E. Kneuss, I. Kuraj, V. Kuncak, and P. Suter. Synthesis modulo recursive functions. In
+Proceedings of the 2013 ACM SIGPLAN International Conference on Object Oriented
+Programming Systems Languages &#38; Applications, OOPSLA '13, pages 407426,
+New York, NY, USA, 2013. ACM.
+16. D. E. Knuth. The Art of Computer Programming, Volume 3: (2Nd Ed.) Sorting and
+Searching. Addison Wesley Longman Publishing Co., Inc., Redwood City, CA, USA,
+1998.
+17. R. Kowalski and D. Kuehner. Linear Resolution with Selection Function. Artificial
+Intelligence, 2, 1971.
+18. B. Mordechai. Mathematical Logic for Computer Science. Springer, 2004.
+19. T. Nipkow, L. C. Paulson, and M. Wenzel. Isabelle/HOL  A Proof Assistant for
+Higher-Order Logic, volume 2283 of Lecture Notes in Computer Science. Springer, 2002.
+20. D. R. Smith. Generating programs plus proofs by refinement. In B. Meyer and J. Wood-
+cock, editors, Verified Software: Theories, Tools, Experiments, First IFIP TC 2/WG 2.3
+Conference, VSTTE 2005, Zurich, Switzerland, October 10-13, 2005, Revised Selected
+Papers and Discussions, volume 4171 of Lecture Notes in Computer Science, pages 182
+188. Springer, 2005.
+21. S. Stratulat. A Unified View of Induction Reasoning for First-Order Logic. In
+A. Voronkov, editor, Turing-100 (The Alan Turing Centenary Conference), volume 10
+of EPiC Series, pages 326352. EasyChair, 2012.
+22. S. Stratulat and V. Demange. Automated certification of implicit induction proofs. In
+CPP'2011 (First International Conference on Certified Programs and Proofs), volume
+7086 of Lecture Notes Computer Science, pages 3753. Springer Verlag, 2011.
+23. N. Wirth. Program development by stepwise refinement. Commun. ACM, 14(4):221227,
+April 1971.
+24. S. Wolfram. The Mathematica Book. Wolfram Media Inc., 2003.

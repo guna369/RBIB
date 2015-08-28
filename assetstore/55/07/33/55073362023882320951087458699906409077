@@ -1,0 +1,1085 @@
+Strong cut-elimination systems for Hudelmaier’s
+depth-bounded sequent calculus for implicational logic
+Roy Dyckhoff1, Delia Kesner2, and Ste´phane Lengrand1,2
+1 PPS, CNRS and Universite´ Paris 7, France
+2 School of Computer Science, University of St Andrews, Scotland
+Abstract. Inspired by the Curry-Howard correspondence, we study normalisation procedures
+in the depth-bounded intuitionistic sequent calculus of Hudelmaier (1988) for the implicational
+case, thus strengthening existing approaches to Cut-admissibility. We decorate proofs with proof-
+terms and introduce various term-reduction systems representing proof transformations. In con-
+trast to previous papers which gave different arguments for Cut-admissibility suggesting weakly
+normalising procedures for Cut-elimination, our main reduction system and all its variations are
+strongly normalising, with the variations corresponding to different optimisations, some of them
+with good properties such as confluence.
+1 Introduction
+The sequent calculus G4ip (as it is called in [TS00]) for intuitionistic propositional logic was
+independently developed by Hudelmaier [Hud89,Hud92], and the first author [Dyc92]; see
+also Lincoln, Scedrov & Shankar [LSS91]; it has the strong property of being depth-bounded,
+in that proofs are of bounded depth and thus (for root-first proof search) no loop-checking
+is required. This contrasts with other calculi for this logic such as Kleene’s G3ip, where
+proofs can be of unbounded depth. Its essential ingredients appeared already in 1952 work of
+Vorob’ev, published in detail in [Vor70].
+Its completeness can be shown by various means, either indirectly, using the completeness
+of another calculus and a permutation argument [Dyc92], or directly, such as in the work of
+Negri and the first author [DN00] where cut-admissibility is proved without reference to the
+completeness of any other sequent calculus. This admissibility proof could be seen, via the
+Curry-Howard correspondence, as a weakly normalising proof-reduction system. Developing
+this idea, this paper presents a formulation of implicationalG4ip with derivations represented
+by (proof-)terms; strong (instead of weak) normalisation is proved by the use of a multi-
+set path ordering. Several variations, all of them being strongly normalising, are considered,
+depending on whether we want to have a system as general as possible or a system more
+restricted (but simpler) implementing some reduction strategy.
+The merits of G4ip for proof-search and automated reasoning have been discussed in
+many papers (see [ORK05] for some recent pointers; note its use of an old name LJT for
+G4ip), because the property of being depth-bounded makes the space of derivations of a
+given sequent finite.
+However, a question that has been less investigated, natural though it is, is the follow-
+ing: which proofs are produced by proof-search in G4ip and what are their properties? Our
+approach to cut-elimination in this paper, with a strongly normalising reduction system in-
+ternal to G4ip, tackles this question in terms of the behaviour of these proofs when they are
+combined together with cuts. In other words, we give them an operational semantics.
+A complementary approach is to give these proofs a denotational semantics and to relate
+them (and their reductions) to simply-typed λ-terms. We leave this approach for future work.
+In contrast to previous work, this paper presents G4ip with a proof-term syntax, so
+sequents are of the form Γ ⇒ M :A where A is a type, M is a (proof-)term and Γ is a
+consistent finite set of “declarations” of the form x :B, where x is a variable and B a type.
+Results about such sequents translate directly to results about traditional “logical sequents”.
+Our approach to cut-elimination using proof-terms differs from that in [DN00], which
+showed (in the context of logical sequents) first the admissibility of Contraction and then the
+admissibility of “context-splitting” (or “multiplicative”) Cut. Given our interest in the term
+calculi, it is appropriate to use rather a “context-sharing” Cut; admissibility of Contraction
+then follows as a special case of that of Cut.
+Matthes [Mat02] tackled a similar problem, with a variety of motivations, such as that
+of understanding better Pitts’ algorithm [Pit92] for uniform interpolation; but his approach
+has not yet been brought to a successful conclusion. His work is similar to ours in using
+terms to represent derivations; but it differs conceptually from ours by considering not the
+use of explicit operators to encode the Cut-rule but the closure of the syntax under (implicit)
+substitution, as in pure λ-calculus, where the general syntax of λ-terms may be considered
+as the extension of the normal lambda terms by such an implicit closure. His reduction rules
+are global (using implicit substitutions) rather than local (using explicit operators); strong
+normalisation is shown for a subset of the reductions, but not for all that are required.
+Structure of the paper The paper is organised as follows. Section 2 presents the term syntax
+and typing rules of our calculus forG4ip and its auxiliary (admissible) rules. Section 3 studies
+proof transformations and reduction rules of the calculus. Section 4 shows a translation from
+the calculus to a first-order syntax and Section 5 shows that every reduction step satisfies
+subject reduction and decreases first-order terms associated to derivations with respect to
+a multi-set path ordering, thus proving strong normalisation. In Section 6 we give different
+variants for the reduction system introduced in Section 3, some of them being confluent.
+Finally we conclude and give some ideas for further work.
+2 Syntax
+2.1 Grammar
+We assume we are given an infinite set of base types P (known as proposition variables or
+atomic formulae in the logical interpretation) and an infinite set of variables x. We consider
+the following grammars for types (also known as formulae) and terms:
+Definition 1 (Grammar of Types and Terms).
+A,B,C,D,E, F ::= P | A⊃B
+M,N,L ::= x | λx.M | x(y, z.M) | x(u.v.M, z.N) |
+inv(x, y.M) | of(M,x) | dec(x, y, z.M) | cut(M,x.N)
+In this definition, the first line defines the syntax for types, the second gives the syntax for
+normal or constructor terms (corresponding to primitive derivations) and the third gives the
+extra syntax for auxiliary terms, which may be built up using also the “auxiliary constructors”
+that appear in bold teletype font, such as cut. Six of the eight term constructors use variable
+binding: in λx.M , x binds in M ; in x(y, z.M), z binds in M ; in x(u.v.M, z.N), u and v bind
+in M and z binds in N ; in inv(x, y.M), y binds in M ; in dec(x, y, z.M), z binds in M ; and
+in cut(M,x.N), x binds in N .
+2
+Standard conventions are used to avoid confusion of free and bound variables, and α-
+convertible terms are regarded as identical.
+Certain constraints on the use of the term syntax will be evident once we present the
+typing rules; these constraints are captured by the following notion of well-formed term:
+Definition 2. A term L is well-formed if in any sub-term of the form
+– x(y, z.M), we have x 6= y, with x not free in M ;
+– x(u.v.M, z.N), we have u 6= v, with x not free in M and not free in N ;
+– inv(x, y.M), we have x not free in M ;
+– of(M,x), we have x not free in M ;
+– dec(x, y, z.M), we have x 6= y, with both of them not free in M .
+Definition 3 (Ordering on (multi-sets of) types). The weight w(A) of a type A is
+defined by: w(P ) = 1 for any base type P and w(A⊃B) = 1 + w(A) + w(B). Types are
+compared by their weight, i.e. we say that A is smaller than B iff w(A) < w(B).
+We shall then compare multi-sets of types, equipped with the traditional multi-set order-
+ing [DM79], denoted <mul, generated by the order relation on types.
+The weight is chosen to ensure that, for every rule of the logical sequent calculus G4ip,
+the multi-set of types appearing in the conclusion is greater than that of any given premiss.
+Hence, we say that G4ip is depth-bounded. See [Dyc92] or [TS00] for details, and see the next
+section for the corresponding property in our version of G4ip with proof-terms.
+2.2 Typing
+A context Γ is a consistent finite set of declarations, i.e. expressions x :A (where x is a variable
+and A is a type) declaring x to be of type A; by consistent is meant that if x :A and x :B
+are in Γ , then A = B. When we write a context in the form Γ , x :A it is always implicit that
+there is no declaration x :B in Γ of the same variable x. By removing the variable names from
+a context Γ , but keeping the types, we obtain the multiset m(Γ ) of types that is associated
+with the context.
+A sequent consists of a context Γ , a term M and a type A; it is written Γ ⇒ M :A.
+The next definition adds term notation to the rules for implication of G4ip; another view
+is that it shows how the untyped normal terms of the above grammar may be typed.
+Definition 4 (Typing Rules for Normal Terms).
+Γ , x :A ⇒ x :A Ax
+Γ , x :A ⇒ M :B
+Γ ⇒ λx.M :A⊃B R⊃
+Γ , y :A, z :B ⇒ M :E
+Γ, x :A⊃B, y :A ⇒ x(y, z.M) :E L0⊃
+Γ , u :C, v :D⊃B ⇒ M :D Γ, z :B ⇒ N :E
+Γ, x : (C⊃D)⊃B ⇒ x(u.v.M, z.N) :E L⊃⊃
+As remarked before these rules only construct well-formed terms; for example the notation
+Γ , x :A⊃B, y :A in the conclusion of rule L0⊃ forces x to be not free in M and x 6= y.
+Note that we use a slight variant of the L⊃⊃ rule used in [Dyc92] and [TS00], and that
+both in axioms Γ , x :A ⇒ x :A and in the rule L0⊃ the type A need not be atomic. In the
+3
+rules R⊃, L0⊃ and L⊃⊃ the types A⊃B,A⊃B and (C⊃D)⊃B respectively are principal; in
+L0⊃ the type A is auxiliary. (This use of “auxiliary” is not to be confused with its use in
+Definition 1 to describe certain kinds of term.)
+Notice that in every instance of a rule in Definition 4 with conclusion Γ ⇒ M :A, each
+premiss Γ ′ ⇒ N :B is such that m(Γ ) ∪ A >mul m(Γ ′) ∪ B, where ∪ denotes the union of
+multi-sets. As a consequence, given Γ and A, there are finitely many derivations concluding
+Γ ⇒ M :A for some (normal) term M .
+Definition 5 (Typing Rules for Auxiliary Terms).
+Γ , y :C⊃D ⇒ M :E
+Γ, x :D ⇒ inv(x, y.M) :E Inv
+Γ ⇒ M :A⊃B
+Γ, x :A ⇒ of(M,x) :B Of
+Γ , z : (C⊃D)⊃B ⇒ M :A
+Γ, x :C, y :D⊃B ⇒ dec(x, y, z.M) :A Dec
+Γ ⇒ M :A x :A,Γ ⇒ N :B
+Γ ⇒ cut(M,x.N) :B Cut
+As remarked before these rules only construct well-formed terms; for example the notation
+Γ , x :A in the conclusion of rule Inv forces x to be not free in M .
+In the Cut-rule, we say that A is the cut-type. Derivations are the labelled trees whose
+leaves are axioms and whose internal nodes match rules: each label is a sequent and each
+internal node is also labelled by the name of the rule. A derivation is normal if it uses only
+the primitive rules, i.e. those of Definition 4. The height of a derivation is just its height as a
+tree; so a tree with one node has height 0.
+Remark 1. Notice that for each proved sequent Γ ⇒ M :A there is a unique derivation tree,
+which can be reconstructed using the information of the term M that represents the proof
+(hence the notion of proof-term).
+We will occasionally find it necessary to rename free variables. The renaming by the
+variable y of all the free occurrences of x in M , written {y/x}M , is defined whenever y and
+x are distinct variables, M is a well-formed term and y is not free in M .
+This is an implicit operation on terms, not an explicit term constructor. In other words,
+renaming is a transformation of terms, and it is sound with respect to typing, as shown by
+the first of the two results of admissibility of Lemma 1. Admissibility is considered in the
+standard sense (see for instance [TS00]):
+Definition 6. A rule R is admissible in an inference system S if and only if, for each instance
+whose premisses are all derivable in S, the conclusion is also derivable in S.
+Lemma 1. The following rules are admissible both in the system of normal derivations and
+in the full system with auxiliary terms, with the proviso that y 6= x in the (Ren) rule.
+Γ , x :B ⇒ M :A
+Γ, y :B ⇒ {y/x}M :A
+(Ren)
+Γ ⇒ M :A
+Γ, y :B ⇒ M :A
+(W )
+Proof: Routine induction on the height of the derivation of the premiss. Some swapping
+of bound variable names may be necessary: recall our convention about α-conversion and
+identity of terms. Remember that the notation Γ , y :B forces y to be not free in M . 2
+We parenthesise the names of those two rules to indicate their admissibility.
+4
+3 Proof Transformations and Reduction Rules
+The starting point of this section is the admissibility in the (cut-free) logical sequent calculus
+G4ip of the following inference rules (i.e. the logical counter-part of the typing rules for
+auxiliary terms given in Definition 5):
+Γ ,C⊃D ⇒ E
+Γ,D ⇒ E Inv
+Γ ⇒ A⊃B
+Γ,A ⇒ B Of
+Γ , (C⊃D)⊃B ⇒ A
+Γ,C,D⊃B ⇒ A Dec
+Γ ⇒ A A,Γ ⇒ B
+Γ ⇒ B Cut
+The admissibility of Inv and Of in G4ip can be proved, independently, by induction on
+the height of the derivation. For the admissibility of Dec and Cut we can use a simultaneous
+induction, the admissibility of one rule being recursively used for the admissibility of the other.
+The measure is now the multi-set of types appearing in the unique premiss for Dec and in
+the second premiss for Cut. In other words, the induction can be done on {{Γ, (C⊃D)⊃B,A}}
+for Dec and on {{Γ,A,B}} for Cut.
+We do not include here the detail of those proofs of admissibility, because they become a
+corollary (Corollary 2) of the properties that we show for our calculus with proof-terms.
+With proof-terms, those admissibility properties mean that a proof-termM with auxiliary
+constructors inv( , . ), of( , ), dec( , , . ) or cut( , . ) can be transformed into another
+proof-term M ′ with the same type in the same context that does not use these constructors.
+This motivates the notion of logical admissibility in a system with proof-terms:
+Definition 7. A rule R is logically admissible in system S if, given an instance with con-
+clusion Γ ⇒ M :A and derivations in system S of its premiss(es), there exists a derivation
+in S of Γ ⇒ M ′ :A for some proof-term M ′.
+Remark that this notion corresponds to the standard notion of admissibility (Definition 6)
+when proof-term annotations are erased.
+Indeed, the proofs of admissibility above can be seen as weakly normalising term re-
+duction systems that specify how to eliminate the auxiliary constructors inv( , . ), of( , ),
+dec( , , . ) and cut( , . ).
+The reduction systems, given hereafter, must satisfy the following properties:
+1. A term containing an auxiliary constructor is reducible by these systems.
+2. They satisfy the Subject Reduction property, i.e. preservation of typing.
+3. They satisfy some termination property.
+Concerning point 3, the weak normalisation property of these systems suffices to prove
+the results of admissibility, and the proofs suggested above can be expressed as a terminating
+innermost strategy for these reduction systems. Nevertheless, we give in this paper reduction
+systems that are in fact strongly normalising. While this can be inferred for the orthogonal
+systems that we present in Section 6 (since weak innermost normalisation is equivalent to
+strong normalisation for orthogonal systems [O’D77]), the result is not straightforward for
+the non-orthogonal ones. However, the measures for induction mentioned above can be taken
+as part of a Multi-Set Path Ordering [KL80,BN98] in order to conclude strong normalisation
+as well (see Section 4).
+5
+We now give in Tables 1, 2 and 3 the reduction systems that eliminate the auxiliary
+constructors of, inv and dec. All these rules that we call system oid will be part of the
+different variants that we are going to introduce.
+of(y, x) −→o1 y(x, z.z)
+of(λy.M, x) −→o2 {x/y}M
+of(y(z, w.N), x) −→o3 y(z, w.of(N, x))
+of(y(u.v.M,w.N), x) −→o4 y(u.v.M,w.of(N, x))
+Table 1. Reduction Rules for of-terms
+inv(x, y.z) −→i1 z
+inv(x, y.y) −→i2 λz.x
+inv(x, y.λz.M) −→i3 λz.inv(x, y.M)
+inv(x, y.y(w, z.N)) −→i4 {x/z}N
+inv(x, y.y(u.v.M, z.N)) −→i5 {x/z}N
+inv(x, y.w(y, z.N)) −→i6 w(u.v.x, z.inv(x, y.N))
+inv(x, y.y′(w, z.N)) −→i7 y′(w, z.inv(x, y.N))
+inv(x, y.y′(u.v.M, z.N)) −→i8 y′(u.v.inv(x, y.M), z.inv(x, y.N))
+Table 2. Reduction Rules for inv-terms
+dec(x, y, z.w) −→d1 w
+dec(x, y, z.z) −→d2 λv.v(x,w.y(w, u.u))
+dec(x, y, z.λw.M) −→d3 λw.dec(x, y, z.M)
+dec(x, y, z.w(u.v.M,w′.N)) −→d4 w(u.v.dec(x, y, z.M), w′.dec(x, y, z.N))
+dec(x, y, z.w(y′, z′.M)) −→d5 w(y′, z′.dec(x, y, z.M))
+dec(x, y, z.z(y′, z′.M)) −→d6 y′(x, z′′.y(z′′, z′.inv(z′′, y′.M)))
+dec(x, y, z.x′(z, z′.M)) −→d7 x(u.v.v(x, z′′.y(z′′, w.w)), z′.dec(x, y, z.M))
+dec(x, y, z.z(u.v.M, z′.N)) −→d8 cut({x/u}{y/v}M,y′.y(y′, z′.N))
+Table 3. Reduction Rules for dec-terms
+In order to reduce the cuts we now suggest a general system called cegs for cut-elimination
+in Tables 4 and 5 (variants are presented in Section 6). The whole system is called gs and
+contains the reduction rules in cegs (Tables 4 and 5) plus the ones in oid (Tables 1, 2 and 3).
+Summing up :
+6
+Kind1
+cut(M,x.x) −→a M
+cut(M,x.y) −→b y
+cut(M,x.λy.N) −→c λy.cut(M,x.N)
+cut(M,x.y(z, w.N)) −→d y(z, w.cut(inv(w, y.M), x.N))
+cut(M,x.y(u.v.N ′, w.N)) −→e y(u.v.cut(dec(u, v, y.M), x.N ′), w.cut(inv(w, y.M), x.N))
+cut(λz.M, x.y(x,w.N)) −→f y(u.v.cut(u, z.dec(u, v, y.M)), w.cut(inv(w, y.λz.M), x.N))
+cut(z, x.y(x,w.N)) −→g y(z, w.cut(z, x.N))
+Kind2
+cut(y(z, w.M), x.N) −→pi y(z, w.cut(M,x.inv(w, y.N)))
+cut(y(u.v.M ′, w.M), x.N) −→φ y(u.v.M ′, w.cut(M,x.inv(w, y.N)))
+Table 4. Cut Elimination Rules cegs (Kind1 and Kind2)
+Kind3
+cut(M,x.x(z, w.N)) −→A cut(cut(z, y.of(M,y)), w.N)
+cut(M,x.x(u.v.N ′, w.N)) −→B cut(cut(λu.cut(λz.inv(z, y.of(M,y)), v.N ′), y.of(M,y)), w.N)
+Table 5. Cut Elimination Rules cegs (Kind3)
+Name of the System Reduction Rules
+oid Tables 1, 2 and 3
+cegs Tables 4, 5
+gs oid ∪ cegs
+As in most cut-elimination systems, the cut-reduction rules can be split into three kinds
+(Kind1,Kind2,Kind3), according to whether they push cuts to the right, to the left, or they
+break a cut into cuts on smaller types.
+Here, owing to the particular inference rules of G4ip and the linearity constraints they
+impose on free variables, the first two kinds must use the auxiliary constructs inv( , . ) and
+dec( , , . ), rather than just propagate the cuts.
+For the third kind of cut-reduction rules, we usually expect both sub-proofs of the cut to
+introduce the cut-type (on the right and on the left, respectively). In particular, this requires
+the first argument of the cut-constructor to be a value, i.e. a variable or an abstraction, with
+a functional type, i.e. an implication A⊃B. However, just as any λ-term can be turned into a
+value by an η-expansion, here any term can be turned into a value by the use of the of( , )
+constructor, with the following rule, which we also call η:
+M −→η λx.of(M,x) if x /∈ FV (M)
+Notice that in both cases this is only sound with respect to typing if the type of the original
+term is an implication.
+Remark 2. All rules of system gs are such that well-formed terms reduce to well-formed terms.
+7
+4 A First-Order Syntax for Typed G4ip-Terms
+Termination of the above rewrite systems on typed terms will be proved by the decrease of a
+measure associated to typing derivations. The latter are mapped to a first-order syntax with
+the following infinite signature:
+Σ = {?/0, I/1,K/2, J/1} ∪ {Dm/1,Cm/2 | m is a multiset of types}
+where the notation f/n is used to say that the symbol f has arity n, and the symbols have
+the following precedence relation:
+Cn Â Dn Â · · · Â · · · Â Cm Â Dm Â J Â K Â I Â ? if n >mul m
+Remark 3.
+1. The order on types (Definition 3) is well-founded, so >mul is well-founded [DM79].
+2. The order >mul is well-founded, so Â is also well-founded.
+3. The order Â is well-founded, so the Multi-Set Path Ordering Àmpo is also well-founded.
+We now consider the Multi-set Path Ordering (mpo) [KL80,BN98] on first-order terms
+induced by the above precedence relation on symbols. This is the relation defined inductively
+as follows:
+ti ¿mpo f(t1, . . . , tn)
+s¿mpo ti
+s¿mpo f(t1, . . . , tn)
+ui ¿mpo f(t1, . . . , tn) for all i
+g(u1, . . . , um)¿mpo f(t1, . . . , tn) g ≺ f
+{{t′1, . . . , t′n}} ¿mpo mul{{t1, . . . , tn}}
+f(t′1, . . . , t′n)¿mpo f(t1, . . . , tn)
+where g and f are first-order symbols with arities m and n, respectively, and
+t1, . . . , tn, t
+′
+1, . . . , t
+′
+n, u1, . . . , um, s are first-order terms.
+It can be shown that ¿mpo is a well-founded order on first-order terms satisfying the
+subterm property, i.e. if s is a subterm of t then s¿mpo t.
+Derivations are mapped to this first-order syntax. In particular, since each sequent Γ ⇒ M :A
+has at most one derivation, we write Γ ⇒ M :A for such a translation, and even M when the
+context and type are clear from the text, as in the right-hand sides of the following definition.
+Γ , x :A ⇒ x :A = ?
+Γ ⇒ λx.M :A⊃B = I(M)
+Γ , x :A⊃B, y :A ⇒ x(y, z.M) :E = I(M)
+Γ , x : (C⊃D)⊃B ⇒ x(u.v.M, z.N) :E = K(M,N)
+Γ , x :D ⇒ inv(x, y.M) :E = J(M)
+Γ , x :A ⇒ of(M,x) :B = J(M)
+Γ , x :C, y :D⊃B ⇒ dec(x, y, z.M) :A = D{{Γ ,(C⊃D)⊃B,A}}(Γ , z : (C⊃D)⊃B ⇒ M :A)
+Γ ⇒ cut(M,x.N) :B = C{{Γ,A,B}}(Γ ⇒ M :A, x :A,Γ ⇒ N :B)
+Observe that M = {x/y}M for any renaming of M .
+8
+5 Subject Reduction and Strong Normalisation
+In this section we show two fundamental properties of system gs. The first one is subject
+reduction and it guarantees that types are preserved by the reduction system. The second
+one is strong normalisation and it guarantees that there is no infinite reduction sequence
+starting from a typed term. Strong normalisation is shown by a decreasing measure given by
+the Multi-Set Path Ordering of Section 4.
+Theorem 1. If Γ ⇒ L :E and L −→gs L′, then Γ ⇒ L′ :E and LÀmpo L′.
+Proof: By induction on the proof Γ ` t : A. We consider only the cases where reduction
+takes place at the root.
+o1 of(y, x) −→o1 y(x, z.z)
+The derivation
+Γ ′, y :A⊃B ⇒ y :A⊃B Ax
+Γ ′, y :A⊃B, x :A ⇒ of(y, x) :B Of
+rewrites to
+Γ , x :A, z :B ⇒ z :B Ax
+Γ ′, y :A⊃B, x :A ⇒ y(x, z.z) :B L0⊃
+Also, L = J(?)Àmpo I(?) = L′ since J Â I.
+o2 of(λy.M, x) −→o2 {x/y}M
+The derivation
+Γ , y :A ⇒ M :B
+Γ ⇒ λy.M :A⊃B R⊃
+Γ , x :A ⇒ of(λy.M, x) :B Of
+rewrites to
+Γ , y :A ⇒ M :B
+Γ, x :A ⇒ {x/y}M :B
+Ren
+Also, L = J(I(M))Àmpo M = L′ by the subterm property of ¿mpo .
+o3 of(y(z, w.N), x) −→o3 y(z, w.of(N, x))
+The derivation
+Γ ′, z :C,w :D ⇒ N :A⊃B
+Γ ′, z :C, y :C⊃D ⇒ y(z, w.N) :A⊃B L0⊃
+Γ ′, z :C, y :C⊃D,x :A ⇒ of(y(z, w.N), x) :B Of
+rewrites to
+Γ ′, z :C,w :D ⇒ N :A⊃B
+Γ ′, z :C,w :D,x :A ⇒ of(N, x) :B Of
+Γ ′, z :C, y :C⊃D,x :A ⇒ y(z, w.of(N,x)) :B L0⊃
+Also, L = J(I(N))Àmpo I(J(N)) = L′ since J Â I.
+9
+o4 of(y(u.v.M,w.N), x) −→o4 y(u.v.M,w.of(N, x)) So A is of the form C⊃D.
+The derivation
+Γ ′, u :C, v :D⊃B′ ⇒ M :D Γ ′, w :B′ ⇒ N :A⊃B
+Γ ′, y : (C⊃D)⊃B′ ⇒ y(u.v.M,w.N) :A⊃B L⊃⊃
+Γ ′, y : (C⊃D)⊃B′, x :A ⇒ of(y(u.v.M,w.N), x) :B Of
+rewrites to
+Γ ′, u :C, v :D⊃B′ ⇒ M :D
+Γ ′, u :C, v :D⊃B′, x :A ⇒ M :D
+(W )
+Γ ′, w :B′ ⇒ N :A⊃B
+Γ ′, w :B′, x :A ⇒ of(N, x) :B Of
+Γ ′, y : (C⊃D)⊃B′, x :A ⇒ y(u.v.M,w.of(N, x)) :B L⊃⊃
+Also, L = J(K(M,N))Àmpo K(M, J(N)) = L′ since J Â K,.
+i1 inv(x, y.z) −→i1 z
+The derivation
+Γ ′, z :E, y :A⊃B ⇒ z :E Ax
+Γ ′, z :E, x :B ⇒ inv(x, y.z) :E Inv
+rewrites to
+Γ ′, z :E, x :B ⇒ z :E Ax
+Also, L = J(?)Àmpo ? = L′ holds by the subterm property of ¿mpo .
+i2 inv(x, y.y) −→i2 λz.x
+The derivation
+Γ ′, y :A⊃B ⇒ y :A⊃B Ax
+Γ ′, x :B ⇒ inv(x, y.y) :A⊃B Inv
+rewrites to
+Γ ′, x :B, z :A ⇒ x :B Ax
+Γ ′, x :B ⇒ λz.x :A⊃B R⊃
+Also, L = J(?) Â I(?) = L′ holds by J Â I.
+i3 inv(x, y.λz.M) −→i3 λz.inv(x, y.M) with E = C⊃D
+The derivation
+Γ ′, y :A⊃B, z :C ⇒ M :D
+Γ ′, y :A⊃B ⇒ λz.M :C⊃D R⊃
+Γ ′, x :B ⇒ inv(x, y.λz.M) :C⊃D Inv
+rewrites to
+Γ ′, y :A⊃B, z :C ⇒ M :D
+Γ ′, x :B, z :C ⇒ inv(x, y.M) :D Inv
+Γ ′, x :B ⇒ λz.inv(x, y.M) :C⊃D R⊃
+Also, L = J(I(M))Àmpo I(J(M)) = L′ by J Â I.
+10
+i4 inv(x, y.y(w, z.N)) −→i4 {x/z}N
+The derivation
+Γ ′, w :A, z :B ⇒ N :E
+Γ ′, w :A, y :A⊃B ⇒ y(w, z.N) :E L0⊃
+Γ ′, w :A, x :B ⇒ inv(x, y.y(w, z.N)) :E Inv
+rewrites to
+Γ ′, w :A, z :B ⇒ N :E
+Γ ′, w :A, x :B ⇒ {x/z}N :E
+Ren
+Also, M = J(I(N))Àmpo N =M ′ holds by the subterm property of ¿mpo .
+i5 inv(x, y.y(u.v.M, z.N)) −→i5 {x/z}N with A = C⊃D
+The derivation
+Γ ′, u :C, v :D⊃B ⇒ M :D Γ ′, z :B ⇒ N :E
+Γ ′, y :A⊃B ⇒ y(u.v.M, z.N) :E L⊃⊃
+Γ ′, x :B ⇒ inv(x, y.y(u.v.M, z.N)) :E Inv
+rewrites to
+Γ ′, z :B ⇒ N :E
+Γ ′, x :B ⇒ {x/z}N :E
+(Ren)
+Also, L = J(K(M,N))Àmpo N = L′ holds by the subterm property of ¿mpo .
+i6 inv(x, y.w(y, z.N)) −→i6 w(u.v.x, z.inv(x, y.N))
+The derivation
+Γ ′, y :A⊃B, z :C ⇒ N :E
+Γ ′, w : (A⊃B)⊃C, y :A⊃B ⇒ w(y, z.N) :E L0⊃
+Γ ′, w : (A⊃B)⊃C, x :B ⇒ inv(x, y.w(y, z.N)) :E Inv
+rewrites to
+Γ ′, x :B, u :A, v :B⊃C ⇒ x :B Ax
+Γ ′, y :A⊃B, z :C ⇒ N :E
+Γ ′, x :B, z :C ⇒ inv(x, y.N) :E Inv
+Γ ′, w : (A⊃B)⊃C, x :B ⇒ w(u.v.x, z.inv(x, y.N)) :E L⊃⊃
+Also, L = J(I(N))Àmpo K(?, J(N)) = L′ by J Â K, ?.
+i7 inv(x, y.y′(w, z.N)) −→i7 y′(w, z.inv(x, y.N))
+The derivation
+Γ ′, w :C, z :D, y :A⊃B ⇒ N :E
+Γ ′, w :C, y′ :C⊃D, y :A⊃B ⇒ y′(w, z.N) :E L0⊃
+Γ ′, w :C, y′ :C⊃D,x :B ⇒ inv(x, y.y′(w, z.N)) :E Inv
+rewrites to
+Γ ′, w :C, z :D, y :A⊃B ⇒ N :E
+Γ ′, w :C, z :D,x :B ⇒ inv(x, y.N) :E Inv
+Γ ′, w :C, y′ :C⊃D,x :B ⇒ y′(w, z.inv(x, y.N)) :E L0⊃
+11
+Also, L = J(I(N))Àmpo I(J(N)) = L′ by J Â I.
+i8 inv(x, y.y′(u.v.M, z.N)) −→i8 y′(u.v.inv(x, y.M), z.inv(x, y.N))
+The derivation
+Γ ′, y :A⊃B, u :C, v :D⊃B′ ⇒ M :D Γ ′, y :A⊃B, z :B′ ⇒ N :E
+Γ ′, y′ : (C⊃D)⊃B′, y :A⊃B ⇒ y′(u.v.M, z.N) :E L⊃⊃
+Γ ′, y′ : (C⊃D)⊃B′, x :B ⇒ inv(x, y.y′(u.v.M, z.N)) :E Inv
+rewrites to
+Γ ′, y :A⊃B, u :C, v :D⊃B′ ⇒ M :D
+Γ ′, x :B, u :C, v :D⊃B′ ⇒ inv(x, y.M) :D Inv
+Γ ′, y :A⊃B, z :B′ ⇒ N :E
+Γ ′, x :B, z :B′ ⇒ inv(x, y.N) :E Inv
+Γ ′, y′ : (C⊃D)⊃B′, x :B ⇒ y′(u.v.inv(x, y.M), z.inv(x, y.N)) :E L⊃⊃
+Also, L = J(K(M,N))Àmpo K(J(M), J(N)) = L′ by J Â K.
+d1 dec(x, y, z.w) −→d1 w, where x, y, z and w are all distinct.
+The derivation
+Γ ′, w :E, z : (C⊃D)⊃B ⇒ w :E Ax
+Γ ′, w :E, x :C, y :D⊃B ⇒ dec(x, y, z.w) :E Dec
+rewrites to
+Γ ′, w :E, x :C, y :D⊃B ⇒ w :E Ax
+Also, L = Dm(?)Àmpo ? = L′, where m = {{Γ ′, E, (C⊃D)⊃B,E}}.
+d2 dec(x, y, z.z) −→d2 λv.v(x,w.y(w, u.u)).
+The derivation
+Γ ′, z : (C⊃D)⊃B ⇒ z : (C⊃D)⊃B Ax
+Γ ′, x :C, y :D⊃B ⇒ dec(x, y, z.z) :E Dec
+rewrites to
+Γ ′, x :C,w :D,u :B ⇒ u :B Ax
+Γ ′, x :C,w :D, y :D⊃B ⇒ y(w, u.u) :B L0⊃
+Γ ′, x :C, y :D⊃B, v :C⊃D ⇒ v(x,w.y(w, u.u)) :B L0⊃
+Γ ′, x :C, y :D⊃B ⇒ λv.v(x,w.y(w, u.u)) : (C⊃D)⊃B R⊃
+Also, L = Dm(?) Àmpo I(I(I(?))) = L′, where m = {{Γ ′, (C⊃D)⊃B, (C⊃D)⊃B}}, by
+Dm Â I.
+d3 dec(x, y, z.λw.M) −→d3 λw.dec(x, y, z.M).
+The derivation
+12
+Γ ′, z : (C⊃D)⊃B,w :E1 ⇒ M :E2
+Γ ′, z : (C⊃D)⊃B ⇒ λw.M :E1⊃E2 R⊃
+Γ ′, x :C, y :D⊃B ⇒ dec(x, y, z.λw.M) :E1⊃E2 Dec
+rewrites to
+Γ ′, z : (C⊃D)⊃B,w :E1 ⇒ M :E2
+Γ ′, x :C, y :D⊃B,w :E1 ⇒ dec(x, y, z.M) :E2 Dec
+Γ ′, x :C, y :D⊃B ⇒ λw.dec(x, y, z.M) :E1⊃E2 R⊃
+Let m = {{Γ ′, (C⊃D)⊃B,E1⊃E2}} and n = {{Γ ′, (C⊃D)⊃B,E1, E2}}. We have
+L = Dm(I(M))Àmpo I(Dn(M)) = L′
+since Dm Â I,Dn because m >mul n.
+d4 dec(x, y, z.w(u.v.M,w′.N)) −→d4 w(u.v.dec(x, y, z.M), w′.dec(x, y, z.N)).
+The derivation
+Γ ′, v :F, u :G⊃H, z : (C⊃D)⊃B ⇒ M :G Γ ′, w′ :H, z : (C⊃D)⊃B ⇒ N :E
+Γ ′, w : (F⊃G)⊃H, z : (C⊃D)⊃B ⇒ w(u.v.M,w′.N) :E L⊃⊃
+Γ ′, w : (F⊃G)⊃H,x :C, y :D⊃B ⇒ dec(x, y, z.w(u.v.M,w′.N)) :E Dec
+rewrites to
+Γ ′, v :F, u :G⊃H,x : (C⊃D)⊃B ⇒ M :G
+Γ ′, v :F , u :G⊃H,x :C, y :D⊃B ⇒ M ′ :G Dec
+Γ ′, w′ :H, z : (C⊃D)⊃B ⇒ N :E
+Γ ′, w′ :H,x :C, y :D⊃B ⇒ N ′ :E Dec
+Γ ′, w : (F⊃G)⊃H,x :C, y :D⊃B ⇒ w(u.v.M ′, w′.N ′) :G L⊃⊃
+with M ′ = dec(x, y, z.M) and N ′ = dec(x, y, z.N).
+Let k = {{Γ ′, (F⊃G)⊃H, (C⊃D)⊃B,E}} and m = {{Γ ′, F,G⊃H, (C⊃D)⊃B,G}} and n =
+{{Γ ′,H, (C⊃D)⊃B,E}}. We have
+L = Dk(K(M,N))Àmpo K(Dm(M,Dn(N)) = L′
+since Dk Â K,Dm,Dn because k >mul m,n.
+d5 dec(x, y, z.w(y′, z′.M)) −→d5 w(y′, z′.dec(x, y, z.M)).
+The derivation
+Γ ′, y′ :F, z′ :G, z : (C⊃D)⊃B ⇒ M :E
+Γ ′, y′ :F ,w :F⊃G, z : (C⊃D)⊃B ⇒ w(y′, z′.M) :E L0⊃
+Γ ′, y′ :F ,w :F⊃G, x :C, y :D⊃B ⇒ dec(x, y, z.w(y′, z′.M)) :E Dec
+rewrites to
+13
+Γ ′, y′ :F , z′ :G, z : (C⊃D)⊃B ⇒ M :E
+Γ ′, y′ :F , z′ :G, x :C, y :D⊃B ⇒ dec(x, y, z.M) :E Dec
+Γ ′, y′ :F,w :F⊃G, x :C, y :D⊃B ⇒ w(y′, z′.dec(x, y, z.M)) :E L0⊃
+Let k = {{Γ ′, F, F⊃G, (C⊃D)⊃B,E}} and m = {{Γ ′, F,G, (C⊃D)⊃B,E}}. We have
+L = Dk(I(M))Àmpo I(Dm(M)) = L′
+since Dk Â I,Dm because k >mul m.
+d6 dec(x, y, z.z(y′, z′.M)) −→d6 y′(x, z′′.y(z′′, z′.inv(z′′, y′.M))).
+The derivation
+Γ ′, y′ :C⊃D, z′ :B ⇒ M :E
+Γ ′, z : (C⊃D)⊃B, y′ :C⊃D ⇒ z(y′, z′.M) :E L0⊃
+Γ ′, x :C, y :D⊃B, y′ :C⊃D ⇒ dec(x, y, z.z(y′, z′.M)) :E Dec
+rewrites to
+Γ ′, y′ :C⊃D, z′ :B ⇒ M :E
+Γ ′, z′′ :D, z′ :B ⇒ inv(z′′, y′.M) :E Inv
+Γ ′, z′′ :D, y :D⊃B ⇒ y(z′′, z′.inv(z′′, y′.M)) :E L0⊃
+Γ ′, x :C, z′′ :D, y :D⊃B ⇒ y(z′′, z′.inv(z′′, y′.M)) :E
+(W )
+Γ ′, y′ :C⊃D,x :C, y :D⊃B ⇒ y′(x, z′′.y(z′′, z′.inv(z′′, y′.M))) :E L0⊃
+Also, L = Dk(I(M))Àmpo I(I(J(M))) = L′ since Dk Â I, J, where k = {{Γ ′, (C⊃D)⊃B,C⊃D,E}}.
+d7 dec(x, y, z.x′(z, z′.M)) −→d7 x(u.v.v(x, z′′.y(z′′, w.w)), z′.dec(x, y, z.M)).
+The derivation
+Γ ′, z : (C⊃D)⊃B, z′ :A ⇒ M :E
+Γ ′, x′ : ((C⊃D)⊃B)⊃A, z : (C⊃D)⊃B ⇒ x′(z, z′.M) :E L0⊃
+Γ ′, x′ : ((C⊃D)⊃B)⊃A, x :C, y :D⊃B ⇒ dec(x, y, z.x′(z, z′.M)) :E Dec
+rewrites to
+. . .
+Γ ′, . . . ⇒ v(x, z′′.y(z′′, w.w)) :B
+Γ ′, z : (C⊃D)⊃B, z′ :A ⇒ M :E
+Γ ′, x :C, y :D⊃B, z′ :A ⇒ dec(x, y, z.M) :E Dec
+Γ ′, x : ((C⊃D)⊃B)⊃A, y :C, z :D⊃B ⇒ x(u.v.v(x, z′′.y(z′′, w.w)), z′.dec(x, y, z.M)) :E L⊃⊃
+with first premiss is constructed as follows
+Γ ′, x :C,w :B, u :B⊃A, z′′ :D ⇒ w :B Ax
+Γ ′, x :C, y :D⊃B, u :B⊃A, z′′ :D ⇒ y(z′′, w.w) :B L0⊃
+Γ ′, x :C, y :D⊃B, u :B⊃A, v :C⊃D ⇒ v(x, z′′.y(z′′, w.w)) :B L0⊃
+14
+Let k = {{Γ ′, (C⊃D)⊃B, ((C⊃D)⊃B)⊃A,E}} and m = {{Γ ′, (C⊃D)⊃B,A,E}}. We have
+L = Dk(I(M))Àmpo K(I(I(?)),Dm(M)) = L′
+since Dk Â K, I, ?,Dm because k >mul m.
+d8 dec(x, y, z.z(u.v.M, z′.N)) −→d8 cut({y/u}{x/v}M,y′.y(y′, z′.N)).
+The derivation
+Γ ′, v :C, u :D⊃B ⇒ M :D Γ ′, z′ :B ⇒ N :E
+Γ ′, z : (C⊃D)⊃B ⇒ z(u.v.M, z′.N) :E L⊃⊃
+Γ ′, x :C, y :D⊃B ⇒ dec(x, y, z.z(u.v.M, z′.N)) :E Dec
+rewrites to
+Γ ′, v :C, u :D⊃B ⇒ M :D
+Γ ′, x :C, y :D⊃B ⇒ {y/u}{x/v}M :D
+(Ren)
+Γ ′, z′ :B ⇒ N :E
+y′ :D,Γ ′, x :C, z′ :B ⇒ N :E
+(W )
+y′ :D,Γ ′, x :C, y :D⊃B ⇒ y(y′, z′.N) :E L0⊃
+Γ ′, x :C, y :D⊃B ⇒ cut({y/u}{x/v}M,y′.y(y′, z′.N)) :E Cut
+Let k = {{Γ ′, (C⊃D)⊃B,E}} and j = {{Γ ′, D,C,D⊃B,E}}. We have
+L = Dk(K(M,N))Àmpo Cj(M, I(N)) = L′
+since Dk Â Cj , I because k >mul j.
+a cut(M,x.x) −→a M .
+The derivation
+Γ ⇒ M :A Γ, x :A ⇒ x :A Ax
+Γ ⇒ cut(M,x.x) :A Cut
+rewrites to
+Γ ⇒ M :A
+Also, L = Cm(M,?)Àmpo M = L′, where m = {{Γ,A,A}}.
+b cut(M,x.y) −→b y.
+The derivation
+Γ ′, y :E ⇒ M :A Γ ′, y :E, x :A ⇒ y :E Ax
+Γ ′, y :E ⇒ cut(M,x.y) :E Cut
+rewrites to
+Γ ′, y :E ⇒ y :E
+Also, L = Cm(M,?)Àmpo ? = L′, where m = {{Γ ′, E,A,E}}.
+15
+c cut(M,x.λy.N) −→c λy.cut(M,x.N).
+The derivation
+Γ ⇒ M :A
+x :A,Γ , y :C ⇒ N :D
+x :A,Γ ⇒ λy.N :C⊃D R⊃
+Γ ⇒ cut(M,x.λy.N) :C⊃D Cut
+rewrites to
+Γ ⇒ M :A
+Γ, y :C ⇒ M :A (W ) x :A,Γ , y :C ⇒ N :D
+Γ, y :C ⇒ cut(M,x.N) :D Cut
+Γ ⇒ λy.cut(M,x.N) :C⊃D R⊃
+Let k = {{A,Γ ,C⊃D}} and j = {{A,Γ ,C,D}}. We have
+L = Ck(M, I(N))Àmpo I(Cj(M,N)) = L′
+since Ck Â I,Cj because k >mul j.
+d cut(M,x.z(y, w.N)) −→d z(y, w.cut(inv(w, z.M), x.N)).
+The derivation
+Γ ′, y :C, z :C⊃B ⇒ M :A
+x :A,Γ ′, y :C,w :B ⇒ N :E
+x :A,Γ ′, y :C, z :C⊃B ⇒ z(y, w.N) :E L0⊃
+Γ ′, y :C, z :C⊃B ⇒ cut(M,x.z(y, w.N)) :E Cut
+rewrites to
+Γ ′, y :C, z :C⊃B ⇒ M :A
+Γ ′, y :C,w :B ⇒ inv(w, z.M) :A Inv x :A,Γ ′, y :C,w :B ⇒ N :E
+Γ ′, y :C,w :B ⇒ cut(inv(w, z.M), x.N) :E Cut
+Γ ′, y :C, z :C⊃B ⇒ z(y, w.cut(inv(w, z.M), x.N)) :E L0⊃
+Let k = {{A,Γ ′, C, C⊃B,E}} and j = {{A,Γ ′, C,B,E}}. We have
+L = Ck(M, I(N))Àmpo I(Cj(J(M), N) = L′
+since Ck Â I,Cj , J because k >mul j.
+e cut(M,x.y(u.v.N, z.N ′)) −→e y(u.v.cut(dec(v, u, y.M), x.N), z.cut(inv(z, y.M), x.N ′)).
+The derivation
+Γ ′, y : (C⊃D)⊃B ⇒ M :A
+x :A,Γ ′, v :C, u :D⊃B ⇒ N :D x :A,Γ ′, z :B ⇒ N ′ :E
+x :A,Γ ′, y : (C⊃D)⊃B ⇒ y(u.v.N, z.N ′) :E L⊃⊃
+Γ ′, y : (C⊃D)⊃B ⇒ cut(M,x.y(u.v.N, z.N ′)) :E Cut
+rewrites to
+D
+Γ ′, v :C, u :D⊃B ⇒ cut(dec(v, u, y.M), x.N) :D
+D′
+Γ ′, z :B ⇒ cut(inv(z, y.M), x.N ′) :E
+Γ ′, y : (C⊃D)⊃B ⇒ y(u.v.cut(dec(v, u, y.M), x.N), z.cut(inv(z, y.M), x.N ′)) :E L⊃⊃
+16
+where D is the following derivation:
+Γ ′, y : (C⊃D)⊃B ⇒ M :A
+Γ ′, v :C, u :D⊃B ⇒ dec(v, u, y.M) :A Dec x :A,Γ ′, v :C, u :D⊃B ⇒ N :D
+Γ ′, v :C, u :D⊃B ⇒ cut(dec(v, u, y.M), x.N) :D Cut
+and D′ is the following derivation:
+Γ ′, y : (C⊃D)⊃B ⇒ M :A
+Γ ′, z :B ⇒ inv(z, y.M) :A Inv x :A,Γ ′, z :B ⇒ N ′ :E
+Γ ′, z :B ⇒ cut(inv(z, y.M), x.N ′) :E Cut
+Let k = {{A,Γ ′, (C⊃D)⊃B,E}} and j = {{A,Γ ′, C,D⊃B,D}} and i = {{A,Γ ′, B,E}} and
+h = {{Γ ′, (C⊃D)⊃B,A}}.
+We have
+L = Ck(M,K(N ′, N))Àmpo K(Cj(Dh(M), N ′),Ci(J(M), N) = L′
+since Ck Â K, J,Cj ,Ci,Dh because k >mul j, h, i.
+f cut(λz.M, x.y(x,w.N)) −→f y(u.v.cut(u,w.dec(w, v, y.M)), w.cut(inv(w, y.λz.M), x.N)).
+The derivation
+z :C, Γ ′, y : (C⊃D)⊃B ⇒ M :D
+Γ ′, y : (C⊃D)⊃B ⇒ λz.M :C⊃D R⊃
+x :C⊃D,Γ ′, w :B ⇒ N :E
+x :C⊃D,Γ ′, y : (C⊃D)⊃B ⇒ y(x,w.N) :E L0⊃
+Γ ′, y : (C⊃D)⊃B ⇒ cut(λz.M, x.y(x,w.N)) :E Cut
+rewrites to
+D
+Γ ′, u :C, v :D⊃B ⇒ M ′ :D
+D′
+Γ ′, w :B ⇒ N ′ :E
+Γ ′, y : (C⊃D)⊃B ⇒ y(u.v.M ′, w.N ′) :E L⊃⊃
+whereM ′ = cut(u,w.dec(w, v, y.M)), N ′ = cut(inv(w, y.λz.M), x.N), D is the following
+derivation:
+Γ ′, u :C, v :D⊃B ⇒ u :C Ax
+u :C, Γ ′, y : (C⊃D)⊃B ⇒ M :D
+Γ ′, u :C,w :C, v :D⊃B ⇒ dec(w, v, y.M) :D Dec
+Γ ′, u :C, v :D⊃B ⇒ cut(u,w.dec(w, v, y.M)) :D Cut
+and D′ is the following derivation:
+Γ ′, y :A⊃B ⇒ λz.M :C⊃D
+Γ ′, w :B ⇒ inv(w, y.λz.M) :C⊃D Inv x :C⊃D,Γ ′, w :B ⇒ N :E
+Γ ′, w :B ⇒ cut(inv(w, y.λz.M), x.N) :E Cut
+Let k = {{C⊃D,Γ ′, (C⊃D)⊃B,E}} and j = {{Γ ′, C, C,D⊃B,D}} and h = {{C, Γ ′, (C⊃D)⊃B,D}}
+and i = {{C⊃D,Γ ′, B,E}}.
+17
+We have
+L = Ck(I(M), I(N))Àmpo K(Cj(?,Dh(M)),Ci(J(I(M)), N)) = L′
+since Ck Â K, ?, J, I,Cj ,Ci,Dh because k >mul j, i, h.
+g cut(x, y.z(y, w.M)) −→g z(y, w.cut(x, y.M)).
+The derivation
+Γ ′, x :A, z :A⊃B ⇒ x :A Ax
+x :A, y :A,w :B,Γ ′ ⇒ M :E
+x :A, y :A, z :A⊃B,Γ ′ ⇒ z(y, w.M) :E L0⊃
+Γ ′, x :A, z :A⊃B ⇒ cut(x, y.z(y, w.M)) :E Cut
+rewrites to
+Γ ′, x :A,w :B ⇒ x :A Ax x :A, y :A,w :B,Γ ′ ⇒ M :E
+Γ ′, x :A,w :B ⇒ cut(x, y.M) :E Cut
+Γ ′, x :A, z :A⊃B ⇒ z(y, w.cut(x, y.M)) :E L0⊃
+Let k = {{A,A,A⊃B,Γ ′, E}} and j = {{A,A,B, Γ ′, E}}.
+We have
+L = Ck(?, I(M))Àmpo I(Cj(?,M)) = L′
+since Ck Â I,Cj because k >mul j.
+pi cut(z(y, w.M), x.N) −→pi z(y, w.cut(M,x.inv(w, z.N))).
+The derivation
+Γ ′, y :C,w :B ⇒ M :A
+Γ ′, y :C, z :C⊃B ⇒ z(y, w.M) :A L0⊃ x :A,Γ ′, y :C, z :C⊃B ⇒ N :E
+Γ ′, y :C, z :C⊃B ⇒ cut(z(y, w.M), x.N) :E Cut
+rewrites to
+Γ ′, y :C,w :B ⇒ M :A
+x :A,Γ ′, y :C, z :C⊃B ⇒ N :E
+x :A,Γ ′, y :C,w :B ⇒ inv(w, z.N) :E Inv
+Γ ′, y :C,w :B ⇒ cut(M,x.inv(w, z.N)) :E Cut
+Γ ′, y :C, z :C⊃B ⇒ z(y, w.cut(M,x.inv(w, z.N))) :E L0⊃
+Let k = {{A,Γ ′, C, C⊃B,E}} and j = {{A,Γ ′, C,B,E}}.
+We have
+L = Ck(I(M), N)Àmpo I(Cj(M, J(N)) = L′
+since Ck Â I,Cj , J because k >mul j.
+φ cut(y(u.v.M, z.M ′), x.N) −→φ y(u.v.M, z.cut(M ′, x.inv(z, y.N))).
+The derivation
+Γ ′, v :C, u :D⊃B ⇒ M :D Γ ′, z :B ⇒ M ′ :A
+Γ ′, y : (C⊃D)⊃B ⇒ y(u.v.M, z.M ′) :A L⊃⊃ x :A,Γ ′, y : (C⊃D)⊃B ⇒ N :E
+Γ ′, y : (C⊃D)⊃B ⇒ cut(y(u.v.M, z.M ′), x.N) :E Cut
+18
+rewrites to
+Γ ′, v :C, u :D⊃B ⇒ M :D
+Γ ′, z :B ⇒ M ′ :A
+x :A,Γ ′, y : (C⊃D)⊃B ⇒ N :E
+x :A,Γ ′, z :B ⇒ inv(z, y.N) :E Of
+Γ ′, z :B ⇒ cut(M ′, x.inv(z, y.N)) :E Cut
+Γ ′, y : (C⊃D)⊃B ⇒ y(u.v.M, z.cut(M ′, x.inv(z, y.N))) :E L⊃⊃
+Let k = {{A,Γ ′, (C⊃D)⊃B,E}} and j = {{A,Γ ′, B,E}}.
+We have
+L = Ck(K(M,M ′), N)Àmpo K(M,Cj(M ′, J(N))) = L′
+since Ck Â K,Cj , J because k >mul j.
+A cut(M,x.x(z, w.N)) −→A cut(cut(z, y.of(M,y)), w.N).
+The derivation
+Γ ′, z :C ⇒ M :C⊃B
+Γ ′, z :C,w :B ⇒ N :E
+Γ ′, z :C, x :C⊃B ⇒ x(z, w.N) :E L0⊃
+Γ ′, z :C ⇒ cut(M,x.x(z, w.N)) :E Cut
+rewrites to
+Γ ′, z :C ⇒ z :C Ax
+Γ ′, z :C ⇒ M :C⊃B
+Γ ′, z :C, y :C ⇒ of(M,y) :B Of
+Γ ′, z :C ⇒ cut(z, y.of(M,y)) :B Cut Γ ′, z :C,w :B ⇒ N :E
+Γ ′, z :C ⇒ cut(cut(z, y.of(M,y)), w.N) :E Cut
+Let k = {{Γ ′, C, C⊃B,E}} and j = {{Γ ′, C,B,E}} and i = {{Γ ′, C, C,B}}. We have
+L = Ck(M, I(N))Àmpo Cj(Ci(?, J(M)), N) = L′
+since k >mul j, i and C
+k Â ?, J,Cj ,Ci.
+B cut(M,x.x(u.v.N, z.N ′)) −→B cut(cut(λu.cut(λy′.inv(y′, y.of(M,y)), v.N), y.of(M,y)), z.N ′).
+The derivation
+Γ ⇒ M : (C⊃D)⊃B
+u :C, v :D⊃B,Γ ⇒ N :D z :B,Γ ⇒ N ′ :E
+x : (C⊃D)⊃B,Γ ⇒ x(u.v.N, z.N ′) :E L⊃⊃
+Γ ⇒ cut(M,x.x(u.v.N, z.N ′)) :E Cut
+rewrites to
+D
+Γ ⇒ M ′ :C⊃D
+Γ ⇒ M : (C⊃D)⊃B
+Γ, y :C⊃D ⇒ of(M,y) :B Of
+Γ ⇒ cut(M ′, y.of(M,y)) :B Cut z :B,Γ ⇒ N ′ :E
+Γ ⇒ cut(cut(M ′, y.of(M,y)), z.N ′) :E Cut
+19
+where M ′ = λu.cut(λy′.inv(y′, y.of(M,y)), v.N) and D is the following derivation:
+Γ ⇒ M : (C⊃D)⊃B
+Γ, y :C⊃D ⇒ of(M,y) :B Of
+Γ , u :C, y :C⊃D ⇒ of(M,y) :B
+(W )
+Γ , u :C, y′ :D ⇒ inv(y′, y.of(M,y)) :B Inv
+Γ , u :C ⇒ λy′.inv(y′, y.of(M,y)) :D⊃B R⊃ u :C, v :D⊃B,Γ ⇒ N :D
+Γ, u :C ⇒ cut(λy′.inv(y′, y.of(M,y)), v.N) :D Cut
+Γ ⇒ λu.cut(λy′.inv(y′, y.of(M,y)), v.N) :C⊃D R⊃
+Let k = {{(C⊃D)⊃B,Γ ,E}} and j = {{B,Γ,E}} and i = {{Γ ,C⊃D,B}} and h = {{C,D⊃B,Γ ,D}}.
+We have
+L =
+Ck(M,K(N,N ′)) Àmpo Cj(Ci(I(Ch(I(J(J(M))), N)), J(M)), N ′)
+= L′
+since Ck Â I, J,Cj ,Ci,Ch because k >mul j, i, h.
+2
+Corollary 1 (Strong Normalisation). System gs is strongly normalising on typed terms.
+Proof: This is a consequence of Theorem 1 and Remark 3. 2
+Corollary 2. Rules Inv,Of,Dec, and Cut are logically admissible in the system of Defini-
+tion 4.
+Proof: Every term with an auxiliary constructor is reducible by system gs. 2
+6 Variants of reduction systems
+We investigate in this section some variants of the cut-elimination system presented in Sec-
+tion 3.
+We discuss in Section 6.1 the rules of Kind3, noticing that the of( , )-constructor is only
+introduced by the reductions of gs in order to include η-conversion in the system. We present
+two variations without η-conversion, called system rs and system ars, that no longer use the
+of( , )-constructor.
+Without η-conversion, the only critical pairs of those variations are between the rules of
+Kind1 and those of Kind2, so in Section 6.2, which only concerns rules of Kind1 and Kind2, we
+present two ways of removing those critical pairs, i.e. of making systems rs and ars orthogonal.
+All the systems presented in this paper can be summarised in the following table:
+20
+of, inv and dec cut = (Kind1 + Kind2) + Kind3 Whole system
+oid cegs = Table 4 + Table 5 gs
+oid cers = Table 4 + Table 6 rs
+oid cears = Table 4 + Table 7 ars
+oid cecbn = Table 8 + (Table 6 or Table 7) cbn
+oid cecbv = Table 9 + (Table 6 or Table 7) cbv
+6.1 Avoiding the of-constructor
+In this section we remove η-expansion from the reduction system so that the of( , )-constructor
+is no more used by the cut elimination rules. We obtain two variants, depending on whether
+we want variables to behave like their η-expansions or we want the elimination of a cut with
+a variable to be simpler and closer to renaming.
+The rules A and B of system gs introduce the of( , )-constructor to model η-expansion,
+turning the first argument of the cut into an abstraction.
+Theorem 2. Rule A (resp. B) can be factorised into an η-expansion followed by rule C (resp.
+D) below:
+cut(λy.M, x.x(z, w.N)) −→C cut(cut(z, y.M), w.N)
+cut(λy.M, x.x(u.v.N ′, w.N)) −→D cut(cut(λu.cut(λz.inv(z, y.M), v.N ′), y.M), w.N)
+Proof:
+(Rule A) cut(M,x.x(z, w.N))
+−→η cut(λy.of(M,y), x.x(z, w.N))
+−→C cut(cut(z, y.of(M,y)), w.N)
+(Rule B) cut(M,x.x(u.v.N ′, w.N))
+−→η cut(λy.of(M,y), x.x(u.v.N ′, w.N))
+−→D cut(cut(λu.cut(λz.inv(z, y.of(M,y)), v.N ′), y.of(M,y)), w.N)
+2
+Note that the η-expansion of an abstraction reduces, by direct elimination of the of( , ),
+to the abstraction itself:
+λy.M −→η λx.of(λy.M, x) −→o2 λx.{x/y}M =α λy.M with x /∈ FV (M)
+This justifies the following theorem:
+Theorem 3. Rules C and D can be respectively derived from rules A and B using system
+oid.
+Proof:
+(Rule C) cut(λy.M, x.x(z, w.N))
+−→A cut(cut(z, w′.of(λy.M,w′)), w.N)
+−→o2 cut(cut(z, w′.{w′/y}M), w.N)
+=α cut(cut(z, y.M), w.N)
+(Rule D) cut(λy.M, x.x(u.v.N ′, w.N))
+−→B cut(cut(λu.cut(λz.inv(z, w′.of(λy.M,w′)), v.N ′), z′.of(λy.M, z′)), w.N)
+−→∗o2 cut(cut(λu.cut(λz.inv(z, w′.{w′/y}M), v.N ′), z′.{z′/y}M), w.N)
+=α cut(cut(λu.cut(λz.inv(z, y.M), v.N ′), y.M), w.N)
+21
+2Similarly, direct elimination of the of( , )-constructor is allowed by rule o1 in the case of a
+variable (y −→η λx.of(y, x) −→o1 y(x, z.z) with x /∈ FV (M)), so this suggests that two
+rules E and F , treating the case of a variable, can also be derived from rules A and B:
+Theorem 4. The following rules E and F can be respectively derived from A and B using
+system gs:
+cut(y, x.x(z, w.N)) −→E y(z, w′.cut(w′, w.inv(w′, y.N)))
+cut(y, x.x(u.v.N ′, w.N)) −→F y(u′.v′.cut(u′, u.P ), w′.cut(w′, w.inv(w′, y.N)))
+where P = dec(u′, v′, y.cut(λy′′.y(u.v.y′′, z.z), v.N ′))
+Proof:
+(Rule E) cut(y, x.x(z, w.N))
+−→A cut(cut(z, y′.of(y, y′)), w.N)
+−→o1 cut(cut(z, y′.y(y′, w′.w′)), w.N)
+−→g cut(y(z, w′.cut(z, y′.w′)), w.N)
+−→b cut(y(z, w′.w′), w.N)
+−→pi y(z, w′.cut(w′, w.inv(w′, y.N)))
+(Rule F ) cut(y, x.x(u.v.N ′, w.N))
+−→B cut(cut(λu.cut(L, v.N ′), y′.of(y, y′)), w.N)
+−→∗ cut(cut(λu.cut(L′, v.N ′), y′.of(y, y′)), w.N)
+−→o1 cut(cut(λu.cut(L′, v.N ′), y′.y(y′, w′.w′)), w.N)
+−→∗ cut(y(u′.v′.cut(u′, u.P ), w′.w′), w.N)
+−→φ y(u′.v′.cut(u′, u.P ), w′.cut(w′, w.inv(w′, y.N)))
+where the first −→∗ is justified by
+L = λy′′.inv(y′′, w′.of(y, w′))
+−→o1 λy′′.inv(y′′, w′.y(w′, z.z))
+−→i6 λy′′.y(y1.y2.y′′, z.inv(y′′, w′.z))
+−→i1 λy′′.y(y1.y2.y′′, z.z) = L′
+and the last −→∗ is justified by
+cut(λu.cut(L′, v.N ′), y′.y(y′, w′.w′))
+−→f y(u′.v′.cut(u′, u.dec(u′, v′, y.cut(L′, v.N ′))), w′.cut(inv(w′, y.λu.cut(L′, v.N ′)), y′.w′))
+−→b y(u′.v′.cut(u′, u.dec(u′, v′, y.cut(L′, v.N ′))), w′.w′)
+= y(u′.v′.cut(u′, u.P ), w′.w′) 2
+Now, by construction, rules E and F make variables have the same functional behaviour
+as their η-expansion.
+Notice also that the new rules C, D, E and F (together with rules pi and φ) can now
+replace any use of rules A and B, thus forming a system, called cers, that is still complete for
+cut-elimination and makes no use of the of( , )-constructor. We show in Table 6 only the cut
+reduction rules of Kind3, in which cegs and cers differ, the rules of Kind1 and Kind2 being the
+same. System cegs can thus be seen as system cers to which η-expansion has been integrated
+by the use of the auxiliary constructor of( , ).
+The behaviour of functionals is interesting in G4ip, because it is a depth-bounded calcu-
+lus. For instance, among all Church’s numerals, only 0 and 1 can be represented in G4ip, so
+22
+Kind3
+cut(λy.M, x.x(z, w.N)) −→C cut(cut(z, y.M), w.N)
+cut(λy.M, x.x(u.v.N ′, w.N)) −→D cut(cut(λu.cut(λz.inv(z, y.M), v.N ′), y.M), w.N)
+cut(y, x.x(z, w.N)) −→E y(z, w′.cut(w′, w.inv(w′, y.N)))
+cut(y, x.x(u.v.N ′, w.N)) −→F y(u′.v′.cut(u′, u.P ), w′.cut(w′, w.inv(w′, y.N)))
+where P = dec(u′, v′, y.cut(λy′′.y(u.v.y′′, z.z), v.N ′))
+Table 6. Cut Elimination Rules in System cers (Kind3)
+when reducing the term that represents (using cuts) “1 + 1”, we should expect some seman-
+tical anomaly in the reductions (which is quite similar to the one reported by Vestergaard
+in [Ves99]). Such an anomaly is to be found in rules B and D, and for abstractions we have
+no alternative choice. However in system rs we have made the choice of making variables have
+the same functional behaviour as their η-expansions, hence rule F inherits the anomaly. But
+instead we might rather follow the intuition that cutting a variable with a another variable is
+almost renaming, and replace rule F with a new rule G, thus forming system cears presented
+in Table 7 (again we only show rules of Kind3, but rules of Kind1 and Kind2 are the same as
+in cegs or cers). This new rule is simpler and more natural than rule F ; however the reducts
+are semantically different and thus the choice of rule G breaks the property that a variable
+and its η-expansion have the same behaviour.
+Kind3
+cut(λy.M, x.x(z, w.N)) −→C cut(cut(z, y.M), w.N)
+cut(λy.M, x.x(u.v.N ′, w.N)) −→D cut(cut(λu.cut(λz.inv(z, y.M), v.N ′), y.M), w.N)
+cut(y, x.x(z, w.N)) −→E y(z, w′.cut(w′, w.inv(w′, y.N)))
+cut(y, x.x(u.v.N ′, w.N)) −→G y(u′.v′.cut(u′, u.P ′), w′.cut(w′, w.inv(w′, y.N)))
+where P ′ = cut(v′, v.dec(u′, v′, y.N ′))
+Table 7. Cut Elimination Rules in System cears (Kind3)
+Since all the rules of system rs are derived from system gs, it is clear that the former
+inherits from the latter the Subject Reduction property as well as the Strong Normalisation
+of typed terms. However, for system ars, those properties are not inherited, so we have to
+check that rule G satisfies the Subject Reduction property and decreases the multi-set path
+ordering from Section 4.
+cut(y, x.x(u.v.N ′, w.N)) −→G y(u′.v′.cut(u′, u.P ′), w′.cut(w′, w.inv(w′, y.N)))
+Let Γ = Γ ′, y : (C⊃D)⊃B.
+The derivation
+23
+Γ ⇒ y : (C⊃D)⊃B
+Γ, u :C, v :D⊃B ⇒ N ′ :D Γ,w :B ⇒ N :E
+Γ, x : (C⊃D)⊃B ⇒ x(u.v.N ′, w.N) :E L⊃⊃
+Γ ⇒ cut(y, x.x(u.v.N ′, w.N)) :E Cut
+rewrites to
+Γ ′, u′ :C, v′ :D⊃B ⇒ u′ :C Ax
+L
+Γ ′, u :C, u′ :C, v′ :D⊃B ⇒ P ′ :D
+Γ ′, u′ :C, v′ :D⊃B ⇒ cut(u′, u.P ′) :D Cut
+L′
+Γ ′, w′ :B ⇒ M :E
+Γ ′, y : (C⊃D)⊃B ⇒ y(u′.v′.cut(u′, u.P ′), w′.L′) :E L⊃⊃
+where M = cut(w′, w.inv(w′, y.N)), the premiss L is constructed as follows:
+Γ ′, u :C, u′ :C, v′ :D⊃B ⇒ v′ :D⊃B
+Γ ′, y : (C⊃D)⊃B, u :C, v :D⊃B ⇒ N ′ :D
+Γ ′, u :C, v :D⊃B, u′ :C, v′ :D⊃B ⇒ dec(u′, v′, y.N ′) :D Dec
+Γ ′, u :C, u′ :C, v′ :D⊃B ⇒ cut(v′, v.dec(u′, v′, y.N ′)) :D Cut
+and the second premiss L′ is constructed as follows:
+Γ ′, w′ :B ⇒ w′ :B
+Γ ′, y : (C⊃D)⊃B,w :B ⇒ N :E
+Γ ′, w′ :B,w :B ⇒ inv(w′, y.N) :E Inv
+Γ ′, w′ :B ⇒ cut(w′, w.inv(w′, y.N)) :E Cut
+Let k = {{Γ , (C⊃D)⊃B, (C⊃D)⊃B,E}} and i = {{Γ ′, B,B,E}} and j = {{Γ ′, C, C,D⊃B,D}}
+and h = {{Γ ′, C,D⊃B,C,D⊃B,D}} and l = {{Γ ′, (C⊃D)⊃B,C,D⊃B,E}} and
+We have
+cut(y, x.x(u.v.N ′, w.N))
+=
+Ck(?,K(N ′, N)) Àmpo K(Cj(?,Ch(?,Dl(N ′))),Ci(?, J(N)))
+=
+y(u′.v′.cut(u′, u.P ′), w′.cut(w′, w.inv(w′, y.N)))
+since Ck Â K,Cj ,Ch,Dl,Ci because k >mul i, j, h, l.
+6.2 Orthogonal systems
+In this section we suggest two ways of restricting the rules of Kind1 and Kind2 to make systems
+rs and ars orthogonal, and hence confluent.
+In the restricted systems gs and ars there is an overlap between the right and left propaga-
+tion sub-systems, i.e. there is a critical pair between any rule in {a, b, c, d, e} and any rule any
+in {pi, φ}. This is shown in the following table, where column headers represent the different
+cases concerning the first premiss of the cut, while row headers represent the different cases
+for the second one (marking inside parentheses the status of the cut-type).
+24
+Axiom R⊃ L0⊃ L⊃⊃
+Axiom (Principal) a a api aφ
+Axiom (Non-Principal) b b bpi bφ
+R⊃ c c cpi cφ
+L0⊃ (Non-Principal, Non-Auxiliary) d d dpi dφ
+L⊃⊃ (Non-Principal) e e epi eφ
+L0⊃ (Non-Principal, Auxiliary) g f pi φ
+L0⊃ (Principal) E C pi φ
+L⊃⊃ (Principal) F or G D pi φ
+This overlap is well-known in sequent calculus, and corresponds to the choice of whether
+to push a cut into the proof of its left premiss or into the proof of its right premiss. The
+former corresponds to a call-by-value strategy and the latter corresponds to a call-by-name
+strategy.
+Since the overlap only concerns cut reduction rules of Kind1 and Kind2, we shall only study
+those kinds of rules and leave the rules of Kind3 as they are in system cers or in system cears
+since both are possible.
+Call-by-name One way to make the system orthogonal is to give preference to rules a-b-c-
+d-e over rules pi-φ, thus restricted to the case when N is an x-covalue Q, i.e. is of the form
+x(y, w.N) or x(u.v.M,w.N). We show the resulting reduction rules of Kind1 and Kind2 in
+Table 8.
+Kind1
+cut(M,x.x) −→a M
+cut(M,x.y) −→b y
+cut(M,x.λy.N) −→c λy.cut(M,x.N)
+cut(M,x.y(z, w.N)) −→d y(z, w.cut(inv(w, y.M), x.N))
+cut(M,x.y(u.v.N ′, w.N)) −→e y(u.v.cut(dec(u, v, y.M), x.N ′), w.cut(inv(w, y.M), x.N))
+cut(λz.M, x.y(x,w.N)) −→f y(u.v.cut(u, z.dec(u, v, y.M)), w.cut(inv(w, y.λz.M), x.N))
+cut(z, x.y(x,w.N)) −→g y(z, w.cut(z, x.N))
+Kind2
+cut(y(z, w.M), x.Q) −→pi y(z, w.cut(M,x.inv(w, y.Q)))
+cut(y(u.v.M ′, w.M), x.Q) −→φ y(u.v.M ′, w.cut(M,x.inv(w, y.Q)))
+Table 8. Cut Elimination Rules in system cecbn (Kind1 and Kind2)
+Notice that in order to reduce a term like cut(M,x.y(x,w.N)), there is no choice other
+than left-propagation (rules pi and φ) until a similar redex is found in which M is a value,
+and then only rules f or g can be applied.
+25
+Axiom R⊃ L0⊃ L⊃⊃
+Axiom (Principal) a a a a
+Axiom (Non-Principal) b b b b
+R⊃ c c c c
+L0⊃ (Non-Principal, Non-Auxiliary) d d d d
+L⊃⊃ (Non-Principal) e e e e
+L0⊃ (Non-Principal, Auxiliary) g f pi φ
+L0⊃ (Principal) E C pi φ
+L⊃⊃ (Principal) F (G) D pi φ
+Call-by-value Alternatively, preference might be given to rules pi and φ, which we can for-
+malise as restricting rules a-b-c-d-e to the case when M is a value V (variable or abstraction).
+We show the resulting reduction rules of Kind1 and Kind2 in Table 9.
+Kind1
+cut(V, x.x) −→a V
+cut(V, x.y) −→b y
+cut(V, x.λy.N) −→c λy.cut(V, x.N)
+cut(V, x.y(z, w.N)) −→d y(z, w.cut(inv(w, y.V ), x.N))
+cut(V, x.y(u.v.N ′, w.N)) −→e y(u.v.cut(dec(u, v, y.V ), x.N ′), w.cut(inv(w, y.V ), x.N))
+cut(λz.M, x.y(x,w.N)) −→f y(u.v.cut(u, z.dec(u, v, y.M)), w.cut(inv(w, y.λz.M), x.N))
+cut(z, x.y(x,w.N)) −→g y(z, w.cut(z, x.N))
+Kind2
+cut(y(z, w.M), x.N) −→pi y(z, w.cut(M,x.inv(w, y.N)))
+cut(y(u.v.M ′, w.M), x.N) −→φ y(u.v.M ′, w.cut(M,x.inv(w, y.N)))
+Table 9. Cut Elimination Rules in system cecbv (Kind1 and Kind2)
+This choice is particularly coherent because the two rules of right-propagation f and g only
+apply to cuts whose first argument is a value. This suggests thatG4ip has an inherent call-by-
+value flavour, echoing the idea that it is somehow based on the call-by-value sequent calculus
+LJQ. Indeed, completeness of LJQ gives a short proof of the completeness of G4ip [DL06].
+Axiom R⊃ L0⊃ L⊃⊃
+Axiom (Principal) a a pi φ
+Axiom (Non-Principal) b b pi φ
+R⊃ c c pi φ
+L0⊃ (Non-Principal, Non-Auxiliary) d d pi φ
+L⊃⊃ (Non-Principal) e e pi φ
+L0⊃ (Non-Principal, Auxiliary) g f pi φ
+L0⊃ (Principal) E C pi φ
+L⊃⊃ (Principal) F (G) D pi φ
+We finish this section by stating the following property of the orthogonal systems presented
+here.
+26
+Theorem 5. Reduction systems cbn and cbv are confluent, hence normal forms are unique.
+Proof: Systems cbn and cbv can be seen as particular orthogonal CRS, so they enjoy con-
+fluence (see [vOvR94] for details). 2
+7 Another proof of strong normalization
+We present here a second proof of strong normalization.
+Lemma 2. If N ∈ SNgs, then inv(x, y.N) ∈ SNgs.
+Proof. By induction on 〈N, |N |〉 w.r.t the lexicographic order 〈→, >〉.
+Lemma 3. If N ∈ SNgs, then of(N, x) ∈ SNgs.
+Proof. By induction on 〈N, |N |〉 w.r.t the lexicographic order 〈→, >〉.
+Lemma 4. Suppose Γ , z :A ` N : E and N ∈ SNgs. Then
+1. If A = (C⊃D)⊃B, and x, y are fresh, then dec(x, y, z.N) ∈ SNgs;
+2. Let Γ `M : A with M ∈ SNgs; then cut(M, z.N) ∈ SNgs.
+Proof. By simultaneous induction on tuples 〈({{Γ ,A,E}}, N,M〉 w.r.t. the lexicographic order
+〈>multiset,→,→〉.
+Theorem 6. If Γ `M : A, then M ∈ SNgs.
+Proof. By induction on the structure of M using Lemmas 2, 3 and 4.
+Theorem 7. If Γ `M : A, then M ∈ SNrs.
+Proof. This is evident since every rs-reduction step can be simulated by a non-empty sequence
+in gs.
+Theorem 8. If Γ `M : A, then M ∈ SNars.
+Proof. One can do the same proof as in Theorem 6 by remarking that rule G also decreases
+the measure of sequents.
+27
+8 Conclusion
+This paper defines various proof-term calculi for the depth-bounded intuitionistic sequent
+calculus of Hudelmaier. Using standard techniques of rewriting, we prove subject-reduction
+and strong normalisation for all of them, so Cut-admissibility turns out to be a corollary. The
+cbn and cbv systems presented in this paper are also orthogonal, which guarantees confluence
+(and uniqueness of normal forms).
+Some relations betweenG4ip and other calculi for intuitionistic logic are studied in [DL06].
+Our approach also suggests how to obtain a term calculus for G4ip but (as in λ-calculus)
+with implicit, rather than explicit, operators to model cut-elimination. This would bring our
+calculus closer to that of Matthes [Mat02], and with a strong normalising cut-elimination pro-
+cedure. As mentioned in the introduction, defining a denotational semantics for our calculi
+as well as investigating the connexions with the simply-typed λ-calculus would reveal more
+properties of the proofs in G4ip. This is left for further investigations.
+References
+[BN98] F. Baader and T. Nipkow. Term Rewriting and All That. Cambridge University Press, 1998.
+[DL06] R. Dyckhoff and S. Lengrand. LJQ, a strongly focused calculus for intuitionistic logic, 2006. Sub-
+mitted. Available at http://www.pps.jussieu.fr/~lengrand/Work/Papers.html.
+[DM79] N. Dershowitz and Z. Manna. Proving termination with multiset orderings. Communications of the
+ACM, 22(8):465–476, 1979.
+[DN00] R. Dyckhoff and S. Negri. Admissibility of structural rules for contraction-free systems of intuition-
+istic logic. The Journal of Symbolic Logic, 65(4):1499–1518, 2000.
+[Dyc92] R. Dyckhoff. Contraction-free sequent calculi for intuitionistic logic. The Journal of Symbolic Logic,
+57(3):795–807, 1992.
+[Hud89] J. Hudelmaier. Bounds for Cut Elimination in Intuitionistic Logic. PhD thesis, Universita¨t Tu¨bingen,
+1989.
+[Hud92] J. Hudelmaier. Bounds on cut-elimination in intuitionistic propositional logic. Archive for Mathe-
+matical Logic, 31:331–354, 1992.
+[KL80] S. Kamin and J.-J. Le´vy. Attempts for generalizing the recursive path orderings. Handwritten paper,
+University of Illinois, 1980.
+[LSS91] P. Lincoln, A. Scedrov, and N. Shankar. Linearizing intuitionistic implication. In Proc. of the Sixth
+Annual IEEE Symposium on Logic in Computer Science, pages 51–62, Amsterdam, The Netherlands,
+1991.
+[Mat02] R. Matthes. Contraction-aware lambda-calculus, 2002. Seminar at Oberwolfach.
+[O’D77] M. J. O’Donnell. Computing in Systems Described by Equations, volume 58 of Lecture Notes in
+Computer Science. Springer-Verlag, 1977.
+[ORK05] J. Otten, T. Raths, and C. Kreitz. The ILTP Library: Benchmarking automated theorem provers
+for intuitionistic logic. In B. Beckert, editor, International Conference TABLEAUX-2005, volume
+3702 of Lecture Notes in Artificial Intelligence, pages 333–337. Springer Verlag, 2005.
+[Pit92] A. M. Pitts. On an interpretation of second order quantification in first-order intuitionistic propo-
+sitional logic. Journal of Symbolic Logic, 57:33–52, 1992.
+[TS00] A. S. Troelstra and H. Schwichtenberg. Basic Proof Theory. Cambridge University Press, 2000.
+[Ves99] R. Vestergaard. Revisiting Kreisel: A computational anomaly in the Troelstra-Schwichtenberg G3i
+system, March 1999. Available at http://www.cee.hw.ac.uk/~jrvest/.
+[Vor70] N. N. Vorob’ev. A new algorithm for derivability in the constructive propositional calculus. American
+Mathematical Society Translations, 94(2):37–71, 1970.
+[vOvR94] V. van Oostrom and F. van Raamsdonk. Weak orthogonality implies confluence: the higher-order
+case. In A. Nerode and Y. Matiyasevich, editors, Proceedings of the 3rd International Symposium on
+Logical Foundations of Computer Science, volume 813 of Lecture Notes in Computer Science, pages
+379–392. Springer-Verlag, July 1994.
+28

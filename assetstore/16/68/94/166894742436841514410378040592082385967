@@ -1,0 +1,1491 @@
+Polymorphic Bytecode:
+Compositional Compilation for Java-like Languages
+Davide Ancona
+DISI - Universita` di Genova
+davide@disi.unige.it
+Ferruccio Damiani
+Dip. di Informatica - Universita` di Torino
+damiani@di.unito.it
+Sophia Drossopoulou
+Dep. of Computing - Imperial College
+sd@doc.ic.ac.uk
+Elena Zucca
+DISI - Universita` di Genova
+zucca@disi.unige.it
+ABSTRACT
+We define xompositionvl xompilvtion as the ability to type-
+check source code fragments in isolation, generate corre-
+sponding binaries, and link together fragments whose mu-
+tual assumptions are satisfied, without reinspecting the code.
+Even though compositional compilation is a highly desirable
+feature, in Java-like languages it can hardly be achieved.
+This is due to the fact that the bytecode generated for a
+fragment (say, a class) is not uniquely determined by its
+source code, but also depends on the compilation context.
+We propose a way to obtain compositional compilation for
+Java, by introducing a polymorphix form of wytexoye contain-
+ing type variables (ranging over class names) and equipped
+with a set of constraints involving type variables. Thus,
+polymorphic bytecode provides a representation for all the
+(standard) bytecode that can be obtained by replacing type
+variables with classes satisfying the associated constraints.
+We illustrate our proposal by developing a typing and a
+linking algorithm. The typing algorithm compiles a class
+in isolation generating the corresponding polymorphic byte-
+code fragment and constraints on the classes it depends
+on. The linking algorithm takes a collection of polymor-
+phic bytecode fragments, checks their mutual consistency,
+and possibly simplifies and specializes them. In particular,
+linking a self-contained collection of fragments either fails, or
+produces standard bytecode (the same as what would have
+been produced by standard compilation of all fragments).
+Cutygoriys unx guvjywt Dyswriptors: D.3.3[Programming
+languages]: Language constructs and features—xlvsses vny
+owjexts; D.3.1[Programming languages]: Formal definitions
+and theory—syntvxA semvntixs; D.3.4[Programming languages]:
+Processors—inxrementvl xompilers
+Gynyrul hyrms: languages, theory, design
+Permission to make digital or hard copies of all or part of this work for
+personal or classroom use is granted without fee provided that copies are
+not made or distributed for profit or commercial advantage and that copies
+bear this notice and the full citation on the first page. To copy otherwise, to
+republish, to post on servers or to redistribute to lists, requires prior specific
+permission and/or a fee.
+POPL’05, January 12–14, 2005, Long Beach, California, USA.
+Copyright 2005 ACM 1-58113-830-X/05/0001 ...$5.00.
+Kyyworxs: type systems, compositional analysis
+1. INTRODUCTION
+Compilers have two main tasks: To check that the source
+code adheres to the language rules (which usually means
+that it typechecks), and to produce target code.
+Originally, compilers would process the complete source
+of an application; thus they would apply glowvl xompilvtion.
+In strongly typed languages execution of a globally compiled
+application is guaranteed to be type safe.
+In the 70s, inspired by Parnas’s ideas about abstract data
+types, languages like Mesa, LIS, Modula-2, and Ada intro-
+duced sepvrvte xompilvtion, whereby an application would
+consist of frvgments (e.g., modules, packages, or classes).1
+A fragment would be compiled separately in the context of
+other, usey fragments. The produced target code fragment
+would reflect these used fragments, that is, it would reflect
+the compilation environment in which it was created.
+An application would be put together through svfe linkB
+ing of target fragments; linking of target fragments was legal
+only with target fragments which corresponded to the com-
+pilation environment in which the former was created. Thus,
+linking preserved a correspondence between the compilation
+and the execution environment, and the ensuing application
+would correspond to a globally compiled one, and have the
+same type safety guarantees.
+In recent years, Java and Cr have adopted the separate
+compilation approach, however combined with yynvmix linkB
+ing, whereby fragments (in this case, classes in binary form)
+are loaded lazily at run-time. Thus, dynamic linking does
+not attempt to preserve a correspondence between the com-
+pilation and the execution environment, nor does the en-
+suing application correspond to a globally compiled one;
+type safety can only be achieved through runtime verifica-
+tion checks.
+Thus, we argue that in Java (and Cr too) there is a clash
+of philosophy between compilation and execution. Namely,
+the adoption of separate compilation means that the target
+fragments reflect the compilation environment in which they
+1Separate compilation should not be confused with inyepenB
+yent xompilvtion, introduced by FORTRAN II, which does
+not use type information from the used fragments, and thus
+does not guarantee type-safety [15].
+were created, while the adoption of dynamic linking means
+that there is no correspondence between compilation and
+execution environment.
+For example, compilation of the source method declara-
+tion mds:
+E m(B x)f return x.f1.f2; g
+in an environment ∆1 containing class B with field f1 of type
+C, and class C with field f2 of type E, generates bytecode mdb1
+with annotations which reflect the classes where fields were
+found and their types, that is:
+E m(B x)f return x[B:f1 C][C:f2 E]; g
+On the other hand, compilation of mds in an environment
+∆2 containing a class B with a field f1 of type D, and a
+class D with a field f2 of type F, for some F subclass of E,
+generates a different bytecode mdb2:
+E m(B x)f return x[B:f1 D][D:f2 F] g
+More importantly, execution of mdb1 in the environment ∆2
+will throw a FieldNotFoundException, even though compila-
+tion and subsequent execution of mds in the environment ∆2
+would be successful.2
+Thus, given the lazy nature of Java dynamic linking, sepa-
+rate compilation is, in some sense, too eager, and too context
+dependent.
+In this paper, we consider, instead, xompositionvl xompiB
+lvtion, whereby target fragments do not reflect the compi-
+lation environment in which they were created, while link-
+ing produces an application which corresponds to a globally
+compiled one, and which, therefore, has all its type safety
+guarantees.
+We define compositional compilation to be the ability
+to typecheck source code fragments in isolation, to gener-
+ate corresponding binaries, and to link together fragments
+whose mutual assumptions are satisfied, without reinspect-
+ing the code.
+We illustrate a new approach to compilation and linking
+for Java-like languages, which will support compositional
+compilation. We propose a polymorphix form of wytexoye
+containing type vvrivwles (ranging over class names) and
+equipped with a set of constraints involving type variables.
+Thus, polymorphic bytecode provides a representation for
+all the (standard Java) bytecode that can be obtained by
+replacing type variables with class names satisfying the as-
+sociated constraints.
+In terms of our example, mds can be compiled in isola-
+tion; the set of polymorphic constraints associated with mds
+is f (B; f1; ); (; f2; );   E g, where ,  are type
+variables, and a constraint of the shape (e; f; e′) expresses
+that type e is expected to declare or inherit a field f of type
+e′. Furthermore, the following polymorphic bytecode mdb
+would be generated:
+E m(B x)f return x[B:f1 ][:f2 ]; g
+Our approach also supports linking, which checks whether
+the polymorphic bytecode of the various fragments satisfies
+2This example shows, in a sense, the most simple case of
+dependency of generated bytecode on the context; Java fea-
+tures such as method overloading and field hiding complicate
+matters even further, but the essence of the problem remains
+the same.
+each other’s requirements, without inspecting the code it-
+self. The process involves the replacement of some type
+variables by concrete class names. In our example, linking
+mdb in the environment ∆1 leads to md
+b
+1, linking md
+b in the
+environment ∆2 leads to md
+b
+2.
+The rest of the paper is organized as follows. In Section 2
+we define a schema formalizing global and compositional
+compilation, introduce the notions of soundness and com-
+pleteness of compositional compilation w.r.t. global compi-
+lation, and give sufficient conditions for guaranteeing them.
+These conditions place requirements on the linking process,
+and on the relation between global and compositional com-
+pilation of one class. In Sections 3 and 4 we instantiate the
+schema to model global compilation and compositional com-
+pilation for a small Java-like language [9]. In Section 5 we
+give an algorithm for linking which satisfies the properties
+required by the theorems in Section 2. Finally, in Section 6
+we discuss related work and in the Conclusion applicability
+of our approach and further work.
+A preliminary version of the material from this paper ap-
+peared in [1]. Proofs of the main results can be found in an
+extended version of this work [2].
+2. FORMALIZING COMPILATION
+In this section we define a schema formalizing both global
+and compositional compilation.
+We start by listing the basic syntactic categories and judg-
+ments such a type system should define. We use a Java-
+oriented terminology, since a significant class of languages
+on which the schema could be instantiated are Java-like (in
+particular, in the next sections we present an instance which
+defines global and compositional compilation for Feather-
+weight Java [9]). However, the schema is much more general,
+and is appropriate for any language where, roughly speak-
+ing, generated binary code is context-dependent. Hence,
+“class” below can be thought of, in general terms, as “lan-
+guage entity”.
+ Source and binary class declarations (s and b).
+ Source fragments (S), which are sequences of source
+class declarations; and binary fragments (B), which
+are sequences of binary class declarations.
+ Class type environments (∆), which are sequences of
+class type assignments (). A class type assignment
+can be thought of as the type information which can be
+extracted from a class declaration (hence the metavari-
+ables ∆ and ); thus a class type environment corre-
+sponds to a sequence of source class declarations de-
+prived of bodies.
+ Global compilation (of a class), ∆ { g s :  j b, to
+be read: The source class declaration s has type  and
+compiles to b in the class type environment ∆.
+ Type constraint environments (Γ), which are sequences
+of type constraints (). A type constraint expresses
+expectations from used classes, e.g., that a given class
+has a field of a given type.
+ Compositional compilation (of a class), {w s :  j Γ j b,
+to be read: The source class declaration s has type 
+and compiles to b under the type constraints in Γ.
+ Linking, ∆ { Γ j B  Γ′ j B′, to be read: In the
+class type environment ∆ the type constraints Γ are
+simplified into Γ′, and the binary fragment B becomes
+B′.
+Empty class type environments and empty type constraint
+environments will be denoted by Λ.
+The ingredients from above model two different approaches
+to compilation.
+In the first approach, code fragments are compiled in the
+context of full type information on other fragments (formal-
+ized by the class type environment ∆), as shown by the rules
+in Fig.1. The global compilation (of a fragment) judgment
+∆′ {G S : ∆ j B means that in ∆
+′ the fragment S has
+type ∆ and compiles to B. Here ∆′ represents (full) type
+information related to classes which are not being compiled,
+such as libraries. In particular, Λ {G S : ∆ j B models the
+compilation of a self-contained fragment.
+(g-frug1)
+∆  {g s :  j b
+∆ {G s :  j b
+(g-frug2)
+∆ ∆1 ::: ∆i−1 ∆i+1 ::: ∆n {G Si : ∆i j Bi 8i 2 1::n
+∆ {G S1 ::: Sn : ∆1 ::: ∆n j B1 ::: Bn
+n  2
+Figury E: Glovul wompilution of u frugmynt
+In the second approach, code fragments can be compiled
+in isolation producing binary code equipped with type con-
+straints (both the binary code and the type constraints might
+contain type variables denoting yet unknown classes). Then,
+it is possible to link together a successfully compiled collec-
+tion of fragments, obtaining, if their mutual requirements
+are compatible, a new binary fragment with simplified type
+constraints. Notice that this check does not depend on the
+source code. This is shown by the rules in Fig.2. The com-
+positional compilation (of a fragment) judgment { C S :
+∆ j Γ j B means that the source fragment S has type ∆ and
+compiles to B under the type constraints in Γ.
+(w-frug1)
+{w s :  j Γ
+′ j b′
+ { Γ′ j b′  Γ j b
+{C s :  j Γ j b
+(w-frug2)
+{C Si : ∆i j Γ
+′
+i j B
+′
+i 8i 2 1::n
+∆1 ::: ∆n { Γ
+′ j B′  Γ j B
+{C S1 ::: Sn : ∆1 ::: ∆n j Γ j B
+n  2
+(Γ′;B′)=
+i∈1::n
+ (Γ′i; B
+′
+i)
+Figury F: Compositionul wompilution of u frugmynt
+In rule (c-frag2), we assume an operator  which, given a se-
+quence of (at least two) pairs consisting of a type constraint
+environment and a binary fragment, gives a new pair, intu-
+itively obtained by combining them avoiding interferences
+(typically, this operator will eliminate clashes in type vari-
+ables, through -renaming.)
+Iterating this process, we will eventually obtain a fragment
+for which no type constraints are left, that is, a judgment
+{C S : ∆ j Λ j B. This means that we have obtained a self-
+contained fragment. In this case, we expect to have obtained
+the same result as global compilation, that is, compositional
+compilation to be souny w.r.t. global compilation, and con-
+versely, that is, compositional compilation to be xomplete
+w.r.t. global compilation. As a first approximation, sound-
+ness and completeness could be expressed as follows:
+{C S : ∆ j Λ j B if and only if Λ {G S : ∆ j B:
+However, since compositional compilation is obviously ex-
+pected to be incremental, and since global compilation al-
+lows for the import of some library classes, whose binary
+may be available, but whose source may not be available, the
+claim above should be generalized in order to deal with open
+source fragments, that is, fragments where some needed class
+is missing.
+We say that a class type environment ∆ is xonsistent
+(w.r.t. global compilation) if Λ {G S : ∆ j B for some S,
+B.3
+Dynition 1. le svy thvt xompositionvl xompilvtion is
+sound fiCrCtC glowvl xompilvtion i for xonsistent ∆′ ∆:
+{C S : ∆ j Γ j BA vny ∆
+′ ∆ { Γ j B Λ j B′
+imply ∆′ {G S : ∆ j B
+′:
+We now state sufficient conditions for soundness. These
+conditions (and analogously those which guarantee com-
+pleteness later on) provide a general schema for proving
+that compositional compilation is sound (resp. complete).
+Indeed, they allow to split the proof in two parts: First,
+checking that compositional compilation of a single class is
+sound and complete — conditions (1) in Theorems 4 and
+6. Second, checking that linking satisfies some requirements
+of well-behaviour — conditions (2) and (3) in Theorems 4
+and 6. In particular, conditions (2) are related to vertical
+(sequential) composition and conditions (3) to horizontal
+composition of linking steps. Conditions (2) require that,
+whenever two linking steps in sequence allow to eliminate
+all type constraints, and the latter requires more type in-
+formation on classes, then starting with this richer type in-
+formation the two steps can be combined in just one step;
+conversely, given a linking step which allows to eliminate all
+type constraints under some type information on classes, if
+we start with only partial type information it is always pos-
+sible to perform a partial simplification of type constraints.
+Conditions (3) require that, whenever a linking step allows
+to eliminate a combination of type constraint environments,
+it is always possible to eliminate each component, and con-
+versely. Finally, condition (4) in Theorem 4 is just a trivial
+requirement needed to express soundness for closed frag-
+ments as a particular case of soundness.
+Note that, in order to prove soundness and completeness,
+it is not necessary that linking is well-behaved for vll type
+constraint environments, but only for those which can be
+obtained through the compilation and linking process. This
+is formalized by the following definition:
+Dynition 2. Relevant type xonstrvint environments vre
+inyuxtively yeney wy the follofiing xlvusesO
+ if { w s :  j Γ j b holys for some s; ; bA then Γ is
+relevvntP
+3This definition assumes the fact that libraries used in global
+compilation have been obtained by correctly compiling some
+code.
+ if Γ is relevvnt vny ∆ { Γ j B Γ′ j B′ holys for some
+∆; B; B′A then Γ′ is relevvntP
+ if Γ1; :::; Γn vre relevvnt vny (Γ;B)=
+i∈1::n
+ (Γi; Bi) for
+some B; B1; :::; BnA then Γ is relevvntC
+Fuwt 3. If {C S : ∆ j Γ j B holys for some S; ∆; BA then
+Γ is relevvntC
+hhyorym 4 (Smffacaefl cgfdalagfk fgr kgmfdfekk).
+Compositionvl xompilvtion is souny fiCrCtC glowvl xompilvtion
+if the follofiing xonyitions holyO
+FC {w s :  j Γ
+′ j b′A vny ∆  { Γ′ j b′  Λ j bA vny
+∆  xonsistent imply ∆  {g s :  j bC
+2C Γ′′ relevvntA ∆2 { Γ
+′′ j B′′  Γ′ j B′A vny ∆1∆2 {
+Γ′ j B′  Λ j B imply ∆1 ∆2 { Γ
+′′ j B′′  Λ j BC
+3C ∆ { Γ j B Λ j B′′A vny (Γ;B)=
+i∈1::n
+ (Γi; Bi) for some
+B1; :::; Bn vny Γ1; :::; Γn relevvntA implies ∆ { Γi j Bi  
+Λ j B′iA for some B
+′
+iA for vll i21::nA vny B
+′′ = B′1 ::: B
+′
+nC
+IC Λ { Λ j B Λ j B for vll BC
+Dynition 5. le svy thvt xompositionvl xompilvtion is
+complete fiCrCtC glowvl xompilvtion i
+∆′ {G S : ∆ j B
+′ implies 9 B; Γ sCtC
+{C S : ∆ j Γ j B vny ∆
+′ ∆ { Γ j B Λ j B′C
+hhyorym . (Smffacaefl cgfdalagfk fgr cgepdelefekk).
+Compositionvl xompilvtion is xomplete fiCrCtC glowvl xompiB
+lvtion if the follofiing xonyitions holyO
+FC ∆  {g s :  j b implies 9 b
+′; Γ′ sCtC
+{w s :  j Γ
+′ j b′ vny ∆  { Γ′ j b′  Λ j bC
+2C Γ′′ relevvnt vny ∆1 ∆2 { Γ
+′′ j B′′  Λ j B imply 9 Γ′; B′
+sCtC ∆2 { Γ
+′′ j B′′  Γ′ j B′ vny ∆1 ∆2 { Γ
+′ j B′  
+Λ j BC
+3C Γi relevvnt vny ∆ { Γi j Bi  Λ j B
+′
+iA for i21::nA fiith
+i∈1::n
+ (Γi; Bi) = (Γ; B)A imply ∆ { Γ j B Λ j B
+′
+1 ::: B
+′
+nC
+Note that theorems 4 and 6 imply soundness and com-
+pleteness for closed fragments. Namely, if we take ∆′ =
+Λ = Γ, applying (4) from theorem 4 we get soundness for
+closed fragments:
+{C S : ∆ j Λ j B implies Λ {G S : ∆ j B:
+On the other hand, for ∆′ = Λ, if there exist B; Γ s.t.
+{ C S : ∆ j Γ j B and ∆ { Γ j B  Λ j B
+′, we get
+{C S : ∆ j Λ j B
+′ by applying rule (c-frag2), and hence we
+obtain completeness for closed fragments:
+Λ {G S : ∆ j B implies {C S : ∆ j Λ j B:
+3. FJ GLOBAL COMPILATION
+In this section, we formalize global compilation of a small
+Java-like language. This models both standard type check-
+ing for Java-like languages (see, e.g., [9, 16]), as well as
+bytecode generation (as already in, e.g., [4, 8]).
+The syntax of the (source) language is defined in Fig.3.
+It is basically Featherweight Java [9] (FJ in the sequel) hence
+a functional subset of Java with no primitive types, except
+S ::= s1 : : : sn
+s ::= cladd c eieendd c′ f fds mdss g (c 6= Objece)
+fds ::= c1 f1; ::: cn fn;
+mdss ::= mds1 ::: md
+s
+n
+mds ::= mh fceeucn es;g
+mh ::= c0 m(c1 x1 ::: cn xn)
+es ::= x j es:f j es0:m(e
+s
+1 ::: e
+s
+n) j
+neh c(es1 ::: e
+s
+n) j (c)e
+s
+where field, method and parameter names
+in fds, mdss and mh are distinct
+Figury G: gourwy lunguugy
+for the minor difference that here class constructors are im-
+plicitly declared. Every class can contain instance field and
+method declarations and has only one constructor whose pa-
+rameters correspond to all class fields (both inherited and
+declared) in the order of declaration. In class declarations
+we assume that the name of the class c cannot be Objece.
+Method overloading and field hiding are not supported. Ex-
+pressions are variables, field access, method invocation, in-
+stance creation and casting; the keyword ehid is considered
+a special variable. Finally, in order to simplify the presenta-
+tion, we assume field names in fds, method names in mdss,
+parameter names in mh to be distinct.
+In Fig.4 we give the syntax of bytecode generated by
+global compilation — that is (an abstraction of) standard
+Java bytecode.
+B ::= b1 ::: bn
+b ::= cladd c eieendd c′ f fds mdsb g
+mdsb ::= mdb1 ::: md
+b
+n
+mdb ::= mh fceeucn eb;g
+eb ::= x j eb[c:f c′] j eb0[c:m(c¯)c
+′](eb1 ::: e
+b
+n)
+j neh [c c¯](eb1 ::: e
+b
+n) j (c)e
+b
+c¯ ::= c1 ::: cn
+where fds and mh are defined in Fig.3 and
+method names in mdsb are distinct
+Figury 4: (Avstruwt) stunxurx vytywoxy
+Our notion of bytecode is abstract, since the only differences
+between source code and bytecode of interest here are the
+annotations needed by the JVM verifier — recall that in
+Java bytecode a field access is annotated with the static
+type of the receiver and the type of the field, a method
+invocation with the static type of the receiver, the type of
+the parameters and the return type, and an instance creation
+with the type of the parameters.
+In Fig.5 we define class type assignments. A class type as-
+signment collects the type information needed for compiling
+other classes which can be extracted from a class declara-
+tion; it is a 4-tuple consisting of the name of the class, the
+name of the parent class, the set of field signatures (type
+and name of declared fields) and the set of method signa-
+tures (return type, name and parameter types of declared
+methods).
+We assume the existence of a function type extracting type
+ ::= (c; c′; fss; mss)
+fss ::= ffs1; : : : ; fsng
+fs ::= c f
+mss ::= fms1; : : : ; msng
+ms ::= c m(c¯)
+Figury I: Cluss typy ussignmynts
+information from a source class declaration. So we will write
+type(fds) and type(mdss) to denote the set of field signatures
+and the set of method signatures extracted from the field
+declarations fds and from the method declarations mdss, re-
+spectively. The straightforward definition of type has been
+omitted.
+The typing rules defining global compilation of a class are
+given in Fig.6. They are standard rules analogous to those
+given in other type systems for Java-like languages [9, 8, 4].
+We use the following auxiliary judgments:
+ ∆; c {g mds
+s : mdsb, meaning that method declara-
+tion(s) mdss in class type environment ∆ and current
+class c (needed for assigning the right type to ehid)
+compile(s) to mdsb.
+ ∆; Π { g e
+s : c j eb, meaning that expression es in
+class type environment ∆ and local type environment
+Π (which maps ehid and method parameters to class
+names) has type c and compiles to eb.
+In rule (g-class), for compiling a class c in a class type
+environment ∆ we check that ∆ is well-formed (judgment
+{g ∆), and compile each method body in ∆ and current
+class c. A class type environment is well-formed if there are
+no multiple type assignments for the same class name, the
+inheritance relation is acyclic, each extended class is avail-
+able, there is no field hiding, the Java rule on overriding is
+respected and there is no overloading (the last two condi-
+tions correspond to the requirement that a class may not
+declare a method with the same name and different return
+or parameter types as an inherited method). Note, how-
+ever, that a class which is only used as a type may not have
+an assignment in ∆. This definition of well-formedness ex-
+actly models the checks which Java compilers perform on the
+needed compilation context.The formal definition of {g ∆
+can be found in [2].
+It is easy to see that the notion of well-formed class type
+environment is the concrete version in the FJ case of the gen-
+eral notion of consistent class type environment introduced
+in Section 2 (see [2] for the details).
+In rules for compiling expressions, we use an auxiliary
+judgment of the form ∆ { , meaning that in the class
+type environment ∆ the type constraint  holds. Type con-
+straints are listed in Fig.7. They have the following informal
+meaning:
+ c  c′ means “c is a subtype of c′”.
+ 9 c means “c is defined”.
+ (c; f; c′) means “c provides field f with type c′”.
+ ::= c  c′ j 9 c j (c; f; c′) j (c; m; c¯; (c′; c¯′))
+j (c; c¯; c¯′)
+Figury K: hypy wonstruints
+ (c; m; c¯; (c′; c¯′)) means “c provides method m appli-
+cable to arguments of type c¯, with return type c′ and
+parameters of type c¯′.
+ (c; c¯; c¯′) means “c provides constructor applicable to
+arguments of type c¯, with parameters of type c¯′”.
+Note that both the constraints (c; m; c¯; (c′; c¯′)) and (c; c¯; c¯′)
+implicitly include the constraint c¯  c¯′.
+The rules defining the judgment ∆ {  (in Fig.8) are in-
+tuitive and almost self-explanatory. In rule =B2), the side
+condition f 62 fss means that f is not declared in fss; analo-
+gously, in rule =B2), m 62 mss means that m is not declared
+in mss. The type constraints in Fig.7 and the rules in Fig.8
+are essentially a subset of those defined in [5] (where type
+constraints were called local type assumptions).
+The rules for the compilation of a class in Fig.6, together
+with the general rules for the global compilation of a frag-
+ment, given in Fig.1, provide an instantiation to FJ of the
+global compilation schema introduced in Section 2.
+4. FJ COMPOSITIONAL COMPILATION
+In this section we formalize compositional compilation for
+the small Java-like language introduced in Section 3. Classes
+are compiled in isolation into polymorphic bytecode. That
+is, bytecode where the annotations may contain type vari-
+ables denoting names of yet unknown classes. The syntax of
+polymorphic bytecode is described by the first four produc-
+tions in Fig.4 (defining binary fragments, class declarations,
+method sequences, and methods, respectively) and by the
+productions in Fig.9 (defining binary expressions).
+eb ::= x j eb[e:f e′] j eb0[e:m(e¯)e
+′](eb1 ::: e
+b
+n)
+j neh [c e¯](eb1 ::: e
+b
+n) j (c)e
+b j c; e eb
+e ::= c j 
+e¯ ::= e1 ::: en
+Figury 9: dolymorphiw vytywoxy (yfipryssions)
+Besides the presence of type variables, the only difference be-
+tween polymorphic and standard bytecode is the presence of
+the “polymorphic casting” annotated expression; if the type
+variable  is substituted with c′, then  c;  eb can be
+specialized either into eb, if c′  c holds (casting-up), or into
+(c)eb, if c  c′ holds (casting-down), or into  c; c′ eb if
+nothing can be said about c′  c and c  c′. For the
+“polymorphic casting” annotation we use a different nota-
+tion (double angle brackets rather than parentheses) since
+this annotation is only allowed in polymorphic bytecode.
+Polymorphic bytecode comes with a sequence of polymorB
+phix type xonstrvints, which involve type variables and class
+names. These are listed in Fig.10. As for polymorphic byte-
+code, the meta-variable e denotes either a type variable or a
+class name. Besides the presence of type variables, the only
+(g-wluss)
+{g ∆
+∆; c {g mds
+s : mdsb
+∆ {g cladd c eieendd c′ ffds mdssg : (c; c′; fss; mss) j cladd c eieendd c′ ffds mdsbg
+type(mdss) = mss
+type(fds) = fss
+(g-methods)
+∆; c {g md
+s
+i : md
+b
+i 8i 2 1::n
+∆; c {g md
+s
+1 ::: md
+s
+n : md
+b
+1 ::: md
+b
+n
+n 6= 1
+(g-method)
+∆; x1:c1 ::: xn:cn; ehid:c {g e
+s : c′ j eb
+∆; c {g c0 m(c1 x1 ::: cn xn) fceeucn es;g : c0 m(c1 x1 ::: cn xn) fceeucn eb;g
+∆{c′  c0
+∆{9ci 8i 2 0::n
+(g-purumeter)
+Π{x :c
+∆; Π {g x : c j x
+(g-eld uwwess)
+∆; Π {g e
+s : c j eb
+∆; Π {g es:f : c′ j eb[c:f c′]
+∆{(c; f; c′)
+(g-meth wull)
+∆; Π {g e
+s
+0 : c0 j e
+b
+0
+∆; Π {g e
+s
+i : ci j e
+b
+i 8i 2 1::n
+∆; Π {g es0:m(e
+s
+1; : : : ; e
+s
+n) : c j e
+b
+0[c0:m(c¯)c](e
+b
+0; : : : ; e
+b
+n)
+∆{(c0; m; (c1; : : : ; cn); (c; c¯))
+(g-new)
+∆; Π {g e
+s
+i : ci j e
+b
+i 8i 2 1::n
+∆; Π {g neh c(es1 ::: e
+s
+n) : c j neh [c c¯](e
+b
+1 ::: e
+b
+n)
+∆{(c; c1 ::: cn; c¯)
+(g-downwust)
+∆; Π {g e
+s : c′ j eb
+∆; Π {g (c)es : c j (c)eb
+∆{c  c′ (g-upwust)
+∆; Π {g e
+s : c′ j eb
+∆; Π {g (c)es : c j eb
+∆{c′  c
+Figury 6: Glovul wompilution
+ ::= e  e′ j 9 c j (e; f; e′) j (e; m; e¯; (e′; e¯′))
+j (c; e¯; e¯′) j c  e
+Figury ED: dolymorphiw typy wonstruints
+difference between the polymorphic type constraints and the
+type constrains listed in Fig.7 is the presence of the last con-
+straint in Fig.10, whose informal meaning is the following:
+ c  e means “c and e are comparable” (this constraint
+will be generated when compiling a cast).
+Polymorphic type constraints not containing type variables
+will be called monomorphix type xonstrvints.
+The rules defining the judgement for compositional com-
+pilation of classes are given in Fig.11. We use the following
+auxiliary judgments:
+ c {w mds
+s : Γ j mdsb, meaning that method declara-
+tion(s) mdss in current class c (needed for assigning the
+right type to ehid) compile to mdsb under the poly-
+morphic type constraints in Γ.
+ Π {w e
+s : e j Γ j eb, meaning that expression es in lo-
+cal type environment Π (which maps ehid and method
+parameters to class names) has type e and compiles to
+eb under the polymorphic type constraints in Γ.
+The intuition behind the compositional compilation rules is
+that they extract the polymorphic type constraints Γ nec-
+essary to compile a given source fragment into a certain
+polymorphic binary fragment.
+However, note that the rules do not check whether the
+inferred collection of constraints Γ is actually satisfiable; in-
+deed, for any fragment it is possible to derive a judgment,
+even for those that are not statically correct. Consistency
+checks are performed by the rule for the linking judgment
+(see below). This approach has the advantage that the typ-
+ing rules for separate compilation are very simple and can
+be implemented in a straightforward way.
+Note also that in the type system a unique judgment can
+be derived for any class declaration (the proof is immedi-
+ate); therefore, we can easily define a type inferenxe algo-
+rithm, that is, an effective way for deducing just from the
+single declaration of a class c the type and the (polymor-
+phic) bytecode of c, and the required type constraints. This
+is not possible for the systems in [4, 5, 3], where one needs
+to know the environment where c is compiled.
+We now define the linking judgment ∆ { Γ j B Γ′ j B′.
+Linking a fragment of polymorphic bytecode B, equipped
+with polymorphic type constraints Γ, in a given class type
+environment ∆, amounts to finding a suitable substitution
+ mapping the type variables into class names. The substi-
+tution  instantiates some polymorphic type constraints in
+Γ into monomorphic type constraints that hold in ∆, and in-
+stantiates variables in B correspondingly; these constraints
+can be eliminated, leaving only the constraints in Γ′. In
+particular, when all constraints are eliminated, we obtain
+a fragment of standard bytecode (like the one produced by
+global compilation).
+Instantiation of Γ w.r.t. substitution  is denoted by (Γ);
+we have omitted the trivial inductive definition which coin-
+cides with conventional variable substitution. Instantiation
+of B w.r.t. ∆ and  is denoted by I.∆(B); ∆ is needed for
+(Γ)
+∆ {  8 2 Γ
+∆ { Γ
+(∃)
+∆; (c; c′; fss; mss) { 9 c
+(∃-cbj)
+∆ { 9 Objece
+(≤-re)
+∆ { c  c
+(≤-truns)
+∆; (c1; c2; fss; mss) { c2  c3
+∆ { c1  c3
+(≤-cbj)
+∆ { c  Objece
+(-1)
+∆; (c; c′; fss; mss) { (c; f; c′′)
+c
+′′
+f 2 fss (-2)
+∆; (c; c′; fss; mss) { (c′; f; c′′)
+∆; (c; c′; fss; mss) { (c; f; c′′)
+f 62 fss
+(-1)
+∆; (c; c′; fss; mss) { ci  c
+′′
+i 8 i 2 1::n
+∆; (c; c′; fss; mss) { (c; m; c1 ::: cn; (c′′; c′′1 ::: c
+′′
+n))
+c
+′′
+m(c′′1 ::: c
+′′
+n) 2 mss
+(-2)
+∆; (c; c′; fss; mss) { (c′; m; c¯; (c′′; c¯′′))
+∆; (c; c′; fss; mss) { (c; m; c¯; (c′′; c¯′′))
+m 62 mss
+(-1)
+∆ { (Objece; ; )
+(-2)
+∆; (c; c′; fss; mss) { (c′; c′1 ::: c
+′
+k; c1 ::: ck)
+∆; (c; c′; fss; mss) { c′i  ci 8 i 2 k + 1::n
+∆; (c; c′; fss; mss) { (c; c′1 ::: c
+′
+n; c1 ::: cn)
+fss = fck+1 fk+1; : : : ; cn fng
+Figury L: Entuilmynt juxgymynt ∆ {  (rulys for thy typy wonstruints in Fig.K)
+(∼-1)
+∆ { c  c′
+∆ { c  c′
+(∼-2)
+∆ { c  c′
+∆ { c′  c
+Figury EF: Entuilmynt juxgymynt ∆ {  (rulys for
+thy typy wonstruint c1  c2)
+dealing with the case c; e eb:
+I.∆(c; e e
+b) =8<
+:
+I.∆(e
+b) if (e) = c′ and ∆ { c′  c
+(c)I.∆(e
+b) if (e) = c′ and ∆ { c  c′
+c; (e) I.∆(e
+b) otherwise.
+In all other cases instantiation of polymorphic bytecode cor-
+responds to variable substitution.
+Remark. Note that the ability of instantiating polymorphic
+bytecode into different kinds of standard bytecode instruc-
+tions is a key feature for dealing with important issues, such
+as resolution of Java syntax ambiguities (see the Conclusion
+for an example of such ambiguities) and, in a wider context,
+code optimization.
+The fact that the monomorphic type constraint  holds in
+the class type environment ∆ is expressed by the judgement
+∆{, which is defined by the rules in Fig.8 and in Fig.12.
+(w-linking)
+{c ∆
+∆ { Γ !ls  j Γ
+′
+∆ { Γ j B Γ′ j I.∆(B)
+Figury EG: Linking
+The linking judgement is defined by rule (c-linking) in
+Fig.13, which is parameterized w.r.t. a linkingBsimplixvtion
+relvtion !ls . A linking-simplification relation models a par-
+ticular way of finding suitable substitutions for simplifying
+type constraints w.r.t. class type environments.
+The formal definition of {c ∆ (well-formed type environ-
+ments for compositional compilation) can be found in [2].
+The judgment {c ∆ is more liberal than {g ∆, since it
+allows extended classes to be undefined in ∆. Indeed, the
+check {g ∆ in global compilation (rule (g-class)) models
+the behaviour of standard Java compilers. On the other
+hand, the premise {c ∆ in rule (c-linking) corresponds to
+an intrinsic notion of consistency, and expresses that some
+additional constraints on each compiled class c are satis-
+fied in ∆, that is, that there is no other declaration for c,
+that the parent class does not have conflicting field/method
+declarations, and that the parent class is not a subtype of
+c. These constraints could be equivalently generated dur-
+ing compositional compilation of class c, as done in [4, 5,
+3]; here we preferred a more compact and efficient formu-
+lation. Note that for FJ the check of 9 c constraints could
+also be moved to be part of well-formedness of class type en-
+vironment, since used classes are always mentioned in field
+or method declarations; but this is not true in general, for
+instance if we have local variables.
+The rules for the compilation of a class in Fig.11 and the
+rule for linking in Fig.13, together with the general rules
+for the compositional compilation of a fragment, given in
+Fig.2, provide an instantiation to FJ of the compositional
+compilation schema introduced in Section 2. In this case
+the operator  used in rule (c-frag2) in Fig.2 in Section 2
+just corresponds to pairwise concatenation of sequences (of
+constraints and binary fragments, respectively) with proper
+-renaming in order to avoid conflicts of type variables.
+Note that all the type variables occurring in a compo-
+sitional compilation judgement are (implicitly) universally
+quantified. In fact, in a class compilation judgement {
+w s :  j Γ j b, the triple  j Γ j b represents all the standard
+binary class declarations of the form I.∆0 ∆(b), for some class
+(w-wluss)
+c {w mds
+s : Γ j mdsb
+{w cladd c eieendd c′ ffds mdssg : (c; c′; fss; mss) j Γ; 9 c′ j cladd c eieendd c′ ffds mdsbg
+type(mdss) = mss
+type(fds) = fss
+(w-methods)
+c {w md
+s
+i : Γi j md
+b
+i 8i 2 1::n
+c {w md
+s
+1 ::: md
+s
+n : Γ1 ::: Γn j md
+b
+1 ::: md
+b
+n
+n 6= 1
+(w-method)
+x1:c1 ::: xn:cn; ehid:c {w e
+s : e j Γ j eb
+c {w c0 m(c1 x1 ::: cn xn) fceeucn es;g : Γ; e  c0; 9 cii∈0::n j c0 m(c1 x1 ::: cn xn) fceeucn eb;g
+(w-purumeter)
+Π { x :c
+Π {w x : c j Λ j x
+(w-eld uwwess)
+Π {w e
+s : e j Γ j eb
+Π {w es:f :  j Γ; (e; f; ) j eb[e:f ]
+ fresh
+(w-meth wull)
+Π {w e
+s
+0 : e0 j Γ0 j e
+b
+0
+Π {w e
+s
+i : ei j Γi j e
+b
+i 8i 2 1::n
+Π {w es0:m(e
+s
+1 ::: e
+s
+n) :  j Γ0Γ1 : : : Γn; (e0; m; e1 ::: en; (; ¯)) j eb0[e0:m(¯)](e
+b
+1; : : : ; e
+b
+n)
+,¯ fresh
+(w-new)
+Π {w e
+s
+i : ei j Γi j e
+b
+i 8i 2 1::n
+Π {w neh c(es1 ::: e
+s
+n) : c j Γ1 : : : Γn; (c; e1 ::: en; ¯) j neh [c ¯](e
+b
+1 ::: e
+b
+n)
+¯ fresh
+(w-wust)
+Π {w e
+s : e j Γ j eb
+Π {w (c)es : c j Γ; c  e j c; e eb
+Figury EE: Compositionul wompilution
+type environment ∆′ and substitution  such that {c ∆
+′ ∆
+and ∆′ ∆ { (Γ).
+We prove now that, under suitable hypothesis on the linking-
+simplification relation, the compositional compilation which
+we defined for FJ can be safely used in place of global com-
+pilation, that is, is sound and complete w.r.t. global compi-
+lation in the sense of Def.1 and Def.5 in Section 2.
+We start by stating some properties of entailment which
+will be needed in the proof and hold independently of the
+linking-simplification relation we choose. Let  and ′ be
+two substitutions, that is, finite mappings from type vari-
+ables to class names. Then  ′ denotes the unique substi-
+tution s.t. ( ′)(Γ) = (′(Γ)) for all Γ; the empty substi-
+tution is denoted by . Finally, Γ n Γ′ denotes the sequence
+of constraints obtained by removing from Γ all constraints
+in Γ′, while kvrs(Γ) (resp. kvrs(b)) denotes the set of type
+variables appearing in Γ (resp. in b).
+droposition 7. If {g ∆ A ∆  { (Γ)A then for vll s; b :
+{w s :  j Γ j b implies ∆  {g s :  j I
+.
+∆ (b):
+droposition 8. If ∆  { g s :  j bA then there exist
+; Γ; b′ sCtC dom()  kvrs(Γ)A vny
+{w s :  j Γ j b
+′
+; ∆  { (Γ); b = I.∆ (b
+′):
+droposition 9 (Weacefafg gf eflaadeefl). ∆ { Γ
+implies ∆ ∆′ { ΓC
+droposition 10. {c ∆1∆2 implies {c ∆1C
+Note that Prop.10 does not hold for the judgment {g ∆
+defining well-formed type environments for global compila-
+tion; indeed, {g ∆ holds only if the class hierarchy in ∆ is
+(upward) complete.
+In order to establish assumptions in Theorem 4 and The-
+orem 6, we require the simplification relation to satisfy the
+properties listed in Theorem 11 below, which have the fol-
+lowing informal meaning.
+!ls Asounx guarantees that the simplification step is sound,
+in the sense that, after applying the given substitution,
+it actually eliminates only type constraints which hold
+in the current class type environment.
+!ls AwomplytyAE guarantees that, if ∆ contains enough type
+information to satisfy all type constraints in Γ, then
+this simplification step must be possible in !ls .
+!ls AwomplytyAF handles the case in which there is not
+enough type information in a class type environment,
+say ∆2, to guarantee that all constraints in Γ hold.
+However, if it is possible to eliminate these type con-
+straints in a larger class type environment ∆1 ∆2, then
+it must be possible to partially simplify Γ in ∆2, ob-
+taining Γ′.
+Note that the last requirement allows many different “strate-
+gies” for !ls — including the strategy where simplification
+just does nothing (Γ′ = Γ in the above) until the class
+type environment contains sufficient information to simplify
+vll type constraints, in which case it applies vll the sub-
+stitutions. However, algorithms implementing !ls should
+attempt to find as many simplifications as possible at any
+step. We will present such an algorithm in the next section.
+hhyorym 11. If the linkingBsimplixvtion relvtion ! ls
+svtises the follofiing propertiesO
+!ls Asounx
+Γ relevvnt vny {c ∆ vny ∆ { Γ !ls  j Γ
+′ imply
+dom()kvrs(Γ) vny Γ′(Γ) vny ∆ { (Γ) n Γ′C
+!ls AwomplytyAE
+Γ relevvnt vny {c ∆ vny ∆ { (Γ) vny dom() 
+kvrs(Γ) imply ∆ { Γ !ls  j ΛC
+!ls AwomplytyAF
+Γ relevvnt vny {c ∆1 ∆2 vny ∆1 ∆2 { Γ ! ls  j Λ
+imply 9 Γ′; ′; ′′ sCtC =F) ∆2 { Γ ! ls 
+′ j Γ′A =2)
+∆1 ∆2 { Γ
+′ !ls 
+′′ j ΛA vny =3)  = ′ ′′C
+ihenA xompositionvl xompilvtion of FJ is souny vny xomB
+plete fiCrCtC glowvl xompilvtionC
+5. A LINKING ALGORITHM
+In this section we describe a particular linking algorithm,
+thus making rule xBlinking effective, and we sketch a proof
+that this algorithm is a correct implementation of the !ls
+relation. We start with some basic definitions which specify
+the problem we are aiming to solve.
+5.1 Basic definitions
+Unless specified, in this section we will only consider type
+environments ∆ s.t. {c ∆, that is, possibly open envi-
+ronments with no multiple type assignments for the same
+class name, no inheritance cycles, no field hiding and no bad
+method overriding. Furthermore, when more convenient, we
+will treat ∆ and Γ as the sets of their elements (regardless
+possible repetitions in Γ), and use the standard set theory
+notations.
+As a first, rather imprecise attempt, the problem could
+be informally stated as follows: given a type environment ∆
+and a sequence of constraints Γ, find the possibly maximal
+Γ′  Γ s.t. ∆ satisfies Γ′; note that, since we are inter-
+ested in incremental linking, ∆ might not satisfy the whole
+environment Γ.
+A first problem with the above statement is that satis-
+faction of type constraints is under-specified; e.g., for ∆ =
+(c; Objece; ;; ;) and Γ = (c1; f; );   c (with c 6= c1), one
+might be tempted to assert that   c is satisfied by ∆ with
+ = c. Nevertheless, even though  = c originally seems like
+the only possible solution, it cannot be considered valid be-
+cause it is sensitive to extensions to ∆. For instance, if we
+take ∆′ = ∆; (c1; c; fc1 fg; ;) then we discover that  = c is
+no longer a valid solution, and that the whole Γ is satisfied
+by ∆′ with  = c1. In terms of the linking process, this
+means that we would need to backtrack from  = c when
+adding a class c1 as specified by ∆
+′.
+We now formalize the above reasoning. First, a solution is
+a substitution  for type variables s.t. ∆ satisfies (Γ), that
+is, ∆ { (Γ) is valid. Second, in order to avoid backtracking,
+ must be the unique possible choice (up to inclusion of
+maps) for all extensions of ∆.
+Dynition 12. For suwstitutions ; ′A fie svy   ′ i
+yom()  yom(′) vny for vll  2 yom()A () = ′()C
+Dynition 13. V sequenxe of xonstrvints Γ has solution
+ fiCrCtC v given ∆ i
+FC ∆ { (Γ)P
+2C 8′; ∆′O if ∆  ∆′ vny ∆′ { ′(Γ)A then   ′C
+Fuwt 14. V Γ hvs vt most one solution fiCrCtC v given ∆C
+Now that we have formalized the notion of solution, we
+can consider in more detail the situation where Γ has no
+solution w.r.t. a given ∆; as already said, this situation oc-
+curs quite naturally when considering incremental linking,
+because ∆ is likely to be incomplete, and thus may contain
+insufficient information to compute a solution for Γ. Nev-
+ertheless, the algorithm should be able to identify a subse-
+quence Γ′′  Γ s.t. Γ′′ has a solution  w.r.t. ∆, and perform
+a simplification step: the constraints Γ′′ are removed in order
+to avoid unnecessary checks in further linking steps, whereas
+ is applied to the remaining constraints ΓnΓ′′, thus return-
+ing a sequence Γ′. Note that if the algorithm was smart
+enough, then Γ′′ would be maximal, that is, there would not
+exist a Γ′′′ s.t. Γ′′  Γ′′′  Γ and Γ′′′ has solution w.r.t. ∆.
+We distinguish two possible situations w.r.t. remaining
+constraints Γ′: If there exists no extension of ∆ which gives
+a solution for Γ′, then the algorithm should detect a linking
+error. In this case, we say that Γ is inxonsistent w.r.t. ∆.
+Otherwise, linking succeeds, but the constraints Γ′ still
+need to be satisfied, therefore the obtained fragment needs
+to be linked further before execution. In this case, we say
+that Γ′′ is unyeterminey w.r.t. ∆.
+Dynition 15. V sequenxe of xonstrvints Γ is inxonsisB
+tent fiCrCtC v given ∆ i for vll ∆′ if ∆  ∆′A there is no 
+sCtC ∆′ { (Γ)P it is xonsistent =fiCrCtC ∆) otherfiiseC
+A sequence of constraints Γ which is inconsistent w.r.t.
+Λ (that is, for all ∆) is called inconsistent. Conversely, a
+sequence of constraints Γ which is consistent w.r.t. some ∆
+(hence, w.r.t. Λ as well) is called consistent.
+Dynition 16. V sequenxe of xonstrvints Γ is determined
+fiCrCtC ∆ i Γ either hvs v solution or is inxonsistent fiCrCtC
+∆P it is undetermined =fiCrCtC ∆) otherfiiseC
+Dynition 17. V sequenxe of xonstrvints Γ is determined
+i for vll ∆A there exists ∆′ sCtC ∆  ∆′ vny Γ is yeterminey
+fiCrCtC ∆′P vny is undetermined otherfiiseC
+droposition 18. ihe xonstrvint  is determined i it
+mvtxhes one of the follofiing pvtternsO 9 cA c  c′A (c; f; t)A
+(c; m; c¯; (t; t¯))A (c; c¯; t¯)A c  c′C
+Finally, in order to prove that our algorithm implements a
+!ls relation satisfying properties!ls -sound,!ls -complete-
+1, and !ls -complete-2 of Theorem 11 — hence, soundness
+and completeness of compositional compilation w.r.t. global
+compilation is guaranteed — we show that each relevant set
+of constraints satisfies a quite intuitive syntactic property,
+and that for constraint sets which satisfy this syntactic prop-
+erty we can define an algorithm which satisfies the conditions
+of Theorem 11.
+This syntactic property is based on a topological relation
+ between constraints, with the following intuitive meaning:
+if   ′, then  has to be processed prior to ′. For this we
+define the predicates I(; ), expressing that  appears in
+an “in-position” in  that is, needs to have been substituted
+before  can be processed, and O(; ) expressing that 
+appears in an “out-position” in , that is, processing  will
+provide a substitution for this variable. I(), I(Γ), O(),
+O(Γ) have the obvious meaning, that is, the set of I variables
+in , or Γ, and the set of O variables in , or Γ.
+InputO
+this: a well-formed Γ
+argument: a well-formed ∆
+dutputO
+if it fails then Γ is inconsistent w.r.t. ∆
+else returns  and transforms Γ into Γ′ s.t.
+– Γ′ = (Γ n Γ′′)
+– Γ′′  Γ
+–  is the solution of Γ′′ w.r.t. ∆
+– for all  2 Γ′,  has no solution w.r.t. ∆
+eseuyoBxoyeO
+huws solve(Env ∆) throws fvilf
+ = 
+this.topsort () // Γ must be topologically sorted
+for each  2 this f // according to the order
+tryf
+:vpply()
+′ = :entvileyWy(∆)
+this.remove()
+:upyvte(′)
+g
+catch(unyeterminey )fg
+g
+return 
+g
+Figury E4: Construint solving ulgorithm solve
+Dynition 19. For vny ΓA A vny  fie yeneO
+FC I(; ) i  =   tA or  = t  A or  = c  A
+or  = (; f; t)A or  = (t; m; t¯; (t′; t¯′)) fiith  = t
+or  2 t¯A or  = (c; t¯; t¯′) fiith  2 t¯C
+2C O(; ) i  = (t; f; )A or  = (t; m; t¯; (t′; t¯′)) fiith
+ 2 t¯′ or  = t′A or  = (c; t¯; t¯′) fiith  2 t¯′C
+3C I() = f j I(; ) gA I(Γ) = [∈ΓI()A
+O() = f j O(; ) gA O(Γ) = [∈ΓO()C
+Dynition 20. ihe follofiing topologixvl relvtion is yeB
+ney on type xonstrvintsO   ′ i O() \ I(′) 6= ;C
+Dynition 21. aet + yenote the trvnsitive xlosure of
+C ihen v set of xonstrvints Γ is fiellBformey i
+FC 8 2 Γ : I(; ) =) 9′ 2 Γ : O(; ′)A
+2C 6 9 2 Γ :  + A
+3C 8; ′ 2 Γ : O(; ) vny O(; ′) =)  = ′
+5.2 Description of the algorithm
+The Java pseudo-code of the main algorithm is defined in
+Figure 14. The method solve takes a class type environment
+∆ and returns a substitution; it is declared in the class im-
+plementing sequences of constraints, therefore this denotes
+a certain Γ. When invoked, method solve either throws fvil
+or returns a substitution  and simplify Γ into Γ′.
+The invocation :entvileyWy(∆), will throw the exception
+fvil if a  2 Γ is found to be inconsistent w.r.t. ∆ (and
+hence the whole Γ is inconsistent as well).
+The method solve returns a , if it has found a subse-
+quence Γ′′  Γ which has solution  w.r.t. ∆, and has
+modified Γ to Γ′ by removing Γ′′ and applying . We can
+see that Γ′′ is maximal, by proving that for all  2 Γ′, 
+has no solution w.r.t. ∆. However, while all possible sim-
+plifications are always performed, some inconsistencies may
+be discovered later on, when some new fragment is linked,
+mainly because each constraint  2 Γ is checked separately.
+For instance, given ∆ = (c; Objece; ;; ;) and Γ = c1 
+c2; c2  c1 (with all class names distinct), Γ:solve(∆) re-
+turns the empty substitution and does not modify Γ, even
+though Γ is clearly inconsistent; however, such inconsistency
+can be captured when performing further linking steps. For
+instance, if we take ∆′ = ∆; (c1; Objece; ;; ;) then Γ:solve(∆
+′)
+throws fvil since c1  c2 is clearly inconsistent w.r.t. ∆
+′.
+The constraints are processed respecting the topological
+order given in Definition 20, so that it is possible to scan
+Γ only once without failing to simplify some constraints.
+To see that the topological sorting is needed, consider for
+instance Γ =   c; (c; f; ), which is not topologically
+sorted, and ∆ = (c; Objece; fc fg; ;). The constraint   c
+is processed first and kept, since is undetermined w.r.t. ∆.
+Then the constraint (c; f; ) is removed (since it has solu-
+tion  = c); however, the already examined constraint   c
+cannot be further instantiated into c  c, and, therefore, is
+not removed. Therefore solve fails to perform a simplifi-
+cation step. Finally, note that since Γ is assumed to be
+well-formed, it can always be topologically sorted.
+Before being processed, each  is instantiated w.r.t. the
+current substituion . Then, the method entvileyWy checks
+whether  has solution w.r.t. ∆; if so, it returns the corre-
+sponding substitution ′, otherwise it throws either fvil, if
+ is inconsistent w.r.t. ∆, or undetermined if  is undeter-
+mined w.r.t. ∆. As already explained, fvil is propagated by
+solve, whereas undetermined is captured; in this way, the
+constraint is not removed, the current substitution is not
+updated, and solve continues with the next constraint.
+Figure 15 contains pseudo-code for entvileyWy in the class
+representing constraints of the form e  e′ (the other cases
+can be found in [2]).
+If either the left or right hand side of the constraint is
+a variable, then the constraint is undetermined, therefore
+the corresponding exception is thrown. Otherwise the con-
+straint is ground and we can check whether it is satisfied by
+∆. If the trivial cases do not apply (reflection and top type),
+then we perform an inheritance graph traversal from c1 up
+to Objece which can terminate in three different ways: if c2
+is found, then the constraint is satisfied and we return the
+empty substitution; if Objece is reached without finding c2
+then the constraint is inconsistent and fvil is thrown; other-
+wise the traversal stops because method superxlvss throws
+unyeterminey since some superclass of c1 (c1 included) could
+not be found in ∆. In the last case, the exception must
+be caught since the constraint still could be inconsistent if
+there exists c s.t. c2  c and c  c1. For this reason a new
+traversal is started from c2 looking for a superclass of c2 (c2
+included) contained in the set S of all superclasses of c1 (c1
+included) collected during the first traversal. If such a class
+is found, then fvil is thrown, otherwise (if either superxlvss
+throws unyeterminey , or Objece is reached) unyeterminey
+is thrown.
+5.3 Correctness of the algorithm
+In the sequel, let !ls denote the relation implemented by
+solve, that is, the relation defined as follows:
+huws entvileyWy(Env ∆) throws unyeterminey ; fvilf
+// ∆ assumed to be well-formed
+if this.lhs():vvr () _ this.rhs():vvr () throw unyeterminey
+c1 = this.lhs()
+c2 = this.rhs()
+if c1:equvls(c2) _ c2:equvls(Objece) return 
+c = c1
+S = fc1g // will contain all c s.t. c1  c
+try f
+while c 6= Objecef
+c = ∆:superxlvss (c)
+S:vyy(c)
+if c:equvls(c2) return 
+g
+throw fvil // chain complete up to Objece
+g
+catch(unyeterminey )fg
+c = c2 // still could fail
+while c 6= Objecef
+c = ∆:superxlvss(c)
+if S:xontvins(c) throw fvil
+g
+throw undetermined
+g
+Figury EI: Dynition of entvileyWy for e  e′
+∆ { Γ !ls  j Γ
+′ iff Γ:solve(∆) returns  and transforms Γ
+into Γ′.
+The following propositions ensure that ! ls leads to a
+sound and complete compositional compilation of FJ w.r.t.
+global compilation.
+droposition 22. Vny relevvnt Γ is fiellBformeyC
+droposition 23. ihe relvtion ! ls svtises properties
+!ls BsounyA !ls BxompleteBFA vny !ls BxompleteB2 of iheoB
+rem FF for vny fiellBformey ΓC
+Finally, note that Prop. 22 ensures also that solve is only
+invoked for sequences of constraints which can be sorted
+w.r.t. the topological order  defined in Definition 20.
+6. RELATED WORK
+No formal model for separate compilation and linking had
+been developed until Cardelli’s seminal work in 1997 [7],
+which can be considered a milestone in the area. It develops
+a simple formal framework for separate compilation (which,
+for the sake of simplification, is considered to consist only
+of typechecking), and linking. This framework can be con-
+sidered to embody the notion of compositional compilation
+formalized in the present paper. The main differences are
+that we are also interested in code generation, and that the
+general framework in Section 2 abstracts from a particular
+programming language, and is parametric in the definition
+of separate compilation and linking judgments. Instead, [7]
+illustrates the concepts on a simple lambda-calculus, and
+linking just amounts in checking that each used entity has
+the required type and replacing its name by its definition.
+Moreover, [7] did not consider the issue of which prop-
+erties compositional compilation should satisfy in order to
+produce the same final result as global compilation. These
+properties correspond to some form of soundness and com-
+pleteness as described in the present paper. They have
+been firstly introduced and formalized in [5], within a gen-
+eral framework for separate compilation and linking espe-
+cially suited for Java-like languages similar to that intro-
+duced here. However, the framework in [5] did not take
+into account possible specialization of bytecode during link-
+ing, hence linking was reduced to interBxhexking, that is,
+checking that mutual assumptions on fragments are satis-
+fied. As a consequence, in the instantation of the frame-
+work presented in [5] (again on Featherweight Java) the
+code generated by separate compilation was standard Java
+bytecode, rather than the polymorphic bytecode introduced
+here; hence, since generated bytecode is context-dependent,
+separate compilation of a class was only possible under some
+given type constraints (or, equivalently, for each possible re-
+sulting bytecode).
+The result in [5] was nevertheless important, since a type
+system for a Java-like language was firstly formally proved to
+guarantee sound and complete inter-checking (or, from an-
+other point of view, to support prinxipvl typings, see below).
+On the practical side, type systems as that in [5] (see also
+[4, 3]) constitute a good basis for selective recompilation,
+as exploited for full Java in [11, 12, 14], since it is possi-
+ble to check whether a change in a source fragment affects
+other fragments by simply checking that their requirements
+still hold, but not for type inference, since type constraints
+needed for compiling a class cannot be inferred by just in-
+specting its source code.
+In other words, compositional compilation as meant in
+this paper (compilation of a fragment in isolation) is not
+possible; type constraints can only be inferred for a given
+resulting bytecode.
+The difference between the present paper and [5] becomes
+clearer by discussing the relation of our approach with the
+notion of prinxipvl typing . According to Wells [17]:
+ a typing for a term i is the collection of all the infor-
+mation other than i which appears in the final judge-
+ment of a proof derivation showing that i is typable,
+and
+ (roughly speaking) a typing for a term i is prinxipvl
+if it somehow represents all the typings for i .
+The paper [17] (see also [10]) pointed out that the principal
+typing property (that is, every typable term has a principal
+typing) plays a key role in compositional type inference.
+In this paper, as in [5], we have formalized compilation (in-
+cluding code generation) by means of a type system. There-
+fore, in our framework, performing compilation amounts to
+performing type inference.
+In the type system in [5], the principal typing property
+holds by taking as terms pairs consisting of a source and a
+binary fragment (in other words, bytecode is considered part
+of the term). Instead, in the type system for compositional
+compilation proposed in this paper, {C , the principal typing
+property holds by taking as terms source fragments S: a
+typing is a triple ∆ j B j Γ (note that bytecode is considered
+part of the typing) and the system has the principal typing
+property since, for any source fragment S, at most one typing
+(modulo renaming of type variables) can be derived.
+7. CONCLUSION
+In this paper we addressed the problem of supporting
+compositional compilation for languages (like Java and Cr)
+where the binary code depends on the compilation context.
+For this, we defined a schema formalizing global and com-
+positional compilation for such languages, and instantiated
+it by providing algorithms supporting compositional com-
+pilation for Featherweight Java. To the best of our knowl-
+edge, this is the first compositional compilation procedure
+for a Java-like language.
+We believe that the results in this paper can be exploited
+at least in two different ways.
+Firstly, they can be directly applied to the development
+of a new generation of compilers/interpreters/linkers (sup-
+porting compositional compilation) for real languages like
+Java and Cr. In this approach, polymorphic bytecode would
+be instantiated eagerly, in a step corresponding to static-
+linking. Such compilers would naturally support selective
+recompilation mechanisms, in the same spirit of [11, 12, 14].
+In this respect, note that the application of our approach
+to, e.g., full Java, does not pose substantially new problems,
+though obviously more and more involved forms of type con-
+straints, as we briefly discuss below. Type constraints mod-
+eling field hiding and method overloading were already pre-
+sented (in the non polymorphic approach) in [4, 5, 3], and
+are omitted in this paper for simplicity. Roughly speaking,
+allowing method overloading simply leads to a different in-
+terpretation of the type constraint (c; m; c¯; (c′; c¯′)), which
+becomes: “for a call of method m with receiver of type c
+and arguments of type c¯ the most specific method has re-
+turn type c′ and parameters of type c¯′” (and analogously
+for field hiding). Hence, rule (c-meth-call) in Fig.11 is not
+affected, whereas rules defining the entailment judgment for
+this type constraint, that is, (-1) and (-2) in Fig.8, must
+change in order to reflect that the type constraint holds when
+c′ and c¯′ are the return and parameter types of the most
+specific method for the call in the given class type envi-
+ronment. The linking simplification algorithm must change
+accordingly. Type constraints modeling most other relevant
+Java features, such as checked exceptions, accessibility lev-
+els, unreachable code, compile-time constants, are presented
+in [11, 12, 14]. Finally, in [13] it is shown how to deal with
+another Java peculiar feature, that is, the ambiguity in an
+expression such as A.B.C.4
+Secondly, the results in this paper could lead to the de-
+velopment of a more flexible run-time support for Java-like
+languages, allowing execution of bytecode containing type
+variables. In this approach, polymorphic bytecode would be
+instantiated lazily, during dynamic linking and loading —
+some initial exploration appears in [6].
+Further work includes extensions of our polymorphic model
+to other Java features, adapting to the polymorphic case
+the results mentioned above, and, more interestingly, to F-
+founded polymorphic methods and classes as introduced by
+GJ and Java 1.5. We also plan to investigate the extension
+of the source language so that it may contain type variables
+as well.
+4For instance, A could be a class, B a static field, C a field,
+or A could be a class, B a nested class, C a static fied, or A
+could be a package, B a class, and C a field.
+Acknowledgements. We are grateful to the anonymous ref-
+erees for detailed and insightful comments and suggestions,
+and to to Alex Buckley for feedback. This work has been
+partially supported by Dynamic Assembly, Reconfiguration
+and Type-checking - EC project IST-2001-33477, and by
+APPSEM II - Thematic network IST-2001-38957.
+8. REFERENCES
+oEq DB Unwonu, ZB Dumiuni, gB Drossopoulou, unx EB nuwwuB Evyn
+mory prinwipul typings zor JuvuAliky lunguugysB ]n Jth Intl.
+korkshop on Formul hychniquys for Juvu drogrums FDD4,
+Juny FDDHB
+oFq DB Unwonu, ZB Dumiuni, gB Drossopoulou, unx EB nuwwuB
+dolymorphiw vytywoxyN Wompositionul wompilution zor
+JuvuAliky lunguugysB hywhniwul ryport, Dipurtimynto xi
+]nzormutiwu y gwiyn–y xyll']nzormu–iony, inivyrsitu xi [ynovu,
+bovymvyr FDDHB Efitynxyx vyrson with proozs, uvuiluvly ut
+ffb://ffb.diei.gnige.if/bgb/bedean/AncanaD/BBCCJL.bdfB
+oGq DB Unwonu unx [B LugorioB gtrongyr hypings zor gmurtyr
+fywompilution oz JuvuAliky LunguugysB Journul of cvjyct
+hychnology, G(J)NI{FI, Juny FDDHB gpywiul issuyN EWccd FDDG
+workshop on Zormul hywhniquys zor JuvuAliky drogrumsB
+oHq DB Unwonu, [B Lugorio, unx EB nuwwuB hruy sypuruty
+wompilution oz Juvu wlussysB ]n AWa gIGdLAb Wonfyryncy
+on drinciplys und dructicy of Dyclurutivy drogrumming
+(ddDd'DF), pugys ELM{FDDB UWa dryss, FDDFB
+oIq DB Unwonu unx EB nuwwuB drinwipul typings zor JuvuAliky
+lunguugysB ]n AWa gymp. on drinciplys of drogrumming
+Lunguugys FDD4, pugys GDJ{GE7B UWa dryss, Junuury FDDHB
+oJq Ulyfi Vuwklyy unx gophiu DrossopoulouB Zlyfiivly Dynumiw
+LinkingB ]n Jth Intl. korkshop on Formul hychniquys for
+Juvu drogrums FDD4, Juny FDDHB
+o7q LB WurxylliB drogrum zrugmynts, linking, unx moxuluri–utionB
+]n AWa gymp. on drinciplys of drogrumming Lunguugys
+EMM7, pugys FJJ{F77B UWa dryss, EMM7B
+oLq gophiu Drossopoulou unx gusun EisynvuwhB ]s thy Juvu hypy
+gystym gounxS ]n EEth Europyun Wonfyryncy on cvjyct
+criyntyd drogrumming (EWccd'M7), volumy EFHE oz LbWg,
+pugys GLM{HELB gpringyrAVyrlug, Juny EMM7B
+oMq UB ]gurushi, VB diyrwy, unx dB kuxlyrB Zyuthyrwyight JuvuN U
+minimul wory wulwulus zor Juvu unx [JB ]n AWa gymp. on
+cvjyctAcriyntyd drogrummingN gystyms, Lunguugys und
+Applicutions EMMM, pugys EGF{EHJ, bovymvyr EMMMB
+oEDq hB JimB khut ury prinwipul typings unx whut ury thyy goox
+zorS ]n drocyydings of thy FGrd AWa gIGdLAbAgIGAWh
+symposium on drinciplys of progrumming lunguugys, pugys
+HF{IGB UWa dryss, EMMJB
+oEEq [B LugorioB howurxs u smurt wompilution munugyr zor JuvuB ]n
+Vlunxo unx Lunyvy, yxitors, Ituliun Wonf. on hhyoryticul
+Womputyr gciyncy FDDG, numvyr FLHE in Lywtury botys in
+Womputyr gwiynwy, pugys GDF{GEIB gpringyr, cwtovyr FDDGB
+oEFq [B LugorioB Unothyr styp towurxs u smurt wompilution
+munugyr zor JuvuB ]n Hishum Huxxux, Unxryu cmiwini,
+fogyr LB kuinwright, unx Loriy aB Liyvrowk, yxitors, AWa
+gymp. on Appliyd Womputing (gAW FDD4), gpyciul hruck on
+cvjyctAcriyntyd drogrumming Lunguugys und gystyms, pugys
+EF7I{EFLDB UWa dryss, aurwh FDDHB
+oEGq [B LugorioB Wupturing ghost xypynxynwiys in Juvu sourwysB
+Journul of cvjyct hychnology, FDDHB ho uppyurB
+oEHq [B LugorioB hypy systyms for Juvu sypuruty compilution und
+sylyctivy rycompilutionB dhD thysis, Dipurtimynto xi
+]nzormutiwu y gwiyn–y xyll']nzormu–iony, inivyrsitu xi [ynovu,
+auy FDDHB
+oEIq fovyrt gyvystuB Woncypts of drogrumming LunguugysB
+UxxisonAkyslyy, FDDHB gyvynth yxitionB
+oEJq DB von chyimv unx hB bipkowB Juvu is hypy guzy A DynitylyB
+]n AWa gymp. on drinciplys of drogrumming Lunguugys
+EMML, UWa dryss, EMMLB
+oE7q JBVB kyllsB hhy yssynwy oz prinwipul typingsB ]n Intyrnutionul
+Wolloquium on Automutu, Lunguugys und drogrumming
+FDDF, numvyr FGLD in Lywtury botys in Womputyr gwiynwy,
+pugys MEG{MFIB gpringyr, FDDFB

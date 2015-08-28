@@ -1,0 +1,1683 @@
+A TUTORIAL FOR MINLOG, VERSION 5.0
+LAURA CROSILLA, MONIKA SEISENBERGER, HELMUT
+SCHWICHTENBERG
+1. Introduction
+This is a tutorial for the interactive proof system Minlog, Version
+5.0, developed by Helmut Schwichtenberg and members of the logic
+group1 at the University of Munich.
+Minlog is implemented in Scheme. Minlog’s favorite dialect is Pe-
+tite Chez Scheme from Cadence Research Systems, which is freely dis-
+tributed at the Internet address www.scheme.com.
+The Minlog system can be downloaded from the Internet address
+http://www.minlog-system.de
+2. Getting started
+The purpose of this Tutorial is to give a rather basic introduction to
+the Minlog system by means of some simple examples. For a thorough
+presentation of Minlog and the motivation behind it the reader should
+consult the reference manual [9] and the document [8]. For a more in–
+depth presentation of the theory underlying Minlog, the reader might
+find it useful also to consult the book [10]. The papers listed in the
+Minlog web page also provide a more detailed and advanced description
+of specific features of the system. In addition, the Minlog distribution
+comes equipped with a directory of examples, to which the user is
+referred.
+In the following we shall assume tacitly that you are using an UNIX-
+like operating system and that Minlog is installed in ˜/minlog, where
+˜ denotes as usual your home directory. Also, C-〈chr〉 means: hold the
+CONTROL key down while typing the character 〈chr〉, while M-〈chr〉
+means: hold the META (or EDIT or ESC or ALT) key down while
+typing 〈chr〉.
+In order to use Minlog, one simply needs a shell in which to run
+Minlog and also an editor in which to edit and record the commands
+This tutorial extends and completes a previous tutorial by L. Crosilla distributed
+with version 4.0 of Minlog.
+1http://www.math.lmu.de/∼logik/welcome.html
+1
+2 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+for later sessions. In this tutorial we shall refer to GNU Emacs2. While
+working with Emacs, the ideal would be to split the window in two
+parts: one containing the file in which to store the commands, and the
+other with the Minlog interactive session taking place. To this aim, it
+is recommended to use the startup script ˜/minlog/minlog which takes
+scheme files as (optional) arguments. For example
+~/minlog/minlog file.scm
+opens a new Emacs-window which is split into two parts. The upper
+part containes the file (Buffer file.scm) whereas the lower part shows
+the Minlog response (Buffer *minlog*).
+Alternatively, one can open emacs and invoke Minlog by loading the
+file minlog.el :
+M-x load-file <enter>
+~/minlog/minlog.el
+In both cases the file init.scm is loaded. In fact, one could also simply
+evaluate (load "~/minlog/init.scm") to start Minlog.
+To execute a command of our file, we simply place the cursor at
+the end of it (after the closed parenthesis), and type C-x C-e. In
+general, C-x C-e will enable us to process any command we type in
+file.scm, one at the time. To process a whole series of commands, one
+can highlight the region of interest and type C-c C-r. We should also
+mention at this point that to undo one step, it is enough to give the
+command (undo), while (undo n) will undo the last n steps. Finally,
+we can type (exit) to end a Scheme session and C-x C-c to exit
+Emacs.
+3. Propositional logic
+3.1. A first example. We shall start from a simple example in propo-
+sitional logic. Suppose we want to prove the tautology:
+(A→ (B → C))→ ((A→ B)→ (A→ C)).
+In the following we shall make use of the convention for which parenthe-
+sis are associated to the right (as this is also implemented in Minlog).
+Therefore the formula above becomes:
+(A→ B → C)→ (A→ B)→ A→ C.
+It is very important, especially at the beginning, to pay the maximum
+attention to the use of parenthesis to prevent mistakes; it might be
+a good strategy to rather exceed in their use in the first examples.
+2See also the Appendix 8.1 for some useful keyboard commands to start working
+with Emacs.
+MINLOG TUTORIAL 3
+Minlog will automatically delete the parenthesis which are not needed,
+therefore facilitating the reading.
+3.1.1. Making a sketch of the proof. The first task will be to make
+an informal sketch of the proof. While making the plan we should
+consider the following fact: Minlog (mainly) implements “Goal Driven
+Reasoning”, also called “Backward Chaining”. That means that we
+start by writing the conclusion we aim at as our goal and then, step
+by step, refine this goal by applying to it appropriate logical rules. A
+logical rule will have the effect of reducing the proof of a formula, the
+goal, to the proof of one or more other formulas, which will become
+the new goals. If our proof is correct, then the formula will be proved
+when we reach the point of having no more goals to solve. In other
+words, Minlog keeps a list of goals and updates it each time a logical
+rule is applied. The proof is completed when the list of goals is empty.
+In this case the tautology we want to prove is made of a series of
+implications, hence we will have to make repeated use of basic rules for
+“deconstructing” implications. The first move will then be to assume
+that the antecedent of the outmost implication is true and try to derive
+the consequent from it. That is, we assume A→ B → C and want to
+derive:
+(A→ B)→ A→ C;
+hence we set the latter as our new goal. Then we observe that the
+formula (A → B) → A → C is an implication as well, and thus can
+be treated in the same way; so we now assume both A → B → C
+and A → B and wish to derive A → C. Clearly, we can make the
+same step once more and obtain A → B → C, A → B and A as our
+premises and try to derive C from them. Now we observe that in order
+to prove C from the assumption A → B → C, we need to prove both
+A and B. Obviously A is proved, as it is one of our assumptions, and
+B immediately follows from A→ B and A by modus ponens.
+3.1.2. Implementing the proof. Once we have a plan for the proof, we
+can start implementing it in Minlog. The initial step would then be
+to write the formula in Minlog. For this purpose, we declare three
+predicate variables A, B and C by writing 3:
+(add-pvar-name "A" "B" "C" (make-arity))
+The expression (make-arity) produces the empty arity for A, B and
+C (see [9] for a description of make-arity). Minlog will then write:
+3We could as well have introduced predicate constants instead of predicate vari-
+ables. In this case we would have used the command add-predconst-name, with
+the same syntax.
+4 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+ok, predicate variable A: (arity) added
+ok, predicate variable B: (arity) added
+ok, predicate variable C: (arity) added
+We now want to prove the above formula with Minlog; we thus need
+to set it as our goal.
+3.1.3. Setting the goal. To set a goal, we can use the command set-goal
+followed by the formula. In the present case:
+(set-goal "(A -> B -> C) -> (A -> B) -> A -> C"))
+Alternatively, we can first give a name to the formula we wish to prove
+and then use this name to set the goal. In the present case, let’s call
+distr (for distributivity of implication) the formula to be proved:
+(define distr (pf "(A -> B -> C) -> (A -> B) -> A -> C"))
+The define command has the effect of defining a new variable, in
+this case distr, and attaching to it the Scheme term which is produced
+by the function pf applied to the formula we enter. In fact, the function
+pf, short for “parse formula”, takes a string as argument and returns a
+Scheme term. This Scheme term is the internal form in Minlog of our
+formula, and distr is a name referring to it. By typing distr, one can
+see the value of this variable. The strategy of naming a formula might
+turn out to be particularly useful in case of very long goals.
+To set distr as our goal we type:
+(set-goal distr)
+Typically, Minlog will number the goals occurring in the proof, and
+will display the top goal as number 1, preceded by a question mark.
+Minlog will print:
+?_1: (A -> B -> C) -> (A -> B) -> A -> C
+3.1.4. The proof. According to our sketch, the first step in proving the
+tautology was to assume the antecedent of the implication and turn
+the consequent into our new goal. This is simply done by writing:
+(assume 1)
+Here the number 1 is introduced by us to identify and name the
+hypothesis. Minlog will thus denote this hypothesis by 1:
+ok, we now have the new goal
+?_2: (A -> B) -> A -> C from
+1:A -> B -> C
+We repeat the assume command to decompose the implication in the
+second goal and obtain a new goal:
+(assume 2)
+MINLOG TUTORIAL 5
+ok, we now have the new goal
+?_3: A -> C from
+1:A -> B -> C
+2:A -> B
+And we decompose the new goal once more:
+(assume 3)
+ok, we now have the new goal
+?_4: C from
+1:A -> B -> C
+2:A -> B
+3:A
+We now need to start using our assumptions. As already mentioned,
+in order to prove C it is enough to prove both A and B, by assumption
+1. Therefore we write: (use 1). This has the effect of splitting the
+goal in two distinct subgoals (note how the subgoals are numbered):
+(use 1)
+ok, ?_4 can be obtained from
+?_6: B from
+1:A -> B -> C
+2:A -> B
+3:A
+?_5: A from
+1:A -> B -> C
+2:A -> B
+3:A
+Then we write:
+(use 3)
+ok, ?_5 is proved. The active goal now is
+?_6: B from
+1:A -> B -> C
+2:A -> B
+3:A
+And conclude the proof by:
+(use 2)
+ok, ?_6 can be obtained from
+?_7: A from
+1:A -> B -> C
+2:A -> B
+3:A
+>
+6 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+(use 3)
+ok, ?_7 is proved. Proof finished.
+To see a record of the complete proof, simply type (display-proof).
+Other useful commands are (proof-to-expr) and the particularly use-
+ful (proof-to-expr-with-formulas). See the manual for a descrip-
+tion of the various display commands available in Minlog.
+We observe that the first three assume commands could be replaced
+by a single one, i.e., (assume 1 2 3). Also, in alternative to the
+last two use commands, we could have given only one command:
+(use-with 2 3), which amounts to applying a cut to the premises
+2 and 3. A final remark: in case of rather complex proofs, it may be
+more convenient to use names to denote specific hypothesis, instead of
+making use of bare numbers. To do so, one can simply use the assume
+command, followed by the name of the assumption in double quotes.
+Before starting to read the next section it is advisable to consult
+the reference manual [9] for a compendium of the commands utilized
+in this example. It is worth noticing that in general these commands
+have a wider applicability than their usage as here presented.
+3.2. A second example: conjunction. The next example is a simple
+tautology made of conjunctions and an implication. We want to prove4:
+A ∧B → B ∧ A.
+In this case, we shall simply record the code of our Minlog proof, asking
+the reader to check Minlog’s reply at each step. We start as usual with
+declaring the variables A and B and setting the goal. Note that if
+one uses the same file for a number of examples, there is no need to
+re-declare the same predicate variables each time. Hence here and in
+the example file available with the distribution repeated declarations
+are commented by prefixing a “;; ”.
+;; (add-pvar-name "A" "B" (make-arity))
+(set-goal "A & B -> B & A")
+We than notice that the main connective is an implication, and thus
+call the command assume:
+(assume 1)
+Next we need a command which operates on a conjunction and splits
+it into its two components. We can simply write:
+(split)
+4Recall that ∧ binds stronger than →.
+MINLOG TUTORIAL 7
+Finally, we impart the command use which is utilized to obtain the
+left (respectively the right) conjunct from an assumption which is a
+conjunction and “use” it to derive the goal.
+(use 1)
+(use 1)
+This completes the proof.
+3.3. Exercises. The reader is encouraged to try and prove other tau-
+tologies. For example the following:
+(1) A→ B → A
+(2) (A→ B → C)→ B → A→ C
+(3) (A→ B)→ (B → C)→ A→ C
+(4) (A→ B → C)→ A ∧B → C
+3.4. Classical logic. To conclude this section on propositional logic,
+we give a short example of a tautology which uses classical logic.
+Minlog implements minimal logic. However, it is possible to use
+Minlog to prove a proposition which holds in an extension of minimal
+logic, like intuitionistic or classical logic. This is achieved by adding
+specific principles which are characteristics of each kind of logic, like
+the “ex falso quodlibet” or a version of the “tertium non datur”. We
+recall that intuitionistic logic is obtained from minimal logic by adding
+a principle which enables us to derive any formula from falsity (“ex
+falso quodlibet” is Latin for “anything follows from falsity”). This
+principle is usually stated as: ⊥ → A, for arbitrary A, where ⊥ denotes
+falsity. Classical logic may be obtained by adding to intuitionistic logic
+the law of “tertium non datur” (Latin for “there is no third option”).
+This is usually stated as A ∨ ¬A, for any A. However, classical logic
+may also be obtained by adding to minimal logic a consequence of
+“tertium non datur”, known as “stability”, asserting that ¬¬A → A,
+for any A. Negation is represented in Minlog as follows: ¬A is A→ ⊥;
+consequently stability is written as:
+((A→ ⊥)→ ⊥)→ A,
+for each A.
+We can add “external” principles to Minlog by introducing so–called
+“global assumptions”. Roughly speaking, a global assumption is a
+proposition whose proof does not concern us at the moment; hence
+it can also be an assumption with no proof. Some global assumptions
+are already set by default, like EfqLog (which is Minlog’s name for “ex
+falso quodlibet”) and StabLog (which is Minlog’s name for the law of
+stability). In order to check which global assumptions we have at our
+8 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+disposal we type: (display-global-assumptions). To check a par-
+ticular global assumption (or theorem) whose name we already know,
+we write pp (for pretty-print) followed by the name of the assumption
+(or theorem) we want to check, e.g.: (pp "StabLog"). Of course we
+can also introduce our own global assumptions and remove them at
+any time (see the reference manual for the relevant commands).
+In the following we wish to prove the tautology:
+((A→ B)→ A)→ A,
+which is known as Peirce formula. Also for this example, we will assume
+that the reader has prepared her sketch of the proof, and we will only
+give an intuitive idea of the proof, preferring to rather concentrate on
+the Minlog interaction, which will be given in its complete form.
+As in the previous examples, we observe first of all that the goal is
+an implication, hence we will assume its antecedent, (A → B) → A,
+and try to prove its consequent, A. Now classical logic comes into play:
+in order to prove A we will assume that its negation holds and try to
+obtain a contradiction from it. This will be achieved by use of Stability.
+We further note that in order to make the argument work, we will need
+at some stage to resort also to “ex falso quodlibet”.
+We start by setting the goal and assuming the antecedent of the
+implication:
+;; (add-pvar-name "A" "B" (make-arity))
+(set-goal "((A -> B) -> A) -> A")
+(assume 1)
+We obtain:
+ok, we now have the new goal
+?_2: A from
+1:(A -> B) -> A
+We now apply Stability, StabLog, so that the goal A will be replaced
+by its double negation: (A → ⊥) → ⊥. Note that ⊥ is called bot in
+Minlog.
+(use "StabLog")
+ok, ?_2 can be obtained from
+?_3: (A -> bot) -> bot from
+1:(A -> B) -> A
+Since this is an implication, we let:
+(assume 2)
+ok, we now have the new goal
+?_4: bot from
+1:(A -> B) -> A
+MINLOG TUTORIAL 9
+2:A -> bot
+We then use hypothesis 2 to replace the goal ⊥ by A.
+(use 2)
+ok, ?_4 can be obtained from
+?_5: A from
+1:(A -> B) -> A
+2:A -> bot
+Also A can be replaced by A → B by use of hypothesis 1. Subse-
+quently, we can assume the antecedent of the new goal, A, and call it
+hypothesis 3:
+(use 1)
+ok, ?_5 can be obtained from
+?_6: A -> B from
+1:(A -> B) -> A
+2:A -> bot
+>
+(assume 3)
+ok, we now have the new goal
+?_7: B from
+1:(A -> B) -> A
+2:A -> bot
+3:A
+Now we can make use of the principle of “ex falso quodlibet”: if
+we want to prove B, we can instead prove falsum, since from falsum
+anything follows, in particular B. Our goal can be updated to ⊥ by
+the following instance of use:
+(use "EfqLog")
+ok, ?_7 can be obtained from:
+?_8: bot from
+1:(A -> B) -> A
+2:A -> bot
+3:A
+The next two steps are obvious.
+(use 2)
+ok, ?_8 can be obtained from
+?_9: A from
+1:(A -> B) -> A
+2:A -> bot
+3:A
+>
+10 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+(use 3)
+ok, ?_9 is proved. Proof finished.
+3.5. Exercises. To familiarize yourself with negation, prove the fol-
+lowing propositions.
+(1) (A→ B)→ ¬B → ¬A,
+(2) ¬(A→ B)→ ¬B,
+(3) ¬¬(A→ B)→ ¬¬A→ ¬¬B.
+3.6. Note on disjunction. In Minlog we don’t have a primitive log-
+ical constant for ∨. This is due to the fact that when wishing to prove
+the disjunction A ∨B we can often prove
+(A -> Pvar) -> (B -> Pvar) -> Pvar
+instead5.
+4. Predicate logic
+4.1. A first example with quantifiers. We now exemplify how to
+prove a statement in predicate logic. We want to prove:
+∀n(Pn→ Qn)→ ∀nPn→ ∀nQn.
+Here we assume that the predicates P and Q take natural numbers
+as arguments. Therefore, we first of all load a file, already available
+within the distribution, which introduces the algebra of natural num-
+bers, including some operations on them, like for example addition.
+The reader is advised to have a look at this file6 by typing:
+(libload "nat.scm")
+Note that this command will produce the display of the whole file
+nat.scm, evaluated. If we wish to load the file “silently”, then we can
+precede the libload command by the following line:
+(set! COMMENT-FLAG #f)
+This will have the effect of hiding the output. To revert to full display
+(which is needed to proceed with the proof) one types:
+(set! COMMENT-FLAG #t)
+5Note, however, that there is also an (inductively defined) “or”, which is dis-
+played as ord, with rules:
+(pp "InlOrD")
+Pvar1 -> Pvar1 ord Pvar2
+(pp "InrOrD")
+Pvar2 -> Pvar1 ord Pvar2
+6See also section 6.1.
+MINLOG TUTORIAL 11
+As we load nat.scm, we can make use of all the conventions which
+are there stipulated; in particular, we can take n,m, k to be variables
+for natural numbers (i.e. of type nat)7. The next task is to introduce
+two new predicate variables P and Q which take natural numbers as
+arguments:
+(add-pvar-name "P" "Q" (make-arity (py "nat")))
+> ok, predicate variable P: (arity nat) added
+ok, predicate variable Q: (arity nat) added
+We then set the goal:
+(set-goal "all n(P n -> Q n) -> all n P n -> all n Q n")
+> ?_1: all n(P n -> Q n) -> all n P n -> all n Q n
+As usual, we first have to “deconstruct” the implications:
+(assume 1 2)
+> ok, we now have the new goal
+?_2: all n Q n from
+1:all n(P n -> Q n)
+2:all n P n
+Then we need to take care of the universal quantifier in the goal:
+(assume "n")
+> ok, we now have the new goal
+?_3: Q n from
+1:all n(P n -> Q n)
+2:all n P n
+n
+Note that we could have also used only one command to perform all
+these actions:
+(assume 1 2 "n")
+We finally have to “use” our hypothesis to conclude the proof:
+(use 1)
+(use 2)
+> ok, ?_3 can be obtained from
+?_4: P n from
+1:all n(P n -> Q n)
+2:all n P n
+n
+> ok, ?_4 is proved. Proof finished.
+7Note that Minlog automatically infers the type of the variables x0, x1, . . . once
+the variable x has been declared. In this case, it infers for example that n0, n1, . . .
+are also natural numbers.
+12 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+4.2. Another example. We now wish to prove the following:
+∀n(Pn→ Qn)→ ∃nPn→ ∃nQn.
+We start by setting the goal and eliminating the two implications:
+(set-goal "all n(P n -> Q n) -> ex n P n -> ex n Q n")
+(assume 1 2)
+?_1: all n(P n -> Q n) -> ex n P n -> ex n Q n
+> ok, we now have the new goal
+?_2: ex n Q n from
+1:all n(P n -> Q n)
+2:ex n P n
+Next we want to use the second assumption, now by applying “for-
+ward reasoning”. Thus we assume there is a witness, say n0, for this
+existential formula and call the resulting hypothesis Pn0 . To this aim
+we make use of a command called by-assume:
+(by-assume 2 "n0" "P_n0")
+> ok, we now have the new goal
+?_5: ex n Q n from
+1:all n(P n -> Q n)
+n0 P_n0:P n0
+Alternatively, from the existential formula in hypothesis 2, we can
+extract a witness, say n0, by applying an existential elimination.
+(ex-elim 2)
+(assume "n0" "P_n0")
+> ok, ?_2 can be obtained from
+?_3: all n(P n -> ex n0 Q n0) from
+1:all n(P n -> Q n)
+2:ex n P n
+> ok, we now have the new goal
+?_4: ex n Q n from
+1:all n(P n -> Q n)
+2:ex n P n
+n0 P_n0:P n0
+As we have already used assumption 2, we may wish to drop it by
+writing:
+(drop 2)
+We conclude the proof by providing a witness, the term n0, for our
+existential goal formula. This will be done by calling the command
+ex-intro with argument (pt "n0"), where pt stands for “parse term”.
+(ex-intro (pt "n0"))
+MINLOG TUTORIAL 13
+> ok, ?_5 can be obtained from
+?_6: Q n0 from
+1:all n(P n -> Q n)
+n0 P_n0:P n0
+Finally, we first instantiate the universal quantifier in assumption 1
+to n0 and then perform a cut with the third assumption.
+(use-with 1 (pt "n0") "P_n0")
+> ok, ?_5 is proved. Proof finished.
+4.3. An example with relations. In the next example we wish to
+prove that every total relation which is symmetric and transitive is
+reflexive. For simplicity we shall work also in this case with the algebra
+of the natural numbers. Our aim is to prove the following statement:
+∀n,m (Rnm→ Rmn) ∧ ∀n,m,k (Rnm ∧ Rmk → Rnk)
+→ ∀n (∃mRnm→ Rnn),
+where n, m, k vary on natural numbers, while R is a binary predicate
+on natural numbers.
+Before attacking our formula, we observe that in general conjunctions
+are quite complex to deal with, as they normally imply the branching
+of a proof in two subproofs. Thus we might wish to first find a for-
+mula which is equivalent to the one above and “simpler” to prove. We
+note that we can equivalently express our goal by a formula in which
+the conjunctions have been replaced by implications. Also, we can ex-
+press the conclusion with a prenex universal quantifier instead of an
+existential one. That is, we can instead prove the following equivalent
+formula:
+∀n,m (Rnm→ Rmn)→ ∀n,m,k (Rnm→ Rmk → Rnk)
+→ ∀n,m (Rnm→ Rnn).
+We observe that the strategy of first simplifying the goal may in some
+cases allow one to considerably reduce the amount of time needed to
+prove a statement. For completeness and for a comparison, we shall
+also record a proof of the original goal at the end of this section.
+We now start by introducing the constant R. We also want to faci-
+litate our work a bit further and introduce names for our two assump-
+tions. In the following we shall use the function py (for “parse type”),
+which is the analogous for types of the function parse formula that we
+encountered in the first example.
+(add-pvar-name "R" (make-arity (py "nat") (py "nat")))
+(define Sym (pf "all n,m(R n m -> R m n)"))
+14 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+(define Trans (pf "all n,m,k(R n m -> R m k -> R n k)"))
+We now state the goal:
+(set-goal (mk-imp Sym Trans (pf "all n,m(R n m -> R n n)")))
+?_1: all n,m(R n m -> R m n)
+-> all n,m,k(R n m -> R m k -> R n k)
+-> all n,m(R n m -> R n n)
+Note that also in this case, we could have directly written the two
+formulas as antecedents of the implication, avoiding the detour through
+a define command. In case of more complex formulas, however, or
+when we need to use the same formulas for various proofs through one
+session, the strategy of introducing names for assumptions can be quite
+useful.
+We now observe that the goal is an implication, so that the first
+step is to write (assume "Sym" "Trans"). We now obtain a univer-
+sally quantified formula and hence need to proceed to eliminate the
+quantifiers. This can be accomplished by another assume command
+in which we specify two natural numbers, say n and m. So we write
+(assume "n" "m"). This produces an implication which again needs
+to be eliminated by another assume command, say (assume 3). Quite
+conveniently we can put all these commands together by simply writ-
+ing:
+(assume "Sym" "Trans" "n" "m" 3)
+ok, we now have the new goal
+?_2: R n n from
+Sym:all n,m(R n m -> R m n)
+Trans:all n,m,k(R n m -> R m k -> R n k)
+n m 3:R n m
+The next move is to make use of our assumptions. It is clear that
+if we take k to be n in Trans, then the goal can be obtained by an
+instance of Sym, and the proof is easily completed. We here utilize
+use by additionally providing a term, "m", which instantiates the only
+variable which can not be automatically inferred by unification8.
+(use "Trans" (pt "m"))
+?_4: R m n from
+Sym:all n,m (R n m -> R m n)
+Trans:all n,m,k(R n m -> R m k -> R n k)
+n m 3:R n m
+?_3: R n m from
+Sym:all n,m(R n m -> R m n)
+8See [8] for an introduction to unification.
+MINLOG TUTORIAL 15
+Trans:all n,m,k(R n m -> R m k -> R n k)
+n m 3:R n m
+The use command has the effect of replacing the current goal with
+two new goals. These are obtained from Trans by instantiating the
+quantifiers with n, m and n (the two n being inferred by unification)
+and then by replacing the goal with the antecedents of the resulting
+instance of Trans. We can now write:
+(use 3)
+> ok, ?_3 is proved. The active goal now is
+?_4: R m n from
+Sym:all n,m(R n m -> R m n)
+Trans:all n,m,k(R n m -> R m k -> R n k)
+n m 3:R n m
+We finally employ Sym and another use:
+(use "Sym")
+ok, ?_4 can be obtained from
+?_5: R n m from
+Sym:all n,m(R n m -> R m n)
+Trans:all n,m,k(R n m -> R m k -> R n k)
+n m 3:R n m
+>
+(use 3)
+ok, ?_5 is proved. Proof finished.
+4.4. The same example again. We here present a Minlog proof of
+the original goal in the previous example, as it allows us to exemplify
+the use of some new commands. We shall leave the proof uncommented
+and make a few remarks at the end. The reader will have to examine
+the proof and check Minlog’s interaction.
+;; (libload "nat.scm")
+;; (add-pvar-name "R" (make-arity (py "nat") (py "nat")))
+(set-goal "all n,m(R n m -> R m n)
+& all n,m,k(R n m & R m k -> R n k)
+-> all n(ex m R n m -> R n n)")
+(assume 1)
+(inst-with 1 ’left)
+(inst-with 1 ’right)
+(drop 1)
+(name-hyp 2 "Sym")
+(name-hyp 3 "Trans")
+(assume "n" 4)
+16 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+(ex-elim 4)
+(assume "m" 5)
+(cut "R m n")
+(assume 6)
+(use-with "Trans" (pt "n") (pt "m") (pt "n") "?")
+(drop "Sym" "Trans" 4)
+(split)
+(use 5)
+(use 6)
+(use-with "Sym" (pt "n") (pt "m") 5)
+The use-with command is similar to the use command, but when
+applied to a universal quantifier it requires to explicitly specify the
+terms one wants to instantiate. In the second occurrence of use-with,
+Minlog will instantiate as specified the universal quantifiers in the sec-
+ond premise and then use hypothesis 5 to prove the goal.
+The command inst-with is analogous to use-with, but operates
+in forward reasoning; hence it allows one to simplify the hypothesis,
+instead of the conclusion. In this case, (inst-with 1 ’left) has the
+effect of producing the left component of the conjunction which con-
+stitutes the first hypothesis. Similarly for the right component.
+As to cut, this command enables one to introduce new goals: (cut
+A) has the effect of replacing goal B by two new goals, A→ B and A.
+In the proof above we have also made use of the commands drop and
+name-hyp. We have already seen the first command, which allows one
+to remove one or more hypothesis from the present context, to make
+the proof more readable. In fact, it simply replaces the current goal
+with another goal in which the hypothesis “dropped” are not displayed
+anymore (but they are not removed in general, as should be clear from
+the example above). The second command has similar “cosmetic” pur-
+poses, and allows one to rename a specific hypothesis and hence to
+work with names given by the user instead of numbers produced by
+default. Both these commands result especially useful in the case of
+long and intricate proofs.
+4.5. Exercises. Prove the following goals:
+(1) ∀m,nRmn→ ∀n,mRmn
+(2) ∀m,nRmn→ ∀nRnn
+(3) ∃m∀nRmn→ ∀n∃mRmn
+4.6. Advanced exercises. Now two examples which involve a func-
+tion. First declare a new function variable (where av stands for “add
+variable”):
+MINLOG TUTORIAL 17
+(av "f" (py "nat=>nat"))
+(set-goal "all f(all n(P(f n) -> Q n)
+-> all n P n -> all n Q n)")
+(set-goal "all f(all n(P n -> Q (f n))
+-> ex n P n -> ex n Q n)")
+And finally:
+;; (add-pvar-name "Q" (make-arity (py "nat")))
+;; (add-pvar-name "A" (make-arity))
+(set-goal "all n(Q n -> A) -> (ex n Q n -> A)")
+(set-goal "ex n(Q n -> A) -> all n Q n -> A")
+4.7. Another example with classical logic. We conclude this sec-
+tion on predicate logic with the proofs of two formulas which hold in
+classical logic. First of all, we prove the inverse of the formula in the
+last exercise, now generalised to an arbitrary type. Then we use this
+formula (conveniently stored as a Lemma) to prove another formula
+which is usually known as the “Drinker” formula. So we start by prov-
+ing:
+(∀xQx→ A)→ ∃˜x(Qx→ A).
+Here Q is a unary predicate which ranges on an arbitrary type, say α.
+In addition, the existential quantifier, ∃˜, is here a classical existential
+quantifier, to be distinguished from the existential quantifier we en-
+countered in the previous example. A classical quantifier ∃˜x is nothing
+more than an abbreviation for ¬∀x ¬. Note that Minlog implements
+both quantifiers, with the appropriate corresponding rules.
+We start by “removing” the constant Q from example 4.1, so that
+we can re-introduce it as a fresh constant which ranges on α rather
+than on the natural numbers. We also introduce two new variables, x
+and y, of type α. Finally, we set the goal.
+(remove-pvar-name "Q")
+(add-pvar-name "Q" (make-arity (py "alpha")))
+(av "x" (py "alpha"))
+(set-goal "(all x Q x -> A) -> excl x(Q x -> A)")
+We start by “deconstructing” the two implications. Then we can
+instantiate the universal quantifier in assumption 2 to a canonical in-
+habitant of the type α.
+(assume 1 2)
+(use 2 (pt "(Inhab alpha)"))
+Subsequently, we proceed by eliminating the implication in the goal,
+using assumption 1 and instantiating the resulting universal quantifier
+by x.
+18 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+(assume 3)
+(use 1)
+(assume "x")
+Now it’s time to call in classical logic. The remaining steps should
+be self–explanatory. Note in particular the use of EfqLog and the
+command save at the end of the proof which enables us to save the
+proof and call it “Lemma”.
+(use "StabLog")
+(assume 4)
+(use 2 (pt "x"))
+(assume 5)
+(use 1)
+(assume "x1")
+(use "EfqLog")
+(use-with 4 5)
+(save "Lemma")
+We now wish to prove the following:
+∃˜x (Qx→ ∀yQy),
+again with Q a unary predicate ranging on α.
+The above formula is known as the “drinker” formula, as it says
+something like: “in a bar, there is a person such that if that person
+drinks then everybody drinks”. To prove the “drinker”, we observe
+that if we substitute the predicate variable A by ∀xQx in the formula
+just proved, then we obtain the drinker formula. The substitution can
+be achieved by the following command.
+(set-goal "excl x(Q x -> all x Q x)")
+(use-with "Lemma"
+(make-cterm (pv "x") (pf "Q x"))
+(make-cterm (pf "all x Q x"))
+"?")
+Here pv stands for “parse variable”. In addition, make-cterm pro-
+duces a “comprehension term” consisting of a list of variables and the
+formula we wish to substitute. For example, if we wish to replace a
+predicate variable P with arity x1, . . . , xn by a formula F (y1, . . . , yn)
+we need to give a comprehension term consisting of a list of variables
+y1, . . . , yn and the formula F (with free variables y1, . . . , yn, plus pos-
+sibly other variables, bound or free). That is, we write: (make-cterm
+(pv "y1") ...(pv "yn") <formula F> ). Note that the list of vari-
+ables can also be empty, as in the second application of make-cterm
+above. We leave the rest of the proof as an exercise for the reader.
+MINLOG TUTORIAL 19
+4.8. Equality reasoning. We now wish to prove that for any function
+f taking natural numbers to natural numbers, for any natural number
+n, the following holds:
+fn = n→ f(fn) = n.
+First of all we recall the nat library and introduce f . Then we set the
+goal and start by a familiar assume command.
+;; (libload "nat.scm")
+(av "f" (py "nat=>nat"))
+(set-goal "all f,n(f n=n -> f(f n)=n)")
+(assume "f" "n" 1)
+Next we can use the command simp which is an essential tool in
+Minlog’s equality reasoning. This command has the effect of simplify-
+ing a proof which involves equal terms by performing an appropriate
+substitution in the goal. We conclude with a use command.
+(simp 1)
+(use 1)
+Suppose now we wish to replace the right hand side by the left hand
+side in the equation above:
+(set-goal "all f,n(n=f n -> n=f(f n))")
+This can be proved by the following commands:
+(assume "f" "n" 1)
+(simp "<-" 1)
+(use 1)
+5. Automatic proof search
+Minlog allows for automatic proof search. There are two distinct
+facilities for performing an automatic search in Minlog. The first is
+given by the command (prop) and exemplifies Hudelmaier-Dyckhoff’s
+search for the case of minimal propositional logic (see e.g. [5], [4]). The
+second is given by the command (search) and allows to automatically
+find proofs also for some quantified formulas.
+5.1. Search in propositional logic. When we give the command
+prop, Minlog will first look for a proof in propositional minimal logic.
+If it fails to find a proof for the given proposition, it will try with intu-
+itionistic logic, by adding appropriate instances of “ex falso quodlibet”.
+If this search also gives no positive answer, it will try to find a proof
+in classical logic, by adding appropriate instances of Stability.
+20 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+To apply this search algorithm, one simply needs to type (prop).
+One could do so after stating the goal or at any point in a proof from
+which one believes that (minimal) propositional logic should suffice.
+If Minlog finds a proof, one can then display it by means of any of
+the display commands available for proofs; for example by writing dnp
+(which is a shortcut for display-normalized-proof).
+The reader is encouraged to try prop on the following tautologies:
+(1) (A→ B → C)→ (A→ B)→ A→ C
+(2) ((A→ B)→ A)→ A
+Further test examples can be found in the section on propositional
+logic in this tutorial.
+5.2. Search in predicate logic. The command search embodies a
+search algorithm based on [6] and ideas of U. Berger (see the Min-
+log reference manual and [7] for details on the algorithm and for some
+differences with Miller’s original algorithm). The search command
+enables us to automatically find a proof for a wider class of formulas
+compared with prop, since it also works for some formulae with quanti-
+fiers (see the reference manual for a detailed description of the class of
+formulae dealt with by search). Note, however, that search only op-
+erates a search in minimal logic. If one wishes to apply this command
+to a classical formula like “Peirce’s law”, one could for example add
+the appropriate instances of “ex falso quodlibet” and of “Stability” as
+antecedents of the goal. In case of more complex proofs, in which one
+can not easily modify the actual goal, an alternative would be to avail
+oneself of a more complete use of the search command which allows
+us to specify some global assumptions, theorems or even hypotheses
+from the given context which one would like to use in the proof. Since
+the search space in the case of quantified formulas can become really
+vast, this possibility of declaring specific assumptions to be used in the
+proof can be very useful, especially if we also state the maximum num-
+ber of multiplicities we allow for each assumption (i.e., the maximum
+number of times each assumption can be used in the proof). One can
+also use this same device to exclude the use of a specific assumption in
+the proof, simply by letting its multiplicity to be 0.
+To use the plain version of search, one simply writes (search). See
+the reference manual for the precise syntax of the command search
+when other assumptions are invoked with the respective multiplicities.
+The reader is encouraged to use search to prove the following:
+∀x(Px→ Qx)→ ∃xPx→ ∃xQx.
+MINLOG TUTORIAL 21
+5.2.1. A more complex example with search. We here wish to intro-
+duce a more complex example for the use of search. We apply the
+algorithm to the following problem: if f is a continuous function then
+f composed with itself is also a continuous function. We suggest to
+solve the problem as follows.
+(add-tvar-name "beta")
+(add-var-name "U" "V" "W" (py "beta"))
+(add-program-constant "In" (py "alpha=>beta=>boole"))
+(add-infix-display-string "In" "in" ’rel-op)
+(add-var-name "f" (py "alpha=>alpha"))
+(set-goal "all f(
+all x,V(f x in V ->
+excl U(x in U & all y(y in U -> f y in V))) ->
+all x,W(f(f x)in W ->
+excl U(x in U & all y(y in U -> f(f y)in W))))")
+(search)
+(dnp)
+Note that one can switch on a verbose form of search by letting: (set!
+VERBOSE-SEARCH #t) before calling search. In this way one can see
+the single steps performed by the search algorithm and detect possible
+difficulties in finding a proof.
+Also, add-infix-display-string allows us to define a token with
+infix notation for the program constant9.
+6. Datatypes and inductively defined predicates
+6.1. The natural numbers. The standard example of a datatype is
+that of the natural numbers. We have already seen that the natu-
+ral numbers are implemented in Minlog as an algebra, and that the
+distribution comes equipped with a file, called nat.scm, which intro-
+duces this algebra. The algebra’s constructors are 0 and Succ (zero
+and successor). To display these constructors, we simply write:
+(display-alg "nat")
+We obtain Minlog’s reply:
+> nat
+Zero: nat
+Succ: nat=>nat
+9Similarly there are commands for prefix and postfix use, for example:
+add-prefix-display-string.
+22 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+Note also that for convenience Minlog allows us to write 0, 1, 2,
+3, ... instead of Zero, (Succ Zero), Succ(Succ Zero), ....
+Algebras usually come equipped with some functions, which are
+called program constants in Minlog. For example, in the case of
+the natural numbers, one has the program-constants NatPlus and
+NatTimes, for addition and multiplication, respectively. These are dis-
+played as + and *. The behaviour of program constants is specified by
+means of appropriate term rewriting rules which in Minlog are called
+computation rules and rewrite rules 10.
+For example, to see the program constant NatPlus and its rules type:
+(display-pconst "NatPlus")
+> NatPlus
+comprules
+nat+0 nat
+nat1+Succ nat2 Succ(nat1+nat2)
+rewrules
+0+nat nat
+Succ nat1+nat2 Succ(nat1+nat2)
+nat1+(nat2+nat3) nat1+nat2+nat3
+Note that here nat is a default variable of type nat. We recommend
+to have a look at the file nat.scm to familiarise oneself with the way
+program constants are defined.
+To see the effect of term rewriting rules for + we type
+(pp (nt (pt "3+4")))
+(pp (nt (pt "Succ n+Succ m+0")))
+which yields as results the number 7 and Succ(Succ(n+m)). Here
+pp stands for pretty print and nt stands for normalize term; this
+essentially consists in repeatedly applying11 the term rewriting rules
+until no new term is obtained.
+6.1.1. Adding new program constants and computation rules. We now
+wish to exemplify the introduction of new program constants on the
+natural numbers.
+10The idea is that a computation rule can be understood as a description of a
+computation in a suitable semantical model, provided the syntactic constructors
+correspond to semantic ones in the model, whereas the other rules should be proved
+before being introduced.
+11Term rewriting in Minlog makes use of normalisation-by-evaluation (see [9]).
+MINLOG TUTORIAL 23
+Recall that if the file nat.scm is not already loaded12, we can type:
+(set! COMMENT-FLAG #f)
+(libload "nat.scm")
+(set! COMMENT-FLAG #t)
+We now introduce a new program constant which represents the
+function which doubles a natural number. The command used to in-
+troduce a new program constant is add-program-constant. It requires
+the name of the constant and its type; further arguments may be the
+degree of totality, the token type (e.g. const) and the arity (see [9]).
+In particular, note that in Minlog we can treat not only total objects
+but also partial ones13. Therefore, when we introduce a new program
+constant, we may also specify its totality degree. A totality degree of
+one (t-deg-one) indicates that the program constant is total, while
+zero (which is the default) denotes non–totality. As to the type, in
+the present case, the new constant Double is of arrow type, as it takes
+natural numbers as input and produces natural numbers as output.
+(add-program-constant "Double" (py "nat=>nat"))
+In case we wish to remove this program constant, we simply write:
+(remove-program-constant "Double")
+The behaviour of a new program constant can be specified by intro-
+ducing one or more computation rules for it. This is accomplished by
+use of the command add-computation-rule, having two arguments:
+a left hand side and a right hand side. The right hand side specifies
+the result of the computation rule for the argument indicated in the
+left hand side.
+The following example should clarify how to use these commands.
+The function “Double” can be defined by specifying primitively re-
+cursively how it acts on zero and on the successor of each natural
+number.
+(add-computation-rule (pt "Double 0") (pt "0"))
+(add-computation-rule (pt "Double(Succ n)")
+(pt "Succ(Succ(Double n))"))
+Alternatively, one could also write:
+(add-computation-rules
+"Double 0" "0"
+"Double(Succ n)" "Succ(Succ(Double n))")
+12Clearly, it is good practice to run a new Minlog session when loading new files
+which could turn out to be incompatible with previously loaded files or previously
+introduced definitions.
+13For the notion of totality see [11, Chapter 8.3]; see also [10].
+24 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+To see the effect of the newly introduced computation rules:
+(pp (nt (pt "Double 3")))
+(pp (nt (pt "Double(n+2)")))
+6.1.2. Proof by induction. Here we wish to exemplify a proof by induc-
+tion on the natural numbers. The goal is very simple: we wish to show
+that Double n = n+n. The first step of the proof consists in using the
+command ind. This command requires a universally quantified goal
+and proves it by induction, according to the definition of the specific
+algebra type.
+(set-goal "all n Double n=n+n")
+(ind)
+The effect of applying ind is to refine the goal to a proof of the base
+and the step cases of the induction. In the present case, where the
+constructors are Zero and Successor, we have to prove two cases: one
+for Zero and one for Successor. Minlog’s reply will be something like
+this:
+ok, ?_1 can be obtained from
+; ?_3: all n(Double n=n+n -> Double(Succ n)=Succ n+Succ n) from
+; n924
+; ?_2: Double 0=0+0 from
+; n924
+We then replace the goal with its normal form by letting:
+(normalize-goal)
+; ?_4: T from
+; n924
+The latter command can be abbreviated with ng and it normalizes
+the goal by using the computation rules for “+” introduced in the file
+nat.scm. More specifically, as both Double 0 and 0+0 reduce to 0,
+the normalization will first of all produce 0=0. This in turn reduces to
+truth, here indicated by T. It comes equipped with an axiom Truth, by
+means of which we prove the base case.
+(use "Truth")
+ok, ?_4 is proved. The active goal now is
+?_3: all n(Double n=n+n -> Double(Succ n)=Succ n+Succ n) from
+n924
+MINLOG TUTORIAL 25
+As to the step, we make use of the induction hypothesis, IH, and
+write:
+(assume "n" "IH")
+(ng)
+(use "IH")
+ok, we now have the new goal
+?_5: Double(Succ n)=Succ n+Succ n from
+n924 n IH:Double n=n+n
+> ok, the normalized goal is
+?_6: Double n=n+n from
+n924 n IH:Double n=n+n
+> ok, ?_6 is proved. Proof finished.
+Also in this case, when we write ng the term rewriting rules for
+Double and “+” are applied.
+Finally, we wish to recall that one could also define the Double func-
+tion without making use of a primitive recursive definition.
+(add-program-constant "DoubleN" (py "nat=>nat"))
+(add-computation-rule (pt "DoubleN n") (pt "n+n"))
+6.1.3. Exercises. Prove that the two definitions of the doubling func-
+tion are equivalent:
+(set-goal "all n Double n=DoubleN n")
+Prove also the following:
+(set-goal "all n,m n+m=m+n")
+6.1.4. Rewrite rules. Once we have proved the above statement for
+which the two definitions of Double are equivalent, we may add a
+rewrite rule which replaces each occurrence of Double by DoubleN.
+(add-rewrite-rule (pt "Double n") (pt "DoubleN n"))
+6.1.5. Another example. We now present another example of induction
+on the natural numbers, which introduces some additional features of
+Minlog.
+Suppose we want to prove that for all natural numbers n, Double n
+is even. We define two new program constants Odd and Even which
+take a natural number as argument and give a boolean (true or false)
+as output. As usual, the behaviour of these program constants can be
+specified by means of appropriate computation rules. In this case the
+computation rules will simultaneously characterize Odd and Even.
+26 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+(add-program-constant "Odd" (py "nat=>boole"))
+(add-program-constant "Even" (py "nat=>boole"))
+(add-computation-rules
+"Odd 0" "False"
+"Even 0" "True"
+"Odd(Succ n)" "Even n"
+"Even(Succ n)" "Odd n")
+The steps of the proof are self–explanatory:
+(set-goal "all n Even(Double n)")
+(ind)
+(prop)
+(search)
+6.2. Case distinction on the booleans. We wish to give an example
+of distinction by cases, and for simplicity we shall consider a trivial
+example on the booleans.
+We wish to prove that for any boolean p, if p is not false than it is
+true. We add a variable p of type boolean and set the goal:
+(av "p" (py "boole"))
+(set-goal "all p((p=False -> F) -> p=True)")
+The proof then proceeds by cases: either p is false or it is true. The
+following steps should be clear.
+(cases)
+(prop)
+(prop)
+6.3. Induction on lists. The following example is an exercise on lists
+over an arbitrary type α. This example illustrates again the use of
+induction; however, since we now deal with parametrized algebras (see
+[9, 10]) the task turns out to be a bit harder than when working with
+the algebra of natural numbers.
+To start with we load the file list.scm, which contains basic defi-
+nitions and operations on lists over an arbitrary type α14. Then we
+introduce a function, Rev, on lists which has the effect of reverting a
+list. Finally we prove:
+∀v,w(Rev (v ∗ w) ≡ (Revw) ∗ (Rev v)),
+14 Note that list.scm does require to first upload nat.scm. We recommend to
+go through the list file before working out this example.
+MINLOG TUTORIAL 27
+where v and w are lists over an arbitrary type α and ∗ denotes the
+append function on lists as defined in list.scm. Further, ≡ repre-
+sent Leibniz’ equality15: two elements are equal if they have the same
+properties, i.e., they are indistinguishable.
+We begin as follows:
+;; (libload "nat.scm")
+(set! COMMENT-FLAG #f)
+(libload "list.scm")
+(set! COMMENT-FLAG #t)
+(add-var-name "x" "a" "b" "c" "d" (py "alpha"))
+(add-var-name "xs" "v" "w" "u" (py "list alpha"))
+We now need to define Rev. This is defined inductively, by first
+giving its value for the empty list and then saying how it applies to a
+non-empty list. The two defining conditions for Rev are the following:
+Rev (Nilα) = (Nilα),
+Rev (a :: w) = (Revw) ∗ (a:)
+where, according to the notation in list.scm, Nilα denotes the empty
+list over the type α, a :: w denotes the list obtained by adding the
+object a of type α to the list w (over α), while a: is the one element
+list obtained from a. We thus write:
+(add-program-constant "ListRev"
+(py "list alpha => list alpha") t-deg-one)
+(add-prefix-display-string "ListRev" "Rev")
+(add-computation-rules
+"Rev(Nil alpha)" "(Nil alpha)"
+"Rev(x::xs)" "Rev xs++x:")
+Note that for simplicity we have stated that ListRev is a total func-
+tion. Minlog’s output will include a warning, to remind us that we
+might wish to separately prove that ListRev is in fact total. Also,
+add-prefix-display-string allows us to define a token for the pro-
+gram constant.
+The following proof makes use of a program constant, ListAppd,
+already available within the file list.scm. This has the following com-
+putation rules:
+(Nil alpha)++xs2 xs2
+15Internally Leibniz equality is printed eqd, where the d stands for “defined”,
+since Leibniz equality is inductively defined.
+28 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+(x1::xs1)++xs2 x1::xs1++xs2
+And rewrite rules:
+xs++(Nil alpha) xs
+xs1++x2: ++xs2 xs1++(x2::xs2)
+To check ListAppd we type:
+(display-pconst "ListAppd")
+Now we can set the goal and start the proof by calling ind:
+(set-goal "all v,w Rev(v++w)eqd Rev w++Rev v")
+(ind)
+This has the effect of producing two subgoals, corresponding to the
+base case and the step case, respectively. We tackle the base case as
+follows:
+(ng)
+(assume "w")
+(use "InitEqD")
+Here we have used InitEqD, which is the axiom: xs eqd xs.
+Subsequently we move to the step case:
+(assume "a" "v" "IHw" "w")
+(ng)
+(simp "IHw")
+And finally we use a theorem proved in the file list.scm and there
+called ListAppdAssoc:
+all xs1,xs2,xs3 xs1++(xs2++xs3)eqd xs1++xs2++xs3
+Then we carry on by
+(simp "ListAppdAssoc")
+(use "InitEqD")
+6.4. Defining algebras: binary trees. We now wish to show how
+to introduce new algebras; we shall also give one more example on
+how to use them. The example we shall consider is that of binary
+trees. First of all we introduce a new algebra, called “bintree” which
+has constructors “Null” and “Con”. We also add two variables of type
+“bintree”: “ltree” and “rtree” (for left and right tree).
+(add-algs "bintree"
+’("bintree" "Null")
+’("bintree=>nat=>bintree=>bintree" "Con"))
+(av "ltree" "rtree" (py "bintree"))
+We then add a new program constant (by using a shortcut, apc, for
+the command add-program-constant) and its respective computation
+MINLOG TUTORIAL 29
+rules. Flatten takes a tree and produces a list consisting of the labels
+in the tree, starting with the root label.
+(apc "Flatten" (py "bintree=>list nat"))
+(add-computation-rules
+"Flatten(Null)" "(Nil nat)"
+"Flatten(Con ltree n rtree)" "n: ++Flatten ltree++Flatten rtree")
+To see how this works, one can for example type:
+(pp (nt (pt "Flatten(Con(Con Null 4 Null)
+1
+(Con Null 5(Con Null 7 Null)))")))
+to obtain 1::4::5::7: as the list of labels.
+6.5. Inductively defined predicates. In Minlog we can also intro-
+duce inductively generated predicates with the command add-ids. An
+example defining the even numbers inductively is as follows:
+(add-ids (list (list "EvenI" (make-arity (py "nat"))))
+’("EvenI 0" "InitEvenI")
+’("all n(EvenI n -> EvenI(n+2))" "GenEvenI"))
+Note that also in this case, similarly to the case of simultaneous free
+algebras, we could use add-ids to introduce simultaneously more than
+one predicate. The case above is a particular example, in which the
+first occurrence of list is followed by only one item. The two closure
+axioms of this inductive definition are EvenI 0 and all n(EvenI n ->
+EvenI(n + 2)), respectively. We suggest to compare this definition
+with the one in section 6.1.5.
+Let’s now see a proof which uses the closure axioms for EvenI. This
+makes essential use of the command intro. The command (intro i
+. terms) expects as goal a formula which can be proved using the i-th
+closure axiom. This axiom is then applied, via use, hence terms may
+have to be provided. For example, below by calling intro 0 we apply
+the first closure axiom for EvenI, and by calling intro 1 we apply the
+second closure axiom.
+(set-goal "all n EvenI(n+n)")
+(ind)
+(ng)
+(intro 0)
+(assume "n" "IH")
+(ng)
+(intro 1)
+(use "IH")
+30 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+To conclude this section, we present a proof using induction on the
+predicate EvenI. This enables us to introduce a number of new com-
+mands in Minlog.
+(set-goal "all n(EvenI n -> ex m m+m=n)")
+(assume "n")
+(elim)
+Here elim applies the induction axiom for the inductive definition.
+For example, if the goal is all n(EvenI n -> P n), we obtain the new
+goals: P 0 and all n((EvenI n & P n) -> P(n+2)). The commands
+for the rest of the proof have been explained before.
+(ex-intro (pt "0"))
+(prop)
+(assume "n1" 2 3)
+(by-assume 3 "m0" 4)
+(ex-intro (pt "m0+1"))
+(simp "<-" 4)
+(use "Truth")
+7. Program extraction from proofs
+In this section we give some basic examples of program extraction
+from proofs. We should perhaps mention at this point that program
+extraction was one of the main original motivations in the development
+of Minlog. In addition, Minlog features some interesting aspects, as for
+example it implements a refined version of the so–called A–translation,
+thus allowing for program extraction from classical proofs. An expo-
+sition of program extraction from proofs and (modified) A–translation
+is well beyond the purpose of this tutorial. See for example [2, 1, 10].
+For our first example of program extraction from proofs, we introduce
+an inductively defined predicate RevI as follows:
+;; (set! COMMENT-FLAG #f)
+;; (libload "nat.scm")
+;; (libload "list.scm")
+;; (set! COMMENT-FLAG #t)
+;; (add-var-name "a" "b" "c" "d" "x" (py "alpha"))
+;; (add-var-name "v" "w" "u" "xs" (py "list alpha"))
+(add-ids
+(list (list "RevI" (make-arity (py "list alpha")
+(py "list alpha"))))
+MINLOG TUTORIAL 31
+’("RevI(Nil alpha)(Nil alpha)" "InitRevI")
+’("all a,v,w(RevI v w -> RevI(v++a:)(a::w))" "GenRevI"))
+Then we add a symmetry axiom for RevI:
+(aga "RevSym" "all v,w(RevI v w -> RevI w v)")
+And finally set the goal:
+(set-goal "all v ex w RevI v w")
+The proof proceeds by structural induction on lists. We first of all call
+ind. Subsequently, we tackle the base case by first of all providing a
+witness, Nil of type α, and then by using the first closure axiom for
+RevI.
+(ind)
+(ex-intro (pt "(Nil alpha)"))
+(intro 0)
+The step is proved by first of all calling some standard commands
+(assume, by-assume), then by providing a witness, and finally by
+making use of RevSym (twice). The second closure axiom is called
+as usual by an intro command.
+(assume "a" "v" 1)
+(by-assume 1 "w" 2)
+(ex-intro (pt "w ++ a:"))
+(use "RevSym")
+(intro 1)
+(use "RevSym")
+(use 2)
+We can finally name the proof we have just completed by writing:
+(define constr-proof (current-proof))
+Note that (current-proof) stores the latest proof.
+We now extract a program from the proof and normalize it as follows:
+(define eterm (proof-to-extracted-term constr-proof))
+(define neterm (rename-variables (nt eterm)))
+(pp neterm)
+We have used rename-variables to obtain a more readable term.
+This “normalized extracted term” neterm is the program we are looking
+for. To display it we write:
+(pp neterm)
+The output will be:
+[xs](Rec list alpha=>list alpha)xs
+(Nil alpha)([x,xs0,xs1]xs1++x:)
+32 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+Here [xs] denotes abstraction on the variable xs, usually also writ-
+ten by use of the λ notation. We observe that the extracted term uses
+the recursion operator Rec. In more familiar terms, it amounts to a
+program, which we may call Reverse, defined as follows:
+Reverse Nil=Nil
+Reverse (x :: xs)=(Reverse xs) ++ x:
+Note that we could have also displayed the program by using the
+command term-to-scheme-expr, which produces the λ–term corre-
+sponding to the program.
+To test the program we can “run” it on input [a,b,c,d]:
+(pp (nt (make-term-in-app-form neterm (pt "a::b::c::d:"))))
+and obtain the result: d::c::b::a:
+7.1. Another example. In this section we wish to exemplify how to
+extract a program from a proof by induction of a statement which uses
+an inductive definition. The inductive definition we wish to implement
+has computational content16; thus we define an algebra corresponding
+to it. In fact, an inductive definition with computational content on
+the proof side corresponds to a free algebra on the program side. Thus
+we need to provide a name for such an algebra as well as names for the
+constructors. We call algEven the algebra and InitEven and GenEven,
+respectively, the two constructors. The latter correspond to the closure
+axioms of the inductive definition.
+(add-ids
+(list (list "EvenII" (make-arity (py "nat")) "algEvenII"))
+’("EvenII 0" "InitEvenII")
+’("allnc n(EvenII n -> EvenII(n+2))" "GenEvenII"))
+In the following we shall also make use of the “non–computational”
+quantifier allnc. Here we briefly recall that a “non–computational”
+quantifier may be used in this case as the variable it quantifies on will
+not be used free in a term later on in the proof. This is to say, the
+extracted program doesn’t depend on this variable.
+We set the following goal:
+(set-goal "allnc n(EvenII n -> ex m m+m=n)")
+The proof proceeds as follows:
+16These inductive definitions are also called “inductive definitions with compu-
+tational content”. Note that there are also inductive definitions without computa-
+tional content (for example RevI above). For more on computational content, see
+for example [10] and [3].
+MINLOG TUTORIAL 33
+(assume "n")
+(elim)
+(ex-intro (pt "0"))
+(prop)
+(assume "n1" 2 3)
+(by-assume 3 "m0" 4)
+(ex-intro (pt "m0+1"))
+(simp "<-" 4)
+(use "Truth-Axiom")
+We then give a name to the proof just completed:
+(define eterm (proof-to-extracted-term (current-proof)))
+(define neterm (rename-variables (nt eterm)))
+We can see the program by writing:
+(pp neterm)
+7.2. Program extraction from classical proofs. Finally, we wish
+to exemplify how to extract programs from classical proofs. Once more,
+an account of the theory underlying this example exceeds the modest
+aims of this tutorial, so that we can but refer the inquisitive reader to
+the literature already mentioned above.
+The goal is to prove a classical variant of the statement in section 7.
+Quite concisely, we set the goal and produce a proof:
+(set-goal "all v excl w RevI v w")
+(assume "v0" 1)
+(cut "all u allnc v(v++u eqd v0 ->
+all w (RevI v w -> bot))")
+(assume "claim")
+Now we can make use of the claim to prove the goal:
+(use "claim"
+(pt "v0") (pt "(Nil alpha)") (pt "(Nil alpha)"))
+(ng)
+(use "InitEqD")
+(intro 0)
+And prove the claim by induction:
+(ind)
+The base case is tackled as follows:
+(assume "v")
+(ng)
+34 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+(assume 2 "w")
+(simp 2)
+(use 1)
+As to the step we write:
+(assume "a" "u" "IH" "v" 3 "w" 4)
+(use "IH" (pt "v++a:") (pt "a::w"))
+(ng)
+(use 3)
+(intro 1)
+(use 4)
+Finally we name the proof, which we conveniently call class-proof:
+(define class-proof (np (current-proof)))
+Finally we add a variable g:
+(av "g" (py "list alpha=>list alpha"))
+The reasons for this are purely cosmetic. In fact, g will be the de-
+fault name in case the extracted program needs a variable of type list
+alpha=>list alpha. Otherwise the program would use a default vari-
+able.
+(define eterm
+(atr-min-excl-proof-to-structured-extracted-term
+class-proof))
+(define neterm (rename-variables (nt eterm)))
+We display the program and obtain the output:
+(pp neterm)
+[xs]
+(Rec list alpha=>list alpha=>list alpha)xs([xs0]xs0)
+([x,xs0,g,xs1]g(x::xs1))
+(Nil alpha)
+Finally:
+(pp (nt (make-term-in-app-form program (pt "a::b::c:"))))
+This gives the result:
+c::b::a:
+To conclude, we would like to remark that this program differs from
+that obtained in section 7. In fact, the program above could be written
+in a more readable form as follows:
+Reverse xs0 = reverse-acc xs0 Nil
+reverse-acc Nil xs1 = xs1
+MINLOG TUTORIAL 35
+reverse-acc (x1::xs2) xs4 = reverse-acc xs2 (x1::xs4)
+The reader can see that this program is linear, hence better than the
+previous one which is quadratic.
+36 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+8. Appendix: Useful Commands for Emacs and Petite
+Scheme
+8.1. Emacs.
+• Start Emacs: emacs &
+• Leave Emacs: C-x C-c
+• Split a window in two: C-x 2
+• Move to another Buffer: C-x b (then specify the Buffer’s name)
+• Move to another window: C-x o
+• Load a file: C-x C-f (then give a name of a file with extension
+.scm)
+• Save a file: C-x C-s
+• Exit from the Minibuffer: C-g
+Scheme
+• Load (Petite) Scheme: M-x run-petite
+• Evaluate a Scheme expression: C-x C-e
+• Evaluate a region: mark the region and then C-c C-r
+• Kill a process: C-c C-c
+• Leave the Debug: r
+• End a Scheme session: (exit)
+• Comment: ;
+C = Control (or Strg), M = Meta (or Edit or Esc or Alt).
+MINLOG TUTORIAL 37
+8.2. Useful Commands: Minlog. The following is a list of com-
+mands which could be used in a “standard” interactive proof with
+Minlog. Rather than explaining the commands in detail (many of
+them have been demonstrated in the above tutorial), we shall write
+them down, often with a short description of their use gathered from
+the reference manual. The reader is advised to check the full details
+with the reference manual.
+8.2.1. Some declarations needed to start a proof.
+(add-tvar-name name1 ...)
+(add-algs ...)
+(add-var-name name1 ... type)
+(add-predconst-name name1 ... arity)
+(add-pvar-name name1 ... type)
+(add-program-constant name type <rest>)
+(add-computation-rule lhs rhs)
+(add-rewrite-rule lhs rhs)
+(add-global-assumption name formula) (abbr. aga)
+For each introduction command above there corresponds another one
+having the effect of removing the item so introduced (constants, vari-
+ables, etc). For example:
+(remove-predconst-name name1 ...)
+There are also numerous display commands, in particular the following:
+(display-pconst name1 ...).
+(display-alg alg-name1 ...)
+(display-idpc idpc-name1 ...)
+(display-global-assumptions string1 ...)
+(display-theorems string1 ...)
+38 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+For types, terms and formulas there is a command (pp object)
+(for pretty-print), which tries to insert useful line breaks. Variants
+are (ppc object) (for pretty-print with case display) and (pp-subst
+substitution) (for pretty-printing substitutions).
+rename-variables renames bound variables in terms, formulas and
+comprehension terms.
+8.2.2. Goals. (set-goal formula) where formula needs to be closed
+(if it not so, then universal quantifiers will be inserted automatically).
+(normalize-goal goal) (abbr. ng) replaces the goal by its normal
+form.
+(display-current-goal) (abbr. dcg)
+8.2.3. Generating interactive proofs. Implication
+(assume x1...)
+moves the antecedent of a goal in implication form to the hypotheses.
+The hypotheses, x1 . . . , should be identified by numbers or strings.
+(use x)
+where x is
+• a number or string identifying a hypothesis from the context,
+• the string “Truth”,
+• the name of a theorem or global assumption.
+• a closed proof,
+• a formula with free variables from the context, generating a new
+goal.
+Conjunction
+(split)
+expects a conjunction A ∧ B as goal and splits it into two new goals,
+A and B.
+(use x . elab-path)
+where x is as in the description of the use command for implication
+and elab-path consists of ’left or ’right.
+Universal Quantifier
+(assume x1...)
+moves universally quantified variables into the context. The variables
+need to be named (by using previously declared names of the appro-
+priate types).
+MINLOG TUTORIAL 39
+(use x . terms)
+where x is as in the case of implication and the optional terms is here a
+list of terms. When pattern unification succeeds in finding appropriate
+instances for the quantifiers in the goal, then these instances will be
+automatically inserted. However, one needs to explicitly provide terms
+for those variables that cannot be automatically instantiated by pattern
+unification.
+Existential Quantifier
+(ex-intro term)
+by this command the user provides a term to be used for the present
+(existential) goal.
+(ex-elim x),
+where x is
+• a number or string identifying an existential hypothesis from
+the context,
+• the name of an existential global assumption or theorem,
+• a closed proof on an existential formula,
+• an existential formula with free variables from the context,
+generating a new goal.
+Classical Existential Quantifier
+(exc-intro terms)
+this command is analogous to (ex-intro), but it is used in the case
+of a classical existential goal.
+(exc-elim x)
+this corresponds to (ex-elim) and applies to a classical existential
+quantifier.
+8.2.4. Other general commands. (use-with x . x-list)
+is a more verbose form of use, where the terms are not inferred via
+unification, but have to be given explicitly. Here x is as in use, and
+x-list is a list consisting of
+• a number or string identifying a hypothesis form the context,
+• the name of a theorem or global assumption,
+• a closed proof,
+• the string “?” generating a new goal,
+• ’left or ’right,
+• a term, whose free variables are added to the context.
+(inst-with x . x-list)
+does for forward chaining the same as use-with for backward chaining.
+It adds a new hypothesis which is an instance of a selected hypothesis
+or of a theorem. Here x and x-list are as in use-with.
+40 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+(inst-with-to x . x-list name-hyp)
+expects a string as its last argument, to name the newly introduced
+instantiated hypothesis.
+(cut A)
+replaces the goal B by the two new goals A and A→ B, with A→ B
+to be proved first. Note that the same effect can also be produced by
+means of the use command.
+(assert A)
+replaces the goal B by the two new goals A and A→ B, with A to be
+proved first.
+(ind)
+expects a goal ∀xρA with ρ an algebra. If c1, . . . , cn are the constructors
+of the algebra ρ, then (ind) will generate n new goals: ∀~xi(A[x :=
+x1i]→ · · · → A[x := xki]→ A[x := ci~xi]).
+(simind all-formula1...)
+expects a goal ∀xρA with ρ an algebra. The user provides other formulas
+to be proved simultaneously with the given one.
+(cases)
+expects a goal ∀xρA with ρ an algebra. Assume that c1, . . . , cn are the
+constructors of the algebra ρ. Then n new (simplified) goals ∀~xiA[x :=
+ci~xi] are generated.
+(simp x)
+expects a known fact of the form rB, ¬rB, t = s or t ≈ s. In case rB,
+the boolean term r in the goal is replaced by T , and in case ¬rB it is
+replaced by F . If t = s (resp. t ≈ s), the goal is written in the form
+A[x := t]. Using Compat-Rev (i.e. ∀x,y(x = y → Py → Px)) (resp.
+Eq-Compat-Rev (i.e. ∀x,y(x ≈ y → Py → Px))) the goal A[x := t] is
+replaced by A[x := s], where P is {x | A }, x is t and y is s. Here x is
+• a number or string identifying a hypothesis form the context,
+• the name of a theorem or global assumption, or
+• a closed proof,
+• a formula with free variables from the context, generating a new
+goal.
+(name-hyp i x1 )
+expects an index i and a string. Then a new goal is created, which
+differs from the previous one only in display aspects: the string names
+the ith hypothesis.
+(drop . x-list),
+hides (but does not erase) the hypothesis listed in x-list. If x-list
+is empty, all hypotheses are hidden.
+MINLOG TUTORIAL 41
+(by-assume x yu)
+is used when proving a goal G from an existential hypothesis
+ExHyp : ∃yA. It corresponds to saying “by ExHyp assume we have
+a y satisfying A”. Here x identifies an existential hypothesis, and we
+assume the variable y and the kernel A (with label u). This command
+corresponds to the sequence (ex-elim x), (assume y u), (drop x).
+(intro i . terms)
+expects as goal an inductively defined predicate. The i-th introduction
+axiom for this predicate is applied, via use (hence terms may have to
+be provided).
+(elim idhyp)
+Recall that I~r provides (i) a type substitution, (ii) a predicate instan-
+tiation, and (iii) the list ~r of argument terms. In (elim idhyp) idhyp
+is, with an inductively defined predicate I,
+• a number or string identifying a hypothesis I~r form the context
+• the name of a global assumption or theorem I~r;
+• a closed proof of a formula I~r;
+• a formula I~r with free variables from the context, generating a
+new goal.
+Then the (strengthened) elimination axiom is used with ~r for ~x and
+idhyp for I~r to prove the goal A(~r ), leaving the instantiated (with
+{ ~x | A(~x ) }) clauses as new goals.
+(elim)
+expects a goal I~r → A(~r ). Then the (strengthened) clauses are gene-
+rated as new goals, via use-with.
+(undo) or (undo n)
+has the effect of cancelling the last step in a proof, or the last n steps,
+respectively.
+8.2.5. Automation and search.
+(strip)
+moves all universally quantified variables and hypotheses of the current
+goal into the context.
+(strip n)
+does the same as (strip) but only for n variables or hypotheses.
+(proceed)
+automatically refines the goal as far as possible as long as there is a
+unique proof. When the proof is not unique, it prompts us with the
+new refined goal, and allows us to proceed in an interactive way.
+(prop)
+searches for a proof of the stated goal. It is devised for propositional
+logic only.
+42 L. CROSILLA, M. SEISENBERGER, H. SCHWICHTENBERG
+(search m (name1 m1) ...)
+expects for m a default value of multiplicity (i.e. a positive integer
+stating how often the assumptions are to be used). Here name1 . . .
+are
+• numbers or names of hypotheses from the present context or
+• names of theorems or global assumptions,
+and m1 . . . indicate the multiplicities of the specific name1 . . . . To
+exclude a hypothesis one can list it with multiplicity 0.
+(auto m (name1 m1) ...)
+It can be convenient to automate (the easy cases of an) interactive
+proof development by iterating search as long as it is successful in
+finding a proof. Then the first goal where it failed is presented as the
+new goal. auto takes the same arguments as search.
+8.2.6. Displaying proofs objects. There are many ways to display a
+proof. We normally use display-proof for a linear representation,
+showing the formulas and the rules used. We also provide a (hopefully)
+readable type-free lambda expression via proof-to-expr, and can
+add useful information with one of proof-to-expr-with-formulas,
+proof-to-expr-with-aconsts. In case the optional proof argument
+is not present, the current proof is taken instead.
+(display-proof . opt-proof) abbreviated dp,
+(display-normalized-proof . opt-proof) abbreviated dnp,
+(proof-to-expr . opt-proof),
+(proof-to-expr-with-formulas . opt-proof),
+(proof-to-expr-with-aconsts . opt-proof).
+Here display-normalized-proof normalizes the proof first. When in
+addition one wants to check the correctness of the proof, use
+(check-and-display-proof . opt-proof-and-ignore-deco-flag)
+abbreviated cdp. ignore-deco-flag is set to true as soon as the
+present proof argument proves a formula of nulltype.
+8.2.7. Searching for theorems. It is a practical problem to find existing
+theorems or global assumptions relevant for the situation at hand. To
+help searching for those we provide
+(search-about string).
+It searches in THEOREMS and GLOBAL-ASSUMPTIONS for all items whose
+name contains string.
+MINLOG TUTORIAL 43
+References
+[1] Holger Benl, Ulrich Berger, Helmut Schwichtenberg, Monika Seisenberger, and
+Wolfgang Zuber, Proof theory at work: Program development in the Minlog
+system, Automated Deduction – A Basis for Applications (W. Bibel and P.H.
+Schmitt, eds.), Applied Logic Series, vol. II: Systems and Implementation Tech-
+niques, Kluwer Academic Publishers, Dordrecht, 1998, pp. 41–71. 7
+[2] Ulrich Berger, Wilfried Buchholz, and Helmut Schwichtenberg, Refined pro-
+gram extraction from classical proofs, Annals of Pure and Applied Logic 114
+(2002), 3–25. 7
+[3] Ulrich Berger and Monika Seisenberger, Program extraction via typed realis-
+ability for induction and coinduction, Ways of Proof Theory: Festschrift for
+W. Pohlers (R. Schindler, ed.), Ontos Verlag, 2010. 16
+[4] Roy Dyckhoff, Contraction–free sequent calculi for intuitionistic logic, The
+Journal of Symbolic Logic 57 (1992), 793–807. 5
+[5] Jo¨rg Hudelmaier, Bounds for cut elimination in intuitionistic propositional
+logic, Ph.D. thesis, Mathematische Fakulta¨t, Eberhard–Karls–Universita¨t
+Tu¨bingen, 1989. 5
+[6] Dale Miller, A logic programming language with lambda–abstraction, function
+variables and simple unification, Journal of Logic and Computation 2 (1991),
+no. 4, 497–536. 5.2
+[7] Helmut Schwichtenberg, Proof search in minimal logic, Artificial Intelligence
+and Symbolic Computation, 7th International Conference, AISC 2004, Linz,
+Austria, September 2004, Proceedings (B. Buchberger and J.A. Campbell,
+eds.), LNAI, vol. 3249, Springer Verlag, Berlin, Heidelberg, New York, 2004,
+pp. 15–25. 5.2
+[8] , A theory of computable functionals, 2010, http://www.
+minlog-system.de. 2, 8
+[9] , Minlog reference manual, 2012, http://www.minlog-system.de. 2,
+3.1.2, 3.1.4, 11, 6.1.1, 6.3
+[10] Helmut Schwichtenberg and Stanley S. Wainer, Proofs and computations, Per-
+spectives in Logic, Association for Symbolic Logic and Cambridge University
+Press, 2012. 2, 13, 6.3, 7, 16
+[11] Viggo Stoltenberg-Hansen, Edward Griffor, and Ingrid Lindstro¨m, Mathema-
+tical theory of domains, Cambridge Tracts in Theoretical Computer Science,
+Cambridge University Press, 1994. 13
+Index
+add-algs, 37
+add-computation-rule, 37
+add-global-assumption, 37
+add-predconst-name, 37
+add-program-constant, 37
+add-rewrite-rule, 37
+add-tvar-name, 37
+add-pvar-name, 37
+add-var-name, 37
+aga, 37
+assert, 40
+assume, 38
+auto, 42
+by-assume, 41
+cases, 40
+cdp, 42
+check-and-display-proof, 42
+cut, 40
+dcg, 38
+display-alg, 37
+display-current-goal, 38
+display-global-assumptions, 37
+display-idpc, 37
+display-normalized-proof, 42
+display-pconst, 37
+display-proof, 42
+display-theorems, 37
+dnp, 42
+dp, 42
+drop, 40
+elim, 41
+ex-elim, 39
+ex-intro, 39
+exc-elim, 39
+exc-intro, 39
+GLOBAL-ASSUMPTIONS, 42
+ignore-deco-flag, 42
+ind, 40
+inst-with, 39
+inst-with-to, 40
+intro, 41
+name-hyp, 40
+ng, 38
+normalize-goal, 38
+pp, 8, 38
+pp-subst, 38
+ppc, 38
+proceed, 41
+proof-to-expr, 42
+proof-to-expr-with-aconsts, 42
+proof-to-expr-with-formulas, 42
+prop, 41
+remove-predconst-name, 37
+rename-variables, 38
+search, 42
+search-about, 42
+set-goal, 38
+simind, 40
+simp, 40
+split, 38
+strip, 41
+THEOREMS, 42
+undo, 41
+use, 38
+use-with, 39
+44

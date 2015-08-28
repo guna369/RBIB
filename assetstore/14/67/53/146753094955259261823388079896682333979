@@ -1,0 +1,2956 @@
+Theoretical Computer Science 311 (2004) 1–70
+www.elsevier.com/locate/tcs
+Fundamental Study
+Principality and type inference for intersection
+types using expansion variables
+A.J. Kfourya ;∗ , J.B. Wellsb
+aBoston University, Boston, MA 02215, USA
+bHeriot-Watt University, Edinburgh, EH14 4AS, Scotland, UK
+Received 2 September 2002; received in revised form 25 August 2003; accepted 30 September 2003
+Communicated by B. Pierce
+Abstract
+Principality of typings is the property that for each typable term, there is a typing from which
+all other typings are obtained via some set of operations. Type inference is the problem of
+0nding a typing for a given term, if possible. We de0ne an intersection type system which
+has principal typings and types exactly the strongly normalizable -terms. More interestingly,
+every 0nite-rank restriction of this system (using Leivant’s 0rst notion of rank) has principal
+typings and also has decidable type inference. This is in contrast to System F where the 0nite
+rank restriction for every 0nite rank at 3 and above has neither principal typings nor decidable
+type inference. Furthermore, the notion of principal typings for our system involves only one
+operation, substitution, rather than several operations (not all substitution-based) as in earlier
+presentations of principality for intersection types (without rank restrictions). In our system the
+earlier notion of expansion is integrated in the form of expansion variables, which are subject to
+substitution as are ordinary variables. A uni0cation-based type inference algorithm is presented
+using a new form of uni0cation, -uni0cation.
+c© 2003 Elsevier B.V. All rights reserved.
+ This is an expanded version of a report that appeared in the Proceedings of the 1999 ACM Symposium
+on Principles of Programming Languages, under the title “Principality and Decidable Type Inference for
+Finite-Rank Intersection Types” [16]. This work has been partly supported by EPSRC grants GR/L 36963 and
+GR/R 41545/01, by NATO grant CRG 971607, by NSF grants 9417382 (CCR), 9806745 (EIA), 9988529
+(CCR), 0113193 (ITR), and by Sun Microsystems equipment grant EDUD-7826-990410-US.
+∗ Corresponding author. Tel.: +1-617-3538911; fax: +1-617-3536457.
+E-mail addresses: kfoury@cs.bu.edu (A.J. Kfoury), jbw@cee.hw.ac.uk (J.B. Wells).
+URLs: http://www.cs.bu.edu/∼kfoury, http://www.cee.hw.ac.uk/∼jbw
+0304-3975/$ - see front matter c© 2003 Elsevier B.V. All rights reserved.
+doi:10.1016/j.tcs.2003.10.032
+2 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+1. Introduction
+1.1. Background and motivation
+The desire for polymorphic type inference. Programming language designers now
+generally recognize the bene0ts (as well as the costs!) of strong static typing. Lan-
+guages such as Haskell [8], Java [9], and ML [19] were all designed with strong typing
+in mind. To avoid imposing an undue burden on the programmer, the compiler is ex-
+pected to infer as much type information as possible. To avoid rejecting perfectly safe
+programs, the type inference algorithm should support as much type polymorphism as
+possible. The main options for polymorphism are universal types, written ∀ :, and
+intersection types, written ∧ . (Their duals are the existential types, written ∃ :,
+and union types, written ∨ .)
+The most popular type inference algorithm is algorithmW by Damas and Milner [7]
+for the type system commonly called Hindley=Milner which supports polymorphism
+with a restricted form of universal types. In practice this type system is somewhat
+inNexible, sometimes forcing the programmer into contortions to convince the compiler
+that their code is well typed. This has motivated a long search for more expressive type
+systems with decidable typability. In this search, there have been a great number of
+negative results, e.g., undecidability of System F [30], 0nite rank restrictions of F above
+3 [15], F6 [20], F! [28], F +  [31], and unrestricted intersection types [22]. Along
+the way, there have been a few positive results, some extensions of the Damas/Milner
+approach, but, perhaps more interestingly, some with intersection types.
+What are principal typings? Many systems with intersection types have had a
+principal typings property. Jim [11] explains the diPerence with the principal types
+property of the Hindley/Milner system as follows:
+Principal types
+Given: a term M typable in type environment A.
+There exists: a type  representing all possible types for M in A.
+Principal typings
+Given: a typable term M .
+There exists: a judgement AM :  representing all possible typings for M .
+Wells [33] gives a system-independent abstract de0nition of principal typings. Speci0-
+cally, a typing (A; ) for a program fragment M is principal for M exactly when that
+typing is at least as strong as all other typings for M . A typing (A; ) is at least as
+strong as a typing (A′; ′) if and only AM :  being derivable implies A′ M : ′
+is derivable for every M . Jim explains how principal typings support the possibility
+of true separate compilation and Wells discusses how they help with compositional
+software analysis.
+Principal typings with intersection types. Intersection types were 0rst introduced
+by Coppo and Dezani [3] and, independently, by Pottinger [22]. 1 The 0rst system of
+intersection types for which principal typings was proved (as far as we are aware)
+1 Despite appearing earlier, [25] was preceded by the internal report version of [3] and gives credit to
+Coppo and Dezani for introducing intersection types.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 3
+was presented by Coppo et al. [4] (a later version is [5]). Like many systems of
+intersection types, it is similar to ours in that “∧” cannot appear to the right of “→”
+and ∧-elimination can only occur at -term variables. Like our system, this system is
+restricted so that the binding type of the bound variable of an abstraction must be an
+intersection of exactly the set of types at which it is used. However, this system diPers
+from ours by allowing one of the types in the intersection type for a bound variable
+to be used for multiple occurrences of the bound variable. It also has a rule to assign
+the special type ! (representing the intersection of 0 types) to any term.
+There is a general approach for an algorithm for 0nding principal typings that was
+followed by Coppo et al. for their type system as well as by Ronchi della Rocca
+and Venneri [24] and van Bakel [28] for other systems of intersection types. In this
+approach, the principal typing algorithm 0rst 0nds a normal form (or approximate
+normal form) and then creates a typing for the normal form. A separate proof shows
+that any typing for the normal form is also a typing for the original term. The algo-
+rithms of this approach are intrinsically impractical, not only due to the expense of
+normalization but, more importantly, because there is no possibility of a short cut to
+normalization. The principality of the principal typing is shown using a technique of
+several diPerent kinds of operations: expansion (sometimes called duplication), lifting
+(sometimes called rise), and substitution. The biggest diPerence with the approach we
+present in this paper is that we use expansion variables to formalize expansion in a
+much simpler way as part of substitution. This allows our approach to be based on
+both substitution and uni0cation. This opens the possibility of more eQcient algorithms
+by adding additional (unnecessary) constraints to the uni0cation problem to shortcut
+the solution, an adaptation we leave to future work.
+Sayag and Mauny [26,27] continue the earlier work cited above, and succeed in
+de0ning a simpler notion of principal typings for a system of intersection types. An
+important diPerence with our analysis is the continued use of an expansion operation,
+although considerably simpli0ed from earlier formulations, in part because they restrict
+attention to -terms in normal form. Moreover, their approach is not substitution-based
+and it is not immediately clear how to extend it to arbitrary -terms not in normal form.
+The 0rst uni0cation-based approach to principal typing with intersection types is by
+Ronchi della Rocca [23]. Of course, the general method here will diverge for some
+terms in the full type system, but a decidable restriction is presented which bounds
+the height of types. Unfortunately, this approach uses the old, complicated approach to
+expansion which makes it very diQcult to understand. It also appears to have trouble
+with commutativity and associativity of “∧”.
+Subsequent uni0cation-based approaches to principal typing with intersection types
+have focused on the rank-2 restriction of intersection types, using Leivant’s notion of
+rank [18]. Van Bakel presents a uni0cation algorithm for principal typing for a rank-2
+system [29]. Later independent work by Jim also attacks the same problem, but with
+more emphasis on handling practical programming language issues such as recursive
+de0nitions, separate compilation, and accurate error messages [11]. Successors to Jim’s
+method include Banerjee’s [2], which integrates Now analysis, and Jensen’s [10], which
+integrates strictness analysis. Other approaches to principal typings and type inference
+with intersection types include [6] and [12].
+4 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+1.2. Contributions of this paper
+The main contributions of this paper are the following:
+• A fully substitution-based notion of principality for a system of intersection types
+(with or without a rank restriction on types). Expansion variables abstractly represent
+the possibility of multiple subderivations for the same term, supporting a substitution-
+based approach in place of the old notion of expansion.
+This contribution makes the technology of intersection types signi0cantly more acces-
+sible to non-theorists. The notions of expansion in earlier literature are so complicated
+that few but the authors could understand them.
+• A uni0cation-based type inference algorithm for intersection types using a novel form
+of uni0cation, -uni0cation. The algorithm always returns principal typings when it
+halts. The algorithm is terminating when restricted to 0nite-rank types.
+This algorithm is the 0rst understandable type inference algorithm for intersection
+types beyond the rank-2 restriction which does not require that terms 0rst be -
+reduced to normal form. Although it may seem that there is quite a bit of material in
+this report, the vast majority of it exists only to prove properties of the algorithm. The
+actual algorithm is largely contained in de0nitions 2.12, 2.14, 2.15, 2.17, 3.8, 3.11,
+3.13, 5.1, and 6.1, together with theorem 6.7. This algorithm has been implemented
+and can currently be found at http://www.church-project.org/modular/
+compositional-analysis/.
+• Decidability of type inference and principal typings for the restrictions to every 0nite
+rank.
+Ours is the 0rst system of intersection types for which this has been shown. At
+rank 3, our system already types terms not typable in the very powerful system F!,
+e.g., the term
+(x:z(x(fu:fu))(x(vg:gv)))(y:yyy);
+which was shown untypable in F! by Urzyczyn [28].
+1.3. Future work
+Using intersection types in practice. This work is carried out in the context of the
+Church Project (http://www.church-project.org/) an ongoing multi-institutional
+ePort investigating the theory and practice of using advanced types and semantics in
+the design and implementation of programming language systems. The Church Project
+is actively implementing and evaluating intersection-type-based technology in an ML
+compiler. A number of practical concerns need to be addressed to 0nish the task of
+making the technology presented in this report usable in the overall project ePort. In
+particular, the following tasks are important:
+1. Adapt the technology to type systems in which “∧” is associative, commutative,
+and idempotent. This will be vital for reducing the space and time complexity of
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 5
+our algorithm, because it will enable the expression of the rank restrictions without
+requiring an essentially linear Now analysis.
+2. Add support for sum types, e.g., booleans and conditionals. This seems likely to
+require the addition of union types or some form of conditional type.
+3. Add support for recursive de0nitions, e.g., a 0x-point operator or letrec bind-
+ings. This will signi0cantly complicate the analysis, because it will interfere with
+the invariant that -compatible constraint sets (De0nition 4.8) have constraints
+neatly divided into positive and negative types (De0nition 4.1). Also, polymor-
+phic/polyvariant analysis of recursion is notoriously diQcult.
+4. Take advantage of the new notion of substitution developed in this report to de-
+vise eQcient representations of polyvariant program analyses. This is particularly
+promising.
+Theoretical concerns. The work presented here inspires the following possible tasks:
+• Investigate the relationship between -uni0cation and other forms of uni0cation—
+decidable and undecidable. In particular, investigate the relationship with second-
+order uni0cation and semi-uni0cation.
+• Further develop the meta-theory of -uni0cation. In particular, investigate conditions
+under which -uni0cation (1) satis0es a principality property and (2) is decidable.
+Use this to develop more sophisticated type inference algorithms.
+• Investigate the complexity of the decidable 0nite-rank restriction of -uni0cation
+introduced in Section 7. Separately, investigate the complexity of the set of programs
+typable in the various 0nite-rank restrictions.
+1.4. Acknowledgements
+Torben Amtoft, Gang Chen, and Lyn Turbak carefully read drafts of this paper and
+found bugs. Gang Chen went further and suggested speci0c bug 0xes. Bradley Alan
+implemented the -uni0cation constraint solver given in the POPL ’99 version of this
+paper [16] and pointed out some errors in examples in the paper. GeoP Washburn
+completed the implementation by adding the generation of the constraint sets from
+-terms, the use of the results of -uni0cation to make principal typings and typing
+derivations, and a nice web-based user interface. The web interface can currently be
+found at http://www.church-project.org/modular/compositional-analysis/.
+SSebastien Carlier, GeoP Washburn, and Bennett Yates have made helpful comments and
+have also helped to carry this research forward by starting to address various items of
+future work mentioned in Section 1.3. We are also indebted to the anonymous referees,
+who made numerous suggestions to clarify our analysis and overall organization of the
+paper.
+2. Intersection types with expansion variables
+This section de0nes a system of intersection types for the -calculus with the ad-
+ditional feature of expansion variables. The expansion variables do not aPect what is
+6 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+typable; instead they support reasoning about principal typings via a notion of substi-
+tution.
+Throughout the paper, the notation X˜
+n
+is meta-notation standing for the notation
+X1; : : : ; Xn. The notation X˜ stands for X˜
+n
+for some n¿0 which either does not matter
+or is clear from the context. A warning: Some authors use the notation UX for similar
+purposes, but in this paper the bar mark on a symbol is not used to stand for a
+sequence.
+2.1. The type system
+The set of natural numbers is denoted N throughout.
+Denition 2.1 (-Terms). Let x and y range over -Var, the set of -term variables.
+We use the usual set of -terms
+M;N ∈ % ::= x | x:M |MN;
+quotiented by -conversion as usual, and the usual notion of reduction
+(x:M)N → M [x := N ]:
+As usual, FV(M) denotes the set of free variables of M .
+The following de0nition gives a structure to type variable names that will be helpful
+later when we need to rename them distinctly.
+Denition 2.2 (Type variables and expansion variables). The set of basic type vari-
+ables or basic T -variables is TVarb= { ai i∈N }. The set of basic expansion variables
+or basic E-variables is EVarb= { Fi i∈N }. We assume TVarb and EVarb are disjoint
+sets, and use Varb to denote the union EVarb ∪ TVarb. Let b (possibly decorated) be a
+metavariable ranging over Varb.
+We use binary strings in {0; 1}∗, called o7set labels, to name (and later to rename)
+variables. If s; t ∈{0; 1}∗, we write s·t for their concatenation. The statement s6t holds
+iP t= s·s′ for some s′ ∈{0; 1}∗. Let p; q; r; s; t (possibly decorated) be metavariables
+ranging over {0; 1}∗.
+The set of type variables or T -variables and the set of expansion variables or E-
+variables are, respectively:
+TVar = {asi | i ∈N; s ∈ {0; 1}∗} and EVar = {Fsi | i ∈N; s ∈ {0; 1}∗}:
+Let TVar and EVar properly extend TVarb and EVarb by taking ai to be a”i and Fi
+to be F”i , where ” denotes the empty string. Let (a
+s
+i )
+t denote as·ti and let (F
+s
+i )
+t denote
+Fs·ti . Let  and  be metavariables ranging over TVar and let F (in italics) be a
+metavariable ranging over EVar. For example, if  denotes asi , then 
+t denotes as·ti .
+We use v (appropriately decorated) as a metavariable ranging over the disjoint union
+Var= EVar∪ TVar.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 7
+Denition 2.3 (Types). Let “→” and “∧” be binary type constructors. The set T of
+types and its subset T→ as well as metavariables over these sets are given as follows:
+U ∈ T→ ::=  | (→ U)
+ ∈ T ::= U | ( ∧ ′) | (F)
+Note that U is only a metavariable over T→. The letters , and  will be used later to
+range over certain other subsets of T. Observe in the tree representation of any ∈T
+that no “∧” and no E-variable can occur as the right child of “→”. We sometimes
+omit parentheses according to the rule that “→” and “∧” associate to the right and the
+application of an expansion variable (e.g., F) has higher precedence than “∧” which
+has higher precedence than “→”. For example, F1 ∧ 2→ 3 = ((F1)∧ 2)→ 3.
+Denition 2.4 (Type environments). A type environment is a function A from -Var
+to T with a 0nite domain of de0nition. A type environment may be written as a 0nite
+list of pairs, as in
+x1 : 1; : : : ; xk : k
+for some distinct x1; : : : ; xk ∈ -Var, some 1; : : : ; k ∈T and some k¿0. If A is a type
+environment, then A[x → ] is the type environment such that
+(A[x → ])(y) =
+{
+A(y) if y = x;
+ if y = x;
+and A\x is the type environment such that
+(A\x)(y) =
+{
+A(y) if y = x;
+unde0ned if y = x:
+If A and B are type environments, then A∧B is a new type environment given by
+(A ∧ B)(x) =
+
+
+A(x) ∧ B(x) if both A(x) and B(x) de0ned;
+A(x) if only A(x) de0ned;
+B(x) if only B(x) de0ned;
+unde0ned if both A(x) and B(x) unde0ned:
+If F ∈ EVar is an E-variable and A is a type environment, then FA is the type envi-
+ronment such that (FA)(x)=F(A(x)).
+Denition 2.5 (Judgements, rule names, and skeletons). The sets of judgements, rule
+names, and pre-skeletons are determined by the following grammar:
+J ∈ Judg ::= A  M : |A e M : 
+R ∈ Rule ::= VAR |ABS-K |ABS-I |APP | ∧ |F
+Q ∈ PSkel ::= 〈R; J; Q˜〉
+Judgements formed with the e symbol will be used to restrict the ∧ and F rules
+so these rules are used only for subterms which are the arguments of an application.
+8 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+Inference Rules for both Skeletons and Derivations
+VAR x : U x : U ∧ A1 ? M : 1; A2 ? M : 2
+A1 ∧ A2 e M : 1 ∧ 2
+ABS-I
+A[x → ]M : U
+A (x:M) : ( → U) ABS-K
+AM : U
+A (x:M) : ( U′ → U) if x =∈ FV(M)
+Inference Rule for Skeletons Only Inference Rule for Derivations Only
+(S)APP
+A1 M : U; A2 ? N : 
+A1 ∧ A2 M N : U′
+(D) APP
+A1 M :  → U; A2 ? N : 
+A1 ∧ A2 M N : U
+Inference Rule for both Skeletons and Derivations: Introducing Expansion Variable F
+F
+A? M : 
+F Ae M : F 
+Fig. 1. Inference rules of system I.
+Observe that a pre-skeleton S is a rule name R, a 0nal judgement J , and zero or
+more subskeletons Q˜. The order of the subskeletons is signi0cant. Note that F is a
+rule name for every F ∈ EVar.
+A skeleton S of System I is a pre-skeleton Q such that, for every sub-pre-skeleton
+Q′= 〈R; J; Q˜〉 occurring in Q, it holds that the judgement J is obtained from the end
+judgements of the pre-skeletons Q˜ (whose order is signi0cant) by rule R and rule R
+is one of the rules for skeletons of System I in Fig. 1. The order of the pre-skeletons
+Q˜ determines the order in which their end judgements must match the premises of the
+rule R. A skeleton 〈R; J; Q1 : : : Qn〉 may be written instead as
+Q1 : : : Qn
+R:
+J
+There are two rules named APP in Fig. 1: Only rule “(S) APP” is used in skeletons.
+In interpreting the rules in Fig. 1, the pattern A?M :  can refer to either AM :  or
+AeM : . Observe that the rule ABS-K is not a special case of the rule ABS-I. This
+is because there is no rule or other provision for “weakening” (adding redundant type
+assumptions to a type environment) in our system and therefore, if there is a proof for
+the judgement A  M :  where x =∈FV(M), then A(x) is not de0ned.
+Denition 2.6 (Derivations and typings). A derivation D of System I is a skeleton S
+such that every use of the rule named “(S) APP” also quali0es as a use of the more
+restrictive rule named “(D) APP” in Fig. 1. The set Deriv of derivations is therefore
+a proper subset of the set Skel of skeletons. Henceforth, all skeletons and derivations
+belong to System I.
+Let the statement AIM :  hold iP there exists a derivation D of System I whose
+0nal judgement is AM : . When this holds, we say that D is a typing for M . A
+term M is typable in System I iP AIM :  holds for some A and . Note that every
+typing is a derivation, but not the other way around.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 9
+The following result is merely what anyone would expect from a system of inter-
+section types formulated without a rule for !.
+Theorem 2.7 (Strong normalization). A -term M is strongly normalizable (i.e., there
+is no in:nite -reduction sequence starting from M) if and only if M is typable in
+System I.
+Proof. A -term M is typable in System I iP M is typable in System →;∧ of [14],
+which is shown there to hold iP M is -SN. System →;∧ of [19] is in fact a non-
+essential variation of earlier systems of intersection types which were shown to type
+exactly the strongly normalizable -terms: The 0rst (correct) proof of the “if” part in
+the theorem is due to Pottinger [22], and the 0rst (correct) proof of the “only-if” part,
+as far as we are aware, is due to Amadio and Curien [1].
+Corollary 2.8 (Undecidability of typability). It is undecidable whether an arbitrarily
+chosen -term M is typable in System I.
+Later in the paper, we will show certain restrictions of System I to have decidable
+typability.
+Remark 2.9. System I does not have the subject reduction property. For example,
+z : 2 → 1 → 3; w : 1 ∧ 2 I (x:(y:zyx)x)w : 3;
+but
+z : 2 → 1 → 3; w : 1 ∧ 2 0I (x:zxx)w : 3:
+By Theorem 2.7, typability is preserved, so for example:
+z : 2 → 1 → 3; w : 2 ∧ 1 I (x:zxx)w : 3:
+The reason for the lack of subject reduction is that (1) “∧” is neither associative,
+commutative, nor idempotent, (2) the implicit ∧-elimination done by the VAR rule and
+the way type environments are built together 0x the component of an intersection type
+associated with a particular variable, and (3) there is no provision for weakening (i.e.,
+introducing unneeded type assumptions). If subject reduction is viewed as a means to
+achieve other goals rather than as a goal by itself, then the lack of subject reduction is
+not a problem, because derivations of System I can be easily translated into derivations
+of more permissive systems of intersection, types (see [29] for a survey) for which
+numerous desirable properties have already been veri0ed. The features of System I
+which prevent subject reduction make the later analysis of principal typings and type
+inference much easier.
+2.2. Substitution
+The notion of substitution de0ned here will be used later in uni0cation for type
+inference and in establishing a principal typing property for System I.
+10 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+Denition 2.10 (Type contexts). The symbol denotes a “hole”. The set T of type
+contexts and its subset T→ as well as metavariables over these sets are given as
+follows:
+U’ ∈ T→ ::= |  | (’→ U’)
+’ ∈ T ::= U’ | (’ ∧ ’′) | (F’)
+Note that U’ is only a metavariable over T→. If ’ has n holes, we write # (’)= n and
+use (1); : : : ; (n) to denote these n holes in their order of occurrence in ’ from left to
+right. Care must be applied when inserting 1; : : : ; n ∈T in the holes of ’ in order to
+obtain a type =’[1; : : : ; n] which is valid according to De0nition 2.3. Speci0cally,
+if hole (i) in ’ is to the immediate right of “→”, then i must be restricted to the
+subset T→.
+If ’∈T , we write EVar(’) for the set of E-variables occurring in ’; TVar(’) for
+the set of T -variables occurring in ’, and Var(’) for the disjoint union EVar(’)∪
+TVar (’).
+Denition 2.11 (Expansions). The set E of expansions is a proper subset of T , de0ned
+by the following grammar:
+e ∈ E ::= | (e ∧ e′) | (Fe)
+In words, an expansion is a type context which mentions no T-variable and no “→”.
+Denition 2.12 (Paths in type contexts). We de0ne path as a partial function which
+determines the position of (i) in ’ as a string in {L;R; 0; 1}∗. The de0nition goes as
+follows, using a “value” of ⊥ to indicate that the function is unde0ned on that input:
+path( (i); ) =
+{
+” if i = 1;
+⊥ otherwise:
+path( (i); ) =⊥
+path( (i); ’→ U’) =
+
+
+L · p if p = path( (i); ’) =⊥;
+R · q if q = path( (i−# (’)); U’) =⊥;
+⊥ otherwise:
+path( (i); ’ ∧ ’′) =
+
+
+0 · p if p = path( (i); ’) =⊥;
+1 · q if q = path( (i−# (’)); ’′) =⊥;
+⊥ otherwise:
+path( (i); F’) = path( (i); ’)
+Let paths(’)= (path( (1); ’); : : : ; path( (n); ’)) where n=# (’).
+Remark 2.13. Because an expansion e∈ E is a type context that does not mention
+“→”, a path in e is a string in {0; 1}∗ rather than in {L;R; 0; 1}∗. We thus use binary
+strings in {0; 1}∗ for a dual purpose: as paths in expansions and as oPset labels to
+rename variables (see De0nition 2.2). The coincidence between the two is by design.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 11
+Denition 2.14 (Variable renaming). For every t ∈{0; 1}∗ (we do not need to consider
+the larger set {L;R; 0; 1}), we de0ne a variable renaming 〈 〉t from T to T , by
+induction:
+1. 〈 〉t = .
+2. 〈asi 〉t = as·ti for every asi ∈ TVar.
+3. 〈’→ U’〉t = 〈’〉t →〈 U’〉t .
+4. 〈’1 ∧ ’2〉t = 〈’1〉t ∧ 〈’2〉t .
+5. 〈Fsi ’〉t = Fs·ti 〈’〉t for every Fsi ∈ EVar.
+In words, 〈’〉t is obtained from ’ by appending t to every oPset that is part of a
+variable name in ’.
+Denition 2.15 (Substitution on types and type contexts). Because every type is also
+a type context, it suQces to give the de0nition for the latter. A substitution is a total
+function S : Var→ (E ∪ T→) which respects “sorts”, i.e., SF ∈ E for every F ∈ EVar
+and S∈T→ for every ∈ TVar. Note that S() cannot have an E-variable or “∧” in
+outermost position. We write SF instead of S(F) and S instead of S(), as long as
+no ambiguity is introduced. We lift a substitution S to a function US from T to T ,
+by induction:
+1. US = .
+2. US=S.
+3. US(’→ U’)= ( US’)→ ( US U’).
+4. US(’1 ∧ ’2)= ( US’1) ∧ ( US’2).
+5. US(F’)= e[ US(〈’〉s1 ); : : : ; US(〈’〉sn)], where SF = e and paths(e)= (s1; : : : ; sn).
+When no ambiguity is possible, we write S for US and S’ for US(’).
+Denition 2.16 (Support of substitutions). Let S : Var→ (E ∪ T→) be a substitution.
+The non-trivial E-domain and non-trivial T-domain of S are
+EDom(S) = {F ∈ EVar |SF = F } and TDom(S) = { ∈ TVar |S = };
+respectively. The non-trivial domain of S (or the support of S) is
+Dom(S) = EDom(S) ∪ TDom(S):
+The notation
+{[F1 := e1; : : : ; Fm := em; 1 := U1; : : : ; n := Un]}
+denotes a substitution S with the indicated mappings where EDom(S)= {F1; : : : ; Fm}
+and TDom(S)= {1; : : : ; n}. We use the enclosing pair, “{[” and “]}” instead of “{”
+and “}”, as visual help to distinguish S from constraint sets to which it is applied.
+Consistent with the preceding notation, {[ ]} is the substitution such that:
+{[ ]}(v) =
+{
+v if v ∈ EVar;
+v if v ∈ TVar:
+12 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+Denition 2.17 (Operations on judgements and skeletons). The notion of renaming
+from De0nition 2.14 is lifted to type environments, judgements, rule names, and skele-
+tons in the obvious way.
+The ∧ operator and the operation of applying an E-variable are lifted to skeletons
+as follows:
+1. S∧S′= 〈∧; A1 ∧ A2 eM : 1 ∧ 2; SS′〉 if S= 〈R1; A1 ?M : 1; S˜〉 and S′=
+〈R2; A2 ?M : 2; S˜′〉.
+2. FS= 〈F; F AeM : F ;S〉 if S= 〈R; A?M : ; S˜〉.
+Using the preceding, the notation for “expansion 0lling” is lifted to skeletons as follows:
+1. (e∧e′)[S1; : : : ;Sn] =S∧S′ if # (e)= j; e[S1; : : : ;Sj] =S, and e′[Sj+1; : : : ;Sn]
+=S′.
+2. (F e)[S1; : : : ;Sn] =F (e[S1; : : : ;Sn]).
+3. [S] =S.
+The notion of substitution is lifted to type environments so that SA is the function
+such that (SA)(x)=S(A(x)). Substitution is lifted to judgements so that S(A?M :
+)=S(A)?M : S(). Substitution is lifted to skeletons as follows:
+1. S〈R; J;S1 · · ·Sn〉= 〈R;S J; (SS1) · · · (SSn)〉 if R =∈ EVar.
+2. S〈F; J;S〉= e[S(〈S〉s1 ); : : : ;S(〈S〉sn)] where SF = e and paths(e)= (s1; : : : ; sn).
+Lemma 2.18 (EPect of substitution on 0nal judgement). Let S be any substitution.
+Let S be the skeleton 〈R; AX M : ; S˜n〉 where X is either “e” or blank. Then S(S)
+= 〈R′;SAY M : S ; S˜′〉 for some R′; S˜′, and Y where Y is blank if X is blank.
+Proof. By induction on the number of sub-skeletons in S and then by cases on
+rule R.
+Lemma 2.19 (Substitution preserves skeletons and derivations). Let S be any substi-
+tution.
+1. If S is a skeleton, then S(S) is a skeleton.
+2. If D is a derivation, then SD is a derivation.
+Proof. By induction on the number of rules in D, using Lemma 2.18.
+Denition 2.20 (Principal typings). A derivation D is a principal typing for -term M
+iP D is a typing for M and for every other typing D′ for M , there is a substitution
+S such that D′=S(D). The principality property for typings is the existence of a
+principal typing for every typable -term.
+Subsequent sections will establish that System I has the principality property. We
+next give two simple examples to illustrate how notions introduced so far are used,
+in particular, the key concepts of “skeleton”, “derivation” and “substitution” in the
+presence of expansion variables.
+Example 2.21 (Principal typing for (x:x)(y:yy)). Let M1 denote the -term (x:x)
+(y:yy). Depicted in Fig. 2 is a skeleton S1 for M1. The skeleton S1 is a particular
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 13
+The skeleton S1 = Skel(M1) is:
+VAR
+x : 1  x : 1
+ABS-I
+ x:x : 1→ 1
+VAR
+y : 2  y : 2
+VAR
+y : 3  y : 3
+F
+y : F3 e y : F3
+APP
+y : 2 ∧ F3  yy : 1
+ABS-I
+ y:yy : 2 ∧ F3→ 1
+G
+e y:yy : G(2 ∧ F3→ 1)
+APP
+ (x:x)(y:yy) : 2
+Letting 71 =8(M1) and S1 =Unify(71), the derivation D1 =S1(S1) is:
+VAR
+x :  x : 
+ABS-I
+ x:x : → 
+VAR
+y : F→  y : F→ 
+VAR
+y :  y : 
+F
+y : Fe y : F
+APP
+y : (F→ ) ∧ F yy : 
+ABS-I
+ y:yy : 
+APP
+ (x:x)(y:yy) : 
+where = ((F→ ) ∧ F)→ .
+Fig. 2. Skeleton S1 and derivation D1 for M1 = (x:x)(y:yy).
+one, produced from M1 by the Skel algorithm of Section 6. It is just a decorated
+version of the parse tree of M1 and its size is therefore “small”, i.e., proportional to
+the size of M1:
+Applying an arbitrary substitution to S1, we can obtain another skeleton for M1. Thus,
+S1 is a scheme for in0nitely many skeletons for M1.
+Associated with S1 is a constraint set 71 = {1→ 1 := G(2∧F3→ 1)→ 2; G2:= G(F3→ 1)}, produced from M1 by the 8 algorithm of Section 6. (“Constraint
+sets” and restrictions on them are de0ned precisely in Section 4.) Note that there is
+one constraint in 71 for each use of the APP rule in S1. A particular substitution S1,
+14 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+The skeleton S2 = Skel(M2) is:
+VAR
+x : 1  x : 1
+VAR
+y : 2  y : 2
+F
+y : F2 e y : F2
+APP
+x : 1; y : F2  xy : 1
+ABS-I
+x : 1  y:xy : F2→ 1
+ABS-I
+ x:y:xy : 1→F2→ 1
+VAR
+z : 3  z : 3
+VAR
+z : 4  z : 4
+G
+z : G4 e z : G4
+APP
+z : 3 ∧ G4  zz : 2
+ABS-I
+ z:zz : 3 ∧ G4→ 2
+H
+e z:zz : H (3 ∧ G4→ 2)
+APP
+ (x:y:xy)(z:zz) : 3
+Letting 72 =8(M2) and S2 =Unify(72), the derivation D2 =S2(S2) is:
+VAR
+x : 3  x : 3
+VAR
+y : 1  y : 1
+VAR
+y :  y : 
+G
+y : Ge y : G
+∧
+y : 2 e y : 2
+APP
+x : 3; y : 2  xy : 
+ABS-I
+x : 3  y:xy : 3
+ABS-I
+ x:y:xy : 3→ 3
+VAR
+z : 1  z : 1
+VAR
+z :  z : 
+G
+z : Ge z : G
+APP
+z : 2  zz : 
+ABS-I
+ z:zz : 3
+APP
+ (x:y:xy)(z:zz) : 3
+where 1, 2 and 3 abbreviate the following types:
+1 =G→ ; 2 = 1 ∧ G= (G→ ) ∧ G; 3 = 2→ = (G→ ) ∧ G→ :
+Fig. 3. Skeleton S2 and derivation D2 for M2 = (x:y:xy)(z:zz).
+obtained from 71 using the Unify algorithm of Section 5, is given by
+S1 = {[G := ; 1 := ; 2 := F→ ; 2 := ]};
+where =((F→ ) ∧ F)→  with = 3 and = 1. Applying substitution S1 to
+skeleton S1, we obtain another skeleton which is now a derivation D1 =S1(S1),
+depicted in Fig. 2.
+A consequence of the analysis in Sections 5 and 6 is that D1 is a principal typing
+for M1, i.e., every typing D′ for M1 is of the form D′=S′(D1) for some substi-
+tution S′.
+Example 2.22 (A principal typing for (x:y:xy)(z:zz)). Let M2 denote the -term
+(x:y:xy)(z:zz). Depicted in Fig. 3 is a skeleton S2 for M2.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 15
+As in Example 2.21, the skeleton S2 is a particular one, produced from M2 by the
+Skel algorithm. Associated with S2 is the following constraint set, produced from M2
+by the 8 algorithm of Section 6:
+72 = {1 := F2→ 1; 1→F2→ 1 := H (3 ∧ G4→ 2)→ 3;
+H3
+:= H (G4→ 2)}:
+A particular substitution S2, obtained from 72 using the Unify algorithm of Section 5,
+is given by
+S2 = {[F := ∧ G ; H := ; 1 := 3; 02 := 1; 12 := ; 3 := 1;
+1 := ; 3 := 3]}
+where we use the abbreviations 1 =G→  and 3 = ((G→ )∧G)→ , with = 4
+and = 2. Observe that, in this example, S2 assigns values to the oPsprings 02 and 
+1
+2
+of 2, but does not need to assign any particular value to 2 itself. This follows from
+the way substitutions are applied “outside-in”, and becomes clear when we consider
+the action of S2 on F2:
+S2(F2) = ( ∧ G )[S〈2〉0; S〈2〉1] = ( ∧ G )[S02; S12]
+= S02 ∧ G(S12) = (G→ ) ∧ G:
+Applying substitution S2 to skeleton S2, we obtain a new skeleton which is also a
+derivation D2 =S2(S2), as depicted in Fig. 3.
+A consequence of the analysis in Sections 5 and 6 is that D2 is a principal typing
+for M2, i.e., every typing D′ for M2 is of the form D′=S′(D2) for some substi-
+tution S′.
+Remark 2.23. The typings identi0ed as principal in this paper are not identical to the
+things which would be de0ned to be principal typings following the general de0nition
+of Wells [33]. A minor diPerence is that a typing in this paper is an entire derivation of
+a judgement rather than a pair (A; ) of the type environment and result type in the 0nal
+judgement of a derivation. This diPerence can be bridged by simply using the (A; )
+pair from the 0nal judgement of a typing in this paper. Then every principal typing of
+this paper is also a principal typing following the general de0nition. A slightly larger
+diPerence is that the word typing in this paper is (somewhat arbitrarily) restricted to
+the case of a derivation where the 0nal type belongs to the restricted set T→ rather
+than the set T of all types. So ({x : }; ) is in the 0nal judgement of a principal
+typing for x according to this paper’s de0nition, but not ({x : F}; F). Because each
+typable term has at least one principal typing, this diPerence does not cause a problem.
+3. Properties of substitutions
+The mechanism of substitution in this paper is new. It comes with several peculiar-
+ities that set it apart from other forms of substitution in the literature.
+16 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+3.1. On types in general
+We start with a very simple but fundamental result about substitutions. If S1 and
+S2 are substitutions in 0rst-order uni0cation, then S1 =S2 iP US1 = US2, where US is the
+lifting of S (De0nition 2.15). This is a basic fact, which is completely obvious in
+0rst-order uni0cation but requires a little proof in -uni0cation.
+Proposition 3.1 is nowhere invoked directly. But it is used implicitly throughout,
+because it allows us to use the same symbol S to denote both a substitution and its
+lifting, unambiguously.
+Proposition 3.1 (Lifting is injective). Let S1 : Var→ (E ∪ T→) and S2 : Var→ (E ∪
+T→) be arbitrary substitutions. Then S1 =S2 i7 US1 = US2.
+Proof. The implication from left to right is immediate, i.e., lifting S to US is a uniquely
+de0ned operation. For the converse (“lifting is injective”), we assume that US1 = US2 and
+we prove that S1 =S2.
+Let  be an arbitrary T-variable. We want to show S1=S2. By de0nition, US=S.
+Hence, if US1 = US2, then S1=S2, as desired.
+Let F be an arbitrary E-variable. We want to prove that S1F =S2F . Take an arbitrary
+∈ TVar and consider the action of US1 and US2 on the type (F). By De0nition 2.15:
+US1(F) = e1[ US1s1 ; : : : ; US1sm ] = e1[S1s1 ; : : : ;S1sm ];
+where e1 = S1F and (s1; : : : ; sm) = paths(e1):
+US2(F) = e2[ US2t1 ; : : : ; US2tn ] = e2[S2t1 ; : : : ;S2tn ];
+where e2 = S2F and (t1; : : : ; tn) = paths(e2):
+By hypothesis, US1(F)= US2(F). Together with the fact that S1si ∈T→ for every
+16i6m and S2tj ∈T→ for every 16j6n, this implies that e1 = e2, i.e., S1F =S2F
+as desired.
+Much of the diQculty in dealing with substitutions in -uni0cation results from
+the distinctive way in which “composition” and “ground composition” of substitutions
+behave. We next give precise de0nitions for these two operations.
+Denition 3.2 (Composition of substitutions). Lifting substitutions to functions from
+T to T , as in De0nition 2.15, allows us to compose them (as functions from T to
+T ) and we use the standard symbol “◦”. 2 Speci0cally, if the substitutions S1 and S2
+are lifted to functions from T to T , then their composition is de0ned by:
+S2 ◦ S1 = {’ → S2(S1’) |’ ∈ T }:
+2 The “composition” of substitutions as such, from Var to E∪T→, is actually meaningless, because their
+domain and codomain are not the same.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 17
+If S1, S2 and S3 are arbitrary substitutions, then it is always the case that:
+S3 ◦ (S2 ◦ S1) = (S3 ◦ S2) ◦ S1:
+This really means US3 ◦ ( US2 ◦ US1)= ( US3 ◦ US2) ◦ US1, which is the usual associativity of
+function composition.
+Denition 3.3 (Ground composition). If S1 and S2 are arbitrary substitutions, we de-
+0ne a new substitution S2 S1, the ground composition of S2 and S1, by
+S2  S1 = {v → S2(S1v) | v ∈ Var};
+which of course can be lifted to a function S2  S1 from T to T as in De0nition 2.15.
+If US1 and US2 are the functions resulting from lifting S1 and S2, it may be expected
+as elsewhere in uni0cation theory that US2 ◦ US1 =S2  S1, but it is not! This and other
+subtle issues are illustrated by examples.
+Example 3.4 (Composition = ground composition). Consider the substitutions S1 =
+{[ := ]}, where  = , and S2 = {[F := ∧ ]}. It is clear that S2 S1 = {[F := ∧ ;
+ := ]}. Applying S2 S1 to the type F, we obtain
+(S2  S1)(F) = 0 ∧ 1:
+Applying S2 ◦S1 to the same type F, we obtain
+(S2 ◦ S1)(F) = S2(S1(F)) = 0 ∧ 1:
+Hence, the two operations, “” and “◦”, are not the same. To be explicit about the
+lifting operation, this says that US2 ◦ US1 = S2  S1.
+Example 3.5 (Ground composition not associative). Consider the following substitu-
+tions:
+S1 = {[F := GH ]}; S2 = {[H := ∧ ]} and S3 = {[G := ∧ ]}:
+A straightforward calculation shows that:
+S3  (S2  S1) = {[F := ( ∧ ) ∧ ( ∧ ); G := ∧ ; H := ∧ ]};
+(S3  S2)  S1 = {[F := H 0 ∧ H 1 ; G := ∧ ; H := ∧ ]}:
+Clearly, S3  (S2 S1) =(S3 S2) S1.
+Example 3.6 (Substitutions not closed under composition). We give two examples,
+each illustrating a diPerent point.
+1. Consider the substitutions:
+S1 = {[F := ∧ ; 1 := ]} and S2 = {[G := ∧ ; 1 := :]};
+18 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+where  = :. While US2 ◦ US1 is well-de0ned as a function from T to T , it is not
+a substitution, i.e., the lifting of a substitution. To see this, consider the action of
+US2 ◦ US1 on the types F and G:
+( US2 ◦ US1)(F) = US2( US1(F)) = 0 ∧  and
+( US2 ◦ US1)(G) = US2( US1(G)) = 0 ∧ ::
+There is no substitution S which maps both F to 0 ∧  and G to 0 ∧ :. If such
+a substitution S existed, it would map two distinct E-variables F and G to the same
+expansion ∧ (which is possible) and the same T -variable 1 to two distinct types
+ and : (which is not possible). It follows also that there is no substitution which
+maps the single type F∧G to (0 ∧ )∧ (0 ∧ :). Thus, posing =(F∧G), we
+have US =( US2 ◦ US1) for every substitution S.
+2. Let now:
+S′1 = {[F := ∧ ( ∧ ); 11 := ]} and S′2 = {[G := ∧ ; 11 := :]};
+where  = :. Consider the action of US′2 ◦ US
+′
+1 on the types F and G
+1:
+( US
+′
+2 ◦ US
+′
+1)(F) = US
+′
+2( US
+′
+1(F)) = 
+0 ∧ (10 ∧ ) and
+( US
+′
+2 ◦ US
+′
+1)(G
+1) = US
+′
+2( US
+′
+1(G
+1)) = 10 ∧ ::
+By the reasoning used above, there is no substitution which maps F∧G1 to
+(0 ∧ (10 ∧ ))∧ (10 ∧ :). Thus, posing ′=(F∧G1), we have US′ =( US′2 ◦ US
+′
+1)
+′
+for every substitution S.
+We have purposely given two types,  and ′, over which the composition of two sub-
+stitutions is not equivalent to a single substitution. Looking ahead,  and ′ violate con-
+ditions 1 and 2, respectively, of “well-named” types (De0nition 3.9). In Lemma 3.18,
+we show that if  is well-named and US1 is well-named, then there is indeed a substi-
+tution S such that US=( US2 ◦ US1).
+Remark 3.7. It is possible to impose restrictions on variable names and the use of
+substitutions in order to recover the usual properties encountered in other forms of
+uni0cation, including the following desirable property:
+1. US2 ◦ US1 =S2 S1,
+for all appropriately restricted substitutions S1 and S2, which would imply two other
+desirable properties:
+2. S3  (S2 S1) = (S3 S2) S1, and
+3. the function US2 ◦ US1 is a substitution, i.e., the lifting of a substitution.
+For property 2, the associativity of “” (not always guaranteed, by Example 3.5) would
+follow from the associativity of “◦” (always guaranteed, by De0nition 3.2). For prop-
+erty 3, as S2 S1 is a substitution (by De0nition 3.3), it would follow that US2 ◦ US1 is
+(the lifting of) a substitution.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 19
+However, it does not seem to be worth the ePort to guarantee the preceding three
+properties at some reasonable level of generality. Instead, we are careful in restricting
+the use of substitutions in order to achieve, at a minimum, the third property above.
+3.2. On well-named types only
+Several properties of substitutions are true provided they are restricted to “well-
+named” types. The de0nition requires the preliminary notion of “E-path”, which also
+plays an important role in the analysis of later sections.
+Denition 3.8 (E-paths). The set EVar∗ of all 0nite sequences of E-variables is also
+called the set of E-paths. We de0ne a function E-path from Var×T to 0nite subsets
+of EVar∗. By induction:
+1. E-path(v; )= ∅.
+2. E-path(v; )=
+{ {”} if v= ;
+∅ if v = :
+3. E-path(v; ’→ U’)= E-path(v; ’)∪ E-path(v; U’).
+4. E-path(v; ’∧’′)= E-path(v; ’)∪ E-path(v; ’′).
+5. E-path(v; F’)=
+{ {FG˜ | G˜ ∈ E-path(v; ’)} if v = F;
+{”}∪ {FG˜ | G˜ ∈ E-path(v; ’)} if v=F:
+Let ’ be a type context with n¿1 holes (1); : : : ; (n) and let =’[1; : : : ; n] where
+1; : : : ; n are n fresh and distinct T -variables. We de0ne E-path( (i); ’)= E-path(i; )
+for every 16i6n.
+Denition 3.9 (Well named types and well named type contexts). As every type
+is also a type context, it suQces to write the de0nition for the latter. We say that
+a type context ’∈T is well named iP both of the following statements hold:
+1. For every v∈Var(’), it holds that E-path(v; ’)= {G˜} (a singleton set) where v
+does not occur in G˜.
+2. For all vs; vt ∈Var(’) with v basic and s; t ∈{0; 1}∗, if s6t then s= t.
+Informally, the 0rst condition says that, for every (type or expansion) variable v,
+the sequence of E-variables encountered as we go from the root of ’ (viewed as a
+tree) to any occurrence of v is always the same. Furthermore, E-variables do not nest
+themselves. If E-path(v; ’) is the singleton set {F˜}, we can write E-path(v; ’)= F˜
+without ambiguity.
+The second condition says that if a variable v occurs in ’, then no proper oPspring
+of v occurs in ’, where a variable vs·t is called an o7spring of vs. Note that types that
+mention only basic variables automatically satisfy the second condition.
+Remark 3.10. Condition 1 in De0nition 3.9 is the important one and will be recalled
+repeatedly in proofs later. Condition 2 will be automatically satis0ed in the way we
+set up constraints and in the way we apply substitutions to them, and will play no
+signi0cant role in the interesting part of our analysis.
+When we derive a constraint set 8(M) from a -term M in Section 6, we will be
+careful to restrict 8(M) to types over basic variables, thus automatically satisfying
+20 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+condition 2. Types over variables that are not basic will be introduced only as a result
+of applying substitutions. In -uni0cation, if a substitution S is applied to a type ,
+the resulting type S may mention several distinct renamings v1; : : : ; vn (“oPspring”)
+of the same variable v in . Although we do not do it in this report, it is possible to
+choose v1; : : : ; vn to be fresh basic variables, obviating the need to impose condition 2.
+To simplify the bookkeeping, we follow a diPerent approach, whereby all oPsprings
+in S of the same variable v are obtained by attaching distinct and incomparable oPset
+labels to v, as in De0nition 2.15. (The oPset labels are incomparable as strings in
+{0; 1}∗.) In this way we guarantee that condition 2 is satis0ed again.
+There are various technical implications of condition 2 in De0nition 3.9 in relation
+to variable naming. These may be ignored without aPecting the reader’s understanding
+through most of the analysis. Condition 2 in De0nition 3.9 matters and makes an
+important diPerence only in a few places in this section only.
+In general, the standard composition of two substitutions using “◦” does not produce
+a substitution, i.e., for substitutions S1 and S2, there does not necessarily exist a substi-
+tution S3 such that US3 = ( US2 ◦ US1). (See Example 3.6). To work around this diQculty,
+we use “⊗E”, a new binary operation on substitutions which we call “safe composi-
+tion relative to E”, where E is an environment expressing certain naming constraints.
+Lemma 3.18 makes the new notion precise. We need a few preliminary de0nitions and
+related facts 0rst.
+Denition 3.11 (E-Path Environment). Given a well-named type context ’, we form
+its E-path environment as follows:
+(E-env(’))(v) =
+{
+F˜ if E-path(v; ’) = {F˜};
+unde0ned if E-path(v; ’) = ∅:
+An E-path environment is a partial function E :Var→ EVar∗ that is the result of ap-
+plying the E-env function to a well-named type context ’. Let E be a metavariable
+over E-path environments.
+Let E be an E-path environment, which implies there is a well-named type context
+’ inducing it, i.e., E= E-env(’). Let S be a substitution such that S’ is a well-named
+type context. We de0ne SE to be another E-path environment, by setting
+(SE)(v) =
+{
+F˜ if E-path(v;S’) = {F˜};
+unde0ned if E-path(v;S’) = ∅:
+Lemma 3.12 (E-path environments are pre0x-closed). Let E be an E-path environ-
+ment and let v∈Var. If E(v) is de:ned with E(v)= F˜G, then E(G) is de:ned with
+E(G)= F˜ .
+Proof. Immediate from the de0nitions.
+We give two equivalent de0nitions of “safe composition”, in 3.13 and 3.14. The
+0rst is more compact and convenient to use in some proofs. The second is more
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 21
+constructive and makes explicit that S2⊗E S1, the safe composition of substitutions S1
+and S2 relative to E, is well-de0ned as a function.
+Denition 3.13 (Safe composition). Let S1 and S2 be substitutions, and E an E-path
+environment. The safe composition of S1 and S2 relative to E is a new substitution,
+written S2 ⊗E S1 and de0ned by
+(S2 ⊗E S1)(v) =
+
+
+’j if v = Uvr;E( Uv) = F˜ ; e = S2(S1(F˜ ))
+with # (e) = n; r = path( ( j); e)
+and e[’1; : : : ; ’n] = S2(S1(F˜ Uv));
+{[ ]}(v) otherwise;
+which of course can be lifted to a function S2 ⊗E S1 from T to T as in De0ni-
+tion 2.15.
+Denition 3.14 (Algorithmic de0nition of safe composition). First, de0ne auxiliary
+functions env-offset and path-to-hole as follows:
+env-Offset(E)(b; s) =
+{
+(s′; t) if bs
+′
+in dom(E) and s′ · t = s;
+unde0ned otherwise:
+Observe that env-Offset(E) is a well de0ned function, because for each b and s there
+is at most one s′6s such that bs
+′ ∈ dom(E), because E is generated from some well-
+named type context ’.
+path-to-hole(’)(s) =
+{
+i if path( (i); ’) = s;
+unde0ned otherwise:
+Observe that path-to-hole(’) is a well de0ned function, because for any ’ and s there
+is at most one i such that path( (i); ’)= s:
+Now, de0ne the safe composition operator as follows:
+(S1 ⊗E S2)(v) = let bs = v
+in if env-offset(E)(b; s) is de0ned
+then let (s′; t) = env-offset(E)(b; s)
+v′ = bs
+′
+F˜ = E(v′)
+e = S2(S1(F˜ ))
+n = # (e)
+in if path-to-hole(e)(t) is de0ned
+then let i = path-to-hole(e)(t)
+e[’1; : : : ; ’n] = S2(S1(F˜v′))
+in ’i
+else {[ ]}(v)
+else {[ ]}(v)
+We next prove three technical results. Lemma 3.15 is used to establish Lemmas 3.16
+and 3.17, and the latter two are used in the proofs of Lemmas 3.18 and 5.11.
+22 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+Lemma 3.15. Let S be a substitution and let e be an expansion. Then:
+1. Se is an expansion.
+2. Let # e= k¿1 and # Se= n¿k. Then there are maps a, b and r solely depending
+on e and S:
+a : {1; : : : ; n} → {1; : : : ; k};
+b : {1; : : : ; n} → {1; : : : ; n}; and
+r : {1; : : : ; k} × {1; : : : ; n} → {0; 1}∗:
+such that for all ’1; : : : ; ’k ∈ T it holds that:
+S(e[’1; : : : ; ’k ]) = (Se)[S〈’a(1)〉r(a(1);b(1)); : : : ;S〈’a(n)〉r(a(n);b(n))]
+where
+• {’a(1); : : : ; ’a(n)}= {’1; : : : ; ’k}, i.e., a is a total surjective map,
+• if E-path( (i); e)= F˜ for 16i6k,
+then paths(S(F˜ ))= (r(i; 1); : : : ; r(i; ni)) for some ni¿1,
+• n= n1 + · · ·+ nk ,
+• {b( j) | a( j)= i and 16j6n}= {1; : : : ; ni} for every 16i6k.
+Proof. Both parts are by structural induction on e. Part 1 is easy and left to the
+reader. Consider part 2 only. For the base case e= of the induction, the result is
+straightforward.
+Proceeding inductively, suppose the result is true for expansion e and for every
+expansion whose size does not exceed size(e). Let F ∈ EVar and consider the action
+of S on Fe[’1; : : : ; ’k ] for some arbitrary ’1; : : : ; ’k ∈T . We make a record of what
+we need to push the argument through:
+1. Let # (SF)=m¿1 and paths(SF)= (p1; : : : ; pm).
+2. For every ‘∈{1; : : : ; m}, let # S〈e〉p‘ = n‘¿k.
+3. By the induction hypothesis, for every ‘∈{1; : : : ; m} there are maps a‘, b‘ and r‘
+solely depending on 〈e〉p‘ and S:
+a‘ : {1; : : : ; n‘} → {1; : : : ; k};
+b‘ : {1; : : : ; n‘} → {1; : : : ; n‘}; and
+r‘ : {1; : : : ; k} × {1; : : : ; n‘} → {0; 1}∗
+such that for all ’′1; : : : ; ’
+′
+k ∈T it holds that:
+S(〈e〉p‘ [’′1; : : : ; ’′k ]) = (S〈e〉p‘)[S〈’′a‘(1)〉r‘(a‘(1);b‘(1)); : : : ;S〈’′a‘(n)〉r‘(a‘(n);b‘(n))]
+where
+• {’′a‘(1); : : : ; ’′a‘(n‘)}= {’′1; : : : ; ’′k},
+• if E-path( (i); 〈e〉p‘)= F˜ for 16i6k,
+then paths(S(F˜ ))= (r‘(i; 1); : : : ; r‘(i; n‘; i)) for some n‘; i¿1,
+• n‘= n‘;1 + n‘;2 + · · ·+ n‘; k ,
+• {b‘( j) | a‘( j)= i and 16j6n‘}= {1; : : : ; n‘; i} for every 16i6k.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 23
+4. We also need a general fact about associativity of the operation of placing types in
+the holes of expansions, namely,
+e0[e1[’1;1; : : : ; ’1;n1 ]; : : : ; em[’m;1; : : : ; ’m;nm ]]
+= (e0[e1; : : : ; em])[’1;1; : : : ; ’1;n1 ; : : : ; ’m;1; : : : ; ’m;nm ]:
+Based on the preceding observations, it is now straightforward to check the following
+sequence of equalities, for arbitrary ’1; : : : ; ’k ∈ T :
+S(Fe[’1; : : : ; ’k ])
+= (SF)[S〈e[’1; : : : ; ’k ]〉p1 ; : : : ;S〈e[’1; : : : ; ’k ]〉pm ]
+= (SF)[S(〈e〉p1 [〈’1〉p1 ; : : : ; 〈’k〉p1 ]); : : : ;S(〈e〉pm [〈’1〉pm ; : : : ; 〈’k〉pm ])]
+= (SF)[S〈e〉p1 [S〈’a1(1)〉p1·r1(a1(1);b1(1)); : : : ;S〈’a1(n1)〉p1·r1(a1(n1);b1(n1))];
+...
+S〈e〉pm [S〈’am(1)〉pm·rm(am(1);bm(1)); : : : ;S〈’am(nm)〉pm·rm(am(nm);bm(nm))]]
+= (S(Fe))[S〈’a1(1)〉p1·r1(a1(1);b1(1)); : : : ;S〈’a1(n1)〉p1·r1(a1(n1);b1(n1));
+...
+S〈’am(1)〉pm·rm(am(1);bm(1)); : : : ;S〈’am(nm)〉pm·rm(am(nm);bm(nm))]:
+The 0rst and second equalities follow from the de0nitions, the third equality uses the
+facts collected in 3 above based on the induction hypothesis, and the fourth equality
+follows from 4. From the right-hand side of the last equality, it is now easy to extract
+maps a, b and r that satisfy the conclusion of part 2 for the expansion Fe.
+The remaining case of the induction is e= e1 ∧ e2, and we assume the conclusion
+of part 2 is true for every expansion whose size is strictly smaller than size(e). This
+case is straightforward (easier than the preceding case F e) and left to the reader.
+Lemma 3.16. Let S be an arbitrary substitution and let F˜ ∈ EVar∗. For all ’∈T ,
+it is the case that:
+S(F˜’) = (S(F˜ ))[S〈’〉r1 ; : : : ;S〈’〉rn ];
+where paths(S(F˜ ))= (r1; : : : ; rn).
+Proof. This is a special case of Lemma 3.15, obtained by making k =1, e= F˜ , and
+’1 =’.
+Lemma 3.17. Let S1 and S2 be arbitrary substitutions and let F˜ ∈ EVar∗. By part 1 of
+Lemma 3.15, S1(F˜ ) and S2(S1(F˜ )) are expansions. Let e1 =S1(F˜ ) and e2 =S2
+(S1(F˜ )), with # e1 = k¿1 and # e2 = n¿k. Then for all ’∈T , it holds that:
+S2(S1(F˜’)) = e2[S2〈S1〈’〉q1〉r1 ; : : : ;S2〈S1〈’〉qn〉rn ]
+24 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+for appropriately de:ned q1; r1; q2; r2; : : : ; qn; rn ∈{0; 1}∗ depending solely on the E-
+path F˜ and the substitutions S1 and S2.
+Proof. We have the following sequence of equalities, using the maps a; b and r as
+de0ned in part 2 of Lemma 3.15:
+S2(S1(F˜’)) = S2(e1[S1〈’〉p1 ; : : : ;S1〈’〉pk ])
+= e2[S2〈S1〈’〉pa(1)〉r(a(1);b(1)); : : : ;S2〈S1〈’〉pa(n)〉r(a(n);b(n))];
+where paths(e1)= (p1; : : : ; pk) and, if E-path( (i); e1)= F˜ i for every 16i6k, then
+paths(S2(F˜ i ))= (r(i; 1); r(i; 2); : : : ; r(i; ni)) for some ni¿1. The 0rst equality above
+follows from part 2 of Lemma 3.15, posing e= F˜ ; more directly, it also follows from
+Lemma 3.16. The second equality above follows from part 2 of Lemma 3.15, posing
+e= e1. The desired conclusion now follows.
+Lemma 3.18 (SuQcient condition for safe composition). Let S1 and S2 be substitu-
+tions, ’ a type context, and S=S2 ⊗E S1 for some E-path environment E. If E⊇
+E-env(’), then S(’)=S2(S1(’)).
+Note that the condition E⊇ E-env(’) implies that ’ is well-named.
+Proof. Fix the E-path environment E throughout the proof. The appropriate induction
+here is on the number n¿0 of occurrences of “→” and “∧” in well-named type contexts
+’ such that E⊇ E-env(’). The base case of the induction on n involves another nested
+induction on the length ‘¿0 of E-paths.
+Base case: Type contexts ’ for this case have n=0 occurrences of “→” and “∧”,
+and therefore are of the form or F˜G or F˜, with E(G)= F˜ and E()= F˜ . If
+’= , the desired result is immediate. Consider the case ’= F˜G only, and omit the
+entirely similar case ’= F˜.
+We proceed by a nested induction, on the length ‘¿0 of F˜ . The base case of the
+nested induction is ‘=0, for which ’=G and E(G)= ”. Posing Uv=G in De0ni-
+tion 3.13, we obtain in the same de0nition: e=S2(S1 )= and rj = path( (j); e)= ”,
+implying that v= Uvrj =G and also that
+S2(S1G) = S2(S1 Uv) = (S2 ⊗E S1)(v) = (S2 ⊗E S1)(G) = S(G);
+which is the desired result.
+Consider next the case ’= F˜G where the length of F˜ is ‘ + 1. If E⊇ E-env(’),
+then E(G)= F˜ . Let e=S2(S1(F˜ )) with # (e)= n and paths(e)= (r1; : : : ; rn). By
+Lemma 3.17,
+S2(S1(F˜G )) = e[S2〈S1〈G 〉q1〉r′1 ; : : : ;S2〈S1〈G 〉qn〉r′n ]
+for appropriately de0ned q1; r′1; : : : ; qn; r
+′
+n ∈{0; 1}∗. De0ning ’j =S2〈S1〈G 〉qj〉r
+′
+j for
+every 16j6n, this means that S2(S1(F˜G ))= e[’1; : : : ; ’n]. For a 0xed j∈{1; : : : ; n},
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 25
+if we pose v=Grj and Uv=G in De0nition 3.13, we get:
+SGrj = (S2 ⊗E S1)(Grj) = ’j:
+The preceding observations imply the following sequence of equalities:
+S2(S1(F˜G )) = e[’1; : : : ; ’n] as shown above
+= e[SGr1 ; : : : ;SGrn ] as shown above
+= (S(F˜ ))[SGr1 ; : : : ;SGrn ] because S(F˜ ) = S2(S1(F˜ ))
+by induction hypothesis
+= S(F˜G ) by Lemma 3:16
+which is the desired conclusion.
+Induction case: Type contexts ’ for this case have n + 1 occurrences of “→” and
+“∧”, and therefore are of the form F˜(’1→’2) or F˜(’1 ∧’2) where each of ’1 and
+’2 has at most n such occurrences. Consider the case F˜(’1→’2) only, and omit the
+entirely similar case F˜(’1 ∧’2).
+Let S1(F˜ )= e1 and S2(S1(F˜ ))= e2, with paths(e2)= (r1; : : : ; rn). By the base
+case of the induction, S(F˜ )=S2(S1(F˜ ))= e2. For a∈{1; 2}, by Lemma 3.17, we
+have:
+S2(S1(F˜’a)) = e2[S2〈S1〈’a〉q1〉r′1 ; : : : ;S2〈S1〈’a〉qn〉r′n ]
+for appropriate q1; r′1; : : : ; qn; r
+′
+n ∈{0; 1}∗ that depend solely on the E-path F˜ and the
+substitutions S1 and S2. De0ning ’a; j =S2〈S1〈’a〉qj〉r′j for every 16j6n, we can write
+S2(S1(F˜’a))= e2[’a;1; : : : ; ’a; n]. Hence, we have the following sequence of equalities:
+e2[S〈’a〉r1 ; : : : ;S〈’a〉rn ] = S(F˜’a) by Lemma 3:16
+= S2(S1(F˜’a)) by induction hypothesis
+= e2[’a;1; : : : ; ’a; n] as shown above:
+This implies S〈’a〉rj =’a; j for a=1; 2 and j=1; : : : ; n. By Lemma 3.17, we have
+S2(S1(F˜(’1 → ’2))) = e2[S2〈S1〈’1 → ’2〉q1〉r′1 ; : : : ;S2〈S1〈’1 → ’2〉qn〉r′n ]
+= e2[S2〈S1〈’1〉q1〉r′1 → S2〈S1〈’2〉q1〉r′1 ; : : : ;S2〈S1〈’1〉qn〉r′n
+→ S2〈S1〈’2〉qn〉r′n ]
+Finally, the preceding implies the following sequence of equalities:
+S2(S1(F˜(’1 → ’2)))
+= e2[’1;1 → ’2;1; : : : ; ’1;n → ’2;n] because S2〈S1〈’a〉qj〉r′j = ’a;j
+= e2[S〈’1〉r1 → S〈’2〉r1 ; : : : ;
+S〈’1〉rn → S〈’2〉rn ] because ’a;j = S〈’a〉rj
+= (S(F˜ ))[S〈’1 → ’2〉r1 ; : : : ;
+S〈’1 → ’2〉rn ] because e2 = S(F˜ )
+= S(F˜(’1 → ’2)) by Lemma 3:16
+which is the desired conclusion.
+26 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+3.3. Finite-support substitutions
+When we deal with termination properties of our algorithms in Sections 5 and 8 we
+restrict attention to substitutions with 0nite support (De0nition 2.16). This is justi0ed
+by the following lemma.
+Lemma 3.19 (Finite-support substitutions suQce). Let S be an arbitrary substitution
+and ’ a type context. Then, from the given S and ’, we can construct a substitution
+S0 such that US0’= US’ with Dom(S0) :nite.
+Proof. We 0rst de0ne the set Var(’; ‘) of variables in ’ at level ‘, by induction on
+‘¿0:
+Var(’; 0) = {v ∈ Var(’) | E-path(v; ’) = ”}
+...
+Var(’; ‘ + 1) = {v ∈ Var(’) | E-path(v; ’) ∈ Var(’; 0) · · ·Var(’; ‘)}:
+Clearly Var(’; ‘) is 0nite for every ‘. Moreover, there is a least m¿0 such that:
+Var(’) = Var(’; 0) ∪ Var(’; 1) ∪ · · · ∪ Var(’;m) and
+Var(’; ‘) = ∅ for every ‘6 m:
+The desired substitution S0 is de0ned by
+S0(v) =
+
+
+S(v) if v = Uvp and Uv ∈ Var(’; ‘);
+for some 06 ‘6 m with p ∈ paths(S(E-path( Uv; ’) ));
+{[ ]}(v) otherwise:
+It is clear that Dom(S0) is 0nite. Moreover, for every v∈Var(’) with E-path(v; ’)= F˜ ,
+an easy induction on the length ‘¿0 of F˜ shows that:
+S(F˜v ) = S0(F˜v ) if v ∈ EVar;
+S(F˜v) = S0(F˜v) if v ∈ TVar:
+This implies that for every type context ’′ ∈T such that ’′[’1; : : : ; ’n] =’ for some
+’1; : : : ; ’n ∈T where n=# (’′)¿0, it is the case that S’′=S0’′. This last asser-
+tion is established by a straightforward induction on the size of the “initial frag-
+ment” ’′ of ’ (details of the induction omitted). A special case of ’′ is ’′=’
+with ’1 = · · · =’n= , which implies S’=S0’.
+4. Lambda-compatible beta-unication
+The problem of -uni0cation was introduced and shown undecidable by Kfoury in
+[14]. This section introduces -compatible -uni0cation, a restriction of -uni0cation,
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 27
+in order to develop a principality property and in preparation for a uni0cation algorithm
+presented in Section 5.
+Denition 4.1 (Positive and Negative Types). We identify two proper subsets R and
+S of T, which we call the “positive types” and the “negative types”, respectively. We
+0rst de0ne R and S with polarities inserted, as R˜ and S˜, de0ned simultaneously with
+R˜→ and S˜→, together with metavariables over these sets, as follows:
+U, ∈ R˜→ ::= + | ( → U,)
+, ∈ R˜ ::= U, | (+F U,)
+U ∈ S˜→ ::= S˜→ ::= − | (+F U,→ U)
+ ∈ S˜ ::= U | ( ∧ ′)|(−F):
+We obtain R→ and R from R˜→ and R˜, respectively, by omitting all polarities. Similarly
+we obtain S→ and S from S˜→ and S˜. Let U,, ,, U, and  also range over R→, R,
+S→, and S, respectively.
+Note that there is a restriction that exactly one E-variable occurs in each positive
+position to the left of “→”, and “∧” occurs only in negative positions. Note also that
+the metavariables U, and U are restricted to the subsets R→ and S→, respectively.
+If ,∈R (resp. ∈S), there is exactly one way of inserting polarities in , (resp. )
+so that the resulting type ,′ (resp. ′) with polarities is in R˜ (resp. S˜). Let (,)+ ∈ R˜
+(resp. ()− ∈ S˜) be the uniquely de0ned expression obtained by inserting polarities in
+,∈R (resp. ∈S). We thus have two well-de0ned functions: ( )+ from R to R˜ and
+( )− from S to S˜.
+Denition 4.2 (Well-named constraint sets). A constraint is an equation of the form
+ := ′ where ; ′ ∈T. An instance 7 of -uni0cation is a 0nite set of constraints, i.e.,
+7 = {1 := ′1; 2 := ′2; : : : ; n := ′n}:
+We write EVar(7) for the set EVar(1 ∧ · · · ∧ ′n), TVar(7) for the set TVar(1 ∧ · · · ∧
+′n) and Var(7) for their disjoint union EVar(7)∪ TVar(7).
+The above constraint set 7 is said to be well named iP the type 1 ∧ ′1 ∧ · · · ∧ n ∧ ′n
+is well named. Given an arbitrary sequence of E-variables F˜ ∈ EVar∗, we write F˜7 to
+denote the constraint set:
+F˜7 = {F˜ := F˜′ |  := ′ is a constraint in 7}:
+We write F˜( := ′) to stand for the constraint F˜  := F˜ ′.
+Denition 4.3 (Good constraints). From now on, all generated constraints will be in
+one of the three forms:
+(a) F˜ ( U, := U) where Var( U,)∩Var( U)= ∅.
+(b) F˜ (G U, := ) where Var(G U,)∩Var()= ∅.
+(c) F˜ (e[ U,1; : : : ; U,n]
+:= e[ U1; : : : ; Un]) where e= e1 ∧ e2 and
+Var( U,1 ∧ · · · ∧ U,n)∩Var( U1 ∧ · · · ∧ Un)= ∅.
+28 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+In form (c), we impose the restriction e= e1 ∧ e2 in order to make (c) disjoint from
+(a). In this way, the three forms are mutually exclusive.
+We say a constraint is a good constraint if it is in one of the three forms above.
+Observe the polarities of types in good constraints: always positive to the left, always
+negative to the right, of the symbol “ :=”.
+For precise statement of concepts and results later, it is convenient to consider an
+additional form, of which (a) and (b), but not (c), are special cases. This additional
+form is
+(d) F˜(, := ) where there is no G ∈ EVar such that ,=G U, and =G′.
+In form (d), there are constraints which are not good; this happens when Var(,)∩
+Var() = ∅ and=or when ,∈R→ and ∈S− S→.
+Denition 4.4 (Outer and Inner Variable Occurrences). In a constraint in one of the
+forms speci0ed in De0nition 4.3, an E-variable H is said to have an outer occurrence
+if it occurs in F˜ in form (a), in form (b) and in form (d), or if it occurs in F˜ e in
+form (c). An occurrence of H which is not outer is said to be an inner occurrence.
+In words, an “outer” occurrence appears on both sides of the constraint and at the top
+level. Occurrences of T -variables are always inner; only occurrences of E-variables are
+diPerentiated between outer and inner.
+Let 7 be a 0nite set of such constraints. We say H ∈ EVar has an outer (resp. inner)
+occurrence in 7 if H has an outer (resp. inner) occurrence in a constraint in 7.
+The de0nition of “outer” and “inner” occurrences of E-variables carries over, in the
+obvious way, when polarities are inserted in constraints. Thus, in each of the forms in
+De0nition 4.3:
+(a) F˜ (( U,)+ :=( U)−).
+(b) F˜ (+G ( U,)+ :=()−).
+(c) F˜ (e[( U,1)
++; : : : ; ( U,n)
++] := e[( U1)−; : : : ; ( Un)−]).
+(d) F˜ ((,)+ :=()−).
+No polarities are inserted in the outer F˜ . Only inner occurrences are said to be positive
+or negative.
+Lemma 4.5 (Simpli0cation preserves good constraints). Let 7 be a :nite set of good
+constraints.
+1. Applying the function simplify( ) de:ned in Fig. 4 to 7, we obtain a :nite set
+simplify(7) of good constraints, each of which is in one of the following forms:
+(a.1) F˜ ( := U),
+(a.2) F˜ ( U, := ),
+(b) F˜ (G U, := ).
+Form (b) here is identical to form (b) in De:nition 4.3; forms (a.1) and (a.2) are
+special cases of form (a) in De:nition 4.3.
+2. The set of inner (resp. outer) variable occurrences in simplify(7) is a subset of
+the set of inner (resp. outer) variable occurrences in 7.
+It is worth noticing that part 1 of this lemma implies that every constraint in the
+result of simplifying a set of good constraints matches one of the rewrite rules in
+algorithm Unify given in Fig. 5.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 29
+Applying simplify( ) to constraint sets:
+• simplify(∅)= ∅.
+• simplify({ := ′}∪7)= simplify( := ′)∪ simplify(7).
+• simplify( := ′)=
+
+
+F simplify(1
+:= ′1) if =F1 and 
+′ =F′1;
+simplify(′1
+:= 1)∪ simplify(2 := ′2) if = 1→ 2 and ′ = ′1→ ′2;
+simplify(1
+:= ′1)∪ simplify(2 := ′2) if = 1 ∧ 2 and ′ = ′1 ∧ ′2;
+∅ if = ′;
+{ := ′} otherwise:
+Fig. 4. The function simplify( ).
+Metavariable conventions:
+• U,∈R→, ,∈R, U; Ui ∈S→, ∈S, ; ′ ∈T, e∈ E, ∈ TVar, F ∈ EVar.
+Mode of operation:
+• Initial call: Unify(7)⇒ Unify(simplify(7); {[ ]}; E-env(7)).
+• Final call: Unify(∅;S;E)⇒S.
+• Unify(70;S0;E)⇒ Unify(71;S1;E), provided:
+– 70 =7∪ F˜{, := } and , := ⇒S is an instance of one of the rewrite rules.
+– 71 = simplify(S70) and S1 =S⊗E S0.
+Rewrite rules:
+ := U ⇒ {[ := U]} (rule 1)
+U, :=  ⇒ {[ := U,]} (rule 2)
+F U, := e[ U1; : : : ; Un] ⇒ {[F := e]} (rule 3)
+Applying substitutions to constraint sets:
+• S∅= ∅.
+• S({ := ′}∪7)= {S :=S′}∪S7.
+Fig. 5. Algorithm Unify (the function simplify( ) is de0ned in Fig. 4).
+Proof. De0ne the operation simplify1( ) on constraint sets by:
+simplify1(∅) = ∅;
+simplify1({ := ′} ∪ 7) = simplify1( := ′) ∪ simplify1(7);
+simplify1(
+:= ′) =
+
+
+F simplify1(1
+:= ′1) if  = F1 and 
+′ = F′1;
+{′1 := 1; 2 := ′2} if  = 1 → 2 and ′ = ′1 → ′2;
+{1 := ′1; 2 := ′2} if  = 1 ∧ 2 and ′ = ′1 ∧ ′2;
+∅ if  = ′ = ;
+{ := ′} otherwise:
+In contrast to simplify( ), simplify1( ) takes apart the arguments of a topmost occur-
+rence only of a type constructor, → or ∧, appearing symmetrically on both sides of
+30 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+the same constraint. This is why the side condition in the 4th case above is = ′= 
+rather than = ′. With the side condition = ′ instead, simplify1( ) would not be
+well-de0ned as a function; for example, it would make simplify1(1→ 2 := 1→ 2)
+equal to both {1 := 1; 2 :=2} and ∅. This is not a problem with the de0nition of
+simplify( ).
+If 7 is a 0nite set of good constraints, simplify(7) is obtained by applying simplify1
+( ) to 7 repeatedly. Because 7 is a 0nite set and each of its types has 0nite size,
+this process is bound to terminate, producing a constraint set 7′ such that
+simplify1(7
+′)=7′.
+Let 7 be a 0nite set of good constraints. Each constraint in 7 is in form (a) or form
+(b) or form (c), as described in De0nition 4.3. We further classify these three forms
+into 0ve forms as follows:
+(a.1) F˜ ( := U),
+(a.2) F˜ ( U, := ),
+(a.3) F˜ (→ U, :=G U,′→ U),
+(b) F˜ (G U, := ),
+(c) F˜ (e[ U,1; : : : ; U,n]
+:= e[ U1; : : : ; Un]) where e= e1 ∧ e2.
+Forms (a.1), (a.2), and (a.3) completely classi0es form (a); forms (a.1) and (a.2) have
+the special case F˜( := ′) in common, where ; ′ ∈ TVar. The action of simplify1( )
+in the 0ve cases is:
+(a.1) simplify1(F˜ (
+:= U))= {F˜ ( := U)},
+(a.2) simplify1(F˜ ( U,
+:= ))= {F˜ ( U, := )},
+(a.3) simplify1(F˜ (→ U, :=G U,′→ U))= {F˜ ( U, := U); F˜ (G U,′ := )},
+(b) simplify1(F˜ (G U,
+:= ))= {F˜ (G U, := )},
+(c) simplify1(F˜ (e[ U,1; : : : ; U,n]
+:= e[ U1; : : : ; Un]))
+= {F˜ (e1[ U,1; : : : ; U,m] := e1[ U1; : : : ; Um]); F˜ (e2[ U,m+1; : : : ; U,n] := e2[ Um+1; : : : ; Un])},
+where, in (c), we take e= e1 ∧ e2 with 16# (e1)=m¡n and # (e2)= n−m¿1. Thus,
+only forms (a.3) and (c) are split by simplify1( ) into two other smaller constraints.
+Hence, the process of applying simplify1( ) repeatedly stops when there are no con-
+straints left that are in form (a.3) or in form (c). Hence, in a good constraint set 7′
+such that simplify1(7
+′)=7′, every constraint is in form (a.1) or form (a.2) or form
+(b). This proves part 1 of the lemma.
+For part 2 of the lemma, it suQces to show that, given a 0nite set 7 of good con-
+straints, the set of inner (resp. outer) variable occurrences in simplify1(7) is a subset
+of the set of inner (resp. outer) variable occurrences in 7. This is a straightforward case
+analysis, by inspecting each of the forms (a.1), (a.2), (a.3), (b),
+and (c).
+Denition 4.6 (Links and graphs). Let v; w∈Var. A link (from v to w) is the pair of
+v and w written in the form vyw. Let 7 be a set of good constraints. The graph of
+7 is a 0nite set of links.
+First consider a set 7 consisting of a single good constraint F˜( U, := U) of form (a)
+as speci0ed in De0nition 4.3. In general, U, and U are of the following forms:
+U, = 1 → · · · → m →  and U = ,1 → · · · → ,n → 
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 31
+for some 1; : : : ; m ∈S and ,1; : : : ; ,n ∈R− R→, with m; n¿0, and some ; ∈ TVar.
+We de0ne:
+graph(7) =
+
+
+{y } if m = n;
+{y w |w ∈ Var(,m+1 → · · · → ,n → )
+and E-path(w; 7) = F˜} if m ¡ n;
+{vy  | v ∈ Var(n+1 → · · · → m → )
+and E-path(v; 7) = F˜} if m ¿ n:
+For an arbitrary set 7 of good constraints, we de0ne the graph of 7 as:
+graph(7) =
+⋃{graph(F˜{ U, := U}) | F˜{ U, := U} ⊆ 7}:
+If there are no good constraints in 7 of form (a), then graph(7)= ∅. (Strictly speaking,
+if we take Var(7) as the set of nodes in the graph of 7, then graph(7)= ∅ means that
+all the nodes in the graph of 7 are isolated, not that there are no nodes in the graph.)
+It is important to note that if vyw is a link in graph(7), then E-path(v; 7)= E-path
+(w; 7): There are no links between variables that have diPerent E-paths. For every
+F˜ ∈ EVar∗, we de0ne graph(7)=F˜ as
+graph(7)=F˜ = {vy w | E-path(v; 7) = E-path(w; 7) = F˜ and vy7 w};
+where we write vy7 w as a shorthand for “vyw is a link in graph(7)”.
+Example 4.7 (y-Chains). Consider the following set 7 of good constraints, all of form
+(a) in De0nition 4.3:
+7 = {1 := F1 U,1 → 1; F11 → 1 := 2; 2 := F2 U,2 → 2; F22 → 2 := 3};
+for some U,1; U,2 ∈R→ and 1; 2 ∈S. Suppose all the variables in {1; 2; 3; 1; 2;
+F1; F2} are pairwise distinct. There are exactly eight links in graph(7), namely
+(separated by blank space for clarity):
+1 y F1 1 y 1 F1 y 2 1 y 2 2 y F2 2 y 2
+F2 y 3 2 y 3:
+A graphic representation of graph(7) is
+For the 7 under consideration, graph(7) is acyclic. Changing, say, 3 to 1 introduces
+cycles, which violates condition (D) for -compatibility below. An instance of a
+32 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+y-chain in graph(7) (read as “link-chain” or as “chain in graph(7)”, trying to avoid
+the overloaded word “path” in this paper) is
+1 y F1 y 2 y 2 y 3:
+This is one of four possible y-chains in graph(7) of maximal length. When graph(7)
+is acyclic, all the variables appearing along a y-chain are guaranteed to be pairwise
+distinct.
+Denition 4.8 (-Compatibility). A constraint set 7 is -compatible iP 7 is 0nite of
+the form:
+7 = {F˜1(,1 := 1); : : : ; F˜n(,n := n)}
+where F˜i(,i
+:= i) is a good constraint of form (a) or form (b) as speci0ed in De0ni-
+tion 4.3, for every 16i6n, and moreover 7 satis0es all of the following conditions:
+(A) 7 is well named.
+(B) Every expansion variable F ∈ EVar has at most one inner positive occurrence in 7,
+i.e., +F occurs at most once in ±7, where ±7 is obtained by inserting polarities
+in 7:
+±7 = {F˜1((,1)+ := (1)−); : : : ; F˜n((,n)+ := (n)−)}:
+(C) Every type variable ∈ TVar occurs at most twice in 7. And if it occurs twice,
+it occurs once positively as + and once negatively as − in the constraint set
+±7.
+(D) graph(7) is acyclic.
+We use the name “-compatible” because, as shown in Lemma 6.2, every constraint
+set induced by a -term satis0es the conditions above.
+Remark 4.9. Condition (D) in De0nition 4.8 is the least transparent and plays a role
+in the proof of Lemma 5.7 only: It imposes a technical restriction on a constraint set
+7, whose sole purpose is to guarantee “Var(,)∩Var()= ∅ for every F˜(, := )∈7” is
+an invariant of algorithm Unify developed in Section 5. The requirement that Var(,)∩
+Var()= ∅ for every F˜(, := )∈7 is not strong enough by itself to be preserved by
+every rewrite step of the algorithm.
+Example 4.10 (Why condition (D) is included). Consider the following set 7 of con-
+straints:
+7 = { := F → U; F → U, := };
+where U∈S→ and U,∈R→, with Var( U,)∩Var( U)= ∅ and Var( U,∧ U)∩{; ; F}= ∅.
+Then 7 is a set of good constraints, all of form (a) as speci0ed in De0nition 4.3. We
+can choose U and U, so that conditions (A)–(C) in De0nition 4.8 are satis0ed. However,
+it is easy to see that no choice of U and U, will satisfy (D), because graph(7) always
+includes the y-chain yFy  which is a cycle.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 33
+Algorithm Unify in Section 5 will substitute the type F→ U for  in the second
+constraint, or the type F→ U, for  in the 0rst constraint, producing the same constraint
+set 7′ in both cases, namely:
+7′ = {F → U, := F → U};
+which still satis0es (A)–(C), but not (D) again, as FyF is a cycle (a self-loop in
+this case). The resulting constraint in 7′ is not good.
+Lemma 4.11 (Simpli0cation preserves -compatibility). If 7 is a -compatible
+constraint set, then so is simplify(7).
+Proof. Because 70 =7 is -compatible, every constraint in 70 is a good constraint
+of form (a) or form (b). By Lemma 4.5, all the constraints in simplify(70) are good
+constraints of form (a.1) or (a.2) or (b). We next show that simplify(70) satis0es
+conditions (A)–(D), in De0nition 4.8. It suQces to show that simplify1(70) satis0es
+(A)–(D), where simplify1( ) is the function de0ned in the proof of Lemma 4.5.
+Following the case analysis in the proof of Lemma 4.5, every constraint in 70 is
+a good constraint of form (a.1), or form (a.2), or form (a.3), or form (b), but not
+of form (c), because 70 is a -compatible (and not only good) constraint set. 3 If
+70 satis0es conditions (A)–(C), then it is immediate that simplify1(70) also satis0es
+(A)–(C).
+It remains to check that simplify1(70) satis0es (D). Assume that simplify1(70) =70,
+otherwise there is nothing to prove. There is exactly one constraint in 70, namely, a
+good constraint of form (a.3), which is split into two constraints, in order to produce
+simplify1(70). Suppose simplify1(70)=71 and
+70 =7 ∪ {F˜( → U, := G U,′ → U)} and
+71 =7 ∪ {F˜( U, := U); F˜(G U,′ := )};
+for some set 7 of good constraints. We need to check that graph(71) is acyclic.
+But this is an immediate consequence of two facts: graph(71)= graph(70) and, by
+hypothesis, graph(70) is acyclic.
+Denition 4.12 (Solutions). Let S :Var→(E∪T→) be a substitution and let 7= {1:= ′1; : : : ; n := ′n} be a -compatible constraint set. We say S is a solution for 7 iP
+Si =S′i for every i∈{1; : : : ; n}.
+Denition 4.13 (Principal solutions). Let S :Var→ (E∪T→) be a substitution and let
+7 be a -compatible constraint set. The substitution S is a principal solution for 7 iP
+3 Starting from a -compatible constraint set 7, which does not include good constraints of form (c),
+algorithm Unify developed in Section 5 applied to 7 may generate good constraints of form (c), in addition
+to form (a) and form (b).
+34 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+S is a solution for 7 and for every solution S′ for 7, there is a substitution S′′ such
+that S′7=S′′(S7). 4 The principality property is the existence of a principal solution
+for every constraint set that has a solution.
+5. Algorithm for lambda-compatible beta-unication
+We design a non-deterministic algorithm Unify which takes a -compatible con-
+straint set 7 as input, such that if 7 has a solution then every evaluation of Unify(7)
+terminates returning a principal solution for 7, and if 7 has no solution then every
+evaluation of Unify(7) diverges.
+Denition 5.1 (Uni0cation algorithm). The operation of Unify is based on the rewrite
+rules shown in Fig. 5. The presentation of Unify in Fig. 5 is self-contained—except
+for two parts in the “mode of operation”, namely, the de0nition of E-env(7) and the
+evaluation of S1 =S⊗E S0. If 7 is the well-named constraint set {1 := ′1; : : : ; n := ′n},
+then the E-path environment of 7 is the E-path environment of the type 1 ∧ ′1 ∧ · · · ∧
+n ∧ ′n (see De0nition 3.11), i.e.,
+E-env(7) = E-env(1 ∧ ′1 ∧ · · · ∧ n ∧ ′n):
+If E is an E-path environment, the evaluation of S1 =S⊗E S0 is given in De0ni-
+tion 3.13.
+Remark 5.2. A rewrite step induced by rules 1 or 2 in Fig. 5 produces, from a given
+-compatible 70, another -compatible constraint set simplify(S70). In fact, ignor-
+ing trivial constraints of the form  :=  (same type  on both sides) and before ap-
+plying simplify( ) to it, S70 is already -compatible. These assertions follow from
+Lemmas 4.11 and 5.7 and their proofs.
+By contrast, a rewrite step induced by rule 3 in Fig. 5 produces a constraint set
+simplify(S70) which is -compatible provided 70 is, according to Lemma 5.7, whereas
+S70 is not in general. That S70 is not necessarily -compatible in this case results from
+the (non-interesting) fact that a constraint of the form {e[ U,1; : : : ; U,n] := e[ U1; : : : ; Un]}
+where n¿2, which is good of form (c) in De0nition 4.3, cannot be -compatible yet;
+it must be 0rst broken up into
+{F˜1( U,1 := U1); : : : ; F˜n( U,n := Un)}
+using simplify( ), where F˜i = E-path( (i); e) for 16i6n.
+We next prove several lemmas, culminating in the main result of this section
+(Theorem 5.16). On the way, there are four key intermediary results: Unify preserves
+-compatibility (Lemma 5.7); Unify preserves solvability (Lemma 5.11); if there is a
+solution, Unify constructs a principal one (Lemma 5.12); and if there is a solution,
+4 We purposely write S′7=S′′(S7) instead of S′ =S′′ ◦S in order to avoid pitfalls associated with the
+composition of substitutions in -uni0cation. These are carefully examined in Section 3.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 35
+Unify terminates (Lemma 5.15). The remaining lemmas and de0nitions provide the
+necessary supporting material.
+Lemmas 5.3 and 5.5, are used in the proof of the 0rst key result in Lemma 5.7:
+-compatibility is an invariant of algorithm Unify.
+Lemma 5.3 (A property of positive and negative types). Let R= {,1; : : : ; ,m}⊂R −
+R→ and let S = { U1; : : : ; Un}⊂S→, with m¿1 and n¿1. De:ne the type:
+ = (,1 → · · · → ,m → ) ∧ U1 ∧ · · · ∧ Un;
+where  is a fresh T-variable. 5 Suppose  satis:es:
+1.  is well-named.
+2. Every F ∈ EVar() has at most one positive occurrence in .
+3. Every ∈ Tvar() has at most one negative occurrence in .
+Then, for every ; ′ ∈R∪ S such that  = ′, it holds that Var()∩Var(′)= ∅.
+Observe the two 0rst conditions above correspond to (A) and (B) in De0nition 4.8,
+while the third condition is a weaker version of (C) in De0nition 4.8.
+Proof. This is a straightforward proof. The details can be found in the technical
+report [17].
+Example 5.4 (Links With Polarities). Consider the constraint set 7 in Example 4.7,
+now with polarities inserted:
+±7= {+1 := +F1( U,1)+ → −1; −F1(1)− → +1 := −2;
++ 2
+:= +F2( U,2)
++ → −2; −F2(2)− → +2 := −3}:
+With polarities inserted, the eight links of graph(±7) are:
++1 y +F1; +1 y −1; −F1 y −2; +1 y −2;
++2 y +F2; +2 y −2; −F2 y −3; +2 y −3:
+There is a pattern here, which is proved in general in the next lemma: To the right of
+“y” it is always either a positive occurrence of an E-variable or a negative occurrence
+of a T -variable.
+It is possible to specify rules to connect together links with polarities, in order to
+produce y-chains with polarities. But this is a little awkward and there is no real need
+for it.
+Lemma 5.5 (A property of links). Let 7 be a -compatible constraint set, and ±7
+the corresponding set with polarities inserted. Then:
+1. Every link in graph(±7) is in one of two possible forms:
+• either “p vy+G” where v∈Var(7) with p∈{+;−} and G ∈ EVar(7),
+5 By De0nition 4.1, the type  thus de0ned is indeed a negative type, allowing us to use the letter “”
+to denote it.
+36 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+• or “p vy−” where v∈Var(7) with p∈{+;−} and ∈ TVar(7).
+In words, the right end-point of a link with polarities is either a positive occurrence
+of an E-variable or a negative occurrence of a T-variable.
+2. For every w∈Var(7) there is at most one good constraint F˜( U, := U) of form (a)
+in 7 such that
+{vy w | vy7 w} = {vy w | vy UF{ U, := U} w};
+i.e., all the links into w are contributed by at most one good constraint of form
+(a) in 7.
+Proof. Links are induced by good constraints of form (a) as speci0ed in De0nition 4.3.
+Consider such a constraint F˜( U, := U). In general, U, and U are of the following forms:
+U, = 1 → · · · → m →  and U = G1 U,1 → · · · → Gn U,n → 
+where 1; : : : ; m ∈S and U,1; : : : ; U,n ∈ R→, with m; n¿0, and ; ∈ TVar and G1; : : : ; Gn
+∈ EVar. Inserting polarities, we obtain
+( U,)+ = (1)− → · · · → (m)− → + and
+( U)− =+G1( U,1)
++ → · · · → +Gn(,n)+ → −:
+Following De0nition 4.6, the conclusion of part 1 of the lemma is now immediate.
+Part 2 follows from the fact that, in a -compatible constraint set 7, every G ∈
+EVar(7) has at most one inner positive occurrence, and every ∈ TVar(7) has at most
+one inner negative occurrence.
+Remark 5.6. The dual statement of part 2 in Lemma 5.5, namely, for every v∈Var(7)
+all the links out from v are contributed by at most one good constraint of form (a) in
+7, is generally false. For a counter-example, consider the constraint set:
+7 = {F →  := ′; F′ → ′ := ′′}
+for some appropriate ; ′ ∈S that make Y-compatible. The links Fy7 ′ and Fy7
+′′, both out from F , are contributed by two diPerent constraints in 7.
+Lemma 5.7 (‘Unify’ preserves -compatibility). Let 70 and 71 be constraint sets such
+that
+Unify(70;S0;E)⇒ Unify(71;S1;E)
+for some S0;S1 and E (which do not matter here). If 70 is -compatible such that
+simplify(70)=70, then 71 is -compatible. In words, the properties listed in De:ni-
+tion 4.8 are invariant relative to the rewrite rules of Unify.
+Proof. 71 is obtained from 70 according to one of the three rules in Fig. 5. We
+consider each of the three rules separately. In each of the three cases, a formal proof
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 37
+requires an induction on types, which we avoid because it is a routine uninteresting
+induction that obscures the underlying argument.
+Rule 1: The constraint under consideration is F˜( := U). There are two subcases,
+depending on whether  occurs exactly twice or exactly once in 70. We omit the latter
+subcase, which is trivial, and assume that  occurs exactly twice. Thus, given that 
+has a single positive occurrence in F˜( := U), we assume that  has a single negative
+occurrence in 70. Let G˜(,
+:= ) be the only constraint other than F˜( := U) in 70 that
+mentions . We thus have
+70 =7 ∪ F˜{ := U} ∪ G˜{, := };
+71 = simplify(7 ∪ {[ := U]}{G˜(, := )})
+= simplify(7) ∪ simplify({[ := U]}{G˜(, := )})
+=7 ∪ simplify({[ := U]}{G˜(, := )});
+where 7 is the subset of all constraints of 70 that do not mention . Let 7ˆ1 =7∪
+{[ := U]} {G˜(, := )}, so that 71 = simplify(7ˆ1). By Lemma 4.11, it suQces to show
+that 7ˆ1 is -compatible. This means we have to show that all the constraints in 7ˆ1 are
+good of form (a) or (b) and that 7ˆ1 satis0es conditions (A)–(D) in De0nition 4.8. It
+is convenient to organize the proof by 0rst showing (1) and (2) below, simultaneously
+with the fact that 7ˆ1 satis0es (D):
+(1) If ∈ TVar(,), then Var( U)∩Var()= ∅.
+(2) If ∈ TVar(), then Var( U)∩Var(,)= ∅.
+Because 70 satis0es condition (A) in De0nition 4.8, it must be that G˜ is a pre0x of
+F˜ . There are two cases, depending on whether G˜ is a proper pre0x of F˜ or not.
+Case 1: G˜ is a proper pre0x of F˜ , i.e., F˜ = G˜H˜ for some H˜ = ”. If ∈ TVar(,), then
+every E-variable in H˜ has an inner occurrence in , (because 70 is well-named), which
+implies every E-variable in H˜ has no inner occurrence in  (because Var(,)∩Var()
+= ∅), which implies Var( U)∩Var()= ∅, thus proving (1) above. By a totally similar
+argument, if ∈ TVar() then Var( U)∩Var(,)= ∅, thus proving (2).
+We next relate graph(7ˆ1) and graph(70). The set of nodes of graph(7ˆ1) is
+Var(70)− {}, and the set of its links is:
+graph(7ˆ1) = {vy w|vy70 w and v = };
+i.e., graph(7ˆ1) is a proper subset of graph(70). Because graph(70) is acyclic, so is
+graph(7ˆ1), thus proving that 7ˆ1 satis0es (D).
+Case 2: F˜ = G˜. Then F˜{ := U; , := }⊆70. In general, U is of the form
+U = ,1 → · · · → ,n → 
+for some ,1; : : : ; ,n ∈R − R→ and ∈ TVar with n¿0. We have y v for every
+v∈Var( U) such that E-path(v; 70)= F˜ , according to De0nition 4.6. Because simplify
+(70)=70, every constraint in 70 is a good constraint of form (a.1) or (a.2) or (b),
+by Lemma 4.5. There are three subcases, depending on whether F˜(, := ) is of one of
+these three forms.
+38 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+Subcase 2.1: F˜(, := ) is of form (a:1), i.e., ,= ′ ∈ TVar and ∈S→. Because
+70 satis0es (C), it must be that  = ′, thus proving (1) vacuously, i.e., it cannot
+be that ∈ TVar(,). By De0nition 4.6, we have ′y v′ for every v′ ∈Var() such
+that E-path(v′; 70)= F˜ . If ∈ TVar(), we have ′y  and, as noted in the preceding
+paragraph, y v for every v∈Var( U) such that E-path(v; 70)= F˜ . Because 70 satis0es
+(D), it must be that ′ = v for every v∈ TVar( U), thus proving (2).
+We relate graph(7ˆ1) and graph(70) in this subcase as follows. The set of nodes of
+graph(7ˆ1) are all the variables in Var(70)− {}, and the set of its links is
+graph(7ˆ1) = {vy w | vy70 w and v = } ∪ {′ y w | y70 w}:
+In the second part of this union, we replace a link y w in graph(70) by the link
+′y w, for every w∈Var( U) with E-path(w; 70)= F˜ . Because graph(70) is acyclic
+and ′y70 , it now follows that graph(7ˆ1) is acyclic, thus proving that 7ˆ1 satis0es
+(D).
+Subcase 2.2: F˜(, := ) is of form (a.2), i.e., = ′ ∈ TVar and ,∈R→. Because
+70 satis0es (C), it must be that ′ =  (no two negative occurrences of the same
+T -variable). Because 70 satis0es (A) and is therefore well-named, it must be that
+′ =∈ TVar(,i) for every 16i6n. Hence, ′ =∈ TVar( U) which is the same as Var()∩
+Var( U)= ∅, thus proving (1). If ∈ TVar(), then necessarily = ′. Hence v′y ′= 
+for every v′ ∈Var(,) such that E-path(v′; 70)= F˜ , by De0nition 4.6. Because 70 satis-
+0es (D), together with the fact that y v for every v∈Var( U) such that E-path(v; 70)=
+F˜ , we have Var(,)∩Var( U)= ∅, thus proving (2).
+We relate graph(7ˆ1) and graph(70) in this subcase as follows. The set of nodes of
+graph(7ˆ1) are all the variables in Var(70)− {}. If ∈ TVar(,) and ′ = , then
+graph(7ˆ1) = {vy w | vy70 w and v = } ∪ {w y ′ | y70 w}:
+In the second part of this union, we replace a link y w in graph(70) by the link
+wy ′, for every w∈Var( U) with E-path(w; 70)= F˜ . By part 2 of Lemma 5.5, there
+are no links of the form vy w where v =  and w∈Var( U), i.e., deleting the node
+ in graph(70) turns every such w into an isolated node or a “source” node in this
+case. Hence, although the direction of the link y w is reversed to wy ′, no cycle
+is introduced as a result. Together with the acyclicity of graph(70), this implies that
+graph(7ˆ1) is acyclic, thus proving that 7ˆ1 satis0es (D). If  =∈ TVar(,) and ′= , then
+graph(7ˆ1) = {vy w | vy70 w with v =  and w = }
+∪ {vy w | vy70  and y70 w}:
+This immediately implies that, if graph(70) is acyclic, then so is graph(7ˆ1), thus
+proving that 7ˆ1 satis0es (D) again.
+Subcase 2.3: F˜(, := ) is of form (b), i.e., ,=H U,′ for some H ∈ EVar and U,′ ∈ R→,
+and = e[ U1; : : : ; Un] for some e∈ E and U1; : : : ; Un ∈ S→ with n=# (e). Because 70
+is well-named, it must be  =∈ TVar(,) and, therefore, ∈ TVar(). By Lemma 5.3, it
+must be Var(,)∩Var( U)= ∅, thus proving both (1) and (2).
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 39
+We relate graph(7ˆ1) and graph(70) as follows. The set of nodes of graph(7ˆ1) is
+Var(70)− {}, and the set of its links is:
+graph(7ˆ1) = {vy w | vy70 w and v = }:
+In words, to obtain graph(7ˆ1), we eliminate all links in graph(70) of the form y w.
+Because graph(70) is acyclic, so is graph(7ˆ1), thus proving that 7ˆ1 satis0es (D).
+We have thus completed the proof that (1) and (2) are true, and that 7ˆ1 satis0es
+condition (D), in all cases and subcases. 6
+Using the fact that  occurs either in , or in , we conclude that Var({[ := U]} ,)∩
+Var({[ := U]} )= ∅, from (1.1) and (1.2). This in turn implies {[ := U]} {G˜(, := )}
+is a good constraint of form (a) or (b), depending on whether G˜(, := ) is good of
+form (a) or (b), respectively. It follows that every constraint in 7ˆ1 is a good constraint
+of form (a) or (b).
+We next proceed to show that 7ˆ1 satis0es conditions (A)–(C) in De0nition 4.8.
+Because E-path(; 70)= E-path(; 7ˆ1), it is readily checked that if 70 satis0es condi-
+tions (A) and (C), then so does 7ˆ1. What makes things work as expected is that we
+substitute a negative type U for a negative occurrence of . If 70 satis0es condition
+(B), then so does 7ˆ1 trivially.
+Rule 2: This is symmetric to rule 1, i.e., the diPerence between rules 1 and 2 are the
+reversed polarities, and is therefore omitted. (In fact, the proof for rule 2 is somewhat
+easier, because we can here merge the counterparts of subcases 2.1 and 2.2 into a
+single subcase, which occurs when F˜{ U, := ; , := }⊆70 and (, := ) is of form (a),
+with no need to deal with forms (a.1) and (a.2) separately. This is because the positive
+occurrence of  here always occurs in ,, never in ; by contrast, for rule 1, when
+F˜{ := U; , := }⊆70, the negative occurrence of  may occur in , just as in . As a
+result also, in the proof for rule 2, we do not need to invoke Lemma 5.5.)
+Rule 3: Let 70 =7∪ G˜{F U, := e[ U1; : : : ; Un]}, where the constraint F U, := e[ U1; : : : ; Un]
+induces a rewrite step according to rule 3. 70 is transformed to 71 = simplify(7ˆ1)
+where
+7ˆ1 = {[F := e]}7 ∪ G˜{e[〈 U,〉s1 ; : : : ; 〈 U,〉sn ] := e[ U1; : : : ; Un]}
+where si = path( (i); e) for every 16i6n. Note that 7ˆ1 is not necessarily in the form
+required by De0nition 4.8, because 7ˆ1 may contain good constraints of form (c) as
+speci0ed in De0nition 4.3. However, by Lemma 4.5, 71 = simplify(7ˆ1) is in the re-
+quired form for -compatibility, i.e., it consists of good constraints all of form (a) or
+form (b).
+Consider a T -variable or E-variable v∈Var(70) such that F occurs in E-path(v; 70).
+Because 70 is well-named, it must be that E-path(v; 70)= G˜FH˜ for some H˜ ∈ EVar∗.
+6 In only two places so far, do we need to invoke condition (D), i.e., that graph(70) is acyclic, in order
+to prove (1) and (2), which are next used to show good constraints are preserved by the rewrite rules; these
+two places are subcases 2.1 and 2.2. There is one more place, in the part of the proof for rule 2 below
+corresponding to subcases 2.1 and 2.2, where we need to invoke (D) again. Nowhere else, in the present
+proof or elsewhere in this paper, do we need to invoke condition (D) in an induction to prove a property
+other than itself. But, of course, we also have to show that (D) itself is initially satis0ed, which is shown
+in the proof of Lemma 6.2, and preserved by all the rewrite rules, which is shown in the present proof.
+40 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+Because every constraint in 70 is good, it must be that F =∈ EVar(e). It follows that
+EVar(H˜)∩ EVar(e)= ∅. Hence, substituting e for F produces a well-named 7ˆ1. Hence,
+71 is also well-named and, thus, satis0es condition (A) in De0nition 4.8.
+Because 70 satis0es condition (B) and (C) in De0nition 4.8, then so does 7ˆ1 triv-
+ially, again using the fact that 70 is well-named (use, in particular, condition 2 in
+De0nition 3.9). Thus, 71 satis0es conditions (B) and (C) in De0nition 4.8.
+It remains to show that 71 satis0es condition (D). For every 16i6n, let E-path( (i);
+e)= H˜ i for some H˜ i ∈ EVar∗. The following equality follows from the pertinent de0-
+nitions:
+graph(71)
+= {vy w | vy70 w with F =∈ E-path(v; 70) = E-path(w; 70)}
+∪{vs y ws | vy70 w with F ∈ E-path(v; 70) = E-path(w; 70)
+and s ∈ {s1; : : : ; sn}}
+∪
+(⋃{graph(G˜H˜ i{〈 U,〉si := Ui}) | 16 i 6 n}) :
+We have to show that graph(71) is acyclic. Given a y-chain C = v1y v2y · · ·y vm
+in graph(7) for some -compatible constraint set 7, it is meaningful to write E-path(C;
+7) because all the entries in C have the same E-path in 7. Given an oPset s∈{0; 1}∗,
+we write Cs to denote vs1y vs2y · · ·y vsm, which may or may not be a valid y-chain
+in graph(7).
+Consider an arbitrary y-chain C in graph(71). If E-path(C; 71)= L˜ =∈{G˜H˜ 1; : : : ;
+G˜H˜ n}, then C is acyclic, because either C is already a y-chain in graph(70) with
+E-path(C; 70)= L˜, or C =Cs0 for some y-chain C0 in graph(70) and s∈{0; 1}∗. In
+the latter situation, we have L˜= G˜H˜ i〈K˜〉s with K˜ = ” and s= si for some i∈{1; : : : ; n},
+and E-path(C0; 70)= G˜FK˜ which is mapped to E-path(C; 71)= G˜H˜ i〈K˜〉s after apply-
+ing the substitution {[F := e]}.
+The non-trivial case occurs when C =w1y71 w2y71 · · ·y71 wm such that E-path(C;
+71)= G˜H˜ i for some 16i6n. There are two cases, n=1 and n¿2. Consider the case
+n=1 0rst. In this case, e= H˜ for some H˜ ∈ EVar∗. By De0nition 4.6, X = graph(70)=
+G˜F and Y = graph(70)=G˜H˜ are disconnected components of graph(70), i.e., for every
+v; w∈Var(70) such that E-path(v; 70)= G˜F and E-path(v; 70)= G˜H˜ , we have v y w
+and w y v. In the case n=1, after substituting H˜ for F , the new constraint G˜H˜ ( U, := U)
+introduces links of the form vy w, all directed from component X to Y . Hence, X
+and Y are now part of the same component in graph(71), but still acyclic; as all the
+other components of graph(71) are components of graph(70) and therefore acyclic,
+graph(71) is acyclic.
+Consider the case n¿2 next. New links of the form vsi y71 w are introduced by
+every new constraint G˜H˜ i(〈 U,〉si := Ui) where si = ”, and v∈Var( U,) and w∈Var( U). In
+general, there is a 0xed i∈{1; : : : ; n} such that:
+C =w1 y71 · · ·y71 wk y71 wk+1 y71 · · ·y71 wk+‘ where
+− 06 k 6 m; 06 ‘6 m and k + ‘ = m;
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 41
+−w1 = vs1; : : : ; wk = vsk for some v1; : : : ; vk ∈ Var(70); with s = si = ”;
+−wk+1; : : : ; wk+‘ ∈ Var(70) ∩ Var(71):
+If ‘=0, i.e., C = vs1y71 · · ·y71 vsk , then by stripping the oPset s we obtain a y-
+chain C0 in graph(70), namely, C0 = v1y70 · · ·y70 vk . Because C0 is acyclic, so is
+C acyclic.
+If k =0, i.e., C =wk+1y71 · · ·y71 wk+‘, then C is already a y-chain in graph(70).
+Because graph(70) is acyclic, C is also acyclic.
+Suppose now k =0 = ‘. Neither of the two y-chains, vs1y71 · · ·y71 vsk and wk+1
+y71 · · ·y71 wk+‘, contains a cycle, for the same reasons given in the case ‘=0 and
+k =0, respectively. The two y-chains are connected by the link vsky71 wk+1 intro-
+duced by the constraint G˜H˜ i(〈 U,〉s := Ui). Because 70 is well-named, condition 1 in Def-
+inition 3.9 implies {v1; : : : ; vk}∩ {w1; : : : ; wk+‘}= ∅, and condition 2 in De0nition 3.9
+implies {vs1; : : : ; vsk}∩ {w1; : : : ; wk+‘}= ∅. Hence, C is acyclic.
+Lemma 5.8 (Progress). Let 70 be a -compatible constraint set such that simplify(70)
+=70. If 70 is not empty, then for every S and E
+1. Unify(70;S;E)⇒Unify(71; S˜⊗E S;E).
+for some 71 and S˜ (which do not matter here). Moreover, whenever part 1 holds
+for some 71 and S˜, it also holds that:
+2. If SE⊇ E-env(70) then (S˜⊗E S)E⊇ E-env(71).
+In words, part 1 says that 70 always contains a constraint that can be processed by
+one of the rewrite rules of Unify. Part 2 is another invariant property of Unify, which
+says that E-path environments are preserved in the process of rewriting constraint
+sets (how a substitution S is applied to an E-path environment E to obtain another
+E-path environment SE is given in De:nition 3.11).
+Proof. For part 1, we have in fact a stronger result: Every constraint in a -compatible
+constraint set 7 such that simplify(7)=7 can be processed by one of the rewrite rules.
+This is a consequence of Lemma 4.5: A good constraint of form (a.1) is processed by
+rule 1, a good constraint of form (a.2) is processed by rule 2, and a good constraint
+of form (b) is processed by rule 3.
+Part 2 follows from: the fact that 71 = simplify(S˜70) which implies E-env(71)⊆
+E-env(S˜70), the fact that (S˜ ⊗E S)E= S˜(SE) by Lemma 3.18, the hypothesis SE⊇
+E-env(70), and the de0nition of E-path environments (De0nition 3.11)—producing the
+following sequence of equalities and containments:
+(S˜⊗E S)E = S˜(SE) ⊇ S˜(E-env(70)) = E-env(S˜70) ⊇ E-env(71)
+which is the desired conclusion.
+Lemma 5.9 (‘simplify’ preserves solvability). Let 7 be a -compatible constraint set
+and let S be a substitution. Then:
+1. S is a solution for 7 i7 S is a solution for simplify(7).
+2. S is a principal solution for 7 i7 S is a principal solution for simplify(7).
+42 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+Proof. For part 1 of the lemma, it suQces to consider the case when 7 consists of a
+single constraint  := ′. Moreover, it suQces to show that S is a solution for 7 iP S is
+a solution for simplify1(7), where simplify1( ) is de0ned in the proof of Lemma 4.5.
+There are 0ve cases in the de0nition of simplify1( ). In the 4th case (when = 
+′)
+and 0fth case (when simplify1(7)=7), the desired conclusion is immediate.
+In the second case (when = 1→2 and ′= ′1→′2) and third case (when = 1 ∧ 2
+and ′= ′1 ∧ ′2), the desired conclusion follows from the way substitutions are lifted
+to types (De0nition 2.5).
+For the 1st case, suppose = F˜, and ′= F˜ with F˜ =” and Var(,) ∩ Var()= ∅.
+A straightforward computation shows that:
+simplify1(
+:= ′) = simplify1(F˜(,
+:= )) = F˜ simplify1(,
+:= ):
+There are diPerent subcases depending on the forms of , and . We consider only one
+of these subcases, namely, when ,= 1→,1 and = ,2→2; all other subcases are
+treated similarly. For this subcase, the desired conclusion follows from the fact that S
+is a solution for F˜(, := ) iP S is a solution for {F˜(,1 := 2); F˜(,2 := 1)}. Remaining
+details omitted.
+For part 2 of the lemma, let S be a principal solution for 7 which, by part 1, is
+also a solution for simplify(7). It suQces to show that S is principal for simplify1(7),
+where simplify1( ) is de0ned in the proof of Lemma 4.5. This is a straightforward
+consequence of principality (De0nition 4.13) and the way substitutions are lifted to
+types (De0nition 2.15). This proves the left-to-right implication of part 2. The converse
+implication is readily proved in the same way. Remaining details omitted.
+The next lemma is used in the proof of Lemma 5.11.
+Lemma 5.10 (A property of substitutions). Let ∈T be well-named, ∈ Tvar() and
+U∈T→. If E-path(; )= F˜ and S is a substitution such that S(F˜)=S(F˜ U), then
+S({[ := U]})=S.
+Proof. By induction on well-named ∈T we prove the stronger conclusion: For every
+oPset p∈{0; 1}∗ we have S〈{[ := U]}〉p=S〈p〉. The base case of the induction is
+= , in which case F˜ = ”. Because {[ := U]}= U here, the desired conclusion follows.
+Proceeding inductively, the two cases = 1→2 and = 1 ∧ 2, are treated similarly.
+Consider the 0rst only. Suppose ∈ Tvar() with E-path()= F˜ . With no loss of
+generality, let ∈ Tvar(1)-Tvar(2). (The two other subcases, ∈ Tvar(2)-Tvar(1)
+and ∈ Tvar(1)∩Tvar(2), are similar and therefore omitted.) Then E-path(; 1)= F˜ .
+By the induction hypothesis, S〈{[ := U]}1〉p=S〈1〉p for every p∈{0; 1}∗. Moreover,
+ =∈ Tvar(2) implies {[ := U]}2 = 2, which implies S〈{[ := U]}2〉p=S〈2〉p for every
+p∈{0; 1}∗. Hence, S〈{[ := U]}〉p=S〈〉p for every p∈{0; 1}∗, which is the desired
+conclusion.
+The last case of the induction is when =G′ for some G ∈ Evar and ′ ∈T. If  is
+well-named, so is ′, and if ∈ Tvar() then ∈ Tvar()′. Let F˜ = E-path(; )′, so that
+GF˜ = E-path(; ). Consider an arbitrary p∈{0; 1}∗ and let SGp= e where # (e)= n
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 43
+and paths(e)= (s1; : : : ; sn). We then have the following sequence of equalities:
+S 〈{[ := U]}〉p = S 〈G ({[ := U]}′)〉p because  = G ′;
+= e[S 〈{[ := U]}′〉p·s1 ; because SGp = e;
+: : : ;S 〈{[ := U]}′〉p·sn ]
+= e[S 〈′〉p·s1 ; : : : ;S 〈′〉p·sn ] by the induction hypothesis
+= S 〈G ′〉p because SGp = e;
+= S 〈〉p because  = G′;
+which is the desired conclusion. This completes the induction and the proof.
+Lemma 5.11 (‘Unify’ preserves solvability). Let 70 be a -compatible constraint set,
+let 71 be a constraint set, and let:
+Unify(70;S;E)⇒ Unify(71; S˜⊗E S;E)
+for some S, S˜ and E (which do not matter here). Then, from a solution S0 for 70,
+we can construct a solution S1 for 71.
+Proof. 71 is obtained from 70 according to one of the three rewrite rules in Fig. 5. In
+each of the three cases, 71 = simplify(7′1) where 7
+′
+1 = S˜70 for some appropriately
+de0ned substitution S˜. We consider each case separately. In all three cases, from
+a solution S0 for 70, we show the existence of a solution S1 for 7′1 (as well as
+71).
+Rule 1: The given constraint set 70 =7∪ F˜{ := U} is transformed to 7′1 = {[ := U]}
+7 ∪ F˜{ U := U}. There are two subcases, depending on whether  occurs exactly twice
+or exactly once in 70. We omit the latter subcase, which is trivial, and assume that 
+occurs exactly twice. If  occurs exactly twice in 70, there is exactly one constraint in
+70, say G˜(,
+:= )∈7, that mentions  and it mentions  exactly once. With no loss
+of generality, assume ∈ Tvar(,) and  =∈ Tvar(); in particular, because 70 is well-
+named, E-path(; G˜,)= F˜ . Because S0 is a solution for 70, we have S0(F˜)=S0(F˜ U).
+This implies, by Lemma 5.10, that S0({[ := U]},)=S0,. Hence, the desired solution
+S1 for 7′1 is simply the given solution S0 for 70.
+Rule 2: Identical to rule 1, except for the reversed polarities.
+Rule 3: Let 70 =7∪ G˜{F U, := e[ U1; : : : ; Un]}, where the constraint F U, := e[ U1; : : : ; Un]
+induces a rewrite step according to rule 3. 70 is transformed to 71 = simplify(7′1)
+where
+7′1 = {[F := e]}7 ∪ G˜{e[〈 U,〉s1 ; : : : ; 〈 U,〉sn ] := e[ U1; : : : ; Un]}
+where paths(e)= (s1; : : : ; sn). Because S0 is a solution for 70, we have that S0(G˜F )=
+S0(G˜e). It suQces to construct a substitution S1 such that S0 =S1⊗E′ {[F := e]} where
+E′= E-env(70). We keep the action of S1 on every variable v (and its oPsprings) for
+which F =∈ E-path(v; 70) identical to the action of S0; in particular, S1(G˜e)=S0(G˜e).
+For every v such that E-path(v; 70)= G˜FH˜ for some H˜ ∈ Evar∗, it therefore suQces
+44 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+to construct S1 so that
+S0(G˜FH˜v) = (S1 ⊗E′ {[F := e]})(G˜FH˜v)
+= S1({[F := e]}(G˜FH˜v))
+= S1(G˜e[〈H˜ v〉s1 ; : : : ; 〈H˜ v〉sn ]):
+Note that the action of S1 on G˜e is already determined, because F =∈ Evar(G˜e), but
+not on 〈H˜ v〉si and its oPsprings. By part 1 of Lemma 3.15, S1(G˜e) is an expansion,
+say e′. We then have
+e′ = S1(G˜e) = S0(G˜e) = S0(G˜F ):
+Let # (e′)=m¿n and paths(e′)= (p1; : : : ; pm). By Lemma 3.16,
+S0(G˜FH˜v) = e′[S0〈H˜ v〉p1 ; : : : ;S0〈H˜ v〉pm ]:
+By part 2 of Lemma 3.15,
+S1(G˜e[〈H˜ v〉s1 ; : : : ; 〈H˜ v〉sn ]) = e′[S1〈H˜ v〉sa(1)r(a(1);b(1)); : : : ;S1〈H˜ v〉sa(m)r(a(m);b(m))]
+for appropriately de0ned maps:
+a : {1; : : : ; m} → {1; : : : ; n}
+b : {1; : : : ; m} → {1; : : : ; m}
+r : {1; : : : ; n} × {1; : : : ; m} → {0; 1}∗
+such that
+• {a(1); : : : ; a(m)}= {1; : : : ; n},
+• if E-path( (i); G˜e)= G˜G˜i for 16i6n,
+then paths(S1(G˜G˜i ))= paths(S0(G˜G˜i ))= (r(i; 1); : : : ; r(i; mi)) for some mi¿1,
+• m=m1 + · · ·+ mn,
+• {b(j) | a(j)= i and 16j6m}= {1; : : : ; mi} for every 16i6n.
+Hence, to complete the de0nition of S1, we need to satisfy the equality S1〈H˜ v
+〉sa(i)r(a(i); b(i)) =S0〈H˜ v〉pi for every 16i6m. If H˜ =H1H2 · · ·H‘ for some ‘¿0 and
+sa(i)r(a(i); b(i))= qi, this equality is satis0ed by setting S1 according to the following
+values:
+S1H
+qit
+j = S0H
+pit
+j and S1v
+qit = S0vpit
+for every 16j6‘ and every t ∈{0; 1}∗.
+Lemma 5.12 (Principal solution constructed). Let 70 and 71 be -compatible con-
+straint sets, let S be a substitution and E an E-path environment such that
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 45
+SE⊇ E-env(70), and let:
+Unify(70;S;E)⇒ Unify(71; S˜⊗E S;E)
+for some substitution S˜. If S1 is a principal solution for 71, then so is S1 ⊗SE S˜
+for 70.
+Proof. 71 is obtained from 70 according to one of the three rewrite rules in Fig. 5.
+For each of the three rules, we have 70 =7∪ F˜{, := } and 71 = simplify(7′1), where
+7′1 = S˜70 and S˜ depends on the form of ,
+:=  (see Fig. 5). Suppose S1 is a principal
+solution for 71.
+First, we check that S0 =S1⊗SE S˜ is a solution for 70. Consider a constraint G˜,′ :=
+G˜′ in 70, which implies that S˜(G˜,′)
+:= S˜(G˜′) is a constraint in 7′1. We have the
+following sequence of equalities:
+S0(G˜,′) =
+1
+(S1 ⊗SE S˜)(G˜,′)=
+2
+S1(S˜(G˜,′))=
+3
+S1(S˜(G˜′))=
+4
+(S1 ⊗SE S˜)(G˜′)
+=
+5
+S0(G˜′)
+as desired. Equalities 1 and 5 follow from the de0nition of S0, equalities 2 and 4
+follow from Lemma 3.18, and equality 3 follows from the fact that S1 is a solution for
+71 together with part 1 in Lemma 5.9. The argument works whether or not G˜,′
+:= G˜′
+is F˜, := F˜.
+Second, we check that S0 is principal for 70. Let S′0 be an arbitrary solution for 70.
+Consider an arbitrary constraint G˜,′ := G˜′ in 70. The corresponding constraint in 7′1
+is S˜(G˜,′) := S˜(G˜′). By Lemma 5.11, there exists a solution S′1 for 71 from S
+′
+0 such
+that:
+(#) S′0(G˜,
+′)=S′1(S˜(G˜,
+′))=S′1(S˜(G˜
+′))=S′0(G˜
+′).
+By hypothesis, S1 is a principal solution for 71 and, by part 2 in Lemma 5.9, a
+principal solution for 7′1. Hence, there is a substitution Sˆ such that:
+S′1(S˜(G˜,
+′)) = Sˆ(S1(S˜(G˜,′))) = Sˆ(S1 ⊗SE S˜(G˜,′)) = Sˆ(S0(G˜,′)) and
+S′1(S˜(G˜
+′)) = Sˆ(S1(S˜(G˜′))) = Sˆ(S1 ⊗SE S˜(G˜′)) = Sˆ(S0(G˜′)):
+Together with (#), this implies that S0 is a principal solution for 70.
+To show that Unify(7) always terminates if 7 has a solution, we need to de0ne a
+strictly decreasing measure on solutions S, which we here take as size(S).
+Denition 5.13 (Size). We de0ne the function size : T →N by induction on T :
+1. size( )= size()= 1.
+2. size(’→ U’)= size(’) + size( U’) + 1.
+3. size(’∧’′)= size(’) + size(’′) + 1.
+4. size(F’)= size(’).
+46 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+In words, size(’) is the number of nodes in the tree representation of ’. Occurrences
+of E-variables are not included in the count for size(’). Proper subsets of T are T
+and E; it is therefore meaningful to use size() and size(e) for ∈T and e∈ E.
+We extend the function size( ) to an arbitrary substitution S :Var→(E ∪ T→) with
+0nite Dom(S) as follows. Let
+S = {[F1 := e1; : : : ; Fm := em; 1 := U1; : : : ; n := Un]};
+where m+ n=0. We de0ne size(S) by
+size(S) = size(e1) + · · ·+ size(em) + size( U1) + · · ·+ size( Un):
+If Dom(S)= {[ ]}, we de0ne size(S)= 0. If Dom(S) is in0nite, we leave size(S)
+unde0ned.
+Lemma 5.14 (Solutions with 0nite support suQce). Let 7 be a -compatible cons-
+traint set and let S be a substitution. If S is a solution for 7, then we can con-
+struct a substitution S′ from S such that:
+1. Dom(S′) is :nite.
+2. S′ is a solution for 7.
+Proof. This is an immediate consequence of Lemma 3.19.
+Lemma 5.15 (‘Unify’ decreases solution size). Let 70 be a -compatible constraint
+set, let 71 be a constraint set, and let:
+Unify(70;S;E)⇒ Unify(71; S˜⊗E S;E)
+for some S, S˜ and E (which do not matter here). If S0 is a solution for 70 with
+:nite Dom(S0), then we can construct a solution S1 for 71 with :nite Dom(S1) such
+that size(S1)¡size(S0).
+Proof. This is a slight adjustment of the proof for Lemma 5.11. The given solution S0
+in the proof for Lemma 5.11 can be assumed to have 0nite Dom(S0), by Lemma 5.14.
+Call Sˆ1 the solution constructed for 71 in Lemma 5.11, to distinguish it from the
+solution S1 constructed here. It is clear that size(S0)= size(Sˆ1). We consider each of
+the three rewrite rules separately.
+Rule 1: The given constraint set 70 =7 ∪ F˜{ := U} is 0rst transformed to 7′1 = {[
+:= U]}7 ∪ F˜{ U := U} and then to 71 = simplify(7′1). Suppose the given solution S0 is
+such that S0(F˜ )= e. Then
+S0(F˜) = Sˆ1(F˜) = e[s1 ; : : : ; sn ];
+where paths(e)= (s1; : : : ; sn). As the variables s1 ; : : : ; sn do not occur in 7′1, we can
+de0ne S1 by:
+S1v =
+{
+v if v∈{s1 ; : : : ; sn};
+Sˆ1v otherwise:
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 47
+Because {s1 ; : : : ; sn}⊆Dom(S0) while {s1 ; : : : ; sn} ∩ Dom(S1)= ∅, we conclude
+size(S1)¡size(S0).
+Rule 2: Identical to rule 1, except for the reversed polarities.
+Rule 3: Let 70 =7∪ G˜{F U, := e[ U1; : : : ; Un]}, where the constraint F U, := e[ U1; : : : ; Un]
+induces a rewrite step according to rule 3. 70 is transformed to 71 = simplify(7′1)
+where
+7′1 = {[F := e]}7 ∪ G˜{e[〈 U,〉s1 ; : : : ; 〈 U,〉sn ] := e[ U1; : : : ; Un]};
+where paths(e)= (s1; : : : ; sn). Let paths(S0(G˜ ))= (t1; : : : ; tm). Because the variables
+Ft1 ; : : : ; Ftm do not occur in 7′1, we can de0ne S1 by
+S1v =
+{
+v if v ∈ {Ft1 ; : : : ; Ftm};
+Sˆ1v otherwise:
+Because {Ft1 ; : : : ; Ftm}⊆Dom(S0) while {Ft1 ; : : : ; Ftm} ∩ Dom(S1)= ∅, it follows size
+(S1)¡size(S0).
+The following theorem shows that the algorithm is sound (i.e., the substitutions Unify
+produces when it terminates are in fact solutions) and complete (i.e., Unify produces a
+solution if there is one), as well as showing it produces principal solutions. We write
+∗⇒ for the reNexive transitive closure of ⇒.
+Theorem 5.16 (Soundness, completeness and principality). Let 7 be a -compatible
+constraint set and let E= E-env(7). Then:
+1. 7 has a solution if and only if Unify(simplify(7); {[ ]};E) ∗⇒Unify(∅;S;E) for some
+S.
+2. If Unify(simplify(7); {[ ]};E) ∗⇒Unify(∅;S;E), then S is a principal solution for 7.
+Proof. Part 1 follows from Lemmas 5.7, 5.8, 5.11, 5.12 and 5.15. For part 2, 0rst
+note that if Unify terminates after n¿1 steps beyond the initial call, then the returned
+substitution S applied to 7 produces a constraint set of the form:
+S7= (Sn ⊗E (Sn−1 ⊗E (Sn−2 ⊗E · · · (S1 ⊗E S0) · · ·)))7
+= Sn((Sn−1 ⊗E (Sn−2 ⊗E · · · (S1 ⊗E S0) · · ·))7)
+= Sn(Sn−1((Sn−2 ⊗E · · · (S1 ⊗E S0) · · ·)7))
+...
+= Sn(Sn−1(Sn−2(· · · ((S1 ⊗E S0)7) · · ·)))
+= Sn(Sn−1(Sn−2(· · · (S1(S07)) · · ·)));
+where S0 = {[ ]} and S1; : : : ;Sn are the n successive substitutions produced by the n
+rewrite steps. The 0rst equality above is by the de0nition of S, while all remaining
+equalities are by Lemma 3.18. Starting from the last equality above, we can also write
+48 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+the following sequence of equalities:
+S7= Sn(Sn−1(Sn−2(Sn−3(· · · (S1(S07)) · · ·))))
+= (Sn ⊗En−1 Sn−1)(Sn−2(Sn−3(· · · (S1(S07)) · · ·)))
+= ((Sn ⊗En−1 Sn−1)⊗En−2 Sn−2)(Sn−3(· · · (S1(S07)) · · ·))
+...
+= ((· · · (((Sn ⊗En−1 Sn−1)⊗En−2 Sn−2)⊗En−3 Sn−3) · · ·)⊗E1 S1)(S07)
+= (((· · · (((Sn ⊗En−1 Sn−1)⊗En−2 Sn−2)⊗En−3 Sn−3) · · ·)⊗E1 S1)⊗E0 S0)7;
+where E0 =E and Ei =Si−1(Ei−1) for every 16i6n−1. Invoking Lemma 5.7, part 2
+of Lemmas 5.8 and 5.12, it is now readily checked that the substitution
+(((· · · (((Sn ⊗En−1 Sn−1)⊗En−2 Sn−2)⊗En−3 Sn−3) · · ·)⊗E1 S1)⊗E0 S0)
+is a principal solution for 7. Hence, S is a principal solution for 7.
+Note that Unify diverges exactly when there is no solution. The evaluation strategy
+does not matter, because Lemmas 5.11 and 5.15 imply termination when there is a
+solution and Lemma 5.12 implies divergence when no solution exists.
+6. Type inference algorithm
+This section de0nes a procedure which, given a -term M , generates a 0nite set
+8(M) of constraints, the solvability of which is equivalent to the typability of the
+term M . We use this to prove the principality property for System I and to de0ne a
+complete type-inference algorithm. An example of a run of the type-inference algorithm
+is presented in Appendix A.
+Denition 6.1 (Algorithm generating constraints and skeleton). For every -term M ,
+Fig. 6 gives an inductive de0nition of a set of constraints 8(M) and a derivation
+skeleton Skel(M), de0ned simultaneously with a type Typ(M) and a type environment
+Env(M). In this de0nition, for a given subterm occurrence N , when a fresh variable is
+chosen, the same fresh variable must be used in Env(N ), Typ (N ), 8(N ), and Skel(N ).
+The process of going from M to 8(M) and Skel(M) is uniquely determined up to the
+choice of expansion variables and type variables.
+Lemma 6.2 (Constraint set is -compatible). Let M be an arbitrary -term. The con-
+straint set 8(M) induced by M is -compatible.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 49
+If M = x, for fresh ∈ Tvarb : Typ(M) = ,
+Env(M) = {x → },
+8(M) = ∅;
+Skel(M) = 〈VAR;Env(M)  M : ; 〉.
+If M = (N1N2), for fresh F ∈ Evarb, ∈ Tvarb: Typ(M) = ;
+Env(M) = Env(N1)∧F Env(N2),
+8(M) = 8(N1) ∪ F 8(N2)∪{Typ(N1) :=FTyp(N2)→},
+Skel(M) = 〈APP;Env(M)M : ; Skel(N1)(F Skel(N2))〉.
+If M = (x:N ), for fresh ∈ TVarb: Typ(M) =
+{
+Env(N )(x)→Typ(N ) if Env(N )(x) de0ned;
+→Typ(N ) otherwise;
+Env(M) = Env(N )\x,
+8(M) = 8(N ),
+Skel(M) =
+〈R;Env(M)  M : Typ(M); Skel(N )〉 where
+if x∈ FV(N ) then R=ABS-I else R=ABS-K:
+Fig. 6. De0nition of 8(M), Skel(M), Typ(M), and Env(M).
+Proof. This is by induction on M . An appropriate induction hypothesis is stated using
+the functions Typ(M), Env(M) and 8(M) in Fig. 6 with polarities inserted. Accord-
+ingly, de0ne:
+• If M = x, then for fresh ∈ TVarb:
+±Typ(M) = +;
+±Env(M) = {x → −};
+±8(M) = ∅:
+• If M =(NP), then for fresh F ∈ EVarb and fresh ∈ TVarb:
+±Typ(M) = +;
+±Env(M) = ±Env(N ) ∧ −F±Env(P);
+±8(M) = ±8(N ) ∪ F±8(P) ∪ {±Typ(N ) := +F±Typ(P)→ −}:
+Note that an outer occurrence of F is inserted without a polarity in ±Typ(M),
+consistent with the use of polarities in De0nitions 4.4 and 4.8.
+• If M =(x:N ), then for fresh ∈ TVarb:
+±Typ(M) =
+{±Env(N )(x)→ ±Typ(N ) if ±Env(N )(x) de0ned;
+−→ ±Typ(N ) otherwise;
+±Env(M) = ±Env(N )x;
+±8(M) = ±8(N ):
+By omitting all polarities in ±Typ(M), ±Env(M) and ±8(M), we get precisely
+Typ(M), Env(M) and 8(M), and we can also go from the latter to the former without
+ambiguity.
+50 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+For each -term M , we de0ne Triple(M)= (±Typ(M);±Env(M);±8(M)). The in-
+duction hypothesis speci0es 6 properties of Triple(M):
+(0) Triple(M) is of the form
+±Typ(M) = ( U,)+;
+±Env(M) = {x1 : (1)−; : : : ; xm : (m)−};
+±8(M) = {F˜1( U,1)+ := F˜1( U1)−; : : : ; F˜n( U,n)+ := F˜n( Un)−};
+for some U,; U,i ∈R→, Ui ∈S→ and j ∈S, and F˜i ∈ EVar∗, with m; n¿0 and Var
+( U,i)∩Var( Ui)= ∅ for every 16i6n. Note that every constraint in 8(M) is good
+of form (a) in De0nition 4.3; good constraints of form (b) and form (c) are
+generated only once the process of -uni0cation is started.
+(1) Triple(M) is well-named, i.e., given the form of Triple(M) described in property
+(0), the type:
+U, ∧ 1 ∧ · · · ∧ m ∧ F˜1( U,1 ∧ U1) ∧ · · · ∧ F˜n( U,n ∧ Un)
+is well-named.
+(2) If expansion variable F ∈ EVar occurs in Triple(M), it occurs exactly once as +F .
+(3) If type variable ∈ TVar occurs in Triple(M), it occurs exactly once as − and
+at most once as +.
+(4) Identical to condition (D) in De0nition 4.8 with 7=8(M).
+(5) For every -term N , if neither M nor N is a subterm occurrence of the other,
+then
+Var(Triple(M)) ∩ Var(Triple(N )) = ∅:
+Although we do not use it in the induction, it is worth pointing out in property (0),
+{x1; : : : ; xm}=FV(M) and n is the number of subterm occurrences in M that are ap-
+plications.
+Observe that (1)–(3) here imply (A)–(C) in De0nition 4.8, while (4) here is identi-
+cal to (D) in De0nition 4.8. The hard part is to set up the induction hypothesis above;
+the rest of the induction is routine, if somewhat tedious.
+Let IH(M) denote the six parts of the induction hypothesis relativized to -term
+M . We omit the straightforward veri0cation that IH(x) is true, for every -variable x.
+Assuming that IH(N ) is true, it is also readily checked that IH(x:N ) is true, and we
+therefore omit the details.
+Finally, assuming that IH(N ) and IH(P) are true, we want to show that IH(NP) is
+true. Part (0) in IH(NP) follows from (0) in both IH(N ) and IH(P), and the de0nitions
+of ±Typ(NP), ±Env(NP) and ±8(NP). Each of parts (1)–(3) and (5) in IH(NP)
+follows from the corresponding parts in IH(N ) and IH(P). For part (4) in IH(NP), we
+need to show that graph(8(NP)) is acyclic. Let 70 be the set:
+70 = {Typ(N ) := F Typ(P)→ }:
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 51
+This is the new constraint, of form (a) as speci0ed in De0nition 4.3, which is added
+to 8(N ) and F8(P) to obtain 8(NP). Then
+graph(8(NP)) = graph(8(N )) ∪ graph(8(P)) ∪ graph(70)
+where; by De0nition 4:6;
+graph(70) =
+
+
+{y F; y } if Typ(N ) =  ∈ TVar;
+{vy  | v ∈ Var( U,) and
+E-path(v; 70) = ”} if Typ(N ) =  → U,
+for some  ∈ S and U, ∈ R→:
+The acyclicity of graph(8(NP)) follows from the acyclity of graph(8(N )) by part 4 in
+IH(N ), the acyclity of graph(8(P)) by part 4 in IH(P), and the fact Var(Triple(N ))∩
+Var(Triple(P))= ∅ by part (5) in IH(N ) (or also part (5) in IH(P)). This last fact
+guarantees v yw for all v∈Var(F8(P)) and w∈Var(8(N )).
+Remark 6.3. Not every -compatible constraint set is induced by a -term; for example,
+a -compatible constraint set 7 as simple as { :=F→ :} is not induced by any -
+term. Moreover, the same constraint set 7 may be induced by diPerent -terms; for
+example, 8(x:y:M)=8(y:x:M) for all -terms M .
+Lemma 6.4 (All derivations instances of Skel(M)). If D is a derivation of System I
+with :nal judgement AM : , then there is a substitution S such that D=S(Skel
+(M)).
+Proof. By induction on the structure of D. (See the proof of Theorem 22 in the
+appendix of [16].)
+Theorem 6.5 (Constraint set and skeleton equivalent). Let M be a -term. Then a
+substitution S is a solution for 8(M) if and only if S(Skel(M)) is a derivation of
+System I. Thus, 8(M) is solvable if and only if M is typable in System I.
+Proof. By induction on M , using the de0nitions of 8(M), Skel(M), and substitution
+together with Lemma 2.19.
+Corollary 6.6 (Undecidability of beta-uni0cation). It is undecidable whether an arbi-
+trarily chosen -compatible constraint set 7 has a solution.
+From the principality property for -compatible -uni0cation, we can derive the
+following.
+Theorem 6.7 (Principal typings and completeness of type inference). Given -term
+M , let PT be the algorithm such that
+PT(M)=
+
+
+S(Skel(M)) if some evaluation of Unify(8(M)) converges
+and returns S;
+unde:ned if every evaluation of Unify(8(M)) diverges:
+52 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+It holds that if M is typable in System I, then PT(M) returns a principal typing for
+M , else PT(M) diverges. Thus, System I has the principality property and PT is a
+complete type inference algorithm for System I.
+Proof. By Lemma 6.2 and Theorem 5.16, if S=Unify(8(M)) is de0ned, it is a princi-
+pal solution for 8(M). By Theorem 6.5, S(Skel(M)) is a typing for M . By Lemma 6.4,
+if D is a typing for M , then D=S′(Skel(M)) for some substitution S′, which must be a
+solution for 8(M) by Theorem 6.5. By De0nition 4.13, it must hold that S′(8(M))=S′′
+(S(8(M))) for some substitution S′′. Thus, D=S′′(PT(M)), 7 proving that PT(M) is
+a principal typing for M .
+7. Skeletons and derivations at nite ranks
+This section makes a 0ner analysis of the relationship between Skel(M) and 8(M)
+for an arbitrary -term M . We then de0ne the “rank” of skeletons and derivations, and
+the “rank” of solutions for constraint sets. Finally, we prove a correspondence between
+the rank of typings for M and the rank of solutions for 8(M).
+Denition 7.1 (Left types). For every skeleton S we de0ne the set of left types of
+S, denoted left-types(S), and the :nal type of S, denoted final-type(S). If S is
+the skeleton 〈R; J; Q1 · · ·Qn〉 where J is the judgement A?M : , then
+final-type(S) = ;
+left-types(S) =
+
+
+∅ if n = 0 and R = VAR;
+left-types(Q1) ∪ left-types(Q2)
+∪{final-type(Q1)} if n = 2 and R = APP;
+{F |  ∈ left-types(Q1)} if n = 1 and
+R = F ∈ EVar;
+left-types(Q1) ∪ · · · ∪
+left-types(Qn) otherwise:
+A simple induction (omitted) shows that a type in left-types(S) is always of the form
+F˜ U for some F˜ ∈ EVar∗ and U∈T→. In words, F˜ U∈ left-types(S) iP U is the 0nal type
+of the left premise Q1 in a subskeleton 〈APP; J; Q1Q2〉 of S. The number of types in
+left-types(S) is therefore the number of times rule APP is used in S.
+The de0nition of left-types(S) is somewhat complicated, but is adjusted in order to
+be exactly the set of left types of a corresponding constraint set. Let 7 be the constraint
+set {1 := ′1; : : : ; n := ′n}. We de0ne the set left-types(7) by
+left-types(7) = {1; 2; : : : ; n}:
+Lemma 7.3 relates left-types(S) and left-types(7).
+7 This requires some additional facts about substitutions, e.g., the principal solution constructed by
+Unify is “safe” for composition in a certain sense. It also depends on the fact that E-path(v; Skel(M))=
+E-path(v; 8(M)) for all v∈ Var.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 53
+Denition 7.2 (The ‘split’ operation). The operation split( ) is 0rst de0ned on a single
+constraint  := ′, where ; ′ ∈T are arbitrary:
+split( := ′) =
+
+
+Fsplit(0
+:= ′0) if  = F0 and 
+′ = F′0;
+split(1
+:= ′1) ∪ split(2 := ′2) if  = 1 ∧ 2 and ′ = ′1 ∧ ′2;
+{ := ′} otherwise:
+What split( ) does is this: 8 If  and ′ are types such that = e[1; : : : ; n] and ′=
+e[′1; : : : ; 
+′
+n] where i = ′i for every 16i6n, then
+split( := ′) = {F˜11 := F˜1′1; : : : ; F˜nn := F˜n′n};
+where F˜i = E-path( (i); e) for every 16i6n. We extend the operation to constraint
+sets 7. If 7= ∅, then split(7)= ∅. If 7= { := ′}∪7′, then split(7)= split( := ′)∪
+split(7′).
+Lemma 7.3 (Relating left types of skeletons and left types of constraint sets). Let M
+be a -term, S=Skel(M) and 7=8(M). We then have, for every substitution S:
+left-types(S(S)) = left-types(split(S7)):
+In particular, if S is the identity substitution, then left-types(S)= left-types(7).
+Proof. By induction on the structure of M . To push the induction through, we prove
+a slightly stronger induction hypothesis, namely,
+IH: For every substitution S, every sequence F˜ of fresh and distinct basic E-variables,
+and every oPset t ∈{0; 1}∗, we have left-types(S〈F˜S〉t)= left-types(split(S
+〈F˜7〉t)).
+We relativize IH to S and 7 by writing IH(S; 7).
+For the base case M = x, we have Skel(M)= 〈VAR; x :  x : ; 〉 and 8(M)= ∅. The
+desired conclusion is immediate in this case.
+Proceeding inductively, let M =N1N2. For i=1; 2, let Si =Skel(Ni) and 7i =8(Ni).
+Using the simultaneous de0nitions of Skel(M) and 8(M) in Fig. 6, posing also U,i =
+Typ(Ni) and Ai =Env(Ni) for i=1; 2, we have:
+S=Skel(M)= 〈APP; A1 ∧HA2  M : ;S1(HS2)〉; (a)
+7=8(M)=71 ∪H72 ∪{ U,1 :=H U,2→ }; (b)
+where H ∈ EVarb and ∈ TVarb are fresh. Let S be a substitution, F˜ a sequence of fresh
+and distinct basic E-variables, and t ∈{0; 1}∗. Suppose S〈F˜ 〉t = e, paths(e)= (u1; : : : ;
+un) where n=# (e)¿1, and G˜i = E-path( (i); e), for every 16i6n. By De0nition
+2.17, it is easy to see that
+S〈F˜S〉t = e[S〈S〉t·u1 ; : : : ;S〈S〉t·un ]:
+8 The operation split( ) here does only a part of the operation simplify( ) in Fig. 5. The two are not
+identical.
+54 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+Hence, by De0nition 7.1 together with (a) above and the fact that final-type(S1)= U,1,
+we have
+left-types(S〈F˜S〉t) = ⋃
+16i6n
+G˜i left-types(S〈S〉t·ui)
+=
+⋃
+16i6n
+G˜i(left-types(S〈S1〉t·ui) ∪ left-types(S〈HS2〉t·ui)
+∪{S〈 U,1〉t·ui}): (c)
+For arbitrary 1; : : : ; n; ′1; : : : ; 
+′
+n ∈T, it is readily checked that:
+split(e[1; : : : ; n]
+:= e[′1; : : : ; 
+′
+n]) = G˜1(split(1
+:= ′1)) ∪ · · · ∪ G˜n(split(n := ′n)):
+Moreover, if i or ′i is in T→ for every 16i6n, then
+split(e[1; : : : ; n]
+:= e[′1; : : : ; 
+′
+n]) = G˜1{1 := ′1} ∪ · · · ∪ G˜n{n := ′n};
+which in turn implies that:
+left-types(split(e[1; : : : ; n]
+:= e[′1; : : : ; 
+′
+n])) = {G˜11; : : : ; G˜nn}:
+Hence, by De0nition 7.1 together with (b), we also have
+left-types(split(S〈F˜7〉t))
+= left-types(split(S〈F˜71〉t)) ∪ left-types(split(S〈F˜H72〉t)) ∪
+left-types(split(S〈F˜ U,1〉t := S〈F˜(H U,2 → )〉t))
+=
+⋃
+16i6n
+G˜i(left-types(split(S〈71〉t·ui)) ∪
+left-types(split(S〈H72〉t·ui)) ∪ {S〈 U,1〉t·ui}) (d)
+The equality of (c) and (d) follows from IH(S1; 72) and IH(S2; 72), which implies
+IH(S; 7) is also true.
+The last case of the induction is M =(x:N ). There are two subcases, depending on
+whether x∈FV(N ) or not. Consider the 0rst subcase only; the second is analyzed in
+the same way. Let S′=Skel(N ) and 7′=8(N ). Using the simultaneous de0nitions
+of Skel(M) and 8(M) in Fig. 6, posing also Typ(N )= U, and Env(N )=A[x → ], we
+have
+S=Skel(M)= 〈ABS-I; A  M : → U,;S′〉; (e)
+7=8(M)=8(N )=7′: (f)
+That IH(S; 7) is true in this case follows from De0nition 7.1, together with (e), (f)
+and IH(S′; 7′). Remaining details omitted.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 55
+Denition 7.4 (Rank of types). For every s∈{L;R; 0; 1}∗, let #L(s) denote the number
+of occurrences of L in s. Formally,
+#L(s) =
+
+
+0 if s = ”;
+1 + #L(t) if s = L · t;
+#L(t) if s = R · t or 0 · t or 1 · t:
+Let ∈T. There is a smallest (and, therefore, unique) ’∈T with n¿1 holes such
+that
+1. =’[1; : : : ; n] for some 1; : : : ; n ∈T.
+2. None of the types in {1; : : : ; n} contains an occurrence of “∧”.
+The rank of hole (i) in ’ is given by hole-rank( (i); ’)= #L(path( (i); ’)). If ’= ,
+i.e.,  does not mention any “∧”, we de0ne rank()= 0. If ’ = , we de0ne rank()
+by:
+rank() = 1 + max{hole-rank( (i); ’) | 16 i 6 # (’)}:
+Let T ⊂T be a non-empty 0nite subset of types. We de0ne rank(T ) by:
+rank(T ) = max{rank() |  ∈ T}:
+If T = ∅, we de0ne rank(T )= 0. This de0nition of rank is equivalent to others found
+in the literature.
+Denition 7.5 (Rank of skeletons, derivations and typings). Let J be the following
+judgement of System I:
+x1 : 1; : : : ; xk : k  M : 
+for some appropriate types 1; : : : ; k ;  and -term M . We say that 1; : : : ; k are the
+environment types in J and  is the derived type in J . If S is a skeleton of System
+I, an environment type (resp., a derived type) in S is an environment type (resp., a
+derived type) in one of the judgements of S.
+If S is a skeleton of System I where every environment type has rank 0 and every
+derived type has rank 0, we write rank(S)= 0 and say that S is a rank-0 skeleton.
+Let k¿1. If S is a skeleton of System I where every environment type has rank
+6k−1 and every derived type has rank 6k, we write rank(S)6k and say that S is a
+skeleton of rank at most k. If rank(S)6k but rank(S)k−1, we write rank(S)= k
+and say that S is a rank-k skeleton. A particular subset of the rank-k skeletons are
+the rank-k derivations, and a particular subset of the rank-k derivations are the rank-k
+typings.
+Denition 7.6 (Lambda-terms in special form). Let M be a -term. We say that M is
+in special form if M =(y1 · · · yn:N )z1 · · · zn where N is not a -abstraction, FV(N )⊆
+{y1; : : : ; yn} and z1; : : : ; zn are n distinct -variables, with n¿0.
+Let M = y1 · · ·yn:N be a -term (not necessarily in special form) where N is not
+a -abstraction, with n¿0, and let FV(M)= {x1; : : : ; xm} with m¿0. We de0ne the
+56 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+special form of M by:
+special(M) = (x1 · · · xmy1 · · ·yn:N )z1 · · · zm+n;
+where z1; : : : ; zm+n are m + n distinct fresh -variables. Clearly, special(M) is a -
+term in special form. (It is not the case in general that if M is in special form, then
+special(M)=M .)
+Lemma 7.7 (Relating rank of typings and rank of left types). Let M be a -term and
+let D be a typing for M . If M is in special form, then rank(D)= rank(left-types(D)).
+The conclusion of the lemma is generally false if M is not in special form. Con-
+sider, for example, the -term M = xx: There is a typing D for xx of rank 2, while
+rank(left-types(D))= 0.
+Proof. If D is a derivation with 0nal judgement x1 : 1; : : : ; xm : m ? P : , we de0ne
+the set of types final-type∗(D) by
+final-type∗(D) = {1 → ; : : : ; m → ; };
+where  is a fresh T -variable (not occurring anywhere in D). Although the usual
+de0nition of “rank” allows us to write the equation:
+rank(final-type∗(D)) = rank(1 → · · · → m → );
+we have to avoid the type on the right-hand side of this equation because, if  =∈T→,
+it is not legal according to our syntax of types (De0nition 2.3).
+We also de0ne left-types∗(D)= left-types(D)∪ final-type∗(D). Without restrictions
+on the -term P, we now prove by induction on the structure of D that:
+IH: rank(D)= rank(left-types∗(D)).
+This is the induction hypothesis, which we write IH(D) when relativized to D.
+For the base case, we have D= 〈VAR; x : U x : U; 〉 and left-types∗(D)= {U→ ; U}.
+This implies IH(D) is true for the base case.
+Suppose the 0nal judgement in D is obtained by using ABS-I, i.e., D= 〈ABS-I;
+A x:M : → U;D′〉 where D′= 〈R; A[x → ]M : U; Q˜〉 for some rule R and appro-
+priate sequence Q˜ of subderivations. We now have the following sequence of equalities:
+rank(D) = rank(D′) by de0nition of rank(D);
+= rank(left-types∗(D′)) by IH(D′);
+= rank((left-types∗(D′)
+−{→ ; U}) ∪ {→ U})
+= rank(left-types∗(D)) by de0nition of left-types∗(D′);
+which implies IH(D) is true for the case when ABS-I is the last rule used in D.
+We omit the case when the 0nal judgement in D is obtained by using ABS-K. This
+case is an easy variation of the preceding case, and we omit all the straightforward
+details.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 57
+Suppose the 0nal judgement in D is obtained by using APP, i.e., D= 〈APP; A1 ∧A2 
+MN : U;D1D2〉 where D1 = 〈R1; A1 M : → U; Q˜1〉 and D2 = 〈R2; A2 ? N : ; Q˜2〉, for
+some rules R1 and R2 and appropriate sequences Q˜1 and Q˜2 of subderivations. Let
+A1 = x1 : 11; : : : ; xm : 
+1
+m; y1 : 
+1
+m+1; : : : ; yn : 
+1
+m+n;
+A2 = x1 : 21; : : : ; xm : 
+2
+m; z1 : 
+2
+m+1; : : : ; zp : 
+2
+m+p
+for some m; n; p¿0, where the sets {x1; : : : ; xm}, {y1; : : : ; yn} and {z1; : : : ; zp} are pair-
+wise disjoint. This implies that
+A1 ∧ A2 = x1 : 11 ∧ 21; : : : ; xm : 1m ∧ 2m; y1 : 1m+1; : : : ; yn :
+1m+n; z1 : 
+2
+m+1; : : : ; zp : 
+2
+m+p
+By the de0nition of final-type∗( ), we thus have
+final-type∗(D1) = {11 → ; : : : ; 1m → ; 1m+1 → ; : : : ; 1m+n → ; → U};
+final-type∗(D2) = {21 → ; : : : ; 2m → ; 2m+1 → ; : : : ; 2m+p → ; };
+final-type∗(D) = {11 ∧ 21 → ; : : : ; 1m ∧ 2m → ;
+1m+1 → ; : : : ; 1m+n → ; 2m+1 → ; : : : ; 2m+p → ; U}:
+A straightforward calculation now shows that
+(†) rank(final-type∗(D)∪{→ U})¿rank(final-type∗(D1)∪ final-type∗(D2)).
+Finally, we have the following sequence of equalities:
+rank(D) =max{rank(D1); rank(D2); rank(final-type∗(D))}
+= rank(left-types∗(D1) ∪ left-types∗(D2) ∪ final-type∗(D))
+= rank(left-types(D) ∪ final-type∗(D1) ∪ final-type∗(D2)
+∪ final-type∗(D))
+= rank(left-types(D) ∪ final-type∗(D))
+= rank(left-types∗(D));
+where the second equality follows from IH(D1) and IH(D2), and the fourth equality
+from (†) and the fact that {→ U}⊆ left-types(D). This establishes IH(D) when APP
+is the last rule used in D.
+Suppose the 0nal judgement in D is obtained by using rule ∧, i.e., D= 〈 ∧ ; A1 ∧A2 e
+M : 1 ∧ 2;D1D2〉 where D1 = 〈R1; A1 ?M : 1; Q˜1〉 and D2 = 〈R2; A2 ?M : 2; Q˜2〉, for
+some rules R1 and R2 and appropriate sequences Q˜1 and Q˜2 of subderivations. Suppose
+FV(M)= {x1; : : : ; xm} for some m¿0, so that
+A1 = x1 : 11; : : : ; xm : 
+1
+m;
+A2 = x1 : 21; : : : ; xm : 
+2
+m;
+A1 ∧ A2 = x1 : 11 ∧ 21; : : : ; xm : 1m ∧ 2m:
+58 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+Hence, by the de0nition of final-type∗( ):
+final-type∗(D1) = {11 → ; : : : ; 1m → ; 1};
+final-type∗(D2) = {21 → ; : : : ; 2m → ; 2};
+final-type∗(D) = {11 ∧ 21 → ; : : : ; 1m ∧ 2m → ; 1 ∧ 2}:
+It is therefore clear that:
+(‡) rank(final-type∗(D))¿rank(final-type∗(D1)∪ final-type∗(D2)).
+We now have the following sequence of equalities:
+rank(D) =max{rank(D1); rank(D2); rank(final-type∗(D))}
+= rank(left-types∗(D1) ∪ left-types∗(D2) ∪ final-type∗(D))
+= rank(left-types(D) ∪ final-type∗(D1) ∪ final-type∗(D2) ∪ final-type∗(D))
+= rank(left-types(D) ∪ final-type∗(D))
+= rank(left-types∗(D));
+where the second equality follows from IH(D1) and IH(D2), and the fourth equality
+from (‡). This establishes IH(D) when rule ∧ is the last used in D.
+The last case of the induction is when the 0nal judgement in D is obtained by
+using rule F , for some F ∈ EVar. This case is straightforward and simpler than all the
+preceding cases. We omit all the details of this last case.
+To complete the proof of Lemma 7.7, consider an arbitrary -term M in special
+form and a typing D for M . Then D must have the following form (see De0nition
+7.6):
+...
+ABS-x
+ y1 · · ·yn:N : 1→ · · · →n→ U
+...
+R1
+z1 : 1 ? z1 : 1
+APP
+z1 : 1  (y1 · · ·yn:N )z1 : 2→ · · · →n→ U
+...
+R2
+z2 : 2 ? z2 : 2
+APP
+...
+APP
+z1 : 1; : : : ; zn−1 : n−1  (y1 · · ·yn:N )z1 · · ·zn−1 : n→ U
+...
+Rn
+zn : n ? zn : n
+APP
+z1 : 1; : : : ; zn : n  (y1 · · ·yn:N )z1 · · ·zn : U
+for some 1; : : : ; n ∈T and U∈T→, where ABS-x∈{ABS-I;ABS-K} and Ri ∈{VAR;
+∧}∪ EVar for every 16i6n. By the de0nition of left-types( ) and left-types∗( ), we
+have
+left-types∗(D) = left-types(D) ∪ final-type∗(D)
+= left-types(D) ∪ {1 → ; : : : ; n → ; U}:
+Because 1→ · · · → n→ U∈ left-types(D) and rank(1→ · · · → n→ U)= rank({1→
+; : : : ; n→ ; U}), it now follows that rank(left-types∗(D))= rank(left-types(D))
+which, together with IH(D), implies the conclusion of the lemma.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 59
+Denition 7.8 (Rank of solutions of constraint sets). Let 7 be the non-empty -
+compatible constraint set {1 := ′1; : : : ; n := ′n}, and let k¿0. We say that a substi-
+tution S :Var→ (E∪T→) is a solution for 7 of rank at most k provided:
+1. S is a solution for 7.
+2. max{rank(S1); : : : ; rank(Sn)}6k.
+We say that S is a rank-k solution for 7 if S is of rank 6k but not 6k−1. If 7= ∅,
+every substitution is a solution for 7, and we de0ne the rank of a solution for 7= ∅
+to be 0 (this is an arbitrary choice which does not aPect the analysis).
+Theorem 7.9 (Rank-k typings vs. rank-k solutions). Let M be a -term and M ′=
+special(M). The following are equivalent conditions, for all k¿0:
+1. There is a rank-k typing for M .
+2. There is a rank-k typing for M ′.
+3. There is a rank-k solution for 8(M ′).
+In the theorem statement we can restrict k to be =1. It is easy to see there is
+no rank-1 typing for any -term P (as opposed to a derivation). Moreover, it can
+be shown that there is no rank-1 solution for 8(P) for any -term P, using the fact
+that all positive inner occurrences of expansion variables in 8(P) are at rank 2 (de-
+tails omitted). This last assertion does not hold for -compatible constraint sets in
+general.
+Proof. Let k¿0 be 0xed throughout the proof. We 0rst prove that, given an arbitrary
+∈T and arbitrary z ∈ -Var, there is a derivation, call it D(z : ), whose 0nal judge-
+ment is z : ? z :  where ?= ” or ?= e depending on whether ∈T→ or not. For this,
+we write  in the form = e[U1; : : : ; Uj] where e is an expansion with # (e)= j¿1 and
+U1; : : : ; Uj ∈T→. The construction of D(z : ) is a straightforward induction on the size
+of e, obtained by using repeatedly rule ∧ and rule F in Fig. 1; rule ∧ (resp. rule F)
+is used as many times as there are occurrences of “∧” (resp. occurrences of F) in e.
+We omit the details of this induction.
+If rank()= 0, then rank(D(z : ))= 0. If rank()= 1, then rank(U1)= · · · = rank(Uj)
+= 0 and j¿2, which in turn implies rank(D(z : ))= 2. If rank()= k¿2, then max
+{rank(U1); : : : ; rank(Uj)}= k which in turn implies rank(D(z : ))= k +1. Note that for
+all ∈T, it holds that rank(D(z : )) =1.
+We now prove the equivalence of parts 1 and 2 in the theorem statement: There is a
+rank-k typing for M iP there is a rank-k typing for M ′. The right-to-left implication is
+easy to see, because M is a subterm of M ′. For the left-to-right implication, suppose D
+is a rank-k typing for M . Hence, D is of the form D= 〈R; J; Q˜〉 where J is the judge-
+ment x1 : 1; : : : ; xm : m M : . We can assume that R∈{VAR;ABS-I;ABS-K;APP} in
+the judgement J , which must therefore be of the form (see De0nition 7.6):
+x1 : 1; : : : ; xm : m  y1 · · · yn:N : m+1 → · · · → m+n → U
+for some 1; : : : ; m+n ∈T and U∈T→, where n¿0 and N is not a -abstraction.
+If rank(D)= 0, then rank(i)= 0 for every i∈{1; : : : ; m + n}. There are no
+rank-1 typings, i.e., typings of rank at most 1 but not 0. If rank(D)= k¿2, then
+60 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+rank(i)6k − 1 for every i∈{1; : : : ; m + n}. The desired typing D′ for M ′ has the
+following form:
+Q˜
+R
+x1 : 1; : : : ; xm : m M : m+1→ · · · →m+n→ U
+ABS-I
+...
+ABS-I
+ x1 · · · xm:M : 1→ · · · →m+n→ U D(z1 : 1)
+APP
+z1 : 1  (x1 · · ·xm:M)z1 : 2→ · · · →m+n→ U D(z2 : 2)
+APP
+... D(zm+n : m+n)
+APP
+z1 : 1; : : : ; zm+n : m+n  (x1 · · ·xm:M)z1 · · ·zm+n : U
+It is easy to check that if rank(D)= 0 then rank(D′)= 0, and if rank(D)¿2 then
+rank(D′)= rank(D).
+We next prove the equivalence of parts 2 and 3 in the theorem statement: There is a
+rank-k typing for M ′ iP there is a rank-k solution for 8(M ′). Let S′=Skel(M ′) and
+7′=8(M ′). By Lemma 6.4 and Theorem 6.5, there is a typing D′ for M ′ iP there is
+a solution S for 7′ such that D′=S(S′). We also have:
+left-types(D′) = left-types(S(S′)) = left-types(split(S7′))
+where the second equality follows from Lemma 7.3. Hence, we also have
+rank(D′) = k iP rank(left-types(D′)) = k
+iP rank(left-types(S(S′))) = k
+iP rank(left-types(split(S7′))) = k
+iP S is a rank-k solution for 7′;
+where the 0rst “iP” is true by Lemma 7.7 and the last “iP” follows from the fact that
+k =1.
+8. Termination and decidability at nite ranks
+This section de0nes UnifyFR, an adaptation of algorithm Unify which produces a
+solution S with bounded rank k for a -compatible constraint set 7. The de0nition of
+UnifyFR diPers from Unify only in the “mode of operation” as presented in Fig. 7.
+The invocation of UnifyFR on 7 at rank k produces a solution S if Unify(7) produces
+S and rank(S7)6k. Otherwise, UnifyFR halts indicating failure, unlike Unify which
+diverges if it cannot 0nd a solution.
+Note that the principality of solutions produced by UnifyFR follows from the prin-
+cipality of solutions produced by Unify.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 61
+Metavariable conventions:
+• U,∈R→, ,∈R, U, Ui ∈S→, ∈S, ; ′ ∈T, e∈ E, ∈ Tvar; F ∈ EVar.
+Mode of operation:
+• Initial call: UnifyFR(7; k)⇒ UnifyFR(p7q; {[ ]}; E-env(7); k) where k¿0.
+• Final call: UnifyFR((; );S;E; k)⇒S.
+• UnifyFR((0; ′0);S0;E; k)⇒ UnifyFR((1; ′1);S1;E; k), provided:
+– 7(0; ′0)=7∪ F˜{, := } and , := ⇒S is an instance of one of the rewrite
+rules.
+– (1; ′1)= (S0;S
+′
+0) and S1 =S⊗E S0.
+– rank(1)6k and rank(′1)6k.
+Rewrite rules:
+ := U ⇒ {[ := U]} (rule 1)
+U, :=  ⇒ {[ := U,]} (rule 2)
+F U, := e[ U1; : : : ; Un] ⇒ {[F := e]} (rule 3)
+Applying substitutions to constraint sets:
+• S∅= ∅.
+• S({ := ′}∪7)= {S :=S′}∪S7.
+Fig. 7. Algorithm UnifyFR (every part other than “Mode of operation” is copied from Fig. 5).
+The presentation of UnifyFR in Fig. 7 includes two new operations, “the coding of a
+constraint set 7 as a pair (; ′)” and “the decomposition of a pair (; ′) as a constraint
+set 7(; ′)”. These are precisely stated in De0nitions 8.1 and 8.2.
+Denition 8.1 (From constraint sets to constraint pairs). The coding p7q of a cons-
+traint set 7= {1 := ′1; : : : ; n := ′n} is the pair (; ′) given by
+p7q = (; ′) = ((1 ∧ · · · ∧ (n−1 ∧ n)); (′1 ∧ · · · ∧ (′n−1 ∧ ′n))):
+To show that for a 0xed k¿0, an evaluation of UnifyFR(7; k) terminates, we need
+to reason about the rank of a constraint in a constraint set. The following de0nitions
+support this.
+Denition 8.2 (-Compatible pairs). Let (; ′) be a pair of types. We de0ne its con-
+straint decomposition sequence d(; ′)= (’; ˆ1; : : : ; ˆn; ˆ
+′
+1; : : : ; ˆ
+′
+n) with 1 + 2n entries,
+where ’∈T with n¿0 holes is the largest (and therefore unique) type context such
+that
+1. =’[1; : : : ; n] and ′=’[′1; : : : ; 
+′
+n], where {i; ′i}= {ˆi ; ˆ′i} for every 16i6n.
+2. For every 16i6n, if hole-rank( (i); ’) is even, then (i; ′i)= (ˆi ; ˆ
+′
+i).
+3. For every 16i6n, if hole-rank( (i); ’) is odd, then (i; ′i)= (ˆ
+′
+i ; ˆi).
+62 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+If G˜i = E-path( (i); ’) for 16i6n, then the constraint set decomposition of (; ′) is
+7(; ′) = {G˜1(ˆ1 := ˆ′1); : : : ; G˜n(ˆn := ˆ′n)}:
+If 7(; ′) is a -compatible constraint set, then we say that (; ′) is a -compatible
+pair. In this case, ˆi ∈R and ˆ′i ∈S for 16i6n, so we can let ˆi = ,i and ˆ′i = i for
+16i6n and write 7(; ′) in the form
+7(; ′) = {G˜1(,1 := 1); : : : ; G˜n(,n := n)}:
+Note that simplify(7(; ′))=7(; ′), because d(; ′) chooses the largest ’ with the
+stated property. For the same reason, note also that 7(; )= ∅. We de0ne the rank of
+constraint G˜i(,i
+:= i) in (; ′):
+rank(G˜i(,i
+:= i); (; ′)) = hole-rank( (i); ’):
+We also de0ne h(; ′):
+h(; ′) = min{hole-rank( (i); ’) | 16 i 6 n};
+i.e., h(; ′) is a lower bound on the L-distance of all the holes in ’ from its root (viewed
+as a binary tree). If = ′=’, i.e., ’ has 0 holes, we leave h(; ′) unde0ned.
+Denition 8.3 (Successful and unsuccessful evaluations of UnifyFR). Let 7 be a -
+compatible constraint set and k¿0. Consider a 0xed, but otherwise arbitrary, evaluation
+of UnifyFR(7; k):
+UnifyFR((0; ′0); {[ ]};E; k)⇒ UnifyFR((1; ′1);S1;E; k)⇒
+· · · ⇒ UnifyFR((i; ′i);Si ;E; k)⇒ · · · ;
+where (0; ′0)= p7q and E= E-env(7). We say this evaluation succeeds if it halts at
+the ith call with i = ′i , for some i¿0, in which case it also returns the substitution
+Si.
+We say this evaluation of UnifyFR(7; k) fails if either it diverges or it halts at the
+ith call with i = ′i , for some i¿0. In the latter case, we also say that the evaluation
+halts unsuccessfully, which means that i = ′i and for all -compatible pairs (; ′) and
+all substitutions S,
+UnifyFR((i; ′i);Si ;E; k) ; UnifyFR((; ′);S;E; k);
+i.e., the evaluation is unable to continue beyond the ith call.
+Denition 8.4 (Evaluating -compatible pairs). Let (0; ′0) and (1; 
+′
+1) be -compat-
+ible pairs. Let rule a be one of the three rules listed in Fig. 5. We write
+(0; ′0)⇒a (1; 
+′
+1)
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 63
+iP 7(0; ′0)= {G˜1(,1 := 1); : : : ; G˜n(,n := n)} and there is i∈{1; : : : ; n} such that:
+1. ,i
+:= i⇒S is an instance of rule a.
+2. (1; ′1)= (S0;S
+′
+0).
+In such a case, we say that (0; ′0) evaluates to, or reduces to, (1; 
+′
+1) by rule a
+using constraint G˜i(,i
+:= i). Moreover, if rank(G˜i(,i
+:= i); (0; ′0))= k, we say that
+the constraint ,i
+:= i is at rank k and that the evaluation from (0; ′0) to (1; 
+′
+1) is
+also at rank k, indicated by writing
+(0; ′0) ⇒(a;k)(1; 
+′
+1):
+We write (0; ′0)⇒ (1; ′1) in case (0; ′0)⇒a (1; 
+′
+1) for some rule a, and
+∗⇒ for the
+reNexive transitive closure of ⇒. Let R⊆{1; 2; 3}. Let (0; ′0)⇒ · · · ⇒ (n; ′n) be an
+evaluation sequence with n¿1 steps. We write (0; ′0)
+n⇒
+R
+(n; ′n) to indicate that the
+evaluation has n steps, and that each step is carried out using rule a for some a∈R.
+Finally, if there is no pair (1; ′1) such that (0; 
+′
+0)⇒
+R
+(1; ′1), then we say that the
+pair (0; ′0) is in R-normal form.
+Lemma 8.5 (Evaluating without rule 3). Let R= {1; 2} and (0; ′0) a -compatible
+pair. Then there is a bound M (0; ′0) solely depending on (0; 
+′
+0) such that for every
+evaluation with R, say (0; ′0)
+n⇒
+R
+(1; ′1), we have n6M (0; 
+′
+0). In words, a diverging
+evaluation of (0; ′0) must use rule 3 in:nitely many times.
+Proof. Consider a single evaluation step (0; ′0)⇒
+R
+(1; ′1). Let 70 =7(0; 
+′
+0) and 71 =
+7(1; ′1). Then TVar(71) is a strict subset of TVar(70). The desired bound M (0; 
+′
+0)
+is therefore the size of the set TVar(70).
+Denition 8.6 (E-redexes in -compatible pairs). Let (; ′) be a -compatible pair and
+k¿0. We de0ne the set of E-redexes of (; ′) at rank k as the following subset of
+the constraints in 7(; ′):
+E-redexes((; ′); k) = {G˜(F U, := ) ∈ 7(; ′) | rank(G˜(F U, := ); (; ′)) = k}:
+Lemma 8.7 (Ordering E-redexes in -compatible pairs). Let (; ′) be a -compatible
+pair and :x the integer k¿0. Then we can list the constraints in E-redexes((; ′); k)
+in a particular order:
+G˜1(F1 U,1
+:= 1); G˜2(F2 U,2
+:= 2); : : : ; G˜n(Fn U,n
+:= n)
+such that for every 16j6n:
+Fj =∈ EVar(G˜1) ∪ · · · ∪ EVar(G˜j−1):
+In particular, for j= n, we have Fn =∈ EVar(G˜1)∪ · · · ∪ EVar(G˜n−1).
+64 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+Proof. Let A= {F1; : : : ; Fn} and B= EVar − A. If G˜ ∈ EVar∗, we write G˜=B for the
+sequence in A∗ obtained from G˜ after erasing all E-variables in B. We de0ne disjoint
+subsets A1; A2; A3; : : : of A as follows:
+A1 = {F ∈ EVar | G˜(F U, := ) ∈ E-redexes((; ′); k) and G˜ =B = ”}:
+If E-redexes((; ′); k) = ∅, then clearly A1 = ∅. For every i¿1, de0ne:
+Ai+1 = {F ∈ EVar | G˜(F U, := G˜) ∈ E-redexes((; ′); k) and G˜ =B ∈ A1 · · ·Ai}:
+This de0nition of A1; A2; A3; : : : is not circular, because 7(; ′) is a -compatible con-
+straint set, implying that E-path(F; 7(; ′)) is uniquely de0ned without repeated entries,
+for every F ∈ EVar. Because A is 0nite, there is a smallest p such that A=A1 ∪ · · · ∪
+Ap. Moreover, by de0nition, if Ai+1 = ∅ then Ai = ∅. Hence, assuming A = ∅, we have a
+partition of A into p¿1 disjoint (non-empty) subsets. We partition E-redexes((; ′); k)
+similarly, by de0ning a subset 7i of constraints, one for every i¿1:
+7i = {G˜(F U, := ) ∈ E-redexes((; ′); k) |F ∈ Ai}:
+Clearly, E-redexes((; ′); k)=71 ∪ · · · ∪7p. For every 16i6p, let Ai = {Fi;1; : : : ;
+Fi; ni}. Thus, in particular, n= n1 + n2 + · · ·+ np. To conclude the proof, we assign a
+0xed but otherwise arbitrary order to each 7i separately:
+G˜i;1(Fi;1 U,i;1
+:= i;1); : : : ; G˜i;ni(Fi;ni U,i;ni
+:= i;ni):
+The sequence 1; 2; : : : ; n in the lemma statement is just the sequence (appropriately
+renamed):
+(1; 1); : : : ; (1; n1); (2; 1); : : : ; (2; n2); : : : ; (p; 1); : : : ; (p; np):
+If G˜(F U, := ) is in 7i, for some 16i6p, then E-path(F; 7(; ′))= G˜ with |G˜=B|= i−1
+by construction. This, together with the fact that the E-path of a variable is uniquely
+de0ned and does not contain repeated entries, implies that for all 16j6p and all
+16r6nj it holds that
+Fj;r =∈ EVar(G˜i;q)
+where either i= j and 16q¡r, or 16i¡j and 16q6ni. The conclusion of the lemma
+follows.
+Denition 8.8 (Conservative E-redexes in -compatible pairs). Let (; ′) be a -com-
+patible pair, k¿0, and G˜(F U, := ) be an E-redex of (; ′) at rank k. We say G˜(F U, := )
+is conservative if its reduction decreases the number of E-redexes at rank k. Specif-
+ically, if there is a -compatible pair (1; ′1) such that (; 
+′)⇒
+3
+(1; ′1) by reducing
+G˜F U, := G˜, then |E-redexes((; ′); k)|¿|E-redexes((1; ′1); k)|.
+Lemma 8.9 (Conservative E-redexes exist). Let (; ′) be a -compatible pair and :x
+integer k¿0. If E-redexes((; ′); k) = ∅, then there is a constraint in E-redexes((; ′);
+k) which is conservative.
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 65
+Proof. If there is exactly one constraint G˜(F U, := ) in E-redexes((; ′); k), then the
+lemma conclusion is readily veri0ed: The reduction of G˜(F U, := ) does not create E-
+redexes at rank k, although it may create E-redexes at ranks = k. If E-redexes((; ′); k)
+contains n¿2 constraints, say
+G˜1(F1 U,1
+:= 1); G˜2(F2 U,2
+:= 2); : : : ; G˜n(Fn U,n
+:= n);
+then, by Lemma 8.7, they can be ordered so that Fn =∈ EVar(G˜1)∪ · · · ∪ EVar(G˜n−1).
+The last constraint G˜n(Fn U,n
+:= n) in this list is a conservative E-redex at rank
+k.
+Lemma 8.10 (Evaluating with rule 3 at a 0xed rank). Let R= {1; 2} as in Lemma
+8.5.
+Hypothesis. Let (0; ′0) be a -compatible pair in R-normal form, with k = h(0; 
+′
+0),
+and consider an arbitrary evaluation with the rules in R (with no rank restriction)
+and rule 3 restricted to conservative E-redexes at rank k, i.e.,
+(#) (0; ′0)⇒a1 (1; 
+′
+1)⇒a2 (2; 
+′
+2)⇒a3 · · ·⇒ai (i; 
+′
+i)⇒ai+1 · · ·
+where for every i¿1, either ai ∈R or ai =3 and the step (i−1; ′i−1)⇒3 (i; 
+′
+i) is the
+result of reducing a conservative E-redex at rank k.
+Conclusion. The evaluation shown in (#) cannot be in:nite. Moreover, if (i; ′i) cannot
+be evaluated further, i.e., if (i; ′i) is in R-normal form and in (3; k)-normal form
+(see De:nition 8.4), then either i = ′i or h(i; 
+′
+i)¿k.
+Proof. We assume E-redexes((; ′); k) = ∅, otherwise the conclusion follows immedi-
+ately from Lemma 8.5. For arbitrary -compatible pair (; ′), de0ne the
+measure:
+P(; ′) = |E-redexes((; ′); h(; ′))|
+= the number of E-redexes of (; ′) at rank h(; ′):
+We also de0ne the measure N (; ′) as follows:
+N (; ′) = (P(; ′); size(7(; ′))):
+The size( ) function is given in De0nition 5.13. We use the lexicographic ordering on
+pairs of natural numbers and, relative to this ordering, we show that N (; ′) is strictly
+decreasing—provided also that the evaluation starts from a -compatible pair (0; ′0)
+in R-normal form.
+If rules 1 or 2 is used, then P(; ′) does not change, but size(7(; ′)) decreases by at
+least 2. In general, rules 1 and 2 can introduce new E-redexes, but these are necessarily
+at ranks strictly greater than h(; ′), because the evaluation under consideration starts
+at (0; ′0) in R-normal form.
+66 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+If rule 3 is used, then P(; ′) decreases by Lemma 8.9, while in general size(7(; ′))
+increases. Because we restrict rule 3 to conservative E-redexes at rank h(; ′), all new
+E-redexes are at ranks ¿h(; ′).
+It follows that the measure N (; ′) is well-ordered, of order type !2. This implies
+the conclusion of the lemma.
+Denition 8.11 (Rank-increasing evaluations). Let R= {1; 2}. Let (0; ′0) be a -
+compatible pair. A rank-increasing evaluation of (0; ′0) is of the form:
+(0; ′0)
+∗⇒
+R
+(1; ′1)
+∗⇒
+R1
+(2; ′2)
+∗⇒
+R2
+· · ·
+where (1; ′1) is in R-normal form and, for every i¿1, if i = ′i then Ri =R∪{(3; ki)}
+where ki = h(i; ′i) and (i+1; 
+′
+i+1) is in Ri-normal form.
+Lemma 8.12 (Rank-increasing evaluations complete). Let 7 be a -compatible con-
+straint set, and let (; ′)= p7q. If a rank-increasing evaluation of (; ′) diverges,
+then 7 has no solution.
+Proof. A rank-increasing evaluation of (; ′) induces an evaluation of Unify(7) such
+that, if the evaluation of (; ′) diverges, then the induced evaluation of Unify(7) also
+diverges. By Lemma 5.11, if 7 has a solution, then every evaluation of Unify(7)
+terminates. This implies the desired result.
+Theorem 8.13 (Decidability of 0nite-rank beta-uni0cation). Let 7 be a -compatible
+constraint set and let k be a :xed but otherwise arbitrary integer ¿1.
+1. 7 has a solution of rank 6k if and only if there is a successful evaluation of
+UnifyFR(7; k).
+2. There is an evaluation of UnifyFR(7; k) which terminates.
+3. It is decidable whether 7 has a solution of rank 6k.
+We purposely impose the restriction k =0 because, if 7 has more than one constraint
+and p7q=(; ′), then rank{; ′}¿1. In such a case, an evaluation of UnifyFR(7; 0)
+always fails, even if 7 has a rank-0 solution.
+We conjecture part 2 of the theorem can be strengthened to: “Every evaluation
+of UnifyFR(7; k) terminates.” The conjecture will be settled if one proves that every
+evaluation of a -compatible pair (0; ′0) that diverges is rank-increasing; Lemma 8.10
+proves it for only a particular evaluation strategy.
+Proof. For the left-to-right implication in part 1, suppose 7 has a solution. By Theorem
+5.16, Unify(7) ∗⇒S for some substitution S, which is also a principal solution for 7.
+The evaluation Unify(7) ∗⇒S induces an evaluation UnifyFR(7; ‘) ∗⇒S for some ‘¿0.
+Let ‘ be the least integer such that UnifyFR(7; ‘) ∗⇒S. Suppose S is a rank-m solution
+for 7, with m¿0. Because S is a principal solution for 7, every other solution is of rank
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 67
+¿m. If m¿1, it is easy to see that ‘=m, which also implies that UnifyFR(7; k) ∗⇒S
+for every k¿m. (If m=0 and 7 has more than one constraint, then ‘=1.)
+For the right-to-left implication in part 1, suppose there is a successful evaluation
+UnifyFR(7; k) ∗⇒S for some k¿0, and suppose k is the least integer with this property.
+(We do not need to impose the restriction k =0 for this implication.) The evaluation
+UnifyFR(7; k) ∗⇒S induces an evaluation Unify(7) ∗⇒S. By Theorem 5.16, S is a prin-
+cipal solution for 7. Moreover, if k =0 or k¿2, then S is a rank-k solution; and if
+k =1, then S is of rank 6k.
+We prove parts 2 and 3 of the theorem simultaneously. Let (0; ′0)= p7q and con-
+sider a rank-increasing evaluation of (0; ′0) as speci0ed in De0nition 8.11:
+(0; ′0)
+∗⇒
+R
+(1; ′1)
+∗⇒
+R1
+(2; ′2)
+∗⇒
+R2
+· · ·
+Such an evaluation of (0; ′0) always exists by Lemma 8.10 and, depending on whether
+it diverges or not, there are two cases. In the 0rst case, if the evaluation diverges, 7
+has no solution by Lemma 8.12 and, moreover, there is n¿1 such that kn¿k where
+kn is given in De0nition 8.11. In this case, the induced evaluation of UnifyFR(7; k)
+terminates unsuccessfully.
+In the second case, the evaluation of (0; ′0) exhibited above terminates at (n; 
+′
+n)
+with n= ′n. There are two subcases, depending on whether kn¿k or not. In the
+0rst subcase, kn¿k, it is clear that the induced evaluation of UnifyFR(7; k) termi-
+nates unsuccessfully, corresponding to the fact that every solution for 7 has rank
+¿kn¿k. In the second subcase, kn6k, the induced evaluation of UnifyFR(7; k) termi-
+nates successfully, corresponding to the fact that there is a rank-kn principal solution for
+7.
+Corollary 8.14 (Decidability of 0nite-rank typability). Let M be a -term and let
+k¿0. It is decidable whether there is a rank-k typing for M in system I.
+Proof. For k61, there is a typing for M of rank 61 iP M is simply typable. For
+k¿2, the result follows from Theorems 7.9 and 8.13.
+Appendix A. Complete run of the type-inference procedure
+We revisit Example 2.22, illustrating a run of the type-inference procedure in Sec-
+tion 6. The -term in this example is (x:y:xy)(z:zz). The steps presented below
+are obtained by running an actual implementation of the procedure, which is found
+at http://www.church-project.org/modular/compositional-analysis/. (This
+is only one of several implementations available at the website, which are all de-
+veloped in the context of the compositional-analysis ePort of the Church Project.)
+There are non-essential diPerences between the initial and 0nal skeletons below and
+those in Example 2.22 for the same -expression; we follow the organization in
+the “type-inference report” produced by the implementation at the forementioned
+website.
+68 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+1. Initial typing judgement:
+ (x:y:xy)(z:zz) : 6
+2. Initial skeleton:
+3. Initial constraint set:
+{ 0 := F01 → 2;
+F23
+:= F2(F14 → 5);
+0 → F01 → 2 := F2(3 ∧ F14 → 5)→ 6 }
+4. Final substitution, obtained by running algorithm Unify in Section 5 on the initial
+constraint set:
+{[ 0 := (F14 → 2) ∧ F14 → 2;
+01 := F14 → 2;
+11 := 4;
+3 := F14 → 2;
+5 := 2;
+6 := (F14 → 2) ∧ F14 → 2;
+F0 := ∧ F1 ;
+F2 := ]}
+5. Final skeleton, also a derivation, obtained by applying the 0nal substitution to the
+initial skeleton:
+A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70 69
+References
+[1] R. Amadio, P.-L. Curien, Domains and Lambda Calculi, in: Cambridge Tracts in Theoretical Computer
+Science, Vol. 41, Cambridge University Press, Cambridge, 1998.
+[2] A. Banerjee, A modular, polyvariant, and type-based closure analysis, in: Proc. 1997 Int. Conf.
+Functional Programming, ACM Press, New York, 1997.
+[3] M. Coppo, M. Dezani-Ciancaglini, An extension of the basic functionality theory for the -calculus,
+Notre Dame J. Formal Logic 21 (4) (1980) 685–693.
+[4] M. Coppo, M. Dezani-Ciancaglini, B. Venneri, Principal type schemes and -calculus semantics, in:
+Hindley and Seldin (Eds.), Essays on Combinatory Logic, Lambda, Calculus, and Formation, Academic
+Press, New York, pp. 535–560.
+[5] M. Coppo, M. Dezani-Ciancaglini, B. Venneri, Functional characters of solvable terms, Z. Math. Logik
+Grundlag. Math. 27 (1) (1981) 45–58.
+[6] M. Coppo, P. Giannini, A complete type inference algorithm for simple intersection types, in: 17th
+Colloq. Trees in Algebra and Programming, Lecture Notes in Computer Science, Vol. 581, Springer,
+Berlin, 1992, pp. 102–123.
+[7] L. Damas, R. Milner, Principal type schemes for functional programs, in: Conf. Rec. 9th Ann. ACM
+Symp. Princ. of Prog. Langs., 1982, pp. 207–212.
+[8] J. Gosling, B. Joy, G. Steele, The Java Language Speci0cation, Addison-Wesley, Reading, MA, 1996.
+[9] J.R. Hindley, J.P. Seldin (Eds.), To H.B. Curry: Essays on Combinatory Logic, Lambda Calculus, and
+Formalism, Academic Press, New York, 1980.
+[10] T. Jensen, Inference of polymorphic and conditional strictness properties, in: Conf. Rec. POPL ’98:
+25th ACM Symp. Princ. of Prog. Langs., 1998.
+[11] T. Jim, What are principal typings and what are they good for?, in: Conf. Rec. POPL ’96: 23rd ACM
+Symp. Princ. of Prog. Langs., 1996.
+[12] B. Jacobs, I. Margaria, M. Zacchi, Filter models with polymorphic types, Theoret. Comput. Sci. 95
+(1992) 143–158.
+[13] A.J. Kfoury, Beta-reduction as uni0cation, A refereed extensively edited version is [14]. This preliminary
+version was presented at the Helena Rasiowa Memorial Conference, July 1996.
+[14] A.J. Kfoury, Beta-reduction as uni0cation, in: D. Niwinski (Ed.), Logic, Algebra, and Computer Science
+(H. Rasiowa Memorial Conference, December 1996), Banach Center Publication, Vol. 46, Springer,
+Berlin, 1999, pp. 137–158. Supersedes [13] but omits a few proofs included in the latter.
+70 A.J. Kfoury, J.B. Wells / Theoretical Computer Science 311 (2004) 1–70
+[15] A.J. Kfoury, J.B. Wells, A direct algorithm for type inference in the rank-2 fragment of the second-order
+-calculus, in: Proc. 1994 ACM Conf. LISP Funct. Program., 1994, pp. 196–207.
+[16] A.J. Kfoury, J.B. Wells, Principality and decidable type inference for 0nite-rank intersection types, in:
+Conf. Rec. POPL ’99: 26th ACM Symp. Princ. of Prog. Langs., 1999, pp. 161–174, superseded by
+[17].
+[17] A.J. Kfoury, J.B. Wells, Principality and Type Inference for Intersection Types Using Expansion
+Variables, supersedes [16], August 2003.
+[18] D. Leivant, Polymorphic type inference, in: Conf. Rec. 10th Ann. ACM Symp. Princ. of Prog. Langs.,
+1983, pp. 88–98.
+[19] R. Milner, M. Tofte, R. Harper, D.B. MacQueen, The De0nition of Standard ML (Revised), MIT Press,
+Cambridge, MA, 1997.
+[20] B. Pierce, Bounded quanti0cation is undecidable, Inform. and Comput. 112 (1994) 131–165.
+[21] S.L. Peyton Jones, C. Hall, K. Hammond, W. Partain, P. Wadler, The Glasgow Haskell compiler: a
+technical overview, in: Proc. UK Joint Framework for Information Technology (JFIT) Technical Conf.,
+1993.
+[22] G. Pottinger, A type assignment for the strongly normalizable -terms, in: J.R. Hindley, J.P. Seldin
+(Eds.), To H.B. Curry: Essays on Combinatory Logic, Lambda Calculus, and Formalism, Academic
+Press, New York, 1980, pp. 561–577.
+[23] S. Ronchi Della Rocca, Principal type schemes and uni0cation for intersection type discipline, Theoret.
+Comput. Sci. 59 (1–2) (1988) 181–209.
+[24] S. Ronchi Della Rocca, B. Venneri, Principal type schemes for an extended type theory, Theoret.
+Comput. Sci. 28 (1–2) (1984) 151–169.
+[25] P. SallSe, Une extension de la thSeorie des types en -calcul, in: G. Ausiello, C. Bo^hm (Eds.), Fifth
+Int. Conf. on Automata, Languages and Programming, Lecture Notes in Computer Science, Vol. 62,
+Springer, Berlin, July 1978, pp. 398–410.
+[26] SE. Sayag, M. Mauny, A new presentation of the intersection type discipline through principal typings
+of normal forms, Technical Report RR-2998, INRIA, October 16, 1996.
+[27] SE. Sayag, M. Mauny, Structural properties of intersection types, in: Proc. of the Eighth Int. Conf. on
+Logic and Computer Science—Theoretical Foundations of Computing (LIRA), Novi Sad, Yugoslavia,
+September 1997, pp. 167–175.
+[28] P. Urzyczyn, Type reconstruction in F!, Math. Struct. Comput. Sci. 7 (4) (1997) 329–358.
+[29] S.J. van Bakel, Intersection Type Disciplines in Lambda Calculus and Applicative Term Rewriting
+Systems, Ph.D. Thesis, Catholic University of Nijmegen, 1993.
+[30] J.B. Wells, Typability and type checking in the second-order -calculus are equivalent and undecidable,
+in: Proc. 9th Annu. IEEE Symp. Logic in Comput. Sci., 1994, pp. 176–185, superseded by [32].
+[31] J.B. Wells, Typability is undecidable for F+eta, Technical Report 96-022, Computer Science
+Department, Boston University, March 1996.
+[32] J.B. Wells, Typability and type checking in System F are equivalent and undecidable, Ann. Pure Appl.
+Logic 98 (1–3) (1999) 111–156, supersedes [30].
+[33] J.B. Wells, The essence of principal typings, in: Proc. 29th Int. Coll. Automata, Languages, and
+Programming, Lecture Notes in Computer Science, Vol. 2380, Springer, Berlin, 2002, pp. 913–925.

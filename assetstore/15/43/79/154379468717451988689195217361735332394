@@ -1,0 +1,1026 @@
+Nominal Unification
+Christian Urban Andrew Pitts Murdoch Gabbay
+University of Cambridge, Cambridge, UK
+INRIA, Paris, France
+Abstract
+We present a generalisation of first-order unification to the practically important case of
+equations between terms involving binding operations. A substitution of terms for vari-
+ables solves such an equation if it makes the equated terms -equivalent, i.e. equal up to
+renaming bound names. For the applications we have in mind, we must consider the simple,
+textual form of substitution in which names occurring in terms may be captured within the
+scope of binders upon substitution. We are able to take a “nominal” approach to binding in
+which bound entities are explicitly named (rather than using nameless, de Bruijn-style rep-
+resentations) and yet get a version of this form of substitution that respects -equivalence
+and possesses good algorithmic properties. We achieve this by adapting two existing ideas.
+The first one is terms involving explicit substitutions of names for names, except that here
+we only use explicit permutations (bijective substitutions). The second one is that the uni-
+fication algorithm should solve not only equational problems, but also problems about the
+freshness of names for terms. There is a simple generalisation of classical first-order uni-
+fication problems to this setting which retains the latter’s pleasant properties: unification
+problems involving -equivalence and freshness are decidable; and solvable problems pos-
+sess most general solutions.
+Key words: Abstract Syntax, Alpha-Conversion, Binding Operations, Unification
+1 Introduction
+Decidability of unification for equations between first-order terms and algorithms
+for computingmost general unifiers form a fundamental tool of computational logic
+with many applications to programming languages and computer-aided reasoning.
+However, very many potential applications fall outside the scope of first-order uni-
+fication, because they involve term languages with binding operations where at
+the very least we do not wish to distinguish terms differing up to the renaming
+of bound names. There is a large body of work studying languages with binders
+through the use of various -calculi as term representation languages, leading to
+Theoretical Computer Science, 2004, Vol. 323(1-3), Pages 473-497.
+higher-order unification algorithms for solving equations between -terms mod-
+ulo -equivalence. However, higher-order unification is technically complicated
+without being completely satisfactory from a pragmatic point of view. The reason
+lies in the difference between substitution for first-order terms and for -terms.
+The former is a simple operation of textual replacement (sometimes called graft-
+ing [1], or context substitution [2, Sect. 2.1]), whereas the latter also involves re-
+namings to avoid capture. Capture-avoidance ensures that substitution respects -
+equivalence, but it complicates higher-order unification algorithms. Furthermore it
+is the simple textual form of substitution rather than the more complicated capture-
+avoiding form which occurs in many informal applications of “unification modulo
+-equivalence”. For example, consider the following schematic rule which might
+form part of the inductive definition of a binary evaluation relation for the ex-
+pressions of an imaginary functional programming language:
+. (1)
+Here , and are metavariables standing for unknown programming language
+expressions. The binders and may very well capture
+free occurrences of the variable named when we instantiate the schematic rule
+by replacing the metavariable with an expression. For instance, using the rule
+scheme in a bottom-up search for a proof of
+(2)
+we would use a substitution that does involve capture, namely
+in order to unify the goal with the conclusion of the rule (1)—generating the new
+goal from the hypothesis of (1). The problem with this is that
+in informal practice we usually identify terms up to -equivalence, whereas textual
+substitution does not respect -equivalence. For example, up to -equivalence, the
+goal
+(3)
+is the same as (2). We might think (erroneously!) that the conclusion of rule (1)
+is the same as without changing the rule’s hypothesis—
+after all, if we are trying to make -equivalence disappear into the infrastructure,
+then we must be able to replace any part of what we have with an equivalent part.
+So we might be tempted to unify the conclusion with (3) via the textual substitu-
+tion , and then apply this substitution to the hypothesis to
+obtain a wrong goal, . Using -calculus and higher-order unifi-
+cation saves us from such sloppy thinking, but at the expense of having to make
+explicit the dependence of metavariables on bindable names via the use of function
+474
+variables and application. For example, (1) would be replaced by something like
+(4)
+or, modulo -equivalence
+. (5)
+Now goal (3) becomes and there is no problem unifying it with the
+conclusion of (5) via a capture-avoiding substitution of for , for and
+for .
+This is all very fine, but the situation is not as pleasant as for first-order terms:
+higher-order unification problems can be undecidable, decidable but lack most
+general unifiers, or have such unifiers only by imposing some restrictions [3];
+see [4] for a survey of higher-order unification. We started out wanting to com-
+pute with binders modulo -equivalence, and somehow the process of making
+possibly-capturing substitution respectable has led to function variables, applica-
+tion, capture-avoiding substitution and -equivalence. Does it have to be so? No!
+For one thing, several authors have already noted that one can make sense of
+possibly-capturing substitution modulo -equivalence by using explicit substitu-
+tions in the term representation language: see [1,5–9]. Compared with those works,
+we make a number of simplifications. First, we find that we do not need to use
+function variables, application or -equivalence in our representation language—
+leaving just binders and -equivalence. Secondly, instead of using explicit substitu-
+tions of names for names, we use only the special case of explicit permutations of
+names. The idea of using name-permutations, and in particular name-swappings,
+when dealing with -conversion was described in [10] and there is growing evi-
+dence of its usefulness (see [11–13], for example). When a name substitution is
+actually a permutation, the function it induces from terms to terms is a bijection;
+this bijectivity gives the operation of permuting names very good logical proper-
+ties compared with name substitution. Consider for example the -equivalent terms
+and , where , and are distinct. If we apply the substitution (re-
+naming all free occurrences of to be ) to themwe get and , which are
+no longer -equivalent. Thus renaming substitutions do not respect -equivalence
+in general, and any unification algorithm using them needs to take extra precautions
+to not inadvertently change the intended meaning of terms. The traditional solution
+for this problem is to introduce a more complicated form of renaming substitution
+that avoids capture of names by binders. In contrast, the simple operation of name-
+permutation respects -equivalence; for example, applying the name-permutation
+that swaps all occurrences of and (be they free, bound or binding) to the
+terms above gives and , which are still -equivalent. We exploit such
+good properties of name-permutations to give a conceptually simple unification
+475
+algorithm.
+In addition to the use of explicit name-permutations, we also compute symbolically
+with predicates expressing freshness of names for terms. Such predicates certainly
+feature in previous work on binding (for example, Qu-Prolog’s not free in
+predicate [8], the notion of “algebraic independence” in [14, Definition 3], and the
+“non-occurrence” predicates of [15]). But once again, the use of such a freshness
+predicate based upon name swapping rather than renaming, which arises naturally
+from the work reported in [10,16], gives us a simpler theory with good algorith-
+mic properties. It is easy to see why there is a need for computing with freshness,
+given that we take a “nominal” approach to binders. (In other words we use con-
+crete versions of binding and -equivalence in which bound entities are named ex-
+plicitly, rather than using de Bruijn-style representations, as for example in [1,7].)
+A basic instance of our generalised form of -equivalence identifies with
+provided is fresh for , where the subterm indicates an ex-
+plicit permutation—namely the swapping of and —waiting to be applied to .
+We write “ is fresh for ” symbolically as ; the intended meaning of this
+relation is that does not occur free in any (ground) term that may be substituted
+for . If we know more about we may be able to eliminate the explicit permuta-
+tion in ; for example, if we knew that holds as well as , then
+can be replaced by .
+It should already be clear from these simple examples that in our setting the appro-
+priate notion of term-equality is not a bare equation, , but rather a hypothetical
+judgement of the form
+(6)
+where is a freshness environment—a finite set of
+freshness assumptions. For example
+(7)
+is a valid judgement of our nominal equational logic. Similarly, judgements about
+freshness itself will take the form
+(8)
+Two examples of valid freshness judgements are and
+.
+The freshness environment in judgements of the form (6) and (8) expresses fresh-
+ness conditions that any textual substitution of terms for variables must respect in
+order for the right-hand side of the judgement to be valid after substitution. This
+explicit use of freshness makes the operation of textual substitution respect our
+generalised form of -equivalence. For example, if we were naı¨vely to regard the
+terms and as -equivalent, then applying for example the capturing
+substitution or results into two terms that are not -equivalent
+476
+anymore. (A similar observation partly motivates the work in [17].) However, if we
+assume and as in (7), then all problematic substitutions are ruled out.
+In this way we obtain a version of -equivalence between terms with variables that
+is respected by textual substitutions (see Lemma 2.14 below), unlike the traditional
+notion of -equivalence.
+Summary
+We will represent languages involving binders using the usual notion of first-order
+terms over a many-sorted signature, but with certain distinguished constants and
+function symbols. These give us terms with: distinguished constants naming bind-
+able entities, that we call atoms; terms expressing a generic form of binding
+of an atom in a term ; and terms representing an explicit permutation
+of atoms waiting to be applied to whatever term is substituted for the variable .
+Section 2 presents this term-language together with a syntax-directed inductive def-
+inition of the provable judgements of the form (6) and (8) which for ground terms
+(i.e. ones with no variables) agrees with the usual notions of -equivalence and
+“not a free variable of”. However, on open terms our judgements differ from these
+standard notions. Section 3 considers unification in this setting. Solving equalities
+between abstractions entails solving both equalities and
+freshness problems . Therefore our general form of nominal unification
+problem is a finite collection of individual equality and freshness problems. Such a
+problem is solved by providing not only a substitution (of terms for variables),
+but also a freshness environment (as above), which together have the property
+that and hold for each individual equality
+and freshness in the problem . Our main result with respect to unifica-
+tion is that solvability is decidable and that solvable problems possess most general
+solutions (for a reasonably obvious notion of “most general”). The proof is via a
+unification algorithm that is very similar to the first-order algorithm given in the
+now-common transformational style [18]. (See [19, Sect. 2.6] or [20, Sect. 4.6] for
+expositions of this.) Section 4 considers the relationship of our version of “unifi-
+cation modulo -equivalence” to existing approaches. Section 5 assesses what has
+been achieved and the prospects for applications.
+Quiz
+To appreciate the kind of problem that nominal unification solves, you might like
+to try the following quiz about the -calculus [21] before we apply our algorithm
+to solve it at the end of Section 3.
+Assuming and are distinct variables, is it possible to find -terms
+that make the following pairs of terms -equivalent?
+477
+(1) and
+(2) and
+(3) and
+(4) and
+If it is possible to find a solution for any of these four problems, can you describe
+what all possible solutions for that problem are like? (The answers are given in
+Example 3.8.)
+2 Nominal equational logic
+We take a concrete approach to the syntax of binders in which bound entities are
+explicitly named. Furthermore we do not assume that the names of bound entities
+are necessarily variables (things that may be substituted for), in order to encompass
+examples like the -calculus [22], in which the restriction operator binds channel
+names and these are quite different from names of unknown processes. Names of
+bound entities will be called atoms. This is partly for historical reasons (stemming
+from the work by the second two authors [10]) and partly to indicate that the in-
+ternal structure of such names is irrelevant to us: all we care about is their identity
+(i.e. whether or not one atom is the same as another) and that the supply of atoms
+is inexhaustible.
+Although there are several general frameworks in the literature for specifying lan-
+guages with binders, not all of them meet the requirements mentioned in the pre-
+vious paragraph. Use of the simply typed -calculus for this purpose is common;
+but as discussed in the Introduction, it leads to a problematic unification theory.
+Among first-order frameworks, Plotkin’s notion of binding signature [23,24], be-
+ing unsorted, equates names used in binding with names of variables standing for
+unknown terms; so it is not sufficiently general for us. A first-order framework that
+does meet our requirements is the notion of nominal algebras in [15]. The nominal
+signatures that we use in this paper are a mild (but practically useful) generalisation
+of nominal algebras in which name-abstraction and pairing can be mixed freely in
+arities (rather than insisting as in [15] that the argument sort of a function symbol
+be normalised to a tuple of abstractions).
+Definition 2.1. A nominal signature is specified by: a set of sorts of atoms (typical
+symbol ); a disjoint set of sorts of data (typical symbol ); and a set of function
+symbols (typical symbol ), each of which has an arity of the form . Here
+ranges over (compound) sorts given by the grammar .
+Sorts of the form classify terms that are binding abstractions of atoms of sort
+over terms of sort . We will explain the syntax and properties of such terms in a
+moment.
+478
+Example 2.2. Here is a nominal signature for expressions in a small fragment of
+ML [25]:
+sort of atoms:
+sort of data:
+function symbols:
+.
+The function symbol constructs terms of sort representing value identifiers
+(named by atoms of sort ); constructs application expressions from pairs of
+expressions; , and construct terms representing respectively function ab-
+stractions ( ), local value declarations ( ) and
+local recursive function declarations ( ). The arities of
+the function symbols specify which are binders and in which way their arguments
+are bound. For example, in the expression ( ) there is
+a binding occurrence of the value identifier whose scope is both of and ;
+and a binding occurrence of the value identifier whose scope is just . These
+binding scopes are reflected by the argument sort of the function symbol . This
+kind of specification of binding scopes is of course a feature of higher-order ab-
+stract syntax [26], using function types in simply typed -calculus where we
+use abstraction sorts . We shall see that the latter have much more elementary
+(indeed, first-order) properties compared with the former.
+Definition 2.3. Given a nominal signature, we assume that there are countably
+infinite and pairwise disjoint sets of atoms (typical symbol ) for each sort of atoms
+, and variables (typical symbol ) for each sort of atoms and each sort of data
+. The terms over a nominal signature and their sorts are inductively defined as
+follows, where we write to indicate that a term has sort .
+Unit value .
+Pairs , if and .
+Data , if is a function symbol of arity and .
+Atoms , if is an atom of sort .
+Atom-abstraction , if is an atom of sort and .
+Suspension , if is a finite list whose elements
+are pairs of atoms, with and of the same sort, and is a variable of
+sort , where is either a sort of data or a sort of atoms (i.e. ).
+Recall that every finite permutation can be expressed as a composition of swappings
+; the list of pairs of atoms occurring in a suspension term specifies a
+finite permutation of atoms waiting to be applied once we know more about the
+variable (by substituting for it, for example). We represent finite permutations
+in this way because it is really the operation of swapping which plays a fundamen-
+479
+tal roˆle in the theory. Since, semantically speaking, swapping commutes with all
+term-forming operations, we can normalise terms involving an explicit swapping
+operation by pushing the swap in as far as it will go, until it reaches a variable (ap-
+plying the swapping to atoms that it meets on the way); the terms in Definition 2.3
+are all normalised in this way, with explicit permutations “piled up” in front of
+variables giving what we have called suspensions. In case the permutation in a
+suspension is the empty list, we just write for .
+Definition 2.4. The permutation action, , of a finite permutation of atoms
+on a term is defined as in Figure 1, making use of the following notations. The
+composition of a permutation followed by a swap is given by list-cons,
+written . (Note that we apply permutations to terms on the left, and hence
+the order of the composition is from right to left.) The composition of followed by
+another permutation is given by list-concatenation, written as . The identity
+permutation is given by the empty list ; and the inverse of a permutation is given
+by list reversal, written as .
+Permutation actions have excellent logical properties (stemming from the fact that
+they are bijections). We exploit these properties in our definition of -equivalence
+for terms over a nominal signature, which is respected by substitution of terms for
+variables even though the latter may involve capture of atoms by binders. To do
+so we will need to make use of an auxiliary relation of freshness between atoms
+and terms, whose intended meaning is that the atom does not occur free in any
+substitution instance of the term. As discussed in the Introduction, our judgements
+about term equivalence ( ) need to contain hypotheses about the freshness of
+atoms with respect to variables ( ); and the same goes for our judgements
+about freshness itself ( ). Figure 2 gives a syntax-directed inductive definition
+of equivalence and freshness using judgements of the form
+and
+where and are terms of the same sort over a given nominal signature, is
+an atom, and the freshness environment is a finite set of freshness constraints
+, each specified by an atom and a variable. Rule ( -suspension) in Figure 2
+makes use of the following definition.
+Definition 2.5. The disagreement set of two permutations and is the set of
+atoms def .
+Note that every disagreement set is a subset of the finite set of atoms
+occurring in either of the lists and , because if does not occur in those lists,
+then from Figure 1 we get . To illustrate the use of disagreement
+sets, consider the judgement
+480
+def
+def
+if
+if
+otherwise
+def
+def
+def
+def
+def
+Fig. 1. Permutation action on terms, .
+( -unit) ( -pair)
+( -function symbol) ( -abstraction-1)
+( -abstraction-2)
+( -atom) for all ( -suspension)
+( -unit) ( -pair)
+( -function symbol)
+( -abstraction-1) ( -abstraction-2)
+( -atom) ( -suspension)
+Fig. 2. Inductive definition of and .
+This holds by applying rule ( -suspension) in Figure 2, since the disagreement set
+of the permutations and is .
+Remark 2.6 (Freshness environments). Note that the freshness environment on the
+left-hand side of judgements in the rules in Figure 2 does not change from hy-
+potheses to conclusion. So in the same way that we assume variables have attached
+sorting information, we could dispense with the use of freshness environments en-
+tirely by attaching the freshness information directly to variables. However, we find
+the use of freshness environments more elegant (for one thing, without them two
+variables with the same name but different freshness information would have to be
+regarded as different). They also make life simpler when we come on to nominal
+unification problems and their solutions in the next section.
+481
+Below we sketch a proof that is an equivalence relation. At first sight this prop-
+erty might be surprising considering the “unsymmetric” definition of the rule ( -
+abstraction-2). However it holds because of the good logical properties of the rela-
+tion with respect to permutation actions. Although reasoning about is rather
+pleasant once equivalence is proved, establishing it first is rather tricky—mainly
+because of the large number of cases, but also because several facts needed in the
+proof are interdependent. We first show that permutations can be moved from one
+side of the freshness relation to the other by forming the inverse permutation, and
+that the freshness relation is preserved under permutation actions.
+Lemma 2.7.
+(1) If then .
+(2) If then .
+(3) If then .
+PROOF. (1) and (2) are by routine inductions on the structure of , using the fact
+that iff ; (3) is a consequence of (2) and the fact that permuta-
+tions are bijections on atoms.
+According to the definition of the permutation action given in Figure 1, if we push
+a permutation inside a term, we need to apply the permutation to all atoms we
+meet on the way. Suppose we apply two distinct permutations, say and , to
+a term , then in general and are not -equivalent—the disagreement set
+characterises all atoms which potentially lead to differences. However,
+if we assume that all atoms in are fresh for , then we can infer that the
+permutation actions produce equivalent terms. This is made precise in the following
+lemma.
+Lemma 2.8. Given any and , if holds for all , then
+.
+PROOF. By induction on the structure of , for all and simultaneously, using
+the fact about disagreement sets that for all atoms , if
+then .
+An example of this lemma is that is a valid judge-
+ment, because the disagreement set is empty.
+In addition some further simple properties of permutations and dis-
+agreement sets need to be established first. A machine-checked proof
+of all results using the theorem prover Isabelle can be found at
+http://www.cl.cam.ac.uk/users/cu200/Unification.
+482
+The next lemma shows that respects the freshness relation.
+Lemma 2.9. If and , then .
+PROOF. Routine induction on the definition of using Lemma 2.7.
+For showing transitivity of the relation , it will be necessary to define a measure
+that counts all term constructors occurring in a term.
+Definition 2.10. The size of a term is the natural number defined by:
+def
+def
+def
+Notice that the size of a term is preserved under permutation actions (i.e. )
+and respected by the relation in the sense that if then .
+Theorem 2.11 (Equivalence). is an equivalence relation.
+PROOF. Reflexivity is by a simple induction on the structure of terms. Transitivity
+is by an induction on the size of terms: a slight complication is that many subcases
+need to be analysed (for example five subcases when dealing with abstractions) and
+also that transitivity needs to be shown by mutual induction with the fact that is
+preserved under permutation actions, that is
+given any if then (9)
+We illustrate the proof of transitivity for the case when and
+hold, with , and all distinct atoms, and we have to prove
+. By the ( -abstraction-2) rule we can infer from the assumptions
+the following facts:
+(i) (ii)
+(iii) (iv)
+Below we give the steps that prove .
+483
+(a) by (iii) and IH (9)
+(b) by (i), (a) and IH (transitivity)
+(c) by definition
+(d) by (ii), (iii) and Lemma 2.9
+(e) by , (d) and Lemma 2.7(i)
+(f) by (c), (iv), (e) and Lemma 2.8
+(g) by (b), (f) and IH (transitivity)
+(h) by (e), (g) and ( -abstraction-2)
+The other cases are by similar arguments. Symmetry is then by a routine induction
+on the definition of using Lemma 2.8 and transitivity.
+Now it is relatively straightforward to obtain the following properties of our equiv-
+alence relation with respect to permutation actions.
+Corollary 2.12.
+(1) if and only if .
+(2) if and only if .
+(3) Given any and , if then for all in we have
+.
+PROOF. (i) follows immediately from Lemma 2.8 and transitivity; (ii) follows
+from (9) and (i); and (iii) is by a routine induction on the structure of using
+Lemma 2.9.
+The main reason for using suspensions in the syntax of terms is to enable a def-
+inition of substitution of terms for variables that allows capture of free atoms by
+atom-abstractions while still respecting -equivalence. The following lemma es-
+tablishes this. First we give some terminology and notation for term-substitution.
+Definition 2.13. A substitution is a sort-respecting function from variables to
+terms with the property that for all but finitely many variables . We
+write for the finite set of variables satisfying . If con-
+sists of distinct variables and for , we sometimes
+write as
+(10)
+We write for the result of applying a substitution to a term ; this is the
+term obtained from by replacing each suspension in (as ranges over
+484
+) by the term got by letting act on the term using the
+definition in Figure 1. For example, if and , then
+. Given substitutions and , and freshness environments
+and , we write
+(a) and (b) (11)
+to mean, for (a), that holds for each and, for (b),
+that holds for all .
+Lemma 2.14 (Substitution). Substitution commutes with the permutation action:
+. Substitution also preserves and in the following sense:
+(1) if and , then ;
+(2) if and , then .
+PROOF. The first sentence follows by a routine induction on the structure of . The
+second follows by induction on the definition of and using Lemma 2.8.
+We claim that the relation defined in Figure 2 gives the correct notion of -
+equivalence for terms over a nominal signature. This is reasonable, given Theo-
+rem 2.11 and the fact that, by definition, it satisfies rules ( -abstraction-1) and ( -
+abstraction-2). Further evidence is provided by the following proposition, which
+shows that for ground terms agrees with the following more traditional defini-
+tion of -equivalence.
+Definition 2.15 (Naı¨ve -equivalence). Define the binary relation between
+terms over a nominal signature to be the least sort-respecting congruence relation
+satisfying whenever is an atom (of the same sort as ) not oc-
+curring at all in the term . Here indicates the result of replacing all free
+occurrences of with in .
+Proposition 2.16 (Adequacy). If and are ground terms (i.e. terms with no vari-
+ables and hence no suspensions) over a nominal signature, then the relation
+of Definition 2.15 holds if and only if is provable from the rules in Fig-
+ure 2. Furthermore, is provable if and only if is not in the set of
+485
+free atoms of , defined by:
+def
+def
+def
+def
+def
+PROOF. The proof is similar to the proof of [10, Proposition 2.2].
+For non-ground terms, the relations and differ! For example
+always holds, whereas is not provable unless . This disagree-
+ment is to be expected, since we noted in the Introduction that is not preserved
+by substitution, whereas from Lemma 2.14 we know that is.
+3 Unification
+Given terms and of the same sort over a nominal signature, can we decide
+whether or not there is a substitution of terms for the variables in and that makes
+them equal in the sense of the relation introduced in the previous section? Since
+instances of are established modulo freshness constraints, it makes more sense
+to ask whether or not there is both a substitution and a freshness environment
+for which holds. As for ordinary first-order unification, solving
+such an equational problem may throw up several equational subproblems; but an
+added complication here is that because of rule ( -abstraction-2) in Figure 2, equa-
+tional problems may generate freshness problems, i.e. ones involving the relation
+. We are thus led to the following definition of unification problems for nominal
+equational logic.
+Definition 3.1. A unification problem over a nominal signature is a finite set of
+atomic problems, each of which is either an equational problem where
+and are terms of the same sort over the signature, or a freshness problem
+where is an atom and a term over the signature. A solution for consists of a
+pair where is a freshness environment and is a substitution satisfying
+for each and
+for each .
+We write for the set of all solutions of a problem . is a most
+general solution for if given any other solution , then there is a
+486
+substitution satisfying and . (Here we are using the
+notation of (11); and denotes the substitution composition of followed by
+, given by def .) A solution is idempotent
+provided .
+We describe an algorithm which, given any nominal unification problem, decides
+whether or not it has a solution and if it does, returns a most general (and idem-
+potent) solution. The algorithm uses labelled transformations, directly generalising
+the presentation of first-order unification in [19, Sect. 2.6] which in turn is based
+upon the approach in [18]. (See also [20, Sect. 4.6] for a detailed exposition, but
+not using labels.) We use two types of labelled transformation between unification
+problems, namely
+and
+where the substitution is either the identity , or a single replacement ;
+and where the freshness environment is either empty , or a singleton .
+The legal transformations are given in Figure 3. This figure uses the notation
+to indicate the union of problems and that are disjoint ( ); and the
+notation to indicate the problem resulting from applying the substitution to
+all the terms occurring in the problem .
+Algorithm. Given a unification problem , the algorithm proceeds in two phases.
+In the first phase it applies as many transformations as possible (non-determin-
+istically). If this results in a problem containing no equational subproblems, then
+it proceeds to the second phase; otherwise it halts signalling failure. In the second
+phase it applies as many transformations as possible (non-deterministically). If
+this does not result in the empty problem, then it halts signalling failure; otherwise
+overall it has constructed a transformation sequence of the form
+(12)
+(where does not contain any equational subproblems) and the algorithm returns
+the solution .
+To show the correctness of this algorithm, we first establish that all sequences of
+unification transitions must terminate.
+Lemma 3.2. There is no infinite series of unification transitions.
+PROOF. Since every reduction sequence consists of two (possibly empty) subse-
+quences, namely one containing only -steps and the other only -steps, we
+can show termination for both subsequences separately. For every unification prob-
+lem we define a measure of the size of to be the lexicographically ordered pair
+See Remark 3.9 for discussion of this use of two phases.
+487
+( -unit)
+( -pair)
+( -function symbol)
+( -abstraction-1)
+( -abstraction-2)
+provided
+( -atom)
+( -suspension)
+( -variable) with
+provided does not occur in
+( -unit)
+( -pair)
+( -function symbol)
+( -abstraction-1)
+( -abstraction-2) provided
+( -atom) provided
+( -suspension) with
+Fig. 3. Labelled transformations.
+of natural numbers , where is the number of different variables used in
+, and is the size (see Definition 2.10) of all equational problems in , that is
+def
+In every -step this measure decreases: the ( ?-variable) transition eliminates
+(completely) one variable from the unification problem, and therefore decreases;
+the ( ?-suspension) transition may eliminate a variable and also decreases the size
+; all other transitions leave the number of variables unchanged, but decrease .
+For the -steps the size
+decreases in every step. Taking both facts together means that every reduction se-
+quence must terminate.
+The following lemmas help us to show that the algorithm gives correct results upon
+488
+termination.
+Lemma 3.3. If then .
+PROOF. We have to prove that both substitutions agree (modulo ) on all vari-
+ables in . The only interesting case is for the substitutions applied
+to , when we need to show that . By Lemma 2.14 we
+can commute the permutation to the outside and move it to the other side of
+by Lemma 2.12—this gives . The case then follows from
+the assumptions by symmetry and commuting the permutation inside the substitu-
+tion.
+Lemma 3.4. Given a unification problem , holds if and only if
+.
+PROOF. Simple calculation using the fact that .
+The following two lemmas show that the unification transformations can be used
+to determine whether or not solutions exists and to describe all of them if they do
+exist.
+Lemma 3.5.
+(i) If and then and
+(ii) If and then and
+PROOF. We just give the details for two unification transitions: the case for ( -
+suspension) follows from Lemma 2.12(iii); and the ( -variable) case is a conse-
+quence of Lemmas 3.3 and 3.4.
+Lemma 3.6.
+(i) If and then
+(ii) If and then
+PROOF. Once again, we just give the details for two unification transitions: the
+( -suspension) case follows from Lemma 2.8; and the ( -variable) case follows
+from Lemma 3.4 and the fact that , which holds by the side-
+condition on the ( -variable) transition about the non-occurrence of in .
+489
+The following theorem establishes the correctness of the nominal unification algo-
+rithm and is the central result of the paper.
+Theorem 3.7 (Correctness). Given a unification problem
+(i) if the algorithm fails on , then has no solution; and
+(ii) if the algorithm succeeds on , then the result it produces is an idempotent
+most general solution.
+PROOF. When failure happens it is because of certain subproblems that mani-
+festly have no solution (namely in the first phase, with , and
+or with occurring in ; in the second phase, ).
+Therefore part (i) is a consequence of Lemma 3.5. For part (ii) one gets that a se-
+quence like (12) exists, and thus is in
+by Lemma 3.6 and the fact that . Furthermore from Lemma 3.5, we get
+that any other solution satisfies and ,
+so that is indeed a most general solution. Since one of those solutions is the
+most general solution , we also know that and hence that
+is idempotent.
+We now apply the nominal unification algorithm to solve the quiz questions from
+the Introduction.
+Example 3.8. Using the first three function symbols of the nominal signature of
+Example 2.2 to represent -terms, the Quiz at the end of the Introduction translates
+into the following four unification problems over that signature, where and are
+distinct atoms of sort and are distinct variables of sort :
+def ,
+def ,
+def ,
+def .
+Applying the nominal unification algorithm described above, we find that
+has no solution;
+has a most general solution given by and
+;
+has a most general solution given by and ;
+has a most general solution given by and
+.
+490
+( -abstraction-2)
+( -abstraction-1)
+( -pair)
+with ( -variable)
+( -function symbol)
+( -abstraction-1)
+( -abstraction-2)
+( -function symbol)
+( -atom)
+with ( -variable)
+( -function symbol)
+( -function symbol)
+( -atom)
+with ( -suspension)
+Fig. 4. Example derivations
+Derivations for and are sketched in Figure 4. Using the Adequacy property
+of Proposition 2.16, one can interpret these solutions as the following statements
+about the -terms mentioned in the quiz.
+Quiz answers
+(1) There is no -term making the first pair of terms -equivalent.
+(2) The only solution for the second problem is to take and .
+(3) For the third problem we can take to be any -term, so long as we take
+to be the result of swapping all occurrences of and throughout .
+(4) For the last problem, we can take to be any -term that does not contain
+free occurrences of , so long as we take to be the result of swapping
+all occurrences of and throughout , or equivalently (since is not
+free in ), taking to be the result of replacing all free occurrences of
+in with .
+Remark 3.9 (Separation of the algorithm into two phases). We organised the algo-
+rithm into two phases: equation-solving followed by freshness-solving. Note that
+the second phase is crucial for the soundness of the algorithm. Consider for exam-
+ple the unification problem consisting of two terms which are not -equivalent:
+(13)
+After applying the transformation ( -abstraction-2) one needs to solve the prob-
+491
+lem , whose first component is solved by ( -atom). Failure is
+only signalled by the algorithm in the second phase when attempting to solve the
+unsolvable freshness problem . The second phase, i. e. solving all fresh-
+ness problems, ensures that the unifiers calculated by the algorithm are sound with
+respect to our notion of -equivalence.
+We used this separation of the algorithm into two phases in order to make the cor-
+rectness proof easier. More efficient algorithms would seek to minimise the amount
+of redundant calculations before failures are signalled, by solving freshness prob-
+lems more eagerly. However, care needs then to be taken to not remove freshness
+constraints from problems too early. For example, consider the following unifica-
+tion problem, which has no solution.
+(14)
+If one applies first ( -suspension) followed by ( -variable), then one gets a
+wrong result, namely . The problem is that the substitution
+has not been properly propagated to the freshness constraint . If
+freshness problems are solved more eagerly, then proper propagation of substitu-
+tions into freshness constraints needs to be taken into account.
+Remark 3.10 (Atoms are not variables). Nominal unification unifies variables, but
+it does not unify atoms. Indeed the operation of identifying two atoms by renaming
+one of them to be the other does not necessarily preserve the validity of the judge-
+ments in Figure 2. For example, holds if ; but renaming to
+be in this judgement we get , which does not hold so long as .
+Referring to Definition 2.3, you will see that we do allow variables ranging over
+sorts of atoms; and such variables can be unified like any other variables. However,
+if is such a variable, then it cannot appear in abstraction position, i.e. as .
+This is because we specifically restricted abstraction to range over atoms, rather
+than over arbitrary terms of atom sort. Such a restriction seems necessary to obtain
+single, most general, solutions to nominal unification problems. For without such a
+restriction, because of rule ( -abstraction-2) in Figure 2 we would also have to al-
+low variables to appear on the left-hand side of freshness relations and in suspended
+permutations. So then we would get unification problems like ,
+where , and are variables of atom sort; this has two incomparable solutions,
+namely and .
+492
+4 Related work
+Higher-order pattern unification
+Most previous work on unification for languages with binders is based on forms
+of higher-order unification, i.e. solving equations between -terms modulo -
+equivalence ( ) by capture-avoiding substitution of terms for function vari-
+ables. Notable among that work is Miller’s higher-order pattern unification used
+in his logic programming language [3]. This kind of unification retains the good
+properties of first-order unification: a linear-time decision procedure and existence
+of most general unifiers. This good behaviour of higher-order pattern unification
+is the result of equations being solved only modulo (where -equivalence
+is the restricted form of -equivalence that identifies and with
+being a variable) and of -terms being restricted such that function variables may
+only be applied to distinct bound variables. An empirical study by Michaylov and
+Pfenning [27] suggests that most unifications arising dynamically in higher-order
+logic programming satisfy Miller’s restrictions, but that it rules out some useful
+programming idioms.
+The main difference between higher-order pattern unification and nominal unifica-
+tion is that the former solves a set of equations by calculating a capture-avoiding
+substitution, while the latter calculates a possibly-capturing substitution and some
+freshness constraints. Moreover, unifiers in higher-order pattern unification solve
+equations with respect to ; whereas in nominal unification, unifiers solve
+equations with respect to the equivalence defined in Figure 2, which agrees
+with -equivalence on ground terms (see Proposition 2.16), but differs from it on
+open terms, since unlike -equivalence, it is respected by possibly-capturing sub-
+stitutions (see Lemma 2.14). For us, the main disadvantage of higher-order pattern
+unification is the one common to most approaches based on higher-order abstract
+syntax that was discussed in the Introduction: one cannot directly express the com-
+mon idiom of possibly-capturing substitution of terms for metavariables. Instead
+one has to encode metavariables as function variables applied to distinct lists of
+(bound) variables, , and use capture-avoiding substitution. At first sight,
+there seems to be a simple encoding for doing that. Consider for example the purely
+equational nominal unification problem
+(15)
+which is solved by . The literal encoding as the higher-order pattern
+unification problem does not work of course, because there is no
+capture-avoiding substitution that solves this problem. However, can be made
+dependent on yielding the unification problem
+(16)
+493
+which is solved by the capture-avoiding substitution of for . If one further
+applies to the atom used by the encoding, then one can read back the orig-
+inal solution by applying some -reductions. There are however several
+problems with this encoding. First, the encoding in general results in a quadratic
+blow-up in the size of terms. For example the nominal unification problem
+(17)
+solved by the unifier needs to be encoded so that and
+depend on both and . This gives the higher-order pattern problem
+(18)
+In the general case, the encoding needs to make metavariables dependent on all
+atoms occurring in a nominal unification problem, regardless of whether they actu-
+ally occur in an individual equational problem. For example, if occurs elsewhere
+within the scope of abstractions of , , and , then needs to be encoded as
+even though an individual equational problem might contain only
+and . Secondly, and more importantly, we cannot see how to encode our freshness
+constraints using this kind of higher-order patterns. (Note that in nominal unifi-
+cation, freshness constraints do not necessarily come from analysing abstractions,
+rather they can be chosen arbitrarily.)
+A more promising target for a reduction of nominal unification to some form of
+higher-order pattern unification is , a -calculus with de-Bruijn indices and ex-
+plicit substitutions. Dowek et al [28] present a version of higher-order pattern uni-
+fication for in which unification problems are solved, as in nominal unification,
+by textual replacements of terms for variables; however a “pre-cooking” operation
+ensures that the textual replacements can be faithfully related to capture-avoiding
+substitutions. It seems possible that the freshness (as well as the equational) prob-
+lems of nominal unification can be encoded into higher-order pattern unification
+problems over , using a non-trivial translation involving the use of the shift oper-
+ator and the introduction of fresh unification variables. The details of this encoding
+still remain to be investigated. Furthermore, it is not clear to us how to translate
+solutions obtained via the encoding back into solutions of the original nominal
+unification problem. But even if it turns out that it is possible to reduce nominal
+unification to the algorithm of Dowek et al, the calculations involved in translating
+our terms into patterns and then using higher-order pattern unification seem far
+more intricate than our simple algorithm that solves nominal unification problems
+directly. The conclusion we draw is that an encoding of nominal unification prob-
+lems into higher-order pattern unification problems (using de Bruijn indices and
+explicit substitutions) might be possible, but such an encoding is no substitute in
+practice for having the simple, direct algorithm we presented here.
+494
+Hamana’s -unification of -terms with “holes”
+Hamana [5,29] manages to add possibly-capturing substitution to a language like
+Miller’s . This is achieved by adding syntax for explicit renaming operations and
+by recording implicit dependencies of variables upon bindable names in a typing
+context. The mathematical foundation for Hamana’s system is the model of binding
+syntax of Fiore et al [24]. The mathematical foundation for our work appeared at
+the same time (see [10]) and is in a sense complementary. For in Hamana’s system
+the typing context restricts which terms may be substituted for a variable by giving
+a finite set of names that must contain the free names of such a term; whereas
+we give a finite set of names which the term’s free variables must avoid. Since -
+conversion is phrased in terms of avoidance, i.e. freshness of names, our approach
+seems more natural if one wants to compute -equivalences concretely. On top of
+that, our use of name permutations, rather than arbitrary renaming functions, leads
+to technical simplifications. In any case, the bottom line is that Hamana’s system
+seems more complicated than the one presented here and does not possess most
+general unifiers.
+Qu-Prolog
+The work [8,9] on unification in Qu-Prolog is most closely related to that reported
+here. Qu-Prolog is a mature logic programming language addressing many prob-
+lems we set out in the Introduction. To begin with, Qu-Prolog’s unification algo-
+rithm unifies terms modulo -equivalence and may produce solutions that, as in
+nominal unification, depend on freshness constraints (in Qu-Prolog such constraints
+are represented by a predicate called not free in). Furthermore, metavariables
+are substituted in a possibly-capturing manner. However, there are also a number
+of differences between nominal unification and unification in Qu-Prolog. The most
+obvious difference is that the term language in Qu-Prolog is richer than our term
+language over nominal signatures; for example Qu-Prolog allows variables in bind-
+ing position and permits explicit substitutions of terms for variables. This richness
+of the term language leads to a number of difficulties. First, the unification problems
+in Qu-Prolog are only semi-decidable (whereas the nominal unification problems
+are decidable) and as a result the algorithm employed in Qu-Prolog can leave as
+unsolved some unification problems that are “too difficult”. This means the unifi-
+cation transformations in Qu-Prolog, while shown not to delete any solutions nor
+to introduce any new ones, do not always lead to problems from which an explicit
+solution can be obtained. Secondly, as we illustrated in Remark 3.10, the possibil-
+ity of forming terms with unification variables in binding position means that most
+general solutions may not exist.
+Another difference arises from the fact that in Qu-Prolog binders are renamed via
+495
+capture-avoiding substitutions. This means that fresh names need to be introduced
+during unification in order to respect -equivalence. This is not necessary in nomi-
+nal unification, because the permutation operation already respects -equivalence.
+In fact the introduction of fresh atoms during unification leads to a more compli-
+cated notion of most general solution. Consider the following variant of the ( -
+abstraction-2) transformation:
+-abstraction-2
+which is applicable provided and is a fresh atom, not occurring elsewhere
+in the problem. This rule is essentially the refinement step that unifies two ab-
+stracted terms in Qu-Prolog (see [8, Page 105]). If we were to use ( -abstraction-
+2 ) instead of ( -abstraction-2) in our nominal unification algorithm, then when
+applied to the problem
+(19)
+it would produce the solution . While this
+solution solves the problem, it is not a most general solution according to Defini-
+tion 3.1—we lost the information that is a completely fresh atom. On the other
+hand, applying transformation ( -abstraction-2) to (19) leads to
+—a most general solution.
+Overall, the theory of Qu-Prolog’s unification is more complex than that of nomi-
+nal unification: in nominal unification we do not need to resort to a semantic notion
+of -equivalence in order to show the correctness of the nominal unification algo-
+rithm; and the use of permutations makes our -relation much simpler compared
+with Qu-Prolog’s use of the traditional notion of -equivalence extended to terms
+with metavariables.
+5 Conclusion and Future Work
+In this paper we have proposed a new solution to the problem of computing possibly-
+capturing substitutions that unify terms involving binders up to -conversion. To do
+so we considered a many-sorted first-order term language with distinguished col-
+lections of constants called atoms and with atom-abstraction operations for bind-
+ing atoms in terms. This provides a simple, but flexible, framework for specify-
+ing binding operations and their scopes, in which the bound entities are explicitly
+named. By using variables prefixed with suspended permutations, one can have
+substitution of terms for variables both allow capture of atoms by binders and re-
+spect -equivalence (renaming of bound atoms). The definition of -equivalence
+for the term language makes use of an auxiliary freshness relation between atoms
+and terms which generalises the “not a free atom of” relation from ground terms
+to terms with variables; furthermore, because variables stand for unknown terms,
+496
+type Gamma (var X) A :- mem (pair X A) Gamma.
+type Gamma (app M N) B :- type Gamma M (arrow A B),
+type Gamma N A.
+type Gamma (lam x.M) (arrow A B) / x#Gamma :-
+type (pair x A)::Gamma M B.
+mem A A::Tail.
+mem A B::Tail :- mem A Tail.
+Fig. 5. An example Prolog program
+hence with unknown free atoms, it is necessary to make hypotheses about the fresh-
+ness of atoms for variables in judgements about term equivalence and freshness.
+This reliance on “freshness”, coupled with name-swapping rather than renaming,
+lead to a new notion of unification problem in which instances of both equiva-
+lence and freshness have to be solved by giving term-substitutions and (possibly)
+freshness conditions on variables in the solution. We showed that this unification
+problem is decidable and unitary.
+Cheney, Gabbay and Urban [30,31] are investigating the extent to which nominal
+unification can be used in resolution-based proof search for a form of first-order
+logic programming for languages with binders (with a view to providing better
+machine-assistance for structural operational semantics). Such a logic program-
+ming language should permit a concrete, “nominal” approach to bound entities in
+programs while ensuring that computation (which in this case is the computation
+of answers to queries) respects -equivalence between terms. This is illustrated
+with the Prolog-like program in Figure 5, which implements a simple typing algo-
+rithm for -terms. The third clause is the interesting one. First, note the term (lam
+x.M), which unifies with any -abstraction. The binder x, roughly speaking, has
+in the “nominal” approach a value which can be used in the body of the clause, for
+example for adding (pair x A) to the context Gamma. Secondly, the freshness
+constraint x#Gamma ensures that Gamma cannot be replaced by a term that con-
+tains x freely. Since this clause is intended to implement the usual rule for typing
+-abstractions
+its operational behaviour is given by: choose fresh names for Gamma, x, M, A and
+B (this is standard in Prolog-like languages), unify the head of the clause with the
+goal formula, apply the resulting unifier to the body of the clause and make sure that
+Gamma is not replaced by a term that contains freely the fresh name we have chosen
+for x. Similar facilities for functional programming already exist in the FreshML
+language, built upon the same foundations: see [13] and . We
+are also interested in the special case of “nominal matching” and its application to
+term-rewriting modulo -equivalence.
+497
+A note on complexity
+If these applications show that nominal unification is practically useful, then it be-
+comes important to study its complexity. The presentations of the term language
+in Section 2 and of the algorithm in Section 3 were chosen for clarity and to make
+the proof of correctness easier, rather than for efficiency. One source of increased
+efficiency is to delay the application of permutations: instead of pushing permuta-
+tion inside terms until they reach suspension as we do here, one should just push
+them under the first constructor (pairing, function symbol application, or atom-
+abstraction) in order to proceed with the next step of decomposition. However, the
+main inefficiency of the algorithm presented in Section 3 comes from the lack of
+sharing in terms and substitutions. Thus the unification problem taken from [32]
+which illustrates that the naı¨ve algorithm for classical first-order unification has
+exponential time complexity, also applies to the algorithm for nominal unification
+given here. If one adapts a representation for terms using techniques developed
+in [32] or [33], which are based on directed acyclic graphs, then one easily arrives
+at an algorithm with quadratic time complexity. The reason for the quadratic, rather
+than linear, time-complexity is that permutations need to be applied to some atoms
+when deciding whether the rules ( -abstraction-1) or ( -abstraction-2) are ap-
+plicable, and these permutations (represented as lists of swappings) might grow
+linearly with the number of nodes. Using a representation of permutations that al-
+lows for a more efficient calculation of their action on atoms does not improve
+the quadratic time complexity, because it makes the operation of composing two
+permutations become linear, while this can be done in constant time when using
+the list-of-swappings representation. For higher-order patterns, Qian managed to
+developed a unification algorithm with linear time-complexity [34]. It seems that
+adapting Qian’s algorithm to nominal unification via an encoding of nominal terms
+into higher-order patterns as discussed in Section 4 will not solve this problem. For
+the encoding makes the resulting higher-order patterns quadratically longer than
+the original nominal terms, so this method would only provide another algorithm
+with quadratic time complexity.
+To sum up, there is a version of nominal unification with quadratic time complexity,
+but is it is still an open question whether a version can be developedwith linear time
+complexity.
+See http://www.cl.cam.ac.uk/users/cu200/Unification for the Is-
+abelle proof scripts.
+498
+Acknowledgements
+A preliminary version of this paper appeared as [35]. We thank James Cheney,
+Gilles Dowek, Roy Dyckhoff, Dale Miller, Frank Pfenning, Francois Pottier and
+Helmut Schwichtenberg for comments on this work. This research was supported
+by UK EPSRC grants GR/R29697 (Urban) and GR/R07615 (Pitts and Gabbay).
+References
+[1] G. Dowek, T. Hardin, C. Kirchner, Higher-order unification via explicit substitutions,
+in: 10th Annual Symposium on Logic in Computer Science, IEEE Computer Society
+Press, Washington, 1995, pp. 366–374.
+[2] C. A. Gunter, Semantics of Programming Languages: Structures and Techniques,
+Foundations of Computing, MIT Press, 1992.
+[3] D. Miller, A logic programming language with lambda-abstraction, function variables,
+and simple unification, Journal of Logic and Computation 1 (1991) 497–536.
+[4] G. Dowek, Higher-order unification and matching, in: A. Robinson, A. Voronkov
+(Eds.), Handbook of Automated Reasoning, Elsevier, 2001, Ch. 16, pp. 1009–1062.
+[5] M. Hamana, A logic programming language based on binding algebras, in:
+N. Kobayashi, B. C. Pierce (Eds.), Theoretical Aspects of Computer Software,
+4th International Symposium, TACS 2001, Sendai, Japan, October 29-31, 2001,
+Proceedings, Vol. 2215 of Lecture Notes in Computer Science, Springer-Verlag,
+Berlin, 2001, pp. 243–262.
+[6] M. Hashimoto, A. Ohori, A typed context calculus, Theoretical Computer Science 266
+(2001) 249–271.
+[7] M. Sato, T. Sakurai, Y. Kameyama, A simply typed context calculus with first-class
+environments, Journal of Functional and Logic Programming 2002 (4).
+[8] P. Nickolas, P. J. Robinson, The Qu-Prolog unification algorithm: Formalisation and
+correctness, Theoretical computer Science 169 (1996) 81–112.
+[9] R. Paterson, Unification of schemes of quantified terms, in: Proc. of UNIF 1990, 1990,
+unpublished proceedings.
+[10] M. J. Gabbay, A. M. Pitts, A new approach to abstract syntax with variable binding,
+Formal Aspects of Computing 13 (2002) 341–363.
+[11] L. Caires, L. Cardelli, A spatial logic for concurrency (part II), in: L. Brim, P. Janc˘ar,
+M. Kr˘etı´nsky´, A. Kuc˘era (Eds.), CONCUR 2002 – Concurrency Theory, 13th
+International Conference, Brno, Czech Republic, August 20-23, 2002. Proceedings,
+Vol. 2421 of Lecture Notes in Computer Science, Springer-Verlag, Berlin, 2002, pp.
+209–225.
+499
+[12] L. Cardelli, P. Gardner, G. Ghelli, Manipulating trees with hidden labels, in: A. D.
+Gordon (Ed.), Foundations of Software Science and Computation Structures, 6th
+International Conference, FOSSACS 2003, Warsaw, Poland. Proceedings, Vol. 2620
+of Lecture Notes in Computer Science, Springer-Verlag, Berlin, 2003, pp. 216–232.
+[13] M. R. Shinwell, A. M. Pitts, M. J. Gabbay, FreshML: Programming with binders
+made simple, in: Eighth ACM SIGPLAN International Conference on Functional
+Programming (ICFP 2003), Uppsala, Sweden, ACM Press, 2003, pp. 263–274.
+[14] A. Salibra, On the algebraic models of lambda calculus, Theoretical Computer Science
+249 (2000) 197–240.
+[15] F. Honsell, M. Miculan, I. Scagnetto, An axiomatic approach to metareasoning on
+nominal algebras in HOAS, in: F. Orejas, P. G. Spirakis, J. Leeuwen (Eds.), 28th
+International Colloquium on Automata, Languages and Programming, ICALP 2001,
+Crete, Greece, July 2001. Proceedings, Vol. 2076 of Lecture Notes in Computer
+Science, Springer-Verlag, Heidelberg, 2001, pp. 963–978.
+[16] A. M. Pitts, Nominal logic, a first order theory of names and binding, Information and
+Computation 186 (2003) 165–193.
+[17] M. Sato, T. Sakurai, Y. Kameyama, A. Igarashi, Calculi of meta-variables, in: M. Baaz
+(Ed.), Computer Science Logic and 8th Kurt Go¨del Colloquium (CSL’03 & KGC),
+Vienna, Austria. Proccedings, Vol. 2803 of Lecture Notes in Computer Science,
+Springer-Verlag, Berlin, 2003, pp. 484–497.
+[18] A. Martelli, U. Montanari, An efficient unification algorithm, ACM Trans.
+Programming Languages and Systems 4 (2) (1982) 258–282.
+[19] J. W. Klop, Term rewriting systems, in: S. Abramsky, D. M. Gabbay, T. S. E. Maibaum
+(Eds.), Handbook of Logic in Computer Science, Volume 2, Oxford Univerity Press,
+1992, pp. 1–116.
+[20] F. Baader, T. Nipkow, Term Rewriting and All That, Cambridge University Press,
+1998.
+[21] H. P. Barendregt, The Lambda Calculus: its Syntax and Semantics, North-Holland,
+1984.
+[22] R. Milner, J. Parrow, D. Walker, A calculus of mobile processes (parts I and II),
+Information and Computation 100 (1992) 1–77.
+[23] G. D. Plotkin, An illative theory of relations, in: R. Cooper, Mukai, J. Perry (Eds.),
+Situation Theory and its Applications, Vol. 22 of CSLI Lecture Notes, Stanford
+University, 1990, pp. 133–146.
+[24] M. P. Fiore, G. D. Plotkin, D. Turi, Abstract syntax and variable binding, in: 14th
+Annual Symposium on Logic in Computer Science, IEEE Computer Society Press,
+Washington, 1999, pp. 193–202.
+[25] R. Milner, M. Tofte, R. Harper, D. MacQueen, The Definition of Standard ML
+(Revised), MIT Press, 1997.
+500
+[26] F. Pfenning, C. Elliott, Higher-order abstract syntax, in: Proc. ACM-SIGPLAN
+Conference on Programming Language Design and Implementation, ACM Press,
+1988, pp. 199–208.
+[27] S. Michaylov, F. Pfenning, An empirical study of the runtime behaviour of
+higher-order logic programs, in: D. Miller (Ed.), Proc. Workshop on the Prolog
+Programming Language, University of Pennsylvania, 1992, pp. 257–271, CIS
+Technical Report MS-CIS-92-86.
+[28] G. Dowek, T. Hardin, C. Kirchner, F. Pfenning, Higher-order unification via explicit
+substitutions: the case of higher-order patterns, in: Proc. of JICSLP, 1996, pp. 259–
+273.
+[29] M. Hamana, Simple -unification for terms with context holes, in: C. Ringeissen,
+C. Tinelli, R. Treinen, R. M. Verma (Eds.), Proc. of UNIF 2002, 2002, unpublished
+proceedings.
+[30] J. Cheney, C. Urban, Prolog, a fresh approach to logic programming modulo -
+equivalence, in: J. Levy, M. Kohlhase, J. Niehren, M. Villaret (Eds.), Proc. of UNIF
+2003, no. DSIC-II/12/03 in Departamento de Sistemas Informa´ticos y Computacio´n
+Technical Report Series, Universidad Polite´cnica de Valencia, 2003, pp. 15–19.
+[31] M. Gabbay, J. Cheney, A proof theory for nominal logic, in: Nineteenth Annual
+IEEE Symposium on Logic in Computer Science, IEEE Computer Society Press,
+Washington, 2004.
+[32] M. S. Paterson, M. N. Wegman, Linear unification, Journal of Computer System
+Sciences 16 (2) (1978) 158–167.
+[33] A. Martelli, U. Montanari, An efficient unification algorithm, ACM Transactions on
+Programming Languages and Systems 4 (2).
+[34] Z. Qian, Unification of higher-order patterns in linear time and space, Journal of Logic
+and Computation 6 (3) (1996) 315–341.
+[35] C. Urban, A.M. Pitts, M. J. Gabbay, Nominal unification, in: M. Baaz (Ed.), Computer
+Science Logic and 8th Kurt Go¨del Colloquium (CSL’03 & KGC), Vienna, Austria.
+Proceedings, Vol. 2803 of Lecture Notes in Computer Science, Springer-Verlag,
+Berlin, 2003, pp. 513–527.
+501

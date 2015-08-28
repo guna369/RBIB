@@ -1,0 +1,1732 @@
+TECHNICAL REPORT TR-2003-135
+The SuÆx Sequoia Index for Approximate String
+Mathing
+Ela Hunt
+Department of Computing Siene, University of Glasgow
+Glasgow, G12 8QQ, UK
+elads.gla.a.uk
+Marh 31, 2003
+Abstrat
+We address the problem of approximate string mathing over protein, DNA,
+and RNA strings, using an arbitrary ost matrix. We fous on full-sensitivity
+searhing, equivalent to the Smith-Waterman algorithm. The data struture
+we propose is ompat. To index a text of length n, we use just over 4n bytes.
+This data struture is amenable to further ompression.
+We show that the index san of the approximate mathing algorithm in
+whih the dynami programming matrix is omputed has time omplexity
+O(mg
+d
+) for a pattern of length m, alphabet size g, and indexing window size
+d.
+We demonstrate the use of the suÆx sequoia with the largest publi repos-
+itory of proteins, now storing 400 million symbols. Our results indiate that
+full-sensitivity approximate mathing ould be delivered at the speed ompa-
+rable to that of heuristi mathing. We believe that this opens the way for a
+database solution to the approximate sequene mathing problem.
+1
+Contents
+1 Introdution 3
+2 Bakground and related work 5
+3 SuÆx sequoia 8
+4 Using the sequoia in approximate mathing 9
+5 Index reation 12
+6 Index layout on disk 13
+7 The mathing algorithm 14
+8 Experimental results 15
+8.1 Data soures . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15
+8.2 Hardware and Software . . . . . . . . . . . . . . . . . . . . . . . . . . 16
+8.3 Benhmarks . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16
+8.4 Index reation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17
+8.5 Query senario . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18
+9 Disussion and further work 20
+9.1 Results reporting . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20
+9.2 Implementation issues . . . . . . . . . . . . . . . . . . . . . . . . . . 22
+9.3 Repetitions in the text . . . . . . . . . . . . . . . . . . . . . . . . . . 22
+9.4 Index ompression . . . . . . . . . . . . . . . . . . . . . . . . . . . . 22
+9.5 Further work . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 22
+10 Conlusions 23
+11 Aknowledgements 23
+2
+1 Introdution
+Biomedial researh is inreasingly dependent on omputing tehnology to manage
+data and identify interesting data sets. Searhing for similar biologial sequenes is
+an every day ativity in a biologial lab, however, so far, database tehnologies have
+not produed tools whih provide fast aess to sequene data. Sequene data are
+strings of diering lengths. DNA sequenes use the alphabet of A, C, G, T. RNA
+uses the alphabet of A, C, G, U, and amino aid sequenes (AAs, proteins) use 23
+letters, whih inlude three ambiguity odes. For sequene omparison purposes,
+these sequenes are stored in the FASTA format whih inludes a one-line sequene
+header, followed by the sequene, shown below.
+>gij7290023jgbjAAF45490.1j(AE003417) CG13376 gene produt [Drosophila melanogaster℄
+MAAEETYKLLKLLPRVGHLVAAGEEVDGPLEAAEEEVDGLLAAAGEEVDGL
+LEVAGVAGPQGEAAEAAAM
+The volume of sequene data is growing daily, and seems to inrease exponentially
+(2 years ago publily available DNA in Genbank
+1
+totalled around 10 Gbytes, now
+it is in exess of 20 Gbytes, while the protein data size inreased from 200 Mbytes
+to 400 Mbytes in the same time period [13, 14℄).
+The data are updated daily, however, this is not done in transational mode,
+and single new sequenes are added, rather than hanged. A hange to an existing
+sequene is normally assoiated with a new identier, indiating that it is a new
+version whih replaes the old one. In this ontext, it would be easy to add the
+hanges to an index, by rebuilding the index. This is justied, beause sequene
+repositories whih host publi sequene query servies serve very large volumes of
+queries, often several thousands per day. Moreover, as the volume and availability
+of biologial sequene inreases, ross-genome omparisons are undertaken, whih
+require aess to large omputational resoures [7, 37, 18, 43℄. An improvement to
+the speed of full-sensitivity sequene analysis might bring quality and ost benets
+to many researh projets, as well as to the biotehnology industry.
+Approximate searhing with arbitrary ost matries is provided by software
+whih sans a set of sequene les and aligns them to the query. Standard solutions
+an be divided into exhaustive algorithms, represented by the Smith-Waterman al-
+gorithm [31℄, and heuristi ones, inluding BLAST [1, 2℄, FASTA [30℄, and, more
+reently, BLAT [16℄. Speialised forms of heuristi algorithms, suited to DNAmath-
+ing exist, and inlude SIM4 [10℄ and SSAHA [28℄. Of those algorithms, only BLAT
+and SSAHA use indexing. BLAT an be used with proteins, however, this is not
+reommended by the author, sine its sensitivity is not as good as that of BLAST.
+Among others, the NCBI
+2
+and the EBI
+3
+provide publi BLAST servies, running on
+1
+http://www.nbi.nlm.nih.gov/Database/index.html
+and http://www.nbi.nlm.nih.gov/entrez/query.fgi?db=Nuleotide
+2
+http://www.nbi.nlm.nih.gov/BLAST/
+3
+http://www.ebi.a.uk/blastall/
+3
+large omputer lusters. Exhaustive searhing, using MPsrh
+4
+is provided at EBI
+[32℄.
+To our knowledge, developments in index strutures for strings have not pro-
+dued viable, full-sensitivity searh tools, appliable in biology. In this domain the
+following strutures have been tested in the persistent ontext, with approximate
+mathing. N-grams (q-grams) have been found to be useful where lose mathes
+are sought [34, 25, 5, 22, 27℄, but ould not deliver more distant mathes [24℄. The
+suÆx array [19℄ was tested with small amounts of DNA under a unit ost model
+[3℄ and was found to be superior to the suÆx tree. We tested the suÆx tree [14℄
+and found it to be potentially useful, but not delivering fast performane, due to its
+large disk image. Reently, Myers and Durbin [23℄ produed a signiantly faster
+version of the Smith-Waterman algorithm whih indexes the query, however, this
+improved version is only twie as fast as the best-known optimised implementation
+alled SWAT
+5
+. In the work of Myers and Durbin [23℄ the entire text still has to
+be traversed, and optimisation is due to the sparsity of positive values in the ost
+matrix. The optimised version omputes around 4% of the dynami programming
+matrix. An eÆient solution to exhaustive searhing does not exist and heuristis
+are used instead, under the assumption that some signiant mathes may indeed
+go unnotied.
+Signiant eort has been made to use hardware parallelisation to improve the
+performane of the Smith-Waterman algorithm, and similar work has been arried
+out with respet to BLAST and BLAT. Coarse-grained parallelism is ahieved by
+using a farm of omputers whih distribute the text onto dierent proessors [12℄.
+Multimedia instrutions have been used to proess a few protein or DNA symbols
+at a time [32, 33℄. Finally, Field Programmable Gate Arrays (FPGAs) have been
+used in ommerial implementations
+6
+and in researh [11, 42℄. Possible hardware
+solutions omplement algorithmi solutions, and are orthogonal to the database
+approah whih uses persistent indexing.
+We have not produed a omplete sequene analysis solution yet, however we
+believe that our ndings onstitute a signiant step towards solving the problem.
+We designed the suÆx sequoia to ombine the features of the suÆx tree whih are
+used in the approximate string mathing ontext, with the ompatness of an array
+where eah text window is addressed by the integer ode representing that window.
+The major ontribution of our work is the new data struture whih ombines the
+features of the suÆx tree and of an array-based index, and measurement of how
+well this struture performs in approximate mathing. In omparison to the work of
+Myers and Durbin, where 4% of the dynami programming matrix is omputed, and
+the entire text is to be sanned, we do not require a text san, but an index san
+instead, where the matrix is omputed on top of the index. In our tests with 400
+million AA residues, and index window of size 5, the upper bound on the size of the
+4
+http://www.ebi.a.uk/MPsrh/index.html
+5
+http://bozeman.mbt.washington.edu/phrap.dos/phrap.html
+6
+www.parael.om, www.timelogi.om
+4
+matrix omputation is 1.6%
+7
+and, in pratie, only part of that matrix is omputed,
+due to the sparsity of the positive values in the ost matrix.
+Further work is needed to explore the implementation options, and reuse the
+existing body of algorithmi solutions embodied in existing programs like BLAST
+and BLAT.
+We start with a review of related work in Setion 2. In Setion 3 we introdue
+the sequoia and in Setion 4 show how it is used in approximate mathing. Setion 5
+fouses on the index reation algorithm. Disk layout of the index is presented in
+Setion 6 and the mathing algorithm is summarised in Setion 7. We then turn our
+attention to the experimental results in Setion 8 and disuss various aspets of the
+approah and our implementation in Setion 9 whih points out the need for further
+renements and exploration of implementation options. We onlude in Setion 10.
+2 Bakground and related work
+We dene the terminology. A target sequene T = t
+0
+t
+1
+: : : t
+n 1
+of length n, over an
+alphabet  of size j  j= g is to be aligned to a query Q = q
+0
+q
+1
+: : : q
+m 1
+of length
+m. The ost matrix S of size j  j  j  j is given, providing a sore S[a℄[b℄ for
+a omparison of symbols a and b. A threshold thresh > 0 is provided, and any
+alignments of T and Q soring above the threshold are to be output. An example
+alignment is shown below. Sequenes whih are being aligned are annotated with
+osets into the sequene, sequene identier at the start of the line, sequene identity
+annotated as ":" and sequene similarity shown as ".". A gap in the alignment is
+shown as a line of hyphens. Gaps an be sored using a simple model where a gap
+ost gap is used, or an aÆne model with the gap ost being equal to h + kl, where
+h is the ost to start a gap, k the gap length, and l the ost of gap extension [9, 39℄.
+150 160 170 180
+2L52.1 TQANRVWTIVNGEVQWKTPPRVKKKTVIYYDDGPRYVFPTG
+..:: . :... :: . . . : .
+K06H7. SEANDY--LRNAKI----PPNRSTFLHVSAANDARKCLKYF
+430 440 450
+For illustration, a fragment of the PAM120 soring matrix is shown [8℄.
+A R N D C Q E G H I L K
+A 3 -3 -1 0 -3 -1 0 1 -3 -1 -3 -2
+R -3 6 -1 -3 -4 1 -3 -4 1 -2 -4 2
+N -1 -1 4 2 -5 0 1 0 2 -2 -4 1
+D 0 -3 2 5 -7 1 3 0 0 -3 -5 -1
+C -3 -4 -5 -7 9 -7 -7 -4 -4 -3 -7 -7
+7
+g
+d
+=textSize = 23
+5
+=405; 000; 000
+5
+Biologists use a variety of ost matries whih inuene query sensitivity. Cost
+matries are dominated by non-positive values, and this allows for algorithmi op-
+timisations, rst exploited in SWAT
+8
+. SWAT is based on the observation that large
+parts of the ost matrix are negative, and alulations involving negative or zero
+values an be skipped.
+The Smith-Waterman algorithm [31℄ is the gold standard of biologial sequene
+omparison. An unoptimised version of this algorithm will run in time proportional
+to the produt of the text length and query length. The sequenes are ompared
+in a left-to-right san of the text, and for eah text symbol, an alignment olumn
+is alulated, whih summarises the similarity of the text up to that symbol, to the
+query. Under a simple gap model, the reurrene formula for the alulation of a
+matrix ell C(i; j) is as follows.
+C(i; j) = maxf0;
+C(i  1; j   1) + S[q(i); t(j)℄;
+C(i  1; j)  gap;
+C(i; j   1)  gapg;
+where gap denotes a gap ost. We adopt this model in our investigation. We now
+proeed to give an example of the alulation.
+3
+3
+s u r r yg e
+s
+u
+r
+v
+y
+e
+0 0 0 0 0 0 0 0
+0
+0
+0
+0
+0
+0
+1
+2
+0 0 0 0 00
+0
+0
+0
+0
+1
+0
+00
+0
+1
+0
+1
+2
+0
+2
+2
+1
+0
+0 0 0
+1 0
+1
+2 1
+2 2
+1
+0 0
+3
+S[0,j] = 0
+S[i,0] = 0
+S[i,j] = if (Pattern[i] == Text[j]) then
+                   max (S[i−1,j−1] +1,  S[i−1,j] − 1, S[i,j−1] − 1, 0)
+else 
+                   max (S[i−1,j−1] −1,  S[i−1,j] − 1, S[i,j−1] − 1, 0)
+anywhere within the matrix
+select maximum similarity
+Figure 1: A dynami programming matrix evaluated with a simplied unary ost
+model.
+The algorithm to alulate similarity between two sequenes is alled a dynami
+programming algorithm (DP). Figure 1 demonstrates the priniple, using a text
+8
+http://bozeman.mbt.washington.edu/phrap.dos/phrap.html
+6
+A8
+TGV$
+RA
+GVS
+9
+VARATGV$
+3TGV$
+VARATGV$
+RA
+1
+5
+7
+TGV$
+TGV$
+6
+VARATGV$
+2
+ARATGV$
+4
+$
+10
+V
+11
+$
+root
+ 
+A  R  A  V  A  R  A  T  G  V  $
+1    2    3    4    5     6    7    8    9  10  11
+Figure 2: A suÆx tree on ARAVARATGV$. Eah suÆx orresponds to a leaf
+marked with this suÆx number.
+surgery, and a query survey. In the simplest model, we assume unit osts for any
+harater deletion, insertion or substitution. To alulate similarity between two
+sequenes of lengths m and n, we build a matrix of size (m + 1)  (n + 1), ll the
+rst row and olumn with zeros, and then use the reurrene formula to ll in the
+remaining ells. After the matrix is lled in, we nd the ells with the highest sores
+(that is normally done by storing them in an additional data struture as soon as
+they have been omputed), and output the sores with string positions.
+A variety of methods have been applied in the past to the indexing of biologial
+sequenes for approximate mathing, sometimes without biologial veriation. A
+rough partitioning of those methods would be into statistial and algorithmi meth-
+ods. Statistial methods inlude, among others, wavelet-based indexing [15, 29℄,
+and they do not appear to have gained the aeptane of biologists yet, possibly due
+to information loss whih happens in the proess of indexing. Algorithmi meth-
+ods gan be divided into two approahes. The rst approah uses hashing [39℄ and
+maintains an index of text windows or an index of query windows. Eah window is
+assigned a unique ode, and there is a one-to-one relationship between a ode and
+the window ontent. If the query is indexed, the omplexity of suh searh is still
+dominated by text size. However, an index to text an make the searh muh more
+eÆient. An index an be reated in one traversal of the string, and is used for exat
+and approximate mathing based on ltering. This approah is used in BLAT [16℄
+where non-overlapping text windows are indexed in memory. Navarro shows that
+this approah is of limited use in approximate mathing, beause it only nds words
+whih are losely similar to the query [26℄. This type of index an be used to index
+the query with respet to the ost matrix used in the alignment [23℄.
+7
+The seond algorithmi approah uses a suÆx index. The suÆx index is an index
+of all substrings of T = t
+0
+t
+1
+: : : t
+n 1
+of form t
+j
+t
+j+1
+: : : t
+n 1
+, for j between 0 and n 1.
+Suh an index an be implemented as a suÆx tree [40, 21, 36℄ or a suÆx array
+[19, 17℄. A suÆx tree, illustrated in Figure 2, is a ompressed digital trie, built by
+inserting all the suÆxes of the string T$ into a trie, where the terminator harater
+$ ensures a one-to-one orrespondene between the suÆxes and tree leaves.
+Approximate searhing an be arried out either on the suÆx tree [6, 35, 4, 20,
+3, 14℄ or on the suÆx array [3℄. In both ases the query string is ut into shorter
+words, and eah word is aligned with the suÆxes present in the tree, starting with
+the root, down to a ertain string depth. The fat that only the top of the suÆx tree
+is used in string searhing motivated us to explore the possibility of summarising
+the top of the tree in an array data struture.
+3 SuÆx sequoia
+aaaabbbb$
+bbb$
+aaabbbb$
+aabbbb$
+abbbb$
+bbbb$
+bb$
+b$
+$
+Suffix
+array
+1
+2
+3
+4
+5
+6
+7
+8
+9
+Suffix sequoia
+depth 3
+disk
+resident
+memory
+resident
+Bit
+map
+  
+  
+  
+
+
+
+  
+  
+  
+
+
+
+  
+  
+  
+
+
+
+  
+  
+  
+
+
+
+0
+1
+2
+3
+4
+5
+6
+7
+Position
+array
+1, 2
+3
+4
+5, 6
+M = {(AAA,0),(AAB,1),(ABA,2),(ABB,3),(BAA,4),(BAB,5),(BBA,6),(BBB,7)}
+Hash Function M used in the construction of the suffix sequoia
+a
+a
+a
+b
+$
+$
+$
+b
+b
+$b
+$
+Suffix tree
+aaaabbbb$
+text
+bbbb$
+bbbb$
+bbbb$
+abbbb$
+Figure 3: The relationship between the suÆx tree, the suÆx array and the suÆx
+sequoia.
+The suÆx sequoia, illustrated in Figure 3, is a derivative of a suÆx tree, trunated
+at a given string depth d, and stored in memory as a bit map and an array of text
+8
+positions. In a disk-based version only the hash funtion M is needed during the
+approximate mathing, and the disk is aessed only when a math is found
+9
+.
+We rst disuss the memory-resident version of the index, whih is present at
+index reation time, before writing to disk. The bit map represents the absene
+or presene of a given short substring in the text. A ell in the positions array
+represents suÆxes whih share a ommon prex of length d. Positions array an
+also be viewed as an array of lists of starting indexes of eah text window. To reate
+the index, we slide a window of size d over the text. The text T of length n has
+n  d+ 1 suh windows, eah of the form
+win
+j
+= s
+j
+::s
+j+d
+:
+During index reation these windows are lexiographially sorted by updating the
+positions array, ontaining g
+d
+ells, one for eah window ode. To ahieve the en-
+oding, we order the alphabet symbols lexiographially and map  to the integer
+range f0; 1; : : : ; g   1g. Eah window is assigned an integer ode:
+ode(win
+j
+) =
+d 1
+X
+k=0
+s
+k+j
+g
+d k 1
+:
+In the bitmap, we set
+bitMap[ode(win
+j
+)℄ = true
+if there is a window with ode(win
+j
+) in the indexed text, and false, otherwise. The
+PositionArray is an array of integer lists. If bitMap [ode(win
+j
+)℄ is set to true, then
+the array PositionArray [ode(win
+j
+)℄ ontains a list of all starting positions of that
+window in the text.
+4 Using the sequoia in approximate mathing
+We perform the dynami programming algorithm (DP) on the suÆx sequoia, instead
+of the suÆx tree.
+We now explain the priniple of the DP matrix alulation where an index to the
+text T is used instead of the traditional traversal of the entire text. Figure 4 shows
+suÆx trees for two strings, T1 and T2, and lays them out as suÆx sequoias. We
+show that the DP matrix is made smaller by the use of the index. Our example
+is based on a window of size three, and this index size redues the alulation size
+in this ase. For a highly repetitive string T1 = aaaaa, there is only one index
+entry for aaa. The full DP matrix of size text  query, without the index, would
+have 5  3 = 15 ells. The index redues the size of the alulation to 9 ells. For
+T2 = abababab, the DP matrix has 83 = 24 ells, and the index redues the matrix
+size to 18 ells, as there are 2 indexable windows of length 3. This kind of saving
+9
+The bitmap an be used in mathing with sparse indexes, and it then has the advantage of
+being muh smaller than the target dataset on whih the searh is performed.
+9
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+
+
+
+
+
+
+
+
+a a
+text
+b
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+
+
+
+
+
+
+
+
+a
+text
+b b
+Indexed 3x3 = 9 cells
+Full DP 5x3 = 15 cells
+Indexed 2(3x3) = 18 cells
+Full DP 8x3 = 24 cells
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+
+
+
+
+
+
+
+
+
+a a a
+text
+compact sequoia
+depth 3
+aaa   1,2,3
+alphabet = {a}
+T1=aaaaa$
+a
+a
+a
+a
+a$ 1
+$
+$
+$ $
+$
+234
+5
+6
+T2=abababab$
+alphabet = {a,b}
+compact sequoia
+depth 3
+aba   1,3,5
+abb   −
+baa   −
+bab   2,4,6
+bba   −
+bbb   −
+aaa   −
+aab   −
+1
+ab
+ab
+ab
+ab$
+$
+3$
+$
+5
+7
+2$
+9
+b
+4
+68
+$
+ab$
+ab
+ab
+$$
+Figure 4: Indexing gain due to a hashed index of all windows of length 3.
+an be realised without the use of the suÆx tree. However, the suÆx tree where the
+hildren of eah node are ordered lexiographially provides an additional indexing
+gain, as shown in Figure 5, where the index shows a part of a suÆx tree over an
+alphabet of A;B;C, and index depth equal 3. By arranging the window entries of
+the suÆx sequoia in alphabetial order, we an take advantage of that ordering, and
+alulate the DP matrix just for the haraters that hange between the previous
+index entry and the one we are looking at.
+In general, given an alphabet , of size g, and indexing depth (window size) d, the
+size of the alulation has an upper limit for the text dimension of the DP matrix
+g + g
+2
++ :::+ g
+d
+=
+g(g
+d
+  1)
+g   1
+:
+This follows from the observation that there are g harater omparisons of the rst
+letter of an index window with a query, g
+2
+omparisons between the seond letter
+of an index window and the query, and for the last letter of the index window all g
+d
+entries need to be ompared to the query.
+Further illustration is provided in Figure 6. The rst index window AAA is ompared
+to the query TTT . For the seond and third index windows (AAB and AAC), just
+10
+A A A
+B
+C
+C A
+B
+C
+C
+B
+A
+C
+B
+A
+B
+B
+B
+A
+A
+B
+C
+C A
+B
+C
+C subtree
+A subtree
+B subtree
+root
+Figure 5: Indexing gain due to index ordering orresponding to the lexiographi
+order. Only the letters shown orrespond to DP olumns whih need to be alu-
+lated.
+A A A
+B
+C
+C A
+B
+C
+C
+B
+A
+C
+B
+A
+B
+B
+B
+A
+A
+B
+C
+C A
+B
+C
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+A A
+00 0
+0
+0
+0
+T
+T
+T
+0
+0
+0
+0
+0
+0
+B
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+A A
+00 0
+0
+0
+0
+T
+T
+T
+0
+0
+0
+0
+0
+0
+C
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+
+
+
+
+
+
+
+
+
+
+
+
+
+A A A
+00 0
+0
+0
+0
+T
+T
+T
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+
+
+
+
+
+
+
+
+
+
+
+
+
+A
+00 0
+0
+0
+0
+T
+T
+T
+0
+0
+0
+B
+A
+00 0
+0
+0
+0
+T
+T
+T
+0
+0
+0
+0
+0
+0
+B
+A
+00 0
+0
+0
+0
+T
+T
+T
+0
+0
+0
+0
+0
+0
+C
+A
+00 0
+0
+0
+0
+T
+T
+T
+0
+0
+0
+0
+0
+0
+C
+A C
+00 0
+0
+0
+0
+T
+T
+T
+0
+0
+0
+0
+0
+0
+B
+A A
+00 0
+0
+0
+0
+T
+T
+T
+0
+0
+0
+A A
+00 0
+0
+0
+0
+T
+T
+T
+A
+B
+B
+C
+C
+B
+query = TTT
+Figure 6: In the suÆx sequoia DP alulation is limited to the shaded areas.
+11
+the last letter of the index window requires omparison with TTT . Next window,
+ABA, requires the realulation of two olumns. Whenever the rst letter of the
+window hanges, full matrix is realulated from srath.
+We fous on a alulation of the matrix for a range of indexes, expressed by odes
+ode1 and ode2. The algorithm for the alulation of matrix values for a range of
+odes is shown below. In this algorithm the bitMap index an be looked up to hek
+if odes are present in the index. This may be useful for indexes whih are sparse
+and have many false marks in the bitmap.
+alulateRange(byte [℄ query, int base, int ode1, int ode2, Matrix mat)
+initialise a dp matrix
+dp = new array [windowSize+1℄[windowSize+1℄;
+deode ode1 to a text array of bytes
+bytes [℄ text = deode(base, ode1);
+alulate dp matrix for the rst indexed word
+alulateDP(text, query, mat, 1)
+while (ode1 < ode2)
+inrement ode1
+if ode1 NOT in bitmap, GOTO while (optional)
+update text to ode1 while heking where to start next
+alulation from
+textUpdate and getAtiveColumn
+alulate the dp matrix starting from ative olumn
+alulateDP(text, query, mat, ativeColumn)
+if maxCodes exeeded, return //(see Setion 7)
+report mathing odes
+5 Index reation
+The time to reate the index is proportional to the length of sequene indexed, that
+is O(n). However, the spae required for this operation depends on the size of the
+window, and the size of the alphabet, as well as the size of text, and the spae
+omplexity is O(n + g
+d
+). This spae fator is reeted in the running time needed
+for the maintenane of the PositionArray holding lists of integers. We traverse the
+text, and alulate the integer ode for eah window. For eah window, the window
+position is stored, indexed by its ode. Given the ode of win
+j
+, and using the DNA
+alphabet of 4 symbols, we alulate the ode for win
+j+1
+as follows:
+ode(win
+j+1
+) = (ode(win
+j
+) mod 4
+d 1
+)  4 + ode(s
+j+d
+);
+and the alulation for proteins is analogous, with alphabet size 4 replaed by 23.
+One the in-memory index is ready, we plae it on disk. Details of this proedure
+follow.
+12
+6 Index layout on disk
+       
+       
+       
+
+
+
+bits
+offset array of g
+bitmap gd
+dintegers
+code
+next offset
+next offset
+index of n positions, ordered by (code, position)
+ordered list of positions
+array size: n integers
+Figure 7: Index layout on disk.
+The data struture onsists (oneptually) of three les: the bitmap, the osets
+le, and the positions le. The bitmap uses the java.util.BitSet lass, serialised to
+disk. The osets and positions les are les of integers. In our implementation
+both osets and positions les have been split into 23 les, aording to the rst
+letter of eah index window. We assume that the available RAM is greater than
+the sum of the following: small buer from whih data is read from the text le, a
+bitmap of size g
+d
+, an array of arrays holding window positions (in total fewer than n
+integers), handles for the osets and positions output les, and some administrative
+overheads needed by the Java Virtual Mahine. We maintain our own arrays, and
+expand them as needed (using System.arrayopy method), as lass java.util.Vetor
+onsumed too muh spae. If the size of the array of arrays exeeds RAM size, one
+an adopt the strategy desribed by ourselves [13℄ where the entire index is built in
+several traversals of the text, eah adding to the osets and positions le, without
+the need for le merging. This approah is possible, beause both les reet the
+alphabeti ordering of index windows.
+Exat le sizes depend on the alphabet size g and window size d. However, the
+dominating ost is the storage of the positions of eah text window, as we are about
+to demonstrate. The bitmap is of size g
+d
+bits, and for a protein index of window size
+5 in Java this requires 804.5 kbytes on disk, and takes less than 0.5 seond to write
+to disk. For a protein index of depth 4, the spae requirement is under 35 kbytes.
+Seond le is the index of osets of size g
+d
+integers. For sequene repositories
+indexing less than 2 Gbytes of protein (4 byte integers), this le requires 25 Mbytes,
+using depth 5. Osets are pointers into the proper index of window positions. This
+le ould potentially be ompressed.
+Third le is the index of positions where eah window is present in the sequene
+le. For an input le of size n there will be fewer than n positions stored in the
+index, as we only index the start of eah window, and there are fewer than n windows.
+Using 4 byte integers and window of size 5 to index 405 million AAs, we needed 1.6
+13
+Gbytes storage for the positions le. It should be possible to ompress this le, as
+eah text window produes an inreasing list of integers.
+These les are aessed as follows. Before mathing, hek in the bitmap index
+if the ode is present in the index. If it is present, perform the alignment. In
+our urrent implementation this hek is not made, beause making it (using the
+java.util.BitSet lass) slowed down the mathing proess onsiderably. This eet
+may be due to the size of the bitmap (800 Kbytes) whih does not t in the ahe
+and to the implementation of this lass in Java.
+If the alignment sore is above the threshold, we nd the osets of this ode and
+the next indexed ode in the index of osets, and nally retrieve the portion of the
+positions list le between the two osets.
+It follows from the index desription that the total index size is dominated by
+the storage of integer position lists. Without ompression, with 4 bytes per integer,
+we need (4n + 4  g
+d
++ g
+d
+=8) bytes for the index. For window size 5, total index
+size is 1600 + 25.7 + 0.8045 = 1626.5 Mbytes. This is four times the size of the AA
+sequene itself.
+The index an be split into smaller les. We store the bit map separately, and
+have 23 osets and 23 positions les, whih we all index partitions.
+7 The mathing algorithm
+The algorithm has three phases, of whih we perform only the rst two. Part one
+is the san of the index to identify mathing windows. This part delivers a list of
+odes and assoiated sores. This part is urrently performed without aess to disk
+or to the bitmap data struture. Part two is the retrieval of positions orresponding
+to the reported ode windows from disk. Part three builds alignments, based on the
+sores reported in part one, and using positions lists gathered from disk in part two.
+We do not fous on part three, as these aspets have been explored by BLAT [16℄,
+and we expet to be able to adapt this solution in the future.
+First, the query sequene is sanned using a window of the same size as index
+depth. For a query of lengthm there are fewer thanm windows. Eah query window
+is aligned with the index. The omplexity of the index san is the produt of m and
+g(g
+d
+ 1)
+g 1
+, i.e. it is O(mg
+d
+). At this point we an introdue an optimisation, paralleling
+the solutions used in SWAT and Myers and Durbin's algorithm. This improvement
+is not a heuristi. It follows from the fat that we indexed all suÆxes and from
+the analysis of the formula used to alulate the DP matrix, where a negative sore
+S[a℄[b℄ is never kept in the matrix, but replaed by 0. This means that evaluating
+a math whih leads to a negative sore is unprodutive, and an be missed out.
+In the PAM120 matrix, see below, A has positive sores in omparison to only ve
+letters. If the rst letter of the urrent query window is A, we only use parts of the
+index whih orrespond to the starting letters with a stritly positive sore, that is
+A,G,P,S,T.
+14
+A . E G H . M F P S T .
+A 3 . 0 1 -3 . -2 -4 1 1 1 .
+Part two of the algorithm starts with the lists of index odes whih are similar to
+the query window (sore >= threshold). For eah ode we hek the bit map, to
+see if it is marked true for this ode, whih means that this ode ours in the text.
+If the ode ours, we look up the osets le orresponding to this ode, and the
+next ode marked in the bitmap. This look up produes two pointers into the le
+of window positions, and data between those pointers is read.
+This part of the algorithm is dominated by the number of hits read from the
+positions le. There is no omputation involved, other than random le reads.
+Therefore, the omplexity of this part is O(h) where h is the number of hits reported.
+We run here into a diÆulty, as some windows produe very large runs of math-
+ing index windows. For instane, taking the query window ARTSV and omparing
+it to the index window starting with the letter A will produe 23
+4
+mathing odes all
+giving a sore of 3 or more (Sore[A℄[A℄=3). If the threshold for a window math is
+set to 3, we annot report all the mathes, as there are too many of them (possibly
+more than 5% of the database). To overome this diÆulty, we use an additional
+parameter. Beside the similarity threshold for an individual window math, we set
+the maximum number of odes, maxCodes, that we report for disk look up for eah
+query window. This is not equivalent to limiting the number of positions to be
+looked up, but is a rough measure of how muh data will be reported. To make sure
+that we know of the presene of very popular odes in the query, we inrement the
+global sore for the query, for eah of the query windows leading to this situation.
+8 Experimental results
+8.1 Data soures
+The le nr.Z was aquired on 4th January 2003 from ftp://ftp.nbi.nih.gov/blast/db/.
+This data set, alled nr (non-redundant), represents all proteins urrently known,
+as well as those predited to exist, based on the translations from known DNA
+sequenes. After deompression the le measured 611,592,207 bytes. The data on-
+sisted of 1,270,887 sequenes, and of this data 405,910,324 was pure AA sequene,
+and the rest were reord headers.
+Query le onsisted of 24 protein sequenes of total length of 17,012 AAs. Those
+were seleted as ve rst entries from the following four les retrieved on 5th Febru-
+ary 2003, with only 4 zebra sh reords from the fth le listed. This hoie was
+initially ditated by the Ssearh benhmark whih aepts query les up to 20 kbytes.
+ftp://ftp.nbi.nih.gov/blast/db/drosoph.aa.Z
+ftp://ftp.nbi.nih.gov/refseq/M musulus/mRNA Prot/mouse.faa.Z
+ftp://ftp.nbi.nih.gov/refseq/R norvegius/mRNA Prot/rat.faa.Z
+ftp://ftp.nbi.nih.gov/refseq/H sapiens/mRNA Prot/hs.faa.Z
+ftp://ftp.nbi.nih.gov/refseq/D rerio/mRNA Prot/zebrafish.faa.Z
+15
+These sequenes represent the following organisms: Drosophila melanogaster (fruit-
+y), mouse, rat, human, and zebra sh.
+To time index reation for a smaller dataset, we used the protein set from
+the worm C. elegans downloaded from ftp://ftp.sanger.a.uk/pub/C.elegans sequen-
+es/WORMPEP/wormpep (size 11,251,105 bytes).
+8.2 Hardware and Software
+Tests were performed on a Compaq PC, Evo Series with 2 GB 266MHz DDR RAM,
+INTEL 845G (Pentium4), one CPU running at 2.26GHz, and a loal disk with
+the following speiation: 80Gb disk - WDC WD800BB-60CJA1, ATA DISK drive
+156301488 setors (80026 MB) w/2048KiB Cahe, CHS=10337/240/63, UDMA(100).
+The OS was Linux release 2.4.18-14. Software was developed in Java, version
+"1.4.0 01" Java(TM) 2 Runtime Environment, Standard Edition (build 1.4.0 01-
+b03) Java HotSpot(TM) Client VM (build 1.4.0 01-b03, mixed mode). For aess
+to les the pakage java.nio whih provides memory-mapped les was used. The
+lass java.util.BitSet was used to store the bit map in memory and on disk (as a
+serialised objet). File reads were buered using memory-mapped les. File writing
+during index reation was not buered.
+BLAST was obtained from ftp://nbi.nlm.nih.gov/blast/exeutables/, version
+dated Mon Jul 9 11:53:34 EDT 2001. Ssearh, provided in the pakage FASTA3,
+was downloaded from ftp://ftp.virginia.edu/pub/fasta, version 3.3t09 May 18, 2001.
+SWAT, version 0.990329, was obtained from Phil Green, phgu.washington.edu.
+Tests were run with BLOSUM62 for BLAST, and BLOSUM50 for the Sequoia,
+Ssearh, and SWAT. Default parameters for those programs were used. The gap
+ost for the Sequoia was set to  12.
+8.3 Benhmarks
+BLAST is a heuristi algorithm. A query sequene is indexed, for proteins the index
+is based on a window of three letters. Eah window is used to generate around
+50 similar windows, where one or two letters have been hanged. Eah of those
+mutated windows is then aligned with the text, and if an exat math for two suh
+windows from the query is found, approximate mathing (a dynami programming
+matrix) follows, whih attempts to onnet the two exat hits, alled a highly soring
+pair (HSP). We tested BLAST with the entire set of 24 sequenes and individual
+sequenes from the set, omparing them to nr. Preproessing nr with the ommand
+formatdb, whih ompresses the data and reates indexes of reord headers, took
+1:31.83.
+Ssearh and SWAT implement the Smith-Waterman algorithm. They perform
+an exhaustive alignment between the query and the text. For Ssearh the query le
+an be up to 20 kB. We started Ssearh with a query le of 24 sequenes, 17,012
+residues, and nr as target, but aborted it after 24 hours, as it has not ompleted. We
+attempted a test of SWAT against nr but that turned out not to be possible, and
+16
+01000
+2000
+3000
+4000
+5000
+6000
+7000
+8000
+0 200 400 600 800 1000 1200 1400 1600 1800
+s
+e
+c
+o
+n
+d
+s
+query length
+Performance comparison of BLAST, Ssearch and SWAT
+ with Sequoia
+BLAST
+SWAT
+Ssearch
+Sequoia
+Figure 8: Comparing the performane of BLAST, Ssearh and SWAT with that of
+the SuÆx Sequoia.
+the error message instruted us to redue the size of the target le. Subsequently, we
+took a subset of nr, ontaining 19,177,178 residues. This onstitutes 0.04724 of nr,
+and we ran this sample with a number of queries for both SWAT and Ssearh. The
+times observed for SWAT and Ssearh exeution had to be saled up proportionally
+(multiplied by 21). Figure 8 summarises the performane of BLAST, SWAT, Ssearh
+and the Sequoia for a range of queries. The performane of the Sequoia is on a par
+with BLAST, while SWAT and Ssearh are signiantly slower.
+8.4 Index reation
+The speed of index reation is related to the size of the data to be indexed and to
+the size of the array needed to maintain a memory-resident array of arrays, before
+it is written to disk. After all data is indexed in memory, we serialise the bitmap
+to disk, and then traverse the array one, and write the osets and positions les
+to disk. Writing to disk was not buered, and was therefore very slow. We show
+timings for the nr dataset at window sizes 4 and 5, and the C elegans dataset, of
+11,251,105 AAs, at window size 3.
+17
+le size window indexing le writing
+Mbytes seonds seonds
+400 4 1152 4886
+400 5 1705 {
+400 5 1714 {
+400 5 1545 4966
+11 3 26 {
+We were not able to index nr to depth 6 in one traversal using our mahine. On the
+other hand, we were surprised, that given the fat that we initialise position arrays
+of size 4, and opy them eah time they need to expand, the index build time is still
+reasonable (under 30 minutes). Clearly, we need to improve the ode that plaes
+data on disk, to make this solution attrative.
+8.5 Query senario
+We submitted eah of the 24 queries, multiple times, using similarity thresholds
+from 1 to 15, and limiting the number of odes to be reported to 100, 500, 1000
+and 10,000. In total 1460 queries were exeuted. Eah query was read from le as
+ASCII, representing the AA residues. A Perl sript [38℄ invoked Java with the query
+and two thresholds as parameters. The timer was started in Java and the query was
+passed for analysis. A sliding window of length 5 was passed over the query, and for
+eah window, using a sore threshold and a threshold on the maximum number of
+mathing odes to nd, maxCodes, the index was used to nd similar sequenes, and
+the le of window positions was read to deliver mathes. We read the mathes from
+disk, but reported only the ount of mathes. Positions were read from disk for index
+partitions where the number of mathing odes found did not exeed maxCodes. The
+atual number of mathing window positions retrieved is related to the maxCodes
+parameter, but the exat number of window positions depends on the frequeny of
+the partiular odes. After all the query windows have been proessed, the timer
+was stopped. We did not assemble the alignment from fragments. We reorded the
+similarity threshold, threshold maxCodes, query length, number of text positions
+read from disk, and the time needed for the operation.
+Figure 9 ompares the speed of our prototype with BLAST. Similarity thresholds
+for a query window (of length 5) are set to 1 and 10, and maxCodes is set to
+10,000. Setting a similarity threshold equal to 1 means that every possible one-
+letter similarity ould be reported. The threshold maxCodes means that only index
+partitions whih have fewer than 10,000 suh odes will be looked up on disk, and a
+partition with more mathes will be disarded. Our partitioning was into sets of 23
+4
+odes, eah partition based on shared rst letter of the index window (reeted in the
+23 les of osets and 23 les of positions). Setting maxCodes to 10,000 would report
+36% of window positions in eah partition, if the ode distribution were uniform.
+In pratie, this varies, as this distribution is skewed. We observe that BLAST is
+faster, by a fator of two, where a realisti number of mathing odes are reported.
+18
+050
+100
+150
+200
+250
+300
+350
+400
+450
+0 500 1000 1500 2000 2500 3000 3500 4000 4500 5000
+s
+e
+c
+o
+n
+d
+s
+query length
+Query execution, Sequoia similarity
+ thresholds 1 and 10, compared to BLAST
+Sequoia, thresh 10, maxCodes 10000
+Blast
+Sequoia, thresh  1, maxCodes 10000
+Figure 9: Performane omparison of BLAST and Sequoia, against nr dataset.
+We summarise in Figure 10 the numbers of hits reported, based on the results shown
+in Figure 9.
+We are also interested in the inuene of the similarity threshold and the max-
+Codes threshold on the number of odes looked up on disk. Figure 11 shows this
+relationship for a sample query of 520 AAs. We interpret this as follows. Setting
+maxCodes to 500 returns only about 0.8 to 0.9 million mathes, on average 1500 per
+query window. We do not know urrently if this is suÆient or not. It might be
+better to use maxCodes 1000 or 10,000 (both returning a similar number of window
+mathes, around 100 million for thresholds 1-3, with a minimum of around 5 million
+for threshold 5). Threshold 5 seems to return the minimum number of mathes for
+other queries as well. This an be explained by the fat that up to threshold 5,
+mathes to individual letters in eah window are reported, and eah math is re-
+ported up to ve times. At higher similarity thresholds, mathes to longer mathing
+words are reported, so there are fewer of them, but eah math is reported several
+times. Overreporting is explained in more detail in Setion 9.1. Overreporting peaks
+at thresholds 1, 2, and 7, and tails o at threshold 12.
+19
+0200
+400
+600
+800
+1000
+1200
+1400
+0 500 1000 1500 2000 2500 3000 3500 4000 4500 5000
+h
+it
+s
+ (
+m
+il
+li
+o
+n
+s
+)
+query length
+Number of hits per query,
+ Sequoia similarity thresholds 1 and 10,
+maxCodes 10,000
+Threshold  1
+Threshold 10
+Figure 10: The relationship between query length and number of individual window
+hits for similarity thresholds 1 and 10, maxCodes limit set to 10,000.
+9 Disussion and further work
+9.1 Results reporting
+In exhaustive searhing, one needs to return all the partial mathes, and then as-
+semble them together. Our solution, to use the threshold maxCodes is not ideal from
+that point of view, as we do not report all mathes. We also, unneessarily, arry
+out the omputation, until we reah the threshold, instead of avoiding omputation.
+An improved solution, possibly based on sequene statistis, is needed, to improve
+both the quality of results, and query eÆieny.
+The problem with our urrent aproah is due to the fat that we index all suÆxes,
+and ompare them to all query windows. Consider two onseutive windows of text,
+for instane ARVAL and RVALT. With a query window DRTAL, using PAM120,
+and gap ost -12 we will sore those windows as follows.
+20
+02e+07
+4e+07
+6e+07
+8e+07
+1e+08
+1.2e+08
+0 2 4 6 8 10 12 14 16
+m
+a
+tc
+h
+e
+s
+similarity threshold
+Relationship between the similarity threshold,
+ maxCodes, and the number of matches
+ reported, for a query of 520 AAs
+520 AAs, maxCodes    500
+520 AAs, maxCodes   1000
+520 AAs, maxCodes 10000
+Figure 11: The eet of maxCodes and the similarity threshold on reporting from
+the SuÆx Sequoia.
+A R V A L
+0 0 0 0 0 0
+D 0 0 0 0 0 0
+R 0 0 6 0 0 0
+T 0 1 0 6 1 0
+A 0 3 0 0 9 0
+L 0 0 0 1 0 14
+R V A L T
+0 0 0 0 0 0
+D 0 0 0 0 0 0
+R 0 6 0 0 0 0
+T 0 0 6 1 0 4
+A 0 0 0 9 0 1
+L 0 0 1 0 14 2
+Due to the high sores between three onseutive pairs of haraters (V,T), (A,A)
+and (L,L), and the fat that both index windows ontain that ombination of letters,
+this sore will be reported three times, beause the next index window will also
+ontain it. Similarly, overreporting strethes along the query itself. We have not
+taken steps to eliminate overreporting yet. We believe further analysis is neessary.
+21
+Another situation where we will perform too many disk aesses arises when the
+query string ontains repeating, or very similar words. Those ould be eliminated
+in the future, by indexing the query, in the same way as it is done in BLAST.
+9.2 Implementation issues
+We used Java 1.4, for ease of programming, and ross-platform ompatibility. We
+would like a generi solution to be made widely available, and will ontinue with
+this line of implementation.
+We believe that a relational database ould support this indexing mehanism, and
+we now have a prototype whih is being evaluated. In ombination with a relational
+database, we an easily support index updates, both deletions and insertions. The
+main data struture is a two-olumn table ontaining the window ode in one olumn,
+and the window index (position) in the other olumn. Suh a table, lustered on
+ode, might provide good query response times.
+9.3 Repetitions in the text
+It is ommon in sequene searhing to lter out repetitive sequenes. This is usually
+done in DNA searhing, and a pakage alled RepeatMasker
+10
+an be used in this
+ontext. Our data struture allows for an easy identiation of sequene repeats,
+independent of any previous knowledge about what suh repeats might look like.
+Statistis on the frequeny of windows an be easily generated from the index, and a
+deision an be made about whih windows are over-represented. To enable searhes
+with repeat masking enabled, an additional bitmap an be reated where repeats
+are marked false.
+9.4 Index ompression
+The suÆx sequoia index is reated in a left-to-right traversal of the sequene. Win-
+dow positions are added at the end of an array referring to a partiular ode and are
+in asending order. It is therefore possible to use lossless ompression tehniques to
+store those integer lists [41℄. The hoie of the ompression sheme will be guided
+by the analysis of data distribution in the positions lists, and seletion between a
+loal and a global ompression sheme will be made.
+9.5 Further work
+Beside the issues whih we have already disussed, we also need to look arefully
+at the statistis of our index and its possible use. Further analysis of the statistis
+of window distribution, their eet on query performane, and their impat on the
+implementation of the data struture is a prerequisite.
+10
+http://repeatmasker.genome.washington.edu/gi-bin/RepeatMasker
+22
+Experiments with dierent window lengths, various ost matries, and the DNA
+alphabet will be arried out to further our understanding of the problem. When the
+statistial and algorithmi hallenges are resolved, we are planning to implement
+a full-sensitivity searh tool both for DNA and proteins, and test it with large
+genomi data sets, in the ontext of omparative genome analysis. We also envisage
+an implementation based on FPGA tehnology, as well as a parallel implementation,
+with index partitions plaed on dierent disks, or mahines.
+10 Conlusions
+We have designed an index whih ombines the features of the suÆx tree with the
+spae eÆieny of an array. This index is reated eÆiently, in one san of the text,
+and has a small footprint. The index requires no aess to disk at DP alulation
+time, and its size is only indiretly related to the size of the underlying data. We
+have shown that using this index, we an perform full-sensitivity sequene searhing,
+given an arbitrary ost matrix, at the ost of heuristi searhing. Our work ould
+pave the way for an eÆient database implementation of full-sensitivity sequene
+retrieval.
+11 Aknowledgements
+Thanks to Jens Stoye and Rob Irving for omments on this manusript. This re-
+searh was supported by the Medial Researh Counil of UK.
+Referenes
+[1℄ S.F. Altshul et al. Basi loal alignment searh tool. J. Mol. Biol., 215:403{10,
+1990.
+[2℄ S.F. Altshul, T.L. Madden, A.A. Shaeer, J. Zhang, Z. Zhang, W. Miller, and
+D.J. Lipman. Gapped BLAST and PSI-BLAST: a new generation of protein
+database searh programs. Nulei Aids Researh, 25:3389{3402, 1997.
+[3℄ R. Baeza-Yates and G. Navarro. A Hybrid Indexing Method for Approximate
+String Mathing. JDA, 1:205{239, 2001.
+[4℄ R.A. Baeza-Yates and G.H. Gonnet. All-against-all sequene math-
+ing. Tehnial report, Dept. of Comp. Siene, Univers. de Chile, 1990.
+ftp://sunsite.d.uhile.l/pub/users/rbaeza/papers/all-all.ps.gz.
+[5℄ S. Burkhardt, A. Crauser, P. Ferragina, H.-P. Lenhof, E. Rivals, and M. Vin-
+gron. q-gram Based Database Searhing Using a SuÆx Array. In RECOMB'99,
+pages 77{83. ACM Press, 1999.
+23
+[6℄ A. L. Cobbs. Fast approximate mathing using suÆx trees. In CPM'95, LNCS
+937, pages 41{54. Springer, 1995.
+[7℄ International Human Genome Sequening Consortium. Initial sequening and
+analysis of the human genome. Nature, 409:860{921, 2001.
+[8℄ M. Dayho, R. Ek, and C. Park. A model of evolutionary hange in proteins.
+In M. Dayho, editor, Atlas of Protein Sequene and Struture, volume 5. Silver
+Springs, MD: National Biomedial Researh Foundation, 1972.
+[9℄ R. Durbin, S. Eddy, A. Krogh, and G. Mithison. Biologial Sequene Analysis.
+Probabilisti models of proteins and nulei aids. CUP, 1998.
+[10℄ L. Florea, G. Hartzell, Z. Zhang, G. Rubin, and W. Miller. A omputer program
+for aligning a DNA sequene with a genomi DNA sequene. Genome Researh,
+8:967{974, 1998.
+[11℄ S. A. Guione and E. Keller. Gene Mathing using JBits. In FPL 2002, LNCS
+2438, pages 1168{1171. Springer, 2002.
+[12℄ X. Huang. A spae{eÆient parallel sequene omparison algorithm for a
+message{passing multiproessor. International Journal of Parallel Program-
+ming, 18(3):223{239, 1989.
+[13℄ E. Hunt, M. P. Atkinson, and R. W. Irving. A database index to large biologial
+sequenes. In VLDB'01, pages 139{148. Morgan Kaufmann, 2001.
+[14℄ E. Hunt, M. P. Atkinson, and R. W. Irving. Database Indexing for Large DNA
+and Protein Sequene Colletions. The VLDB Journal, 11:256{271, 2002.
+[15℄ T. Kahvei and A.K. Singh. An EÆient Index Struture for String Databases.
+In VLDB'01, pages 351{360. Morgan and Kaufmann, 2001.
+[16℄ W. James Kent. BLAT: The BLAST-like Alignment Tool. Genome Res.,
+12(4):656{664, 2002.
+[17℄ S. Kurtz, J.V. Choudhuri, E. Ohlebush, C. Shleiermaher, J. Stoye, and
+R. Giegerih. REPuter: the Manifold Appliations of Repeat Analysis on a
+Genomi Sale. Nulei Aids Researh, 29(22):4633{4642, 2001.
+[18℄ A.E. Kwitek et al. Automated onstrution of high-density omparative maps
+between rat, human, and mouse. Genome Researh, 11(11):1935{43, 2001.
+[19℄ U. Manber and G. Myers. SuÆx arrays: a new method for on-line string
+searhes. SIAM J. Comput., 22(5):935{948, Otober 1993.
+[20℄ L. Marsan and M-F. Sagot. Extrating strutured motifs using a suÆx tree
+{ Algorithms and appliation to promoter onsensus identiation. In RE-
+COMB'00, pages 210{219, 2000.
+24
+[21℄ E.M. MCreight. A spae-eonomi suÆx tree onstrution algorithm. Journal
+of the A.C.M., 23(2):262{272, April 1976.
+[22℄ C. Miller, J. Gurd, and A. Brass. A RAPID algorithm for sequene database
+omparisons: appliation to the identiation of vetor ontamination in the
+EMBL databases. Bioinformatis, 15:111{121, 1999.
+[23℄ G. Myers and R. Durbin. Aelerating Smith-Waterman Searhes. In WABI
+2002, LNCS 2452, pages 331{342. Springer, 2002.
+[24℄ G. Navarro. A Guided Tour to Approximate String Mathing. ACM Computing
+Surveys, 33(1):31{88, 2000.
+[25℄ G. Navarro and R. Baeza-Yates. A pratial q-gram index for text retrieval
+allowing errors. CLEI Eletroni Journal, 1(2), 1998.
+[26℄ G. Navarro, R. Baeza-Yates, E. Sutinen, and J. Tarhio. Indexing Methods for
+Approximate String Mathing. IEEE Data Engineering Bulletin, 24(4):19{27,
+2001.
+[27℄ G. Navarro, E. Sutinen, J. Tanninen, and J. Tarhio. Indexing Text with Ap-
+proximate q-grams. In CPM'2000, LNCS 1848, pages 350{365. Springer, 2000.
+[28℄ Z Ning, AJ Cox, and JC Mullikin. SSAHA: A Fast Searh Method for Large
+DNA Databases. Genome Res., 11:1725{1729, 2001.
+[29℄ O. Ozturk and H. Ferhatosmanoglu. Eetive Indexing and Filtering for Simi-
+larity Searh in Large Biosequene Databases. In BIBE 2003, 2003. to appear.
+[30℄ W. R. Pearson and D. J. Lipman. Improved tools for biologial sequene om-
+parison. Pro Natl Aad Si U S A, 85:2444{8, 1988.
+[31℄ T.A. Smith and M.S. Waterman. Identiation of ommon moleular subse-
+quenes. J. Mol. Biol., 284, 1981.
+[32℄ S. Sturrok and J. Collins. MPsrh version 1.3., 1993.
+http://www.ebi.a.uk/MPsrh/index.html.
+[33℄ Rognes T. ParAlign: a parallel sequene alignment algorithm for rapid and
+sensitive database searhes. Nulei Aids Researh, 29:7:1647{1652, 2001.
+[34℄ E. Ukkonen. Approximate string mathing with q-grams and maximal mathes.
+Theor. Comput. Si., 92(1):191{212, 1992.
+[35℄ E. Ukkonen. Approximate string mathing over suÆx trees. CPM'93, pages
+228{242, 1993.
+[36℄ E. Ukkonen. On-line onstrution of suÆx-trees. Algorithmia, 14(3):249{260,
+1995.
+25
+[37℄ J. C. Venter et al. The Sequene of the Human Genome. Siene, 291:1304{
+1351, 2001.
+[38℄ L. Wall, R.L. Shwartz, T. Christiansen, and S. Potter. Programming Perl.
+Nutshell Handbook. O'Reilly & Assoiates, 2nd edition, 1996.
+[39℄ M. Waterman. Introdution to Computational Biology. Maps, sequenes and
+genomes. Chapman & Hall, 1995.
+[40℄ P. Weiner. Linear pattern mathing algorithm. In Proeedings of the 14th An-
+nual IEEE Symposium on Swithing and Automata Theory, pages 1{11, Wash-
+ington, DC, 1973.
+[41℄ I. H. Witten, A. Moat, and T. C. Bell. Managing Gigabytes: Compressing and
+Indexing Douments and Images. Morgan Kaufmann Publishers, Los Altos, CA
+94022, USA, seond edition, 1999.
+[42℄ Y. Yamaguhi, Y. Miyajima, T. Maruyama, and A. Konagaya. High Speed
+Homology Searh Using Run-Time Reonguration. In FPL 2002, LNCS 2438,
+pages 281{291. Springer, 2002.
+[43℄ Q. Yuan, S. Ouyang, J. Liu, B. Suh, R. Cheung, F.and Sultana, D. Lee, Quak-
+enbush, J., and C.R. Buell. The TIGR rie genome annotation resoure: an-
+notating the rie genome and reating resoures for plant biologists. Nulei
+Aids Researh, 31(1):229{33, 2003.
+26

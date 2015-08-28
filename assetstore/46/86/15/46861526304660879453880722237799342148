@@ -1,0 +1,1205 @@
+A Theory of Software Product Line Refinement
+Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+Informatics Center – Federal University of Pernambuco
+Department of Computing Systems – Federal University of Campina Grande
+{phmb,lmt}@cin.ufpe.br -- rohit@dsc.ufcg.edu.br
+Abstract. To safely derive and evolve a software product line, it is im-
+portant to have a notion of product line refactoring and its underlying
+refinement notion, which assures behavior preservation. In this paper we
+present a general theory of product line refinement by extending a pre-
+vious formalization with explicit interfaces between our theory and the
+different languages that can be used to create product line artifacts. More
+important, we establish product line refinement properties that justify
+stepwise and compositional product line development and evolution.
+1 Introduction
+A software product line is a set of related software products that are
+generated from reusable assets. Products are related in the sense that they
+share common functionality. Assets correspond to components, classes,
+property files, and other artifacts that are composed in different ways to
+specify or build the different products. This kind of reuse targeted at
+a specific set of products can bring significant productivity and time to
+market improvements [PBvdL05,vdLSR07].
+To obtain these benefits with reduced upfront investment, previous
+work [Kru02,CN01,AJC+05] proposes to minimize the initial product line
+(domain) analysis and development process by bootstraping existing re-
+lated products into a product line. In this context it is important to rely
+on a notion of product line refactoring [Bor09], which provides guidance
+and safety for deriving a product line from existing products, and also
+for evolving a product line by simply improving its design or by adding
+new products while preserving existing ones. Product line refactoring
+goes beyond program refactoring notions [Opd92,Fow99,BSCC04,CB05]
+by considering both sets of reusable assets that not necessarily cor-
+respond to valid programs, and extra artifacts, such as feature mod-
+els [KCH+90,CE00], which are necessary for automatically generating
+products from assets.
+Instead of focusing on the stronger notion of refactoring, in this pa-
+per we focus on the underlying notion of product line refinement, which
+2 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+also captures behavior preservation but abstracts quality improvement.
+This allows us to develop a formal theory of product line refinement,
+extending the previous formalization [Bor09] with explicit assumptions
+about the different languages that can be used to create product line
+artifacts. More important, we establish product line refinement proper-
+ties that justify safe stepwise and compositional product line development
+and evolution. Our theory is encoded in the Prototype Verification System
+(PVS) [ORS92], which provides mechanized support for formal specifica-
+tion and verification. All properties are proved using the PVS prover.
+This text is organized as follows. Section 2 introduces basic con-
+cepts and notation for feature models and other extra product line ar-
+tifacts [CE00,BB09]. Several assumptions and axioms explicitly establish
+the interfaces between our theory and particular languages used to de-
+scribe a product line. Definitions and lemmas are introduced to formalize
+auxiliary concepts and properties. Following that, in Sec. 3, we discuss
+and formalize our notion of product line refinement. We also derive basic
+properties that justify stepwise product line development and evolution.
+Next, Sec. 4 presents the product line refinement compositionality results
+and their proofs. We discuss related work in Sec. 5 and conclude with
+Sec. 6. Finally, Appendix A contains proofs omitted in the main text.
+2 Product lines concepts
+In the product line approach formalized in this paper, automatic gener-
+ation of products from assets is enabled by Feature Models and Config-
+uration Knowledge (CK) [CE00]. A feature model specifies common and
+variant features among products, and is used for describing and selecting
+products based on the features they support. A CK relates features and
+assets, specifying which assets implement possible feature combinations.
+Hence a CK can be used to actually build a product given chosen fea-
+tures for that product. We now explain in more detail these two kinds
+of artifacts and related concepts, using examples from the Mobile Media
+product line [FCS+08], which contains applications – such as the one il-
+lustrated in Fig. 1 – that manipulate photo, music, and video on mobile
+devices.
+2.1 Feature models
+A feature model is essentially represented as a tree, containing features
+and information about how they are related. Features basically abstract
+A Theory of Software Product Line Refinement 3
+Fig. 1. Mobile Media screenshots
+groups of associated requirements, both functional and non-functional.
+In the particular feature model notation illustrated here, relationships
+between a parent feature and its child features (subfeatures) indicate
+whether the subfeatures are optional (present in some products but not
+in others, represented by an unfilled circle), mandatory (present in all
+products, represented by a filled circle), or (every product has at least one
+of them, represented by a filled triangular shape), or alternative (every
+product has exactly one of them, represented by an unfilled triangular
+shape). For example, Fig. 2 depicts a simplified Mobile Media feature
+model, where Sorting is optional, Media is mandatory, Photo and Music
+are or-features, and the two illustrated screen sizes are alternative.
+Mobile Media
+Media
+Photo Music
+Screen Size
+128x149 240x320
+Management
+Send Photo Sorting
+Send Photo ⇒ Photo
+Fig. 2. Mobile Media simplified feature model
+Besides these relationships, feature models may contain propositional
+logic formulas about features. Feature names are used as atoms to indicate
+that a feature should be selected. So negation of a feature indicates that
+4 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+it should not be selected. For instance, the formula just below the tree
+in Fig. 2 states that feature Photo must be present in some product
+whenever feature Send Photo is selected. So
+{Photo, Send Photo, 240x320},
+together with the mandatory features, which hereafter we omit for brevity,
+is a valid feature selection (product configuration), but
+{Music, Send Photo, 240x320}
+is not. Likewise {Music, Photo, 240x320} is a valid configuration, but
+{Music, Photo, 240x320, 128x149}
+is not because it breaks the Screen Size alternative constraint. In sum-
+mary, a valid configuration is one that satisfies all feature model con-
+straints, specified both graphically and through formulas.
+The set of all valid configurations often represents the semantics of a
+feature model. However, as different feature model notations might ex-
+press constraints and configurations in different ways, our product line
+refinement theory abstracts the details and just assumes a generic func-
+tion [[ ]] for obtaining the semantics of a feature model as a set of config-
+urations.
+Assumption 1 〈Feature model semantics〉
+FeatureModel : TY PE
+Configuration : TY PE
+[[ ]] : FeatureModel→ set[Configuration]
+We use simplified PVS notation for introducing the mentioned function
+and related types. In PVS, TYPE declares an uninterpreted type that
+imposes no assumptions on implementations of the specification.
+As shall be clear latter, these concepts are all we require about
+feature models. With them, we can define our product line refinement
+notion and derive its properties. So our theory applies for any fea-
+ture model notation whose semantics can be expressed as a set of
+configurations. This is the case of the feature model notation illus-
+trated in this section and others, which have been formalized else-
+where [GMB08,AGM+06,CHE05,Bat05,SHTB07].
+Given a notion of feature model semantics, it is useful to define a
+notion of feature model equivalence to reason about feature models. Two
+feature models are equivalent iff they have the same semantics.
+A Theory of Software Product Line Refinement 5
+Definition 1 〈Feature model equivalence〉
+Feature models F and F ′ are equivalent, denoted F ∼= F ′, whenever
+[[F ]] = [[F ′]].
+Again, this is quite similar to the PVS specification, which defines the
+equivalence as a function with the following type:
+∼= : FeatureModel, FeatureModel→ bool
+Hereafter we omit such typing details, and overload symbols, but the
+types can be easily inferred from the context.
+We now establish the equivalence properties for the just introduced
+function.
+Theorem 1 〈Feature model equivalence – reflexivity〉
+∀F : FeatureModel · F ∼= F
+Proof: Follows directly from Definition 1 and the reflexivity of the equal-
+ity of configuration sets. 
+Theorem 2 〈Feature model equivalence – symmetry〉
+∀F, F ′ : FeatureModel · F ∼= F ′ ⇒ F ′ ∼= F
+Proof: Follows directly from Definition 1 and the symmetry of the equal-
+ity of configuration sets. 
+Theorem 3 〈Feature model equivalence – transitivity〉
+∀F, F ′, F ′′ : FeatureModel · F ∼= F ′ ∧ F ′ ∼= F ′′ ⇒ F ∼= F ′′
+Proof: Follows directly from Definition 1 and the transitivity of the equal-
+ity of configuration sets. 
+These properties justify safe stepwise evolution of feature models, as il-
+lustrated in previous work [AGM+06].
+2.2 Assets and products
+Besides a precise notion of feature model semantics, for defining prod-
+uct line refinement we assume means of comparing assets and products
+with respect to behavior preservation. We distinguish arbitrary asset sets
+(set[Asset]) from well-formed asset sets (Product), which correspond to
+valid products in the underlying languages used to describe assets. We
+assume the wf function specifies well-formedness, and v denotes both
+asset and product refinement.
+6 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+Assumption 2 〈Asset and product refinement〉
+Asset : TY PE
+v: Asset, Asset→ bool
+wf : set[Asset]→ bool
+Product : TY PE = (wf)
+v : Product, Product→ bool
+We use the PVS notation for defining the Product type as the set of all
+asset sets that satisfy the wf predicate.
+Our product line refinement theory applies for any asset language with
+these notions as long as they satisfy the following properties. Both asset
+and product refinement must be pre-orders.
+Axiom 1 〈Asset refinement reflexivity〉
+∀a : Asset · a v a
+Axiom 2 〈Asset refinement transitivity〉
+∀a, b, c : Asset · a v b ∧ b v c⇒ a v c
+Axiom 3 〈Product refinement reflexivity〉
+∀p : Product · p v p
+Axiom 4 〈Product refinement transitivity〉
+∀p, q, r : Product · p v q ∧ q v r ⇒ p v r
+These are usually properties of any refinement notion because they are
+essential to support stepwise refinement and development. This is, for
+example, the case of existing refinement notions for object-oriented pro-
+gramming and modeling [BSCC04,GMB05,MGB08].
+Finally, asset refinement must be compositional in the sense that refin-
+ing an asset that is part of a valid product yields a refined valid product.
+Axiom 5 〈Asset refinement compositionality〉
+∀a, a′ : Asset · ∀s : set[Asset]·
+a v a′ ∧ wf(a ∪ s)
+⇒ wf(a′ ∪ s) ∧ a ∪ s v a′ ∪ s
+A Theory of Software Product Line Refinement 7
+We use ∪ both to denote set union and insertion of an element to a set.
+Such a compositionality property is essential to guarantee independent
+development of assets in a product line, and is supported, for example, by
+existing class refinement notions [SB04]. In that context, a product is a
+main command with a set of class declarations that coherently resolves all
+references to class and method names. In general, we do not have to limit
+ourselves to code assets, and consider any kind of asset that supports the
+concepts and properties discussed in this section.
+2.3 Configuration knowledge
+As discussed in Sec. 2.1, features are groups of requirements, so they must
+be related to the assets that realize them. This is specified by the configu-
+ration knowledge (CK), which can be expressed in many ways, including
+as a relation from feature expressions (propositional formulas having fea-
+ture names as atoms) to sets of asset names [BB09]. For example, showing
+the relation in tabular form, the following CK
+Music.java, ...
+AppMenu.aj, ...
+Common.aj, ...
+Photo.java, ...
+Photo ∧ Music
+Photo ∨ Music
+Photo
+Music
+MM.java, ...Mobile Media
+… …
+establishes that if the Photo and Music features are both selected then
+the AppMenu asset, among others omitted in the fifth row, should be part
+of the final product. Essentially, this product line uses the AppMenu aspect
+as a variability implementation mechanism [GA01,AJC+05] that has the
+effect of presenting the left screenshot in Fig. 1. For usability issues, this
+screen should not be presented by products that have only one of the
+Media features, so the need for the fifth row in the simplified Mobile
+Media CK. Similarly, some assets are shared by the Photo and Music
+implementations, so we write the fourth row to avoid repeating the asset
+names on the second and third rows.
+Given a valid product configuration, the evaluation of a CK yields
+the names of the assets needed to build the corresponding product. In
+our example, the configuration {Photo, 240x320}1 leads to
+{MM.java, . . . , Photo.java, . . . , Commom.aj, . . . }.
+1 Remember we omit mandatory features for brevity.
+8 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+This gives the basic intuition for the semantics of a CK. It is a function
+that maps product configurations into finite sets (represented by fset)
+of asset names. So our product line refinement theory relies on a CK
+semantic function [[ ]] as follows.
+Assumption 3 〈CK semantics〉
+CK : TY PE
+AssetName : TY PE
+[[ ]] : CK → Configuration→ fset[AssetName]
+For the CK notation illustrated in this section, the semantics of a given
+CK K, represented as [[K]], could be defined in the following way: for
+a configuration c, an asset name n is in the set [[K]]c iff there is a row
+in K that contains n and its expression evaluates to true according to
+c. But we do not give further details because our aim is to establish a
+product line refinement theory that is independent of CK notation, as
+long as this notation’s semantics can be expressed as a function that
+maps configurations into finite sets of assets names.
+Similarly to what we have done for feature models, we define a notion
+of CK equivalence based on the notion of CK semantics. This is useful to
+reason about CK. Two CK specifications are equivalent iff they have the
+same semantics.
+Definition 2 〈Configuration knowledge equivalence〉
+Configuration knowledge K is equivalent to K ′, denoted K ∼= K ′, when-
+ever [[K]] = [[K ′]].
+We now establish the equivalence properties for the just introduced
+relation.
+Theorem 4 〈Configuration knowledge equivalence – reflexivity〉
+∀K : CK ·K ∼= K
+Proof: Follows directly from Definition 2 and the reflexivity of the equal-
+ity of functions. 
+Theorem 5 〈Configuration knowledge equivalence – symmetry〉
+∀K,K ′ : CK ·K ∼= K ′ ⇒ K ′ ∼= K
+Proof: Follows directly from Definition 2 and the symmetry of the equal-
+ity of functions. 
+A Theory of Software Product Line Refinement 9
+Theorem 6 〈Configuration knowledge equivalence – transitivity〉
+∀K,K ′,K ′′ : CK ·K ∼= K ′ ∧K ′ ∼= K ′′ ⇒ K ∼= K ′′
+Proof: Follows directly from Definition 2 and the transitivity of the equal-
+ity of functions.
+
+2.4 Asset mapping
+Although the CK illustrated in the previous section refers only to code
+assets, in general we could also refer to requirements documents, design
+models, test cases, image files, XML files, and so on. For simplicity, we
+focus on code assets as they are equivalent to other kinds of asset for our
+purposes. The important issue here is not the nature of asset contents,
+but how the assets are compared and referred to in the CK.
+We cover asset comparison in Sec. 2.2. For dealing with asset refer-
+ences, each product line keeps a mapping such as the following
+{Main 1 7→
+class Main {
+...new StartUp(...);...
+}
+Main 2 7→
+class Main {
+...new OnDemand(...);...
+}
+Common.java 7→
+class Common {
+...
+}
+...
+}
+from asset names used in a CK to actual assets. So, besides a feature
+model and a CK, a product line contains an asset mapping, which ba-
+sically corresponds to an environment of asset declarations. This allows
+conflicting assets in a product line, like assets that implement alternative
+features, such as both Main classes in the illustrated asset mapping.
+Formally, we specify asset mappings in PVS as follows.
+10 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+Definition 3 〈Asset mapping〉
+Let r be a finite set of name-asset pairs (r : fset[AssetName,Asset]).
+mapping(r) : bool =
+∀n : AssetName · ∀a, b : Asset·
+(n, a) ∈ r ∧ (n, b) ∈ r ⇒ a = b
+AssetMapping : TY PE = (mapping)
+Since there is not much to abstract from this notion of asset mapping,
+it is actually defined as part of our theory. Differently from the concepts
+of feature model, CK, and their semantics, the asset mapping concept is
+not a parameter to our theory.
+We also define auxiliary functions that are used to define product
+line refinement. The second one is mapping application over a set. In the
+following, consider that m : AssetMapping and s : fset[AssetName].
+Definition 4 〈Auxiliary asset mapping functions〉
+dom(m) : set[AssetName] =
+{n : AssetName | ∃a : Asset · (n, a) ∈ m}
+m〈s〉 : set[Asset] =
+{a : Asset | ∃n ∈ s · (n, a) ∈ m}
+We use the notation ∃n ∈ s ·p(n) as an abbreviation for the PVS notation
+∃n : AssetName · n ∈ s ∧ p(n).
+To derive product line refinement properties, we establish several
+properties of the introduced auxiliary functions. The proofs appear in
+Appendix A.
+Lemma 1 〈Distributed mapping over union〉
+For asset mapping A, asset a, and finite sets of asset names S and S′, if
+a ∈ A〈S ∪ S′〉
+then
+a ∈ A〈S〉 ∨ a ∈ A〈S′〉
+
+A Theory of Software Product Line Refinement 11
+Lemma 2 〈Distributed mapping over singleton〉
+For asset mapping A, asset name an and finite set of asset names S, if
+an ∈ dom(A)
+then
+∃a : Asset · (an, a) ∈ A ∧ A〈an ∪ S〉 = a ∪A〈S〉
+
+Remember we use ∪ both for set union and insertion of an element to a
+set.
+Lemma 3 〈Asset mapping domain membership〉
+For asset mapping A, asset name an and asset a, if
+(an, a) ∈ A
+then
+an ∈ dom(A)
+
+Lemma 4 〈Distributed mapping over set of non domain elements〉
+For asset mapping A and finite set of asset names S, if
+¬∃n ∈ S · n ∈ dom(A)
+then
+A〈S〉 = {}
+
+For reasoning about asset mappings, we define a notion of asset map-
+ping refinement. Asset mapping equivalence could also be defined, but
+we choose the weaker refinement notion since it gives us more flexibility
+when evolving asset mappings independently of other product line ele-
+ments such as feature models and CK. As shall be clear latter, we can
+rely on refinement for asset mappings but not for the other elements; that
+is why, in previous sections, we define equivalences for them. For asset
+mapping refinement, exactly the same names should be mapped, not nec-
+essarily to the same assets, but to assets that refine the original ones.
+12 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+Definition 5 〈Asset mapping refinement〉
+For asset mappings A and A′, the first is refined by the second, denoted
+A v A′
+whenever
+dom(A) = dom(A′)
+∧ ∀n ∈ dom(A)·
+∃a, a′ : Asset · (n, a) ∈ A ∧ (n, a′) ∈ A′ ∧ a v a′
+We use ∀n ∈ dom(A) · p(n) to abbreviate the PVS notation
+∀n : AssetName · n ∈ dom(A)⇒ p(n)
+Note also that a v a′ in the definition refers to asset refinement, not to
+program refinement.
+We now prove that asset mapping refinement is a pre-order.
+Theorem 7 〈Asset mapping refinement reflexivity〉
+∀A : AssetMapping ·A v A
+Proof: For an arbitrary asset mapping A, from Definition 5 we have to
+prove that
+dom(A) = dom(A)
+∧ ∀n ∈ dom(A)·
+∃a, a′ : Asset · (n, a) ∈ A ∧ (n, a′) ∈ A ∧ a v a′
+The first part of the conjunction follows from equality reflexivity. For an
+arbitrary n ∈ dom(A), we are left to prove
+∃a, a′ : Asset · (n, a) ∈ A ∧ (n, a′) ∈ A ∧ a v a′ (1)
+From Definition 4, as n ∈ dom(A), we have that
+n ∈ {n : AssetName | ∃a : Asset · (n, a) ∈ A}
+By set comprehension and membership, we have that
+∃a : Asset · (n, a) ∈ A
+Let a1 be such a. Then we have (n, a1) ∈ A. From this and Axiom 1, we
+easily obtain 1 taking a and a′ as a1.
+A Theory of Software Product Line Refinement 13
+
+Theorem 8 〈Asset mapping refinement transitivity〉
+∀A,A′, A′′ : AssetMapping ·A v A′ ∧A′ v A′′ ⇒ A v A′′
+Proof: For arbitrary asset mappings A, A′, and A′′, assume that A v A′
+and A′ v A′′. From Definition 5 we have to prove that
+dom(A) = dom(A′′)
+∧ ∀n ∈ dom(A)·
+∃a, a′′ : Asset · (n, a) ∈ A ∧ (n, a′′) ∈ A′′ ∧ a v a′′
+The first part of the conjunction follows from our assumptions, Defini-
+tion 5, and equality transitivity. For an arbitrary n ∈ dom(A), we are left
+to prove
+∃a, a′′ : Asset · (n, a) ∈ A ∧ (n, a′′) ∈ A′′ ∧ a v a′′ (2)
+But from our assumptions and Definition 5 we have that n ∈ dom(A′)
+and therefore
+(n, a) ∈ A ∧ (n, a′) ∈ A′ ∧ a v a′
+(n, a′) ∈ A′ ∧ (n, a′′) ∈ A′′ ∧ a′ v a′′
+for some a, a′, a′′ : Asset. We then have the a and a′′ necessary to obtain 2
+directly from this and the transitivity of asset refinement (Axiom 2). 
+To establish the compositionality results, we rely on an important
+property of asset mapping refinement: if A v A′ then products formed by
+using A assets are refined by products formed by corresponding A′ assets.
+Lemma 5 〈Asset mapping compositionality〉
+For asset mapping A and A′, if
+A v A′
+then
+∀ans : fset[AssetName] · ∀as : fset[Asset]·
+wf(as ∪A〈ans〉)
+⇒ wf(as ∪A′〈ans〉) ∧ as ∪A〈ans〉 v as ∪A′〈ans〉
+
+14 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+2.5 Product lines
+We can now provide a precise definition for product lines. In particular,
+a product line consists of a feature model, a CK, and an asset mapping
+that jointly generate products, that is, valid asset sets in their target
+languages.
+Definition 6 〈Product line〉
+For a feature model F , an asset mapping A, and a configuration knowledge
+K, we say that tuple
+(F,A,K)
+is a product line when, for all c ∈ [[F ]],
+wf(A〈[[K]]c〉)
+We omit the PVS notation for introducing the ProductLine type, but it
+roughly corresponds to the one we use in this definition.
+The well-formedness constraint in the definition is necessary because
+missing an entry on a CK might lead to asset sets that are missing some
+parts and thus are not valid products. Similarly, a mistake when writ-
+ing a CK or asset mapping entry might yield an invalid asset set due
+to conflicting assets, like two aspects that are used as variability mecha-
+nism [GA01,AJC+05] and introduce methods with the same signature in
+the same class. Here we demand product line elements to be coherent as
+explained.
+Given the importance of the well-formedness property in this def-
+inition, we establish compositionality properties related to the well-
+formedness function wf . First we have that feature model equivalence
+is compositional with respect to wf .
+Lemma 6 〈Feature model equivalence compositionality over wf〉
+For feature models F and F ′, asset mapping A, and configuration knowl-
+edge K, if
+F ∼= F ′ ∧ ∀c ∈ [[F ]] · wf(A〈[[K]]c〉)
+then
+∀c ∈ [[F ′]] · wf(A〈[[K]]c〉)
+A Theory of Software Product Line Refinement 15
+
+Similarly, for CK we have the following.
+Lemma 7 〈CK equivalence compositionality over wf〉
+For feature model F , asset mapping A, and configuration knowledge K
+and K ′, if
+K ∼= K ′ ∧ ∀c ∈ [[F ]] · wf(A〈[[K]]c〉)
+then
+∀c ∈ [[F ]] · wf(A〈[[K ′]]c〉)
+
+Finally, for asset mappings we have that refinement is compositional with
+respect to wf .
+Lemma 8 〈Asset mapping refinement compositionality over wf〉
+For feature model F , asset mapping A and A′ and configuration knowl-
+edge K, if
+A v A′ ∧ ∀c ∈ [[F ]] · wf(A〈[[K]]c〉)
+then
+∀c ∈ [[F ]] · wf(A′〈[[K]]c〉)
+
+3 Product line refinement
+Now that we better understand what a product line is, we can introduce
+a notion of product line refinement that provides guidance and safety for
+deriving a product line from existing products, and also for evolving a
+product line by simply improving its design or by adding new products
+while preserving existing ones.
+Similar to program and model refinement [BSCC04,GMB05], product
+line refinement preserves behavior. However, it goes beyond source code
+and other kinds of reusable assets, and considers transformations to fea-
+ture models and CK as well. This is illustrated by Fig. 3, where we refine
+the simplified Mobile Media product line by renaming the feature Music.
+16 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+Music.java, ...
+AppMenu.aj, ...
+Common.aj, ...
+Photo.java, ...
+Photo ∧ Music
+Photo ∨ Music
+Photo
+Music
+MM.java, ...Mobile Media
+Photo.java
+Music.java
+Mobile Media
+Media
+Photo Music
+Screen Size
+128x149 240x320
+Management
+Send Photo Sorting
+Send Photo ⇒ Photo
+… …
+Audio.java, ...
+AppMenu.aj, ...
+Common.aj, ...
+Photo.java, ...
+Photo ∧ Audio
+Photo ∨ Audio
+Photo
+Audio
+MM.java, ...Mobile Media
+Photo.java
+Audio.java
+… …
+Mobile Media
+Media
+Photo Audio
+Screen Size
+128x149 240x320
+Management
+Send Photo Sorting
+Send Photo ⇒ Photo
+✔
+✔
+✔
+✔
+✔
+✔
+✔
+Fig. 3. Product line renaming refinement
+As indicated by check marks, this renaming requires changing the feature
+model, CK, and asset mapping; due to a class name change, we must
+apply a global renaming, so the main method and other classes beyond
+Music.java are changed too.
+The notion of behavior preservation should be also lifted from assets
+to product lines. In a product line refinement, the resulting product line
+should be able to generate products that behaviorally match the origi-
+nal product line products. So users of an original product cannot observe
+behavior differences when using the corresponding product of the new
+product line. With the renaming refinement, for example, we have only
+improved the product line design: the resulting product line generates a
+set of products exactly equivalent to the original set. But it should not
+be always like that. We consider that the better product line might gen-
+erate more products than the original one. As long as it generates enough
+products to match the original product line, users have no reason to com-
+plain. For instance, by adding the optional Copy feature (see Fig. 4), we
+refine our example product line. The new product line generates twice as
+many products as the original one, but what matters is that half of them
+– the ones that do not have feature Copy – behave exactly as the original
+products. This ensures that the transformation is safe; we extended the
+product line without impacting existing users.
+3.1 Formalization
+We formalize these ideas in terms of product refinement (see Assump-
+tion 2). Basically, each program generated by the original product line
+must be refined by some program of the new, improved, product line.
+A Theory of Software Product Line Refinement 17
+Music.java, ...
+AppMenu.aj, ...
+Common.aj, ...
+Photo.java, ...
+Photo ∧ Music
+Photo ∨ Music
+Photo
+Music
+MM.java, ...Mobile Media
+Photo.java
+AppMenu.aj
+Mobile Media
+Media
+Photo Music
+Screen Size
+128x149 240x320
+Management
+Send Photo Sorting
+Send Photo ⇒ Photo
+… …
+Mobile Media
+Media
+Photo Music
+Screen Size
+128x149 240x320
+Management
+Send Photo Sorting
+Send Photo ⇒ Photo
+Copy
+CopyPhoto.aj, ...Copy ∧ Photo
+Copy.java, ...Copy
+Music.java, ...
+AppMenu.aj, ...
+Common.aj, ...
+Photo.java, ...
+Photo ∧ Music
+Photo ∨ Music
+Photo
+Music
+MM.java, ...Mobile Media
+Photo.java
+AppMenu.aj… …
+CopyPhoto.aj
+✔
+✔
+✔
+✔
+Fig. 4. Adding an optional feature refinement
+Definition 7 〈Product line refinement〉
+For product lines (F,A,K) and (F ′, A′,K ′), the first is refined by the
+second, denoted
+(F,A,K) v (F ′, A′,K ′)
+whenever
+∀c ∈ [[F ]] · ∃c′ ∈ [[F ′]] ·A〈[[K]]c〉 v A′〈[[K ′]]c′〉
+Remember that, for a configuration c, a configuration knowledge K, and
+an asset mapping A related to a given product line, A〈[[K]]c〉 is a well-
+formed set of assets. So A〈[[K]]c〉 v A′〈[[K ′]]c′〉 refers to the product re-
+finement notion discussed in Sec. 2.2.
+3.2 Examples and considerations
+To explore the definition just introduced, let us analyze a few concrete
+product line transformation scenarios.
+Feature names do not matter First let us see how the definitions
+applies to the transformation depicted by Fig. 3. The feature models
+differ only by the name of a single feature. So they generate the same
+set of configurations, modulo renaming. For instance, for the source (left)
+product line configuration {Music, 240x320} we have the target (right)
+product line configuration {Audio, 240x320}. As the CKs have the same
+structure, evaluating them with these configurations yield
+18 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+{Commmon.aj, Music.java, . . . }
+and
+{Commmon.aj, Audio.java, . . . }.
+The resulting sets of asset names differ at most by a single element:
+Audio.java replacing Music.java. Finally, when applying these sets of
+names to both asset mappings, we obtain the same assets modulo global
+renaming, which is a well known refinement for closed programs. This
+is precisely what, by Definition 7, we need for assuring that the source
+product line is refined by the target product line.
+This example shows that our refinement definition focus on the prod-
+uct line themselves, that is, the sets of products that can be gener-
+ated. Contrasting with our previous notion of feature model refactor-
+ing [AGM+06], feature names do not matter. So users will not notice
+they are using products from the new product line, although developers
+might have to change their feature nomenclature when specifying product
+configurations. Not caring about feature names is essential for support-
+ing useful refinements such as the just illustrated feature renaming and
+others that we discuss later.
+Safety for existing users only To further explore the definitions, let
+us consider now the transformation shown in Fig. 4. The target feature
+model has an extra optional feature. So it generates all configurations of
+the source feature model plus extensions of these configurations with fea-
+ture Copy. For example, it generates both {Music, 240x320} and {Music,
+240x320, Copy}. For checking refinement, we focus only on the common
+configurations to both feature models – configurations without Copy. As
+the target CK is an extension of the source CK for dealing with cases
+when Copy is selected, evaluating the target CK with any configuration
+without Copy yields the same asset names yielded by the source CK with
+the same configuration. In this restricted name domain, both asset map-
+pings are equal, since the target mapping is an extension of the first for
+names such as CopyPhoto.java, which appears only when Copy is se-
+lected. Therefore, the resulting assets produced by each product line are
+the same, trivially implying program refinement and then product line
+refinement.
+By focusing on the common configurations to both feature models,
+we check nothing about the new products offered by the new product
+line. In fact, they might even not operate at all. Our refinement notion
+A Theory of Software Product Line Refinement 19
+assures only that users of existing products will not be disappointed by
+the corresponding products generated by the new product line. We give
+no guarantee to users of the new products, like the ones with Copy func-
+tionalities in our example. So refinements are safe transformations only in
+the sense that we can change a product line without impacting existing
+users.
+Non refinements As discussed, the transformation depicted in Fig. 3
+is a refinement. Classes and aspects are transformed by a global renam-
+ing, which preserves behavior for closed programs. But suppose that,
+besides renaming, we change the AppMenu.aj2 aspect so that, instead of
+the menu on the left screenshot in Fig. 1, we have a menu with “Pho-
+tos” and “Audio” options. The input-output behavior of new and original
+products would then not match, and users would observe the difference.
+So we would not be able to prove program refinement, nor product line
+refinement, consequently.
+Despite not being a refinement, this menu change is an useful product
+line improvement, and should be carried on. The intention, however, is to
+change behavior, so developers will not be able to rely on the benefits of
+checking refinement. The benefits of checking for refinement only apply
+when the intention of the transformation is to improve product line con-
+figurability or internal structure, without changing observable behavior.
+3.3 Basic properties
+To support stepwise product line development and evolution, we now
+establish that product line refinement is a pre-order.
+Theorem 9 〈Product line refinement reflexivity〉
+∀l : ProductLine · l v l
+Proof: Let l = (F,A,K) be an arbitrary product line. By Definition 7,
+we have to prove that
+∀c ∈ [[F ]] · ∃c′ ∈ [[F ]] ·A〈[[K]]c〉 v A〈[[K]]c′〉
+For an arbitrary c ∈ [[F ]], just let c′ be c and the proof follows from
+product refinement reflexivity (Axiom 3). 
+2 See Sec. 2.3 for understanding the role this aspect plays.
+20 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+Theorem 10 〈Product line refinement transitivity〉
+∀l1, l2, l3 : ProductLine · l1 v l2 ∧ l2 v l3 ⇒ l1 v l3
+Proof: Let l1 = (F1, A1,K1), l2 = (F2, A2,K2), l3 = (F3, A3,K3) be arbi-
+trary product lines. Assume that l1 v l2 ∧ l2 v l3. By Definition 7, this
+amounts to
+∀c1 ∈ [[F1]] ∧ ∃c2 ∈ [[F2]] ·A1〈[[K1]]c1〉 v A2〈[[K2]]c2〉 (3)
+and
+∀c2 ∈ [[F2]] · ∃c3 ∈ [[F3]] ·A2〈[[K2]]c2〉 v A3〈[[K3]]c3〉 (4)
+We then have to prove that
+∀c1 ∈ [[F1]] · ∃c3 ∈ [[F3]] ·A1〈[[K1]]c1〉 v A3〈[[K3]]c3〉
+For an arbitrary c1 ∈ [[F1]], we have to prove that
+∃c3 ∈ [[F3]] ·A1〈[[K1]]c1〉 v A3〈[[K3]]c3〉 (5)
+Properly instantiating c1 in 3, we have
+∃c2 ∈ [[F2]] ·A1〈[[K1]]c1〉 v A2〈[[K2]]c2〉
+Let c′2 be such c2. Properly instantiating c′2 in 4, we have
+∃c3 ∈ [[F3]] ·A2〈[[K2]]c′2〉 v A3〈[[K3]]c3〉
+Let c′3 be such c3. Then we have
+A1〈[[K1]]c1〉 v A2〈[[K2]]c′2〉 ∧A2〈[[K2]]c′2〉 v A3〈[[K3]]c′3〉
+By product refinement transitivity (Axiom 4), we have
+A1〈[[K1]]c1〉 v A3〈[[K3]]c′3〉
+This gives us the c3 in 5 that completes our proof. 
+A Theory of Software Product Line Refinement 21
+4 Product line refinement compositionality
+The product line refinement notion allows one to reason about a product
+line as a whole, considering its three elements (artifacts): feature model,
+CK, and asset mapping. However, for independent development of prod-
+uct line artifacts, we must support separate and compositional reasoning
+for each product line artifact. This allows us to evolve product line arti-
+facts independently. We first consider feature models. Replacing a feature
+model by an equivalent one leads to a refined product line.
+Theorem 11 〈Feature model equivalence compositionality〉
+For product lines (F,A,K) and (F ′, A,K), if
+F ∼= F ′
+then
+(F,A,K) v (F ′, A,K)
+Proof: For arbitrary F , F ′, A, K, assume that F ∼= F ′. By Definition 7,
+we have to prove that
+∀c ∈ [[F ]] · ∃c′ ∈ [[F ′]] ·A〈[[K]]c〉 v A〈[[K]]c′〉
+From our assumption and Definition 1, this is equivalent to
+∀c ∈ [[F ]] · ∃c′ ∈ [[F ]] ·A〈[[K]]c〉 v A〈[[K]]c′〉
+For an arbitrary c ∈ [[F ]], just let c′ be c and the proof follows from
+product refinement reflexivity (Axiom 4). 
+We require feature model equivalence because feature model refinement,
+which requires [[F ]] ⊆ [[F ′]] instead of [[F ]] = [[F ′]], is not enough for ensur-
+ing that separate modifications to a feature model imply refinement for
+the product line. In fact, refinement allows the new feature model to have
+extra configurations that might not generate valid products; the associ-
+ated feature model refinement transformation would not lead to a valid
+product line. For example, consider that the extra configurations result
+from eliminating an alternative constraint between two features, so that
+they become optional. The assets that implement these features might
+well be incompatible, generating an invalid program when both features
+are selected. Refinement of the whole product line, in this case, would
+also demand changes to the assets and CK.
+We can also independently evolve a CK. For similar reasons, we require
+CK equivalence as well.
+22 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+Theorem 12 〈CK equivalence compositionality〉
+For product lines (F,A,K) and (F,A,K ′), if
+K ∼= K ′
+then
+(F,A,K) v (F,A,K ′)
+Proof: The proof is similar to that of Theorem 11, using Definition 2
+instead of Definition 1. 
+Note that the reverse does not hold because the asset names generated
+by K and K ′ might differ for assets that have no impact on product
+behavior,3 or for assets that have equivalent behavior but are named
+differently in the product lines. For similar reasons, the reverse does not
+hold for Theorem 11.
+For asset mappings, we can rely only on refinement. Separately refin-
+ing an asset mapping implies refinement for the product line as a whole.
+Theorem 13 〈Asset mapping refinement compositionality〉
+For product lines (F,A,K) and (F,A′,K), if
+A v A′
+then
+(F,A,K) v (F,A′,K)
+Proof: For arbitrary F , A, A′, and K, assume that A v A′. By Defini-
+tion 7, we have to prove that
+∀c ∈ [[F ]] · ∃c′ ∈ [[F ]] ·A〈[[K]]c〉 v A′〈[[K]]c′〉
+For an arbitrary c ∈ [[F ]], if we prove
+A〈[[K]]c〉 v A′〈[[K]]c〉 (6)
+then c is the necessary c′ we need to complete the proof. By Lemma 5
+and our assumption, we have that
+∀ans : fset[AssetName] · ∀as : fset[Asset]·
+wf(as ∪A〈ans〉)
+⇒ wf(as ∪A′〈ans〉) ∧ as ∪A〈ans〉 v as ∪A′〈ans〉
+(7)
+3 Obviously an anomaly, but still possible.
+A Theory of Software Product Line Refinement 23
+By properly instantiating ans with [[K]]c and as with {} in 7, from set
+union properties we obtain
+wf(A〈[[K]]c〉)
+⇒ wf(A′〈[[K]]c〉) ∧A〈[[K]]c〉 v A′〈[[K]]c〉 (8)
+From Definition 6, we have that wf(A〈[[K]]c〉) for all c ∈ [[F ]]. Therefore,
+from this and 8 we obtain
+wf(A′〈[[K]]c〉) ∧A〈[[K]]c〉 v A′〈[[K]]c〉
+concluding the proof (see 6). 
+Finally, we have the full compositionality theorem, which justifies
+completely independent development of product line artifacts.
+Theorem 14 〈Full compositionality〉
+For product lines (F,A,K) and (F ′, A′,K ′), if
+F ∼= F ′ ∧A v A′ ∧K ∼= K ′
+then
+(F,A,K) v (F ′, A′,K ′)
+Proof: First assume that F ∼= F ′, A v A′, and K ∼= K ′. By Lemma 6,
+the fact that (F,A,K) is a product line, and Definition 6, we have that
+(F ′, A,K) is a product line. Then, using Theorem 11, we have
+(F,A,K) v (F ′, A,K) (9)
+Similarly, from our assumptions, deductions, and Lemma 7 we have that
+(F ′, A,K ′) is a product line. Using Theorem 12, we have
+(F ′, A,K) v (F ′, A,K ′) (10)
+Again, from our assumptions, deductions, and Lemma 8, we have that
+(F ′, A′,K ′) is a product line. Using Theorem 13, we have
+(F ′, A,K ′) v (F ′, A′,K ′) (11)
+The proof then follows from 9, 10, 11, and product line refinement tran-
+sitivity (Theorem 10). 
+24 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+5 Related work
+The notion of product line refinement discussed here first appeared in a
+product line refactoring tutorial [Bor09]. Besides talking about product
+line and population refactoring, this tutorial illustrates different kinds of
+refactoring transformation templates that can be useful for deriving and
+evolving product lines. In this paper we extend the initial formalization of
+the tutorial making clear the interface between our theory and languages
+used to describe product line artifacts. We also derive a number of prop-
+erties that were not explored in the tutorial. We encode the theory in the
+PVS specification language and prove all properties with the PVS prover.
+Our notion of product line refinement goes beyond refactoring of fea-
+ture models [AGM+06,GMB08], considering also other artifacts like con-
+figuration knowledge and assets, both in isolation and in an integrated
+way. In particular, the refinement notion explored here is independent of
+the language used to describe feature models. The cited formalization of
+feature models [AGM+06,GMB08], and others [SHTB07], could, however,
+be used to instantiate our theory for dealing with specific feature model
+notation and semantics. Similarly, our theory is independent of product
+refinement notions. A program refinement notion, like the one for a se-
+quential subset of Java [SB04,BSCC04], could be used to instantiate our
+general theory.
+Early work [CDCvdH03] on product line refactoring focus on Prod-
+uct Line Architectures (PLAs) described in terms of high-level compo-
+nents and connectors. This work presents metrics for diagnosing struc-
+tural problems in a PLA, and introduces a set of architectural refactor-
+ings that can be used to resolve these problems. Besides being specific to
+architectural assets, this work does not deal with other product line ar-
+tifacts such as feature models and configuration knowledge. There is also
+no notion of behavior preservation for product lines, as captured here by
+our notion of product line refinement.
+Several approaches [KMPY05,TBD06,LBL06,KAB07] focus on refac-
+toring a product into a product line, not exploring product line evolution
+in general, as we do here. First, Kolb et al. [KMPY05] discuss a case
+study in refactoring legacy code components into a product line imple-
+mentation. They define a systematic process for refactoring products with
+the aim of obtaining product lines assets. There is no discussion about
+feature models and configuration knowledge. Moreover, behavior preser-
+vation and configurability of the resulting product lines are only checked
+by testing. Similarly, Kastner et al. [KAB07] focus only on transforming
+A Theory of Software Product Line Refinement 25
+code assets, implicitly relying on refinement notions for aspect-oriented
+programs [CB05]. As discussed here and elsewhere [Bor09] these are not
+adequate for justifying product line refinement and refactoring. Trujillo et
+al. [TBD06] go beyond code assets, but do not explicitly consider transfor-
+mations to feature model and configuration knowledge. They also do not
+consider behavior preservation; they indeed use the term “refinement”,
+but in the quite different sense of overriding or adding extra behavior to
+assets.
+Liu et al. [LBL06] also focus on the process of decomposing a legacy
+application into features, but go further than the previously cited ap-
+proaches by proposing a refactoring theory that explains how a feature
+can be automatically associated to a base asset (a code module, for in-
+stance) and related derivative assets, which contain feature declarations
+appropriate for different product configurations. Contrasting with our
+theory, this theory does not consider feature model transformations and
+assumes an implicit notion of configuration knowledge based on the idea
+of derivatives. So it does not consider explicit configuration knowledge
+transformations as we do here. Their work is, however, complementary to
+ours since we abstract from specific asset transformation techniques such
+as the one supported by their theory. By proving that their technique can
+be mapped to our notion of asset refinement, both theories could be used
+together.
+The theory we present in this paper aims to formalize concepts
+and processes from tools [LBL06,CBS+07,ACN+08] and practical experi-
+ence [ACV+05,AJC+05,KMPY05,AGM+06,TBD06,KAB07] on product
+line refactoring. A more rigorous evaluation of the proposed theory is,
+however, left as future work.
+6 Conclusions
+In this paper we present a general theory of product line refinement, for-
+malizing refinement and equivalence notions for product lines and its ar-
+tifacts: feature model, configuration knowledge, and asset mapping. More
+important, we establish a number of properties that justify stepwise and
+compositional product line development and evolution. The presented
+theory is largely independent of the languages used to describe feature
+model, configuration knowledge, and reusable assets. We make this ex-
+plicit through assumptions and axioms about basic concepts related to
+these languages.
+26 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+By instantiating this theory with proper notations and semantic for-
+malizations for feature models and the other product line artifacts, we
+can directly use the refinement and equivalence notions, and the associ-
+ated properties, to guide and improve safety of the product line deriva-
+tion and evolution processes. Such an instantiation also allows one to
+formally prove soundness of product line refactoring transformation tem-
+plates [Bor09] expressed in those notations. As the transformation tem-
+plates precisely specify the transformation mechanics and preconditions,
+their soundness is specially useful for correctly implementing the transfor-
+mations and avoiding typical problems with current program refactoring
+tools [ST09]. In fact, soundness could help to avoid even subtler problems
+that can appear with product line refactoring tools.
+Acknowledgements
+We would like to thank colleagues of the Software Productivity Group
+for helping to significantly improve this work. Ma´rcio Ribeiro provided
+support with the Mobile Media example. Rodrigo Bonifa´cio played a fun-
+damental role developing the configuration knowledge approach used here.
+Vander Alves and Tiago Massoni carried on the initial ideas about fea-
+ture model and product line refactoring. Fernando Castor, Carlos Pontual,
+Se´rgio Soares, Rodrigo, and Ma´rcio provided excellent feedback on early
+versions of part of the material presented here. We would also like to ac-
+knowledge current financial support from CNPq, FACEPE, and CAPES
+projects, and early support from FINEP and Meantime mobile creations.
+A Extra proofs
+In this appendix we present the proofs we omitted in the main text.
+The PVS specification of the whole theory, and proof files for all lemmas
+and theorems are available at http://twiki.cin.ufpe.br/twiki/bin/
+view/SPG/TheorySPLRefinement.
+Lemma 1 〈Distributed mapping over union〉
+For asset mapping A, asset a, and finite sets of asset names S and S′, if
+a ∈ A〈S ∪ S′〉
+then
+a ∈ A〈S〉 ∨ a ∈ A〈S′〉
+A Theory of Software Product Line Refinement 27
+Proof: For arbitrary A, a, S , and S′, assume a ∈ A〈S ∪ S′〉. From this
+and Definition 4 (A〈〉) we have
+a ∈ {a : Asset | ∃n ∈ S ∪ S′ · (n, a) ∈ m}
+From set union and membership properties, we have
+a ∈ {a : Asset | ∃n ∈ S · (n, a) ∈ m ∨ ∃n ∈ S′ · (n, a) ∈ m}
+From set comprehension properties, we have
+a ∈ {a : Asset | ∃n ∈ S · (n, a) ∈ m} ∪ {a : Asset | ∃n ∈ S′ · (n, a) ∈ m}
+By applying twice Definition 4 (A〈〉), we derive
+a ∈ A〈S〉 ∪A〈S′〉
+The proof follows from the above and set membership properties. 
+Lemma 2 〈Distributed mapping over singleton〉
+For asset mapping A, asset name an, and finite set of asset names S, if
+an ∈ dom(A)
+then
+∃a : Asset · (an, a) ∈ A ∧ A〈an ∪ S〉 = a ∪A〈S〉
+Proof: For arbitrary A, an, and S, assume an ∈ dom(A). From this,
+Definition 4 (dom), and set comprehension and membership properties,
+we have
+∃a : Asset · (an, a) ∈ A (12)
+Let a1 be such a. By Definition 4 (A〈〉), we have
+A〈an ∪ S〉 = {a : Asset | ∃n ∈ an ∪ S · (n, a) ∈ A}
+Again, by set membership and comprehension properties, we have
+A〈an ∪ S〉 =
+{a : Asset | ∃n ∈ {an} · (n, a) ∈ A}
+∪ {a : Asset | ∃n ∈ S · (n, a) ∈ A}
+By Definition 4 (A〈〉), our assumption that A is an asset mapping, and
+set membership and comprehension properties, we have
+A〈{an} ∪ S〉 = a1 ∪A〈S〉
+From this and remembering that 12 was instantiated with a1, a1 provides
+the a we need to conclude the proof.
+28 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+
+Lemma 3 〈Asset mapping domain membership〉
+For asset mapping A, asset name an, and asset a, if
+(an, a) ∈ A
+then
+an ∈ dom(A)
+Proof: For arbitrary A, an, and a, assume (an, a) ∈ A. By Definition 4
+(dom), we have to prove that
+∃x : Asset | (an, x) ∈ A
+Let x be a, and this concludes the proof. 
+Lemma 4 〈Distributed mapping over set of non domain elements〉
+For asset mapping A and finite set of asset names S, if
+¬∃n ∈ S · n ∈ dom(A)
+then
+A〈S〉 = {}
+Proof: For arbitrary A and S, assume ¬∃n ∈ S ·n ∈ dom(A). By Defini-
+tion 4 (A〈〉), we have to prove that
+{a : Asset | ∃n ∈ S · (n, a) ∈ A} = {}
+By Lemma 3, we then have to prove that
+{a : Asset | ∃n ∈ S · n ∈ dom(A) ∧ (n, a) ∈ A} = {}
+The proof follows from the above, our assumption, and set comprehension
+properties. 
+Lemma 5 〈Asset mapping compositionality〉
+For asset mapping A and A′, if
+A v A′
+A Theory of Software Product Line Refinement 29
+then
+∀ans : fset[AssetName] · ∀as : fset[Asset]·
+wf(as ∪A〈ans〉)
+⇒ wf(as ∪A′〈ans〉) ∧ as ∪A〈ans〉 v as ∪A′〈ans〉
+Proof: For arbitrary A and A′, assume A v A′. From Definition 5, we
+have
+dom(A) = dom(A′)
+∧ ∀n ∈ dom(A)·
+∃a, a′ : Asset · (n, a) ∈ A ∧ (n, a′) ∈ A′ ∧ a v a′
+(13)
+By induction on the cardinality of ans, assume the induction hypothesis
+∀ans′ : fset[AssetName]·
+card(ans′) < card(ans)
+⇒ ∀as : fset[Asset]·
+wf(as ∪A〈ans′〉)
+⇒ wf(as ∪A′〈ans′〉) ∧ as ∪A〈ans′〉 v as ∪A′〈ans〉
+(14)
+and we have to prove
+∀as : fset[Asset]·
+wf(as ∪A〈ans〉)
+⇒ wf(as ∪A′〈ans〉) ∧ as ∪A〈ans〉 v as ∪A′〈ans〉
+(15)
+By case analysis, now consider that ¬(∃an ∈ ans · an ∈ dom(A)). By
+Lemma 4, we have that A〈ans〉 = {}. Similarly, given that dom(A) =
+dom(A′) (see 13), we also have that A′〈ans〉 = {}. So, by set union
+properties, we are left to prove that
+∀as : fset[Asset] · wf(as)⇒ wf(as) ∧ as v as
+The proof trivially follows from Axiom 3 and propositional calculus.
+Let’s now consider the case ∃an ∈ ans · an ∈ dom(A). By basic set
+properties, we have that ans = an ∪ ans′ for some asset name an ∈
+dom(A) and set ans′ such that an 6∈ ans′. Then, from 15, we are left to
+prove that
+∀as : fset[Asset]·
+wf(as ∪A〈an ∪ ans′〉)
+⇒ wf(as ∪A′〈an ∪ ans′〉)
+∧ as ∪A〈an ∪ ans′〉 v as ∪A′〈an ∪ ans′〉
+30 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+By Lemma 2, given that an ∈ dom(A) and consequently an ∈ dom(A′),
+we have that A〈an ∪ ans′〉 = a∪A〈ans′〉 and A′〈an ∪ ans′〉 = a′∪A′〈ans′〉
+for some assets a and a′. From 13, we also have that a v a′. By equational
+reasoning, we then have to prove that
+∀as : fset[Asset]·
+wf(as ∪ a ∪A〈ans′〉)
+⇒ wf(as ∪ a′ ∪A′〈ans′〉)
+∧ as ∪ a ∪A〈ans′〉 v as ∪ a′ ∪A′〈ans′〉
+For an arbitrary as, assume wf(as ∪ a ∪ A〈ans′〉) and then we have to
+prove that
+wf(as ∪ a′ ∪A′〈ans′〉)
+∧ as ∪ a ∪A〈ans′〉 v as ∪ a′ ∪A′〈ans′〉 (16)
+By the induction hypothesis (see 14), instantiating ans′ with the ans′ just
+introduced, note that we will have card(ans′) < card(ans) and, therefore
+∀as : fset[Asset]·
+wf(as ∪A〈ans′〉)
+⇒ wf(as ∪A′〈ans′〉) ∧ as ∪A〈ans′〉 v as ∪A′〈ans〉
+From this, instantiating as as as ∪ a, and remembering that we have
+already assumed wf(as ∪ a ∪A〈ans′〉), we have
+wf(as ∪A′〈ans′〉)
+∧ as ∪A〈ans′〉 v as ∪A′〈ans〉
+Now, given that a v a′, from the compositionality axiom (Axiom 5) and
+the above we have that
+wf(()as ∪ a′ ∪A′〈ans′〉)
+∧ as ∪ a ∪A′〈ans′〉 v as ∪ a′ ∪A′〈ans′〉
+The proof then follows from 16, the above, and Axiom 4. 
+Lemma 6 〈Feature model equivalence compositionality over wf〉
+For feature models F and F ′, asset mapping A, and configuration knowl-
+edge K, if
+F ∼= F ′ ∧ ∀c ∈ [[F ]] · wf(A〈[[K]]c〉)
+A Theory of Software Product Line Refinement 31
+then
+∀c ∈ [[F ′]] · wf(A〈[[K]]c〉)
+Proof: For arbitrary F , F ′, A, and K, assume
+F ∼= F ′ ∧ ∀c ∈ [[F ]] · wf(A〈[[K]]c〉)
+By Definition 1, what we have to prove is equivalent to
+∀c ∈ [[F ]] · wf(A〈[[K]]c〉)
+which corresponds to our assumption. 
+Lemma 7 〈CK equivalence compositionality over wf〉
+For feature model F , asset mapping A, and configuration knowledge K
+and K ′, if
+K ∼= K ′ ∧ ∀c ∈ [[F ]] · wf(A〈[[K]]c〉)
+then
+∀c ∈ [[F ]] · wf(A〈[[K ′]]c〉)
+Proof: Similar to proof of Lemma 6, using Definition 2 instead. 
+Lemma 8 〈Asset mapping refinement compositionality over wf〉
+For feature model F , asset mappings A and A′, and configuration knowl-
+edge K, if
+A v A′ ∧ ∀c ∈ [[F ]] · wf(A〈[[K]]c〉)
+then
+∀c ∈ [[F ]] · wf(A′〈[[K]]c〉)
+Proof: For arbitrary F , A, A′, and K, assume
+A v A′ ∧ ∀c ∈ [[F ]] · wf(A〈[[K]]c〉) (17)
+For an arbitrary c ∈ [[F ]], we then have to prove that
+wf(A′〈[[K]]c〉) (18)
+32 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+By properly instantiating the assumption (17) with the just introduced
+c, we have
+wf(A〈[[K]]c〉) (19)
+From Lemma 5 and the assumption (17), we have
+∀ans : fset[AssetName] · ∀as : fset[Asset]·
+wf(as ∪A〈ans〉)
+⇒ wf(as ∪A′〈ans〉)∧
+as ∪A〈ans〉 v as ∪A′〈ans〉
+Instantiating ans with [[K]]c, as with {}, and by set union properties, we
+have
+wf(A〈[[K]]c〉)
+⇒ wf(A′〈[[K]]c〉) ∧A〈[[K]]c〉 v A′〈[[K]]c〉
+The proof (see 18) then follows from the above and 19. 
+References
+ACN+08. Vander Alves, Fernando Calheiros, Vilmar Nepomuceno, Andrea
+Menezes, Se´rgio Soares, and Paulo Borba. FLiP: Managing software
+product line extraction and reaction with aspects. In 12th International
+Software Product Line Conference, page 354. IEEE Computer Society,
+2008.
+ACV+05. Vander Alves, Ivan Cardim, Heitor Vital, Pedro Sampaio, Alexandre
+Damasceno, Paulo Borba, and Geber Ramalho. Comparative analysis
+of porting strategies in J2ME games. In 21st IEEE International Confer-
+ence on Software Maintenance, pages 123–132. IEEE Computer Society,
+2005.
+AGM+06. Vander Alves, Rohit Gheyi, Tiago Massoni, Uira´ Kulesza, Paulo Borba,
+and Carlos Lucena. Refactoring product lines. In 5th International Con-
+ference on Generative Programming and Component Engineering, pages
+201–210. ACM, 2006.
+AJC+05. Vander Alves, Pedro Matos Jr., Leonardo Cole, Paulo Borba, and Geber
+Ramalho. Extracting and evolving mobile games product lines. In 9th
+International Software Product Line Conference, volume 3714 of LNCS,
+pages 70–81. Springer-Verlag, 2005.
+Bat05. Don Batory. Feature models, grammars, and propositional formulas. In
+9th International Software Product Lines Conference, volume 3714 of
+LNCS, pages 7–20. Springer-Verlag, 2005.
+BB09. Rodrigo Bonifa´cio and Paulo Borba. Modeling scenario variability as
+crosscutting mechanisms. In 8th International Conference on Aspect-
+Oriented Software Development, pages 125–136. ACM, 2009.
+A Theory of Software Product Line Refinement 33
+Bor09. Paulo Borba. An introduction to software product line refactoring. In
+3rd Summer School on Generative and Transformational Techniques in
+Software Engineering (to appear), 2009.
+BSCC04. Paulo Borba, Augusto Sampaio, Ana Cavalcanti, and Ma´rcio Corne´lio.
+Algebraic reasoning for object-oriented programming. Science of Com-
+puter Programming, 52:53–100, 2004.
+CB05. Leonardo Cole and Paulo Borba. Deriving refactorings for AspectJ. In
+4th International Conference on Aspect-Oriented Software Development,
+pages 123–134. ACM, 2005.
+CBS+07. Fernando Calheiros, Paulo Borba, Se´rgio Soares, Vilmar Nepomuceno,
+and Vander Alves. Product line variability refactoring tool. In 1st Work-
+shop on Refactoring Tools, pages 33–34, July 2007.
+CDCvdH03. Matt Critchlow, Kevin Dodd, Jessica Chou, and Andre´ van der Hoek.
+Refactoring product line architectures. In 1st International Workshop on
+Refactoring: Achievements, Challenges, and Effects, pages 23–26, 2003.
+CE00. Krysztof Czarnecki and Ulrich Eisenecker. Generative programming:
+methods, tools, and applications. Addison-Wesley, 2000.
+CHE05. Krzysztof Czarnecki, Simon Helsen, and Ulrich Eisenecker. Formalizing
+cardinality-based feature models and their specialization. Software Pro-
+cess: Improvement and Practice, 10(1):7–29, 2005.
+CN01. Paul Clements and Linda Northrop. Software Product Lines: Practices
+and Patterns. Addison-Wesley, 2001.
+FCS+08. Eduardo Figueiredo, Ne´lio Cacho, Claudio Sant’Anna, Ma´rio Monteiro,
+Uira´ Kulesza, Alessandro Garcia, Se´rgio Soares, Fabiano Ferrari, Safoora
+Khan, Fernando Filho, and Francisco Dantas. Evolving software product
+lines with aspects: an empirical study on design stability. In 30th In-
+ternational Conference on Software Engineering, pages 261–270. ACM,
+2008.
+Fow99. Martin Fowler. Refactoring: Improving the Design of Existing Code.
+Addison-Wesley, 1999.
+GA01. Cristina Gacek and Michalis Anastasopoulos. Implementing product line
+variabilities. SIGSOFT Software Engineering Notes, 26(3):109–117, 2001.
+GMB05. Rohit Gheyi, Tiago Massoni, and Paulo Borba. An abstract equivalence
+notion for object models. Electronic Notes in Theoretical Computer Sci-
+ence, 130:3–21, 2005.
+GMB08. Rohit Gheyi, Tiago Massoni, and Paulo Borba. Algebraic laws for feature
+models. Journal of Universal Computer Science, 14(21):3573–3591, 2008.
+KAB07. Christian Kastner, Sven Apel, and Don Batory. A case study implement-
+ing features using AspectJ. In 11th International Software Product Line
+Conference, pages 223–232. IEEE Computer Society, 2007.
+KCH+90. Kyo Kang, Sholom Cohen, James Hess, William Novak, and A. Spencer
+Peterson. Feature-oriented domain analysis (FODA) feasibility study.
+Technical Report CMU/SEI-90-TR-21, Software Engineering Institute,
+Carnegie Mellon University, 1990.
+KMPY05. Ronny Kolb, Dirk Muthig, Thomas Patzke, and Kazuyuki Yamauchi.
+A case study in refactoring a legacy component for reuse in a product
+line. In 21st International Conference on Software Maintenance, pages
+369–378. IEEE Computer Society, 2005.
+Kru02. Charles Krueger. Easing the transition to software mass customization.
+In 4th International Workshop on Software Product-Family Engineering,
+volume 2290 of LNCS, pages 282–293. Springer-Verlag, 2002.
+34 Paulo Borba, Leopoldo Teixeira and Rohit Gheyi
+LBL06. Jia Liu, Don Batory, and Christian Lengauer. Feature oriented refactor-
+ing of legacy applications. In 28th International Conference on Software
+Engineering, pages 112–121. ACM, 2006.
+MGB08. Tiago Massoni, Rohit Gheyi, and Paulo Borba. Formal model-driven
+program refactoring. In 11th International Conference on Fundamental
+Approaches to Software Engineering, volume 4961 of LNCS, pages 362–
+376. Springer-Verlag, 2008.
+Opd92. William Opdyke. Refactoring Object-Oriented Frameworks. PhD thesis,
+University of Illinois at Urbana-Champaign, 1992.
+ORS92. Sam Owre, John Rushby, and Natarajan Shankar. Pvs: A prototype
+verification system. In 11th International Conference on Automated De-
+duction, pages 748–752. Springer-Verlag, 1992.
+PBvdL05. Klaus Pohl, Gu¨nter Bo¨ckle, and Frank van der Linden. Software Prod-
+uct Line Engineering: Foundations, Principles and Techniques. Springer,
+2005.
+SB04. Augusto Sampaio and Paulo Borba. Transformation laws for sequen-
+tial object-oriented programming. In Refinement Techniques in Software
+Engineering, volume 3167 of LNCS, pages 18–63. Springer, 2004.
+SHTB07. Pierre-Yves Schobbens, Patrick Heymans, Jean-Christophe Trigaux, and
+Yves Bontemps. Generic semantics of feature diagrams. Computer Net-
+works, 51(2):456–479, 2007.
+ST09. Friedrich Steimann and Andreas Thies. From public to private to ab-
+sent: Refactoring Java programs under constrained accessibility. In 23rd
+European Conference on Object-Oriented Programming, volume 5653 of
+LNCS, pages 419–443. Springer, 2009.
+TBD06. Salvador Trujillo, Don Batory, and Oscar Diaz. Feature refactoring a
+multi-representation program into a product line. In 5th International
+Conference on Generative Programming and Component Engineering,
+pages 191–200. ACM, 2006.
+vdLSR07. Frank van der Linden, Klaus Schmid, and Eelco Rommes. Software Prod-
+uct Lines in Action: the Best Industrial Practice in Product Line Engi-
+neering. Springer, 2007.

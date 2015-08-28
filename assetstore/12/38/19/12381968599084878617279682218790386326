@@ -1,0 +1,2298 @@
+Rodrigo Ce´sar de Castro Miranda
+Um algoritmo para pesquisa aproximada de
+padro˜es baseado no me´todo de Landau e
+Vishkin e uso de arranjos de sufixos para
+reduzir o uso de espac¸o
+Bras´ılia
+2006
+Rodrigo Ce´sar de Castro Miranda
+Um algoritmo para pesquisa aproximada de
+padro˜es baseado no me´todo de Landau e
+Vishkin e uso de arranjos de sufixos para
+reduzir o uso de espac¸o
+Descrevemos uma variante do algoritmo de
+Landau e Vishkin que substitui o uso de
+a´rvores de sufixos nesse algoritmo por arran-
+jos de sufixos, com o objeto de diminuir o
+espac¸o utilizado.
+Orientador:
+Mauricio Ayala-Rinco´n
+Universidade de Bras´ılia
+Mestrado em Informa´tica
+Bras´ılia
+2006
+Dedico esta dissertac¸a˜o a meus pais,
+pelo carinho e exemplo de honestidade e trabalho,
+ao meu irma˜o, pela amizade e apoio,
+e a minha esposa, pelo amor, pelo apoio
+e por compartilhar comigo os dias de sol e os dias de chuva.
+Agradecimentos
+Dedico meus sinceros agradecimentos para:
+– o professor doutor Maur´ıcio Ayala-Rinco´n, pela orientac¸a˜o, pela pacieˆncia, pelo
+exemplo, pelo incentivo, pelo trabalho, e pela amizade;
+– aos colegas Daniel Sobral, Leon So´lon, Marcus Yuri, Ricardo Lima, Rinaldi Neto,
+Thomas Sant’Ana, e Wilton Jose´, pelo apoio e inu´meras discusso˜es e sobre computac¸a˜o,
+o universo e o nu´mero 42;
+– aos colegas Rinaldi Maya Neto e Wilton Jose´ Pereira dos Santos, pela contribuic¸a˜o
+na revisa˜o do trabalho;
+– a equipe da secretaria de po´s-graduac¸a˜o do CIC;
+– a minha famı´lia, pelo apoio e compreensa˜o;
+– a todos os colegas do Mestrado em Informa´tica da UnB.
+Resumo
+A pesquisa aproximada de padro˜es em um texto e´ um problema importante para
+a cieˆncia da computac¸a˜o. A pesquisa de algoritmos eficientes para solucionar esse pro-
+blema influencia o desenvolvimento de aplicac¸o˜es em a´reas como biologia computacional
+e pesquisa textual em grandes massas de dados (como a web, por exemplo). Mas para
+o tratamento de volumes de informac¸a˜o da magnitude envolvida nessas aplicac¸o˜es, o uso
+eficiente de tempo e espac¸o e´ uma condic¸a˜o essencial. A soluc¸a˜o mais conhecida para
+esse problema e´ um algoritmo de programac¸a˜o dinaˆmica com complexidade θ(mn) para
+duas palavras P e T de comprimento m e n. Landau e Vishkin desenvolveram um al-
+goritmo que usa a´rvores de sufixos para acelerar a computac¸a˜o de caminhos da tabela
+de programac¸a˜o dinaˆmica que correspondem a`s ocorreˆncias de um padra˜o em um texto
+com no ma´ximo k diferenc¸as, cuja complexidade de tempo e espac¸o esta´ em θ(kn). Nesse
+algoritmo as a´rvores de sufixos sa˜o utilizadas para permitir o ca´lculo em tempo constante
+do comprimento do maior prefixo comum entre quaisquer dois sufixos de P e T . Propuse-
+mos e implementamos uma variac¸a˜o do algoritmo de Landau e Vishkin que usa arranjos
+de sufixos para esse ca´lculo, melhorando o uso de espac¸o e mantendo um desempenho
+similar, e apresentamos a relac¸a˜o de custo e benef´ıcio de cada alternativa examinada.
+Com isso, desenvolvemos um mecanismo que torna poss´ıvel substituir o uso de a´rvores de
+sufixos por arranjos de sufixos em determinadas aplicac¸o˜es, com ganho no uso de espac¸o,
+o que permite processar um volume maior de informac¸o˜es. A modificac¸a˜o realizada na˜o e´
+trivial, pois os algoritmos e estruturas de dados utilizadas sa˜o complexos, e os paraˆmetros
+de desempenho e uso de espac¸o rigorosos.
+Abstract
+Approximate pattern matching in an important problem in computer science. The
+research of efficient solutions for this problem influences the development of applications
+in disciplines such as computational biology and searching the web, and in order to be
+able to handle such massive ammounts of information the efficient use of computational
+resources is a necessary condition. The most known solution for the approximate pattern
+matching problem is a dynamic programming algorithm which has θ(mn) complexity
+given two strings P and T of length m and n. Landau and Vishkin developed a θ(kn)
+algorithm which uses suffix trees for a faster computation of paths along the dynamic
+programming table that correspond to matches of a pattern in a text with at most k
+differences. In this algorithm the suffix trees are used for a constant-time calculus of the
+longest common extension of any two suffixes of P and T . We proposed and implemented
+a variation of Landau and Vishkin’s algorithm which uses suffix arrays for this calculus,
+improving the space requirements of the algorithm while keeping a similar running time
+performance, and present the costs and benefits of each algorithm. In order to achieve
+this we developed a technique that makes it possible to replace the use os suffix trees
+for suffix arrays in certain applications with an improved memory usage that allows the
+processing of a larger ammount of information. The modifications done were not trivial
+ones, as the algorithms and data structures involved are very complex, and the parameters
+for accepted running time performance and space usage are very rigorous.
+Suma´rio
+1 Introduc¸a˜o p. 8
+2 Definic¸a˜o do Problema p. 11
+2.1 Preliminares . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . p. 11
+2.1.1 Palavras . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . p. 11
+2.1.2 A´rvores e o LCA . . . . . . . . . . . . . . . . . . . . . . . . . . p. 12
+2.2 Distaˆncia de Edic¸a˜o . . . . . . . . . . . . . . . . . . . . . . . . . . . . . p. 14
+2.3 Pesquisa aproximada de padro˜es com k erros . . . . . . . . . . . . . . . p. 18
+3 Algoritmo de Landau e Vishkin p. 20
+3.1 Fase de Pre´-processamento . . . . . . . . . . . . . . . . . . . . . . . . . p. 20
+3.1.1 A´rvores de sufixos . . . . . . . . . . . . . . . . . . . . . . . . . . p. 21
+3.1.2 Ca´lculo do LCA em O(1) para uma a´rvore bina´ria completa . . p. 24
+3.1.3 Pre´-processamento para ca´lculo do LCA de uma a´rvore qualquer p. 29
+3.1.4 Ca´lculo do LCA em O(1) em uma a´rvore de sufixos . . . . . . . p. 32
+3.2 Fase de iterac¸a˜o . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . p. 34
+3.2.1 Construc¸a˜o e extensa˜o de d-caminhos . . . . . . . . . . . . . . . p. 35
+3.2.2 A iterac¸a˜o . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . p. 36
+3.3 O algoritmo . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . p. 38
+3.4 Ana´lise do algoritmo . . . . . . . . . . . . . . . . . . . . . . . . . . . . p. 39
+3.4.1 A fase de pre´-processamento . . . . . . . . . . . . . . . . . . . . p. 39
+3.4.2 A fase de iterac¸a˜o . . . . . . . . . . . . . . . . . . . . . . . . . . p. 39
+4 Algoritmo de Landau e Vishkin Modificado para Usar Arranjos de
+Sufixos p. 40
+4.1 Arranjo de Sufixos . . . . . . . . . . . . . . . . . . . . . . . . . . . . . p. 40
+4.2 Ca´lculo do Comprimento do Maior Prefixo Comum Usando Arranjos de
+Sufixos . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . p. 42
+4.3 O algoritmo proposto . . . . . . . . . . . . . . . . . . . . . . . . . . . . p. 45
+4.4 Ana´lise do algoritmo proposto . . . . . . . . . . . . . . . . . . . . . . . p. 47
+5 Ana´lise Experimental p. 49
+5.1 Implementac¸o˜es utilizadas . . . . . . . . . . . . . . . . . . . . . . . . . p. 49
+5.1.1 A´rvore de sufixos . . . . . . . . . . . . . . . . . . . . . . . . . . p. 50
+5.1.2 Arranjos de sufixos . . . . . . . . . . . . . . . . . . . . . . . . . p. 51
+5.1.3 Usando algoritmos que melhoram o caso me´dio . . . . . . . . . p. 51
+5.1.4 Diminuindo mais o uso de espac¸o . . . . . . . . . . . . . . . . . p. 52
+5.2 Ana´lise e Comparac¸a˜o de resultados . . . . . . . . . . . . . . . . . . . . p. 52
+5.2.1 Ambiente computacional . . . . . . . . . . . . . . . . . . . . . . p. 52
+5.2.2 Dados aleato´rios . . . . . . . . . . . . . . . . . . . . . . . . . . p. 53
+5.2.3 Dados reais . . . . . . . . . . . . . . . . . . . . . . . . . . . . . p. 68
+5.2.4 Avaliac¸a˜o dos resultados . . . . . . . . . . . . . . . . . . . . . . p. 75
+6 Conclusa˜o e caminhos futuros p. 77
+Refereˆncias p. 80
+81 Introduc¸a˜o
+A pesquisa aproximada de padro˜es em um texto e´ um problema importante para a
+cieˆncia da computac¸a˜o com aplicac¸o˜es para a biologia computacional, bancos de dados de
+textos, e a pesquisa de textos na web. A pesquisa de algoritmos eficientes para solucionar
+esse problema influencia o desenvolvimento de aplicac¸o˜es em a´reas como biologia compu-
+tacional e pesquisa textual de grandes massas de dados como a web e bancos de dados
+de textos (como a pesquisa da jurisprudeˆncia de um tribunal, por exemplo). Mas para
+o tratamento de volumes de informac¸a˜o da magnitude envolvida nessas aplicac¸o˜es o uso
+eficiente de tempo e espac¸o e´ uma condic¸a˜o essencial.
+O problema ba´sico para a pesquisa aproximada de padro˜es e´ o problema de distaˆncia
+de edic¸a˜o entre duas palavras P e T , que foi proposto por Vladimir I. Levenshtein em
+1965, e trata de encontrar o nu´mero mı´nimo de operac¸o˜es que transformariam P em T ou
+vice-versa. A soluc¸a˜o mais conhecida para esse problema e´ um algoritmo de programac¸a˜o
+dinaˆmica com complexidade θ(mn) quando o comprimento de P e T sa˜o m e n, respec-
+tivamente. Levenshtein mostrou que a distaˆncia de edic¸a˜o de P e T sera´ obtida a partir
+das distaˆncias de edic¸a˜o entre os prefixos de comprimento m− 1 e n− 1 de P e T , e entre
+esses prefixos e P e T , o que nos nos da´ uma relac¸a˜o de recorreˆncia que podemos resolver
+de forma eficiente com um algoritmo de programac¸a˜o dinaˆmica.
+O algoritmo de pesquisa de padro˜es aproximados e´ uma variac¸a˜o do algoritmo de
+distaˆncia de edic¸a˜o. Nesse caso buscamos subpalavras de T cuja distaˆncia de edic¸a˜o com
+respeito a P e´ a menor poss´ıvel. Do ponto de vista algor´ıtmico a diferenc¸a e´ a condic¸a˜o
+inicial do algoritmo.
+Em 1970 Needleman e Wunsch(1) adaptaram o algoritmo de Levenshtein para o pro-
+cessamento de sequ¨eˆncias biolo´gicas. O problema de distaˆncia de edic¸a˜o e´ um problema
+de minimizac¸a˜o no qual se busca o conjunto mı´nimo de operac¸o˜es para transformar uma
+palavra na outra, que na˜o leva em conta informac¸o˜es da Biologia sobre a evoluc¸a˜o de
+sequ¨eˆncias biolo´gicas. Needleman e Wunsch propuseram uma medida de similaridade ou
+9semelhanc¸a entre duas sequ¨eˆncias, que e´ calculada de forma similar a` distaˆncia de edic¸a˜o,
+mas transformando o ca´lculo numa maximizac¸a˜o na qual se busca ter a ma´xima simila-
+ridade. O algoritmo de Needleman e Wunsch e´ conhecido com algoritmo de alinhamento
+global.
+Smith e Waterman(2) posteriormente propuseram uma modificac¸a˜o ao algoritmo de
+Needleman e Wunsch que e´ adequada para encontrar regio˜es de grande similaridade entre
+duas sequ¨eˆncias. O algoritmo de Smith e Waterman e´ conhecido como algoritmo de
+alinhamento local. Ambos algoritmos usam a estrutura ba´sica do algoritmo de distaˆncia
+de edic¸a˜o.
+Na forma tradicional, o algoritmo de ca´lculo de distaˆncia de edic¸a˜o usa uma tabela
+de programac¸a˜o dinaˆmica de tamanho n + 1 × m + 1, e dessa forma sua complexidade
+de espac¸o esta´ em θ(mn). Pode-se usar uma te´cnica desenvolvida por Hirschberg(3) para
+alterar a complexidade de espac¸o do algoritmo para θ(n), dobrando o tempo de execuc¸a˜o.
+Landau e Vishkin(4) desenvolveram e apresentaram em 1986 um algoritmo que usa
+a´rvores de sufixos para acelerar a computac¸a˜o de caminhos da tabela de programac¸a˜o
+dinaˆmica de θ(mn) para θ(nk) onde k e´ a quantidade ma´xima de diferenc¸as. O uso
+de espac¸o do algoritmo de Landau e Vishkin e´ θ(kn), mas assim como na programac¸a˜o
+dinaˆmica podemos modificar o algoritmo para executar usando espac¸o θ(n) para calcular
+as posic¸o˜es onde P esta´ em T com no ma´ximo k diferenc¸as e um algoritmo θ(km) para
+calcular cada sequ¨eˆncia de operac¸o˜es de transformac¸a˜o ou alinhamento.
+Mesmo para a variante em que o uso de espac¸o e´ θ(n), o algoritmo de Landau e
+Vishkin usa um fator multiplicador de n que e´ grande, em parte por causa do uso de
+a´rvores de sufixos para calcular os ı´ndices que permitem acelerar a computac¸a˜o da tabela
+de programac¸a˜o dinaˆmica. A´rvores de sufixos sa˜o estruturas de dados que formam um
+ı´ndice de todos os sufixos de um texto ou palavra, e que podem ser constru´ıdas em espac¸o
+e tempo linear. Apesar da complexidade linear no uso de espac¸o, mostramos que e´ poss´ıvel
+diminu´ı-lo utilizando uma estrutura de dados mais simples que tambe´m e´ um ı´ndice de
+todos os sufixos de uma palavra, chamada de arranjo de sufixos.
+Propusemos e implementamos uma variac¸a˜o do algoritmo de Landau e Vishkin que
+usa arranjos de sufixos para esse ca´lculo, melhorando o uso de espac¸o e mantendo um
+desempenho similar ao do algoritmo original (em me´dia 25% mais lento que a versa˜o
+original para cadeias de DNA quando a memo´ria do computador e´ suficiente para toda a
+execuc¸a˜o do algoritmo) mas que diminui o uso de espac¸o. Para o caso de DNA e RNA,
+podemos obter ganhos de 26 a 29% com respeito ao uso de espac¸o, o que possibilita pro-
+10
+cessar palavras que na˜o seriam processadas com o algoritmo original baseado em a´rvores
+de sufixos.
+O algoritmo proposto foi inicialmente descrito em (5) como um resumo estendido,
+e posteriormente publicado como artigo completo. Neste trabalho expandimos essa des-
+cric¸a˜o e apresentamos os ajustes necessa´rios para realizar a computac¸a˜o do LCE (Longest
+Common Extension, definida na sec¸a˜o 2.1) por meio de arranjos de sufixos utilizando
+a´rvores cartesianas, e a descric¸a˜o da implementac¸a˜o e experimentos. 1
+Desenvolvemos um mecanismo para consultas em tempo constante do comprimento
+do maior prefixo comum de dois sufixos quaisquer de uma palavra, o que torna poss´ıvel
+substituir o uso de a´rvores de sufixos por arranjos de sufixos em aplicac¸o˜es que precisem
+desse ca´lculo, como e´ o caso do algoritmo de Landau e Vishkin.
+A modificac¸a˜o realizada na˜o e´ trivial. Foi preciso desenvolver a forma de calcular o
+comprimento do maior prefixo comum de dois sufixos de uma palavra em tempo constante
+apo´s processamento linear de um arranjo de sufixos, diminuindo o uso de espac¸o. Isso
+foi poss´ıvel com a construc¸a˜o de uma a´rvore cartesiana que e´ processada para consultas
+de LCA (Lowest Common Ancestor, definida na sec¸a˜o 2.1) em tempo constante. Apesar
+do aparente aumento da quantidade de informac¸a˜o (inserimos uma quantidade maior de
+estruturas de dados e etapas de processamento) na pra´tica foi poss´ıvel manter a ordem
+de complexidade de execuc¸a˜o e diminuir efetivamente o espac¸o utilizado.
+O restante deste trabalho esta´ dividido da seguinte forma.
+• No cap´ıtulo 2 definimos o problema e apresentamos conceitos teo´ricos que sera˜o
+utilizados ao longo do trabalho.
+• No cap´ıtulo 3 apresentamos o algoritmo de Landau e Vishkin e as te´cnicas para sua
+implementac¸a˜o.
+• No cap´ıtulo 4 apresentamos nossas modificac¸o˜es no algoritmo de Landau e Vishkin.
+• No cap´ıtulo 5 apresentamos a implementac¸a˜o realizada e a ana´lise dos dados expe-
+rimentais obtidos
+• No cap´ıtulo 6 conclu´ımos o trabalho e apresentamos algumas direc¸o˜es futuras.
+1A implementac¸a˜o estara´ dispon´ıvel a partir da pa´gina http://www.mat.unb.br/~ayala/TCgroup/
+11
+2 Definic¸a˜o do Problema
+2.1 Preliminares
+Neste trabalho usaremos os termos palavra, cadeia de caracteres, sequ¨eˆncia, texto e
+padra˜o como equivalentes a` palavra inglesa string que em computac¸a˜o e´ a palavra mais
+comum para descrever uma sequ¨eˆncia ordenada de caracteres. Os nomes texto e padra˜o
+servira˜o para identificar o papel espec´ıfico de cada palavra no contexto que estiver sendo
+descrito. Representaremos palavras com letras maiu´sculas como P e T , e caracteres como
+p, t em letras minu´sculas, sendo que o caractere ti sera´ o i-e´simo caractere da palavra T .
+As formas caligra´ficas B, T ou C sera˜o usadas para nomear a´rvores.
+2.1.1 Palavras
+Dadas as palavras T = t1...tn e P = p1...pm de comprimento |T | = n e |P | = m,
+m ≤ n, sobre um alfabeto Σ apresentamos as definic¸o˜es:
+• ε e´ a palavra vazia, e |ε| = 0.
+• P e´ uma subpalavra de T se m ≤ n e p1...pm = ti...ti+m−1 para algum i ≥ 1 e
+i+m− 1 ≤ n. Se m < n dizemos que P e´ uma subpalavra pro´pria de T .
+• P e´ um prefixo de T se m ≤ n e pi = ti para 1 ≤ i ≤ m. Se m < n enta˜o dizemos
+que P e´ um prefixo pro´prio de T .
+• P e´ um sufixo de T se p1...pm = ti...ti+m−1 para i +m − 1 = n e i ≥ 1. Se i > 1
+enta˜o dizemos que P e´ um sufixo pro´prio de T . Tambe´m dizemos que Ti = ti...tn
+onde i ≥ 1 e´ o i-e´simo sufixo de T (ou seja, o sufixo de T que comec¸a na posic¸a˜o i).
+• O maior prefixo comum ou LCP (Longest Common Prefix ) de T e P e´ a maior
+palavra L = l1...lk tal que 0 ≤ k ≤ m e l1 . . . lk = p1 . . . pk = t1 . . . tk. Se k = 0 enta˜o
+L = ε.
+12
+• Ale´m disso usamos a notac¸a˜o LCPP,T para indicar o LCP de P e T . Indicamos
+ainda LCPP,T (i, j) como sendo o maior prefixo comum de Pi e Tj. Quando P e T
+forem o´bvios pelo contexto, usaremos apenas LCP (i, j).
+• A maior extensa˜o comum ou LCE (Longest Common Extension) de T e P e´ o
+comprimento do maior prefixo comum de P e T : |LCPP,T |. Usaremos a notac¸a˜o
+LCEP,T para indicar o LCE de P e T , e LCEP,T (i, j) como sendo o comprimento
+de LCPP,T (i, j). Quando P e T forem o´bvios pelo contexto, usaremos apenas
+LCE(i, j).
+Para efeitos dos algoritmos apresentados neste trabalho, chamaremos as palavras T e
+P de texto e padra˜o, respectivamente.
+2.1.2 A´rvores e o LCA
+Uma a´rvore T e´ um conjunto de no´s (ou ve´rtices) e arestas que possui as seguintes
+propriedades:
+• uma aresta liga exatamente dois no´s.
+• Um caminho em T e´ uma lista de no´s distintos tal que dois no´s em sequ¨eˆncia sa˜o
+unidos por uma aresta, e nenhuma aresta se repete. O comprimento de um caminho
+e´ o nu´mero de no´s presentes nesse caminho.
+• Existe exatamente um caminho entre dois no´s quaisquer de T.
+Uma outra forma de descrever uma a´rvore e´ como um grafo conectado sem ciclos.
+Podemos designar um no´ de T como sua raiz, o que transforma a a´rvore em uma
+estrutura hiera´rquica. A definic¸a˜o de a´rvores apresentada por Knuth em (6) explicita
+essa estrutura hiera´rquica.
+Para efeitos deste trabalho, todas as a´rvores possuem uma raiz. Assim dizemos que
+para um no´ v qualquer, os no´s no caminho entre v e a raiz sa˜o os no´s ancestrais de v
+(note que v e´ ancestral de si mesmo). Um ancestral pro´prio de v e´ um ancestral de v que
+na˜o e´ o pro´prio v.
+Para todo no´ v, exceto a raiz, temos exatamente um ancestral pro´prio w que esta´
+ligado a v por uma aresta. Dizemos que w e´ o no´ pai de v, e que v e´ um no´ filho de w.
+Dizemos que dois no´s sa˜o irma˜os se sa˜o filhos do mesmo no´.
+13
+Figura 1: exemplo de LCA
+A raiz da a´rvore na˜o possui ancestrais pro´prios e portanto na˜o possui no´ pai. Ale´m
+disso, a raiz e´ ancestral pro´prio de todos os demais no´s da a´rvore.
+Chamamos de folha um no´ que na˜o possui no´s filhos, e de no´s internos todos os
+demais no´s.
+Dizemos ainda que cada no´ v da a´rvore T define uma sub-a´rvore, que e´ a a´rvore
+formada pelos no´s dos quais v e´ ancestral, e as arestas que ligam esses no´s. A raiz da
+sub-a´rvore de v e´ o no´ v.
+Uma a´rvore bina´ria e´ uma a´rvore em que cada no´ possui no ma´ximo 2 filhos.
+Uma a´rvore bina´ria completa e´ uma a´rvore bina´ria em que todos seus no´s que na˜o
+sa˜o folhas possuem exatamente 2 filhos, e ale´m disso o comprimento dos caminhos da raiz
+ate´ cada folha e´ o mesmo. Uma a´rvore bina´ria completa com p folhas tera´ exatamente
+2p− 1 no´s, e p sera´ da forma p = 2x para algum x ∈ N.
+Definic¸a˜o 2.1.1 (LCA). Dada a a´rvore T, o LCA (Lowest Common Ancestor) de dois
+no´s v e w de T e´ o no´ x que e´ ancestral de v e w tal que nenhum outro no´ na sub-a´rvore
+de x tambe´m seja ancestral de v e w.
+Dados os no´s v e w da a´rvore T, indicaremos o LCA de v e w por LCAT(v, w). Onde
+for o´bvio qual a a´rvore sendo referenciada, usaremos a notac¸a˜o LCA(v, w).
+Exemplo 2.1.1 (LCA). Na figura 1 temos uma a´rvore bina´ria completa, e alguns no´s
+rotulados. Da definic¸a˜o de LCA, temos que:
+• LCA(a, b) = b.
+• LCA(a, c) = LCA(b, c) = d.
+• LCA(d, e) = LCA(c, e) = LCA(b, e) = LCA(a, e) = r.
+14
+• LCA(a, d) = LCA(b, d) = d.
+2.2 Distaˆncia de Edic¸a˜o
+O conceito de distaˆncia de edic¸a˜o leva ao problema de que tratamos neste trabalho.
+Definic¸a˜o 2.2.1 (Distaˆncia de Edic¸a˜o). A distaˆncia de edic¸a˜o entre duas palavras P =
+p1...pm e T = t1...tn e´ a quantidade mı´nima de operac¸o˜es necessa´rias para transformar P
+em T ou vice-versa, onde as operac¸o˜es poss´ıveis sa˜o:
+• Substituic¸a˜o quando o caractere pi de P e´ substitu´ıdo por um caractere tj de T .
+• Inserc¸a˜o quando um caractere pi de P e´ inserido na posic¸a˜o j de T .
+• Remoc¸a˜o quando o caractere pi e´ removido de P .
+Quando o pi = tj dizemos que e´ um casamento ou pareamento (match).
+A distaˆncia de edic¸a˜o entre as palavras P e T e´ uma medida do grau de diferenc¸a
+entre elas, mas ale´m da distaˆncia de edic¸a˜o nos interessa saber a sequ¨eˆncia de operac¸o˜es
+que transformariam uma dessas palavras na outra, que chamamos de transcrito de edic¸a˜o.
+Para ilustrar os conceitos de distaˆncia e transcrito de edic¸a˜o apresentamos o exemplo
+2.2.1 que segue:
+Exemplo 2.2.1 (Transcrito de edic¸a˜o). Dadas as palavras P=TGCCATA e T=ATCCCTGAT,
+o transcrito de edic¸a˜o de P em T e´ a sequ¨eˆncia de operac¸o˜es:
+1. Inserimos o caractere “A” na posic¸a˜o 1: ATGCCATA.
+2. Substitu´ımos o caractere na posic¸a˜o 3 (“G”) por “C”: ATCCCATA.
+2. Removemos o caractere na posic¸a˜o 6 (“A”): ATCCCTA.
+4. Inserimos o caractere “G” na posic¸a˜o 7: ATCCCTGA.
+5. Inserimos o caractere “T” apo´s a posic¸a˜o 8: ATCCCTGAT = T .
+Observe que com 5 operac¸o˜es podemos transformar P em T , e vice-versa. Em especial,
+o ca´lculo da a distaˆncia de edic¸a˜o apresentado a seguir indica que esse e´ o nu´mero mı´nimo
+de operac¸o˜es para P e T dados (baseado na tabela de programac¸a˜o dinaˆmica apresentada
+na figura 2).
+15
+A distaˆncia de edic¸a˜o entre T e P pode ser encontrada por meio de uma relac¸a˜o
+de recorreˆncia sobre as distaˆncias de edic¸a˜o de prefixos de T e P , ou seja, a distaˆncia
+de edic¸a˜o D(i, j) entre p1...pi e t1...tj sera´ calculada das distaˆncias D(i − 1, j − 1) entre
+p1...pi−1 e t1...tj−1, D(i − 1, j) entre p1...pi−1 e t1...tj e D(i, j − 1) entre p1...pi e t1...tj−1
+utilizando a relac¸a˜o de recorreˆncia:
+D(i, j) =
+
+i+ j se j = 0 ou i = 0,
+mı´nimo
+
+D(i− 1, j − 1) + d
+D(i− 1, j) + 1
+D(i, j − 1) + 1
+ caso contra´rio
+onde d = 0 se pi = tj ou 1 se pi 6= tj
+Essa relac¸a˜o de recorreˆncia pode ser calculada por um algoritmo de programac¸a˜o
+dinaˆmica de complexidade θ(nm) que utiliza uma tabela de programac¸a˜o dinaˆmica de
+tamanho (n + 1) × (m + 1), tambe´m denotada por D. Os alinhamentos ou transcritos
+de edic¸a˜o podem ser recuperados utilizando ponteiros de retorno (traceback) que formam
+um caminho na tabela de programac¸a˜o dinaˆmica.
+Para recuperar a sequ¨eˆncia de operac¸o˜es que formam o transcrito de edic¸a˜o basta
+seguir os ponteiros de retorno a partir da ce´lula D(m,n).
+Na ce´lula D(i, j) da tabela de programac¸a˜o dinaˆmica um ponteiro para a ce´lula su-
+perior significa que removemos o caractere pi de P , um ponteiro para a ce´lula a` esquerda
+significa que inserimos o caractere tj em P , e um ponteiro na diagonal significa um casa-
+mento de pi e tk ou enta˜o uma substituic¸a˜o se pi 6= tj. Seguimos os ponteiros de retorno
+ate´ chegarmos a uma ce´lula D(0, k) ou D(k, 0). Nesse ponto removemos os k primeiros
+caracteres do padra˜o ou do texto, respectivamente.
+O algoritmo de programac¸a˜o dinaˆmica consiste em construir uma tabela para os va-
+lores D(i, j) conforme a relac¸a˜o de recorreˆncia acima tal que o valor da ce´lula D(i, j)
+sera´ o valor D(i, j) na relac¸a˜o de recorreˆncia. Na figura 2 temos um exemplo das tabe-
+las de distaˆncia de edic¸a˜o e de ponteiros de retorno para as palavras P=TGCCATA e
+T=ATCCCTGAT utilizadas no exemplo 2.2.1. Cada ce´lula D(i, j) da tabela possui o
+valor da distaˆncia de edic¸a˜o de p1 . . . pi e t1 . . . tj (i = 0 ou j = 0 sa˜o condic¸o˜es iniciais
+para o ca´lculo). O ponteiro de retorno indica qual ce´lula na tabela foi escolhida para
+calcular o valor da ce´lula corrente.
+16
+Figura 2: Tabela de programac¸a˜o dinaˆmica e ponteiros de retorno
+Uma te´cnica descrita por Hirschberg(3) em 1975 permite que o ca´lculo da relac¸a˜o
+de recorreˆncia seja feito usando espac¸o θ(n) ao inve´s de θ(nm), dobrando o tempo de
+execuc¸a˜o. Essa te´cnica consiste em encontrar um ponto no alinhamento o´timo entre P
+e T . Esse ponto o´timo divide a tabela de programac¸a˜o dinaˆmica em dois subproblemas
+que juntos teˆm a metade do tamanho do problema original. Enta˜o esses subproblemas
+sa˜o resolvidos recursivamente.
+Exemplo 2.2.2 (Tabela de programac¸a˜o dinaˆmica e ponteiros de retorno). Na figura
+2 temos a tabela de programac¸a˜o dinaˆmica calculada para o exemplo 2.2.1, e a mesma
+tabela com os ponteiros de retorno desenhados, indicando quais as operac¸o˜es que devem
+ser executadas para transformar P em T .
+O algoritmo de alinhamento global de Needleman e Wunsch usa uma relac¸a˜o de re-
+correˆncia semelhante a` de distaˆncia de edic¸a˜o. Seja Σ′ = Σ ∪ {–} onde o caractere “–”
+representa um espac¸o. Enta˜o dada uma func¸a˜o de pontuac¸a˜o δ : Σ′×Σ′ → <, a similari-
+dade S entre duas sequ¨eˆncias P e T e´ dada pela relac¸a˜o de recorreˆncia:
+S(i, j) =
+
+0 se j = 0 e i = 0,
+S(i− 1, 0) + δ(pi,−) se j = 0 e 1 ≤ i ≤ m,
+S(0, j − 1) + δ(−, tj) se i = 0 e 1 ≤ j ≤ n,
+ma´ximo
+
+S(i− 1, j − 1) + δ(pi, tj)
+S(i− 1, j) + δ(−, tj)
+S(i, j − 1) + δ(pi,−)
+ caso contra´rio
+Essa relac¸a˜o de recorreˆncia pode ser calculada por um algoritmo de programac¸a˜o
+dinaˆmica de complexidade θ(mn) similar ao algoritmo para a distaˆncia de edic¸a˜o, usando
+uma tabela de programac¸a˜o dinaˆmica que aqui tambe´m sera´ denotada por S.
+17
+A func¸a˜o de pontuac¸a˜o δ indica o qua˜o prova´vel ou aceita´vel supomos uma substi-
+tuic¸a˜o espec´ıfica ou um espac¸o. Por exemplo, se δ(e, i) = 2 e δ(e, a) = −1 isso quer
+dizer que uma substituic¸a˜o de e por i e´ mais aceita´vel no ca´lculo que estamos realizando
+que uma substituic¸a˜o de e por a. Para o alinhamento de sequ¨eˆncias moleculares δ cos-
+tuma indicar a probabilidade da ocorreˆncia de uma mutac¸a˜o que transforme uma base ou
+aminoa´cido em outro (7).
+O algoritmo de Needleman e Wunsch procura a ma´xima similaridade entre duas
+sequ¨eˆncias, enquanto o algoritmo de distaˆncia de edic¸a˜o busca a mı´nima diferenc¸a. Ale´m
+disso o algoritmo de Needleman e Wunsch usa uma func¸a˜o de pontuac¸a˜o que pode atri-
+buir pontuac¸o˜es distintas a pares distintos de caracteres. Podemos dizer que o algoritmo
+de Needleman e Wunsch resolve um problema mais gene´rico que inclui o problema de
+distaˆncia de edic¸a˜o. Dada a func¸a˜o δ apropriada podemos usar o ca´lculo de similaridade
+para calcular a distaˆncia de edic¸a˜o entre duas palavras P e T . Observe que se fizermos
+δ(a, b) = {0 se a = b, −1 caso contra´rio}, obteremos S(m,n) tal que D(m,n) = −S(m,n).
+Como o algoritmo de Needleman e Wunsch na˜o usa o conceito de edic¸a˜o da palavra,
+ao inve´s do transcrito de edic¸a˜o usamos o conceito de alinhamento para representar as
+semelhanc¸as entre as sequ¨eˆncias.
+Definic¸a˜o 2.2.2 (Alinhamento). Um alinhamento de duas sequ¨eˆncias P e T e´ uma matriz
+2 × l (l ≥ m,n) tal que a primeira linha da matriz conte´m os caracteres de P na ordem
+em que aparecem em P mesclados com l−m espac¸os (representados por “–”) e a segunda
+linha conte´m os caracteres de T na ordem em que aparecem em T mesclados com l − n
+espac¸os tal que nenhuma coluna da matriz possui espac¸os em ambas as linhas (8).
+Na representac¸a˜o visual de um alinhamento podemos desenhar uma linha extra entre
+as linhas do alinhamento com um caractere “|” sempre que os caracteres c1 e c2 de uma
+coluna
+(
+c1
+c2
+)
+do alinhamento forem iguais, e em branco caso contra´rio. Isso permite
+visualizar melhor as situac¸o˜es em que foi feita uma operac¸a˜o de substituic¸a˜o. Usaremos o
+conceito de alinhamento ao inve´s de transcrito de edic¸a˜o, pois e´ um conceito mais gene´rico
+e mais coˆmodo.
+O alinhamento pode ser recuperado seguindo os ponteiros de retorno de forma similar
+ao transcrito de edic¸a˜o. Na ce´lula S(i, j) da tabela de programac¸a˜o dinaˆmica, um ponteiro
+para a ce´lula superior significa um espac¸o na segunda linha da coluna, um ponteiro para
+a ce´lula a` esquerda significa um espac¸o na primeira linha da coluna, e um ponteiro na
+diagonal significa uma coluna sem espac¸os com pi na primeira linha e tj na segunda.
+18
+Podemos tambe´m construir um alinhamento de duas palavras P e T a partir do
+transcrito de edic¸a˜o de P em T percorrendo os caracteres de P e T na ordem em que
+aparecem da seguinte forma:
+• Suponha que ja´ temos as k primeiras colunas do alinhamento, e a pro´xima coluna
+sera´ a coluna k+1 e vamos processar os caracteres pi e tj tal que a ce´lula D(i, j) se
+encontra no caminho formado pelos ponteiros de retorno. Se k = 0 enta˜o i = j = 1.
+– Se pi = tj enta˜o acrescentamos a coluna Ck+1 =
+(
+pi
+tj
+)
+e fazemos i = i + 1,
+j = j + 1 e k = k + 1.
+– Se fazemos a substituic¸a˜o de pi por tj, enta˜o acrescentamos a coluna Ck+1 =(
+pi
+tj
+)
+e fazemos i = i+ 1, j = j + 1 e k = k + 1.
+– Se removemos o caractere pi enta˜o acrescentamos a coluna Ck+1 =
+(
+pi
+−
+)
+e
+fazemos i = i+ 1 e k = k + 1.
+– Se inserimos o caractere tj enta˜o acrescentamos a coluna Ck+1 =
+(
+−
+tj
+)
+e
+fazemos j = j + 1 e k = k + 1.
+• Repetimos as operac¸o˜es ate´ que todos os caracteres de P e T estejam no alinhamento,
+e todas as operac¸o˜es do transcrito de edic¸a˜o tenham sido representadas.
+Exemplo 2.2.3 (Alinhamento). Dadas P e T como no exemplo 2.2.1 e o transcrito de
+edic¸a˜o gerado de P para T , o alinhamento correspondente seria:
+P: - T G C C A T - A -
+| | | | |
+T: A T C C C - T G A T
+2.3 Pesquisa aproximada de padro˜es com k erros
+O problema da pesquisa aproximada de padro˜es com k erros entre um padra˜o P e
+um texto T e´ o problema de encontrar todos os pares de posic¸o˜es (i, j) em T tal que a
+19
+distaˆncia de edic¸a˜o entre P e ti...tj e´ no ma´ximo k. O caso especial em que k = 0 e´ o
+problema de encontrar todas as ocorreˆncias de P em T .
+Esse problema pode ser resolvido pelo algoritmo de programac¸a˜o dinaˆmica usado
+para o problema da distaˆncia de edic¸a˜o com uma alterac¸a˜o simples: na condic¸a˜o inicial
+definimos que D(i, 0) = 0 para cada 0 ≤ i ≤ n. As ocorreˆncias de P em T sera˜o
+os caminhos que iniciem na linha 0 e terminem na linha m da tabela de programac¸a˜o
+dinaˆmica. Um alinhamento gerado a partir desses caminhos e´ chamado de alinhamento
+semi-global
+20
+3 Algoritmo de Landau e Vishkin
+Landau e Vishkin(4) desenvolveram um algoritmo de complexidade θ(kn) para o pro-
+blema da pesquisa aproximada de padro˜es com k erros, melhorando dessa forma a com-
+plexidade da soluc¸a˜o de programac¸a˜o dinaˆmica θ(nm), onde n e m sa˜o os comprimentos
+do texto e do padra˜o, respectivamente. O algoritmo e´ dividido em duas fases: uma fase
+de pre´-processamento e uma fase de iterac¸a˜o. A apresentac¸a˜o mostrada aqui segue a de
+Gusfield(9).
+Na fase de pre´-processamento o algoritmo de Landau e Vishkin constro´i uma a´rvore
+de sufixos T para as palavras P e T (concatenadas) e processa T para que seja poss´ıvel
+calcular o LCA (sec¸a˜o 2.1.2) de quaisquer de suas folhas em tempo O(1). Na sua fase de
+iterac¸a˜o o algoritmo de Landau e Vishkin usa a observac¸a˜o de que ocorreˆncias do padra˜o no
+texto sera˜o representados por caminhos ao longo das diagonais da tabela de programac¸a˜o
+dinaˆmica (representando casamentos) intercalados com trechos na vertical, horizontal e
+diagonais que representem erros. Assim o algoritmo percorre as diagonais da tabela de
+programac¸a˜o dinaˆmica fazendo saltos em tempo constante ao longo das diagonais, e o
+comprimento de cada salto e´ calculado a partir do LCA na a´rvore de sufixos de suas
+folhas correspondentes aos sufixos envolvidos de P e T .
+Apesar das suas propriedades teo´ricas, na˜o temos conhecimento de uma aplicac¸a˜o
+pra´tica do algoritmo de Landau e Vishkin na ana´lise de sequ¨eˆncias biolo´gicas.
+3.1 Fase de Pre´-processamento
+Na fase de pre´-processamento constru´ımos uma a´rvore de sufixos T para P concate-
+nada a T e a processamos para que possamos calcular o LCA (ver sec¸a˜o 2.1.2) de duas
+folhas quaisquer em O(1).
+Esse processamento faz um mapeamento dos no´s de T para os no´s de uma a´rvore
+bina´ria completa B impl´ıcita, para a qual calculamos facilmente o LCA de dois no´s em
+21
+tempo O(1), dessa forma obtendo um ca´lculo de LCA em tempo O(1) para uma a´rvore
+qualquer.
+3.1.1 A´rvores de sufixos
+A a´rvore de sufixos e´ uma estrutura de dados desenvolvida por Weiner(10) que forma
+um ı´ndice de todos os sufixos de uma palavra, permitindo consultas ra´pidas a`s suas
+subpalavras e a informac¸o˜es da sua estrutura. Weiner(10) e McCreight(11) mostraram
+como e´ poss´ıvel construir uma a´rvore de sufixos usando espac¸o e tempo linear, o que tornou
+o uso da estrutura de dados mais pra´tico, e Ukkonen(12) desenvolveu um algoritmo que
+constroi uma a´rvore de sufixos de forma incremental (on-line). Posteriormente Kurtz(13)
+mostrou que apesar de usar espac¸o da ordem θ(n) o fator multiplicador de n pode ser
+alto, e desenvolveu te´cnicas para buscar uma diminuic¸a˜o desse fator.
+Uma a´rvore de sufixos T para a palavra T = t1...tn sobre um alfabeto Σ e´ uma a´rvore
+que possui as seguintes propriedades:
+• T possui exatamente n folhas, numeradas de 1 a n.
+• Cada no´ interno de T, exceto possivelmente pela raiz, possui pelo menos dois no´s
+filhos.
+• Cada aresta T e´ rotulada por uma subpalavra de T , tal que para um no´ v os ro´tulos
+das arestas que ligam v a seus filhos se diferenciam pelo menos por seus caracteres
+iniciais.
+• Para uma folha i de T, a concatenac¸a˜o dos ro´tulos das arestas no caminho da raiz
+de T ate´ i, na ordem em que sa˜o visitadas, e´ o sufixo Ti de T .
+• A concatenac¸a˜o dos ro´tulos das arestas no caminho da raiz ate´ o no´ que e´ o
+LCAT(v, v
+′) de duas folhas v e v′ de T nos da´ o maior prefixo comum de Tv e
+Tv′ .
+Um caractere chamado sentinela que na˜o pertence a Σ e´ concatenado a T para garantir
+que T possui exatamente n + 1 folhas. Denotamos os caracteres sentinelas como $ e
+#, tal que $ 6= #. Na figura 3 apresentamos a a´rvore de sufixos T para a palavra
+T = GATGACCA$.
+A a´rvore de sufixos para uma palavra de comprimento n pode ser constru´ıda em
+tempo θ(n) utilizando espac¸o θ(n), como descrito por McCreight(11) e Ukkonen(12). O
+22
+Figura 3: A´rvore de sufixos para a palavra GATGACCA$
+algoritmo de McCreight adiciona os sufixos de T a` a´rvore T um apo´s o outro, adicionando
+primeiro o sufixo T1, seguido do sufixo T2 e assim sucessivamente ate´ que o todos os sufixos
+de T tenham sido adicionados a T. O algoritmo de Ukkonen constro´i a a´rvore de sufixos
+T adicionando os prefixos de T na ordem crescente de seu comprimento, construindo
+primeiro a a´rvore de sufixos T1 para a palavra t1, depois adicionando o caractere t2 para
+obter a a´rvore de sufixos T2 para a palavra t1t2, depois acrescentando t3 para obter a
+a´rvore de sufixos T3 para a palavra t1t2t3, e assim sucessivamente ate´ que e´ constru´ıda a
+a´rvore T para t1 . . . tn a partir da a´rvore Tn−1 para t1 . . . tn−1. Por construir a a´rvore de
+sufixos processando um caractere de T por vez, na ordem em que aparecem na palavra,
+dizemos que o algoritmo de Ukkonen e´ um algoritmo on-line. Apesar dos algoritmos de
+McCreight e de Ukkonen parecerem algoritmos muito distintos, Kurtz e Giegerich(14)
+mostraram que sa˜o na verdade muito parecidos.
+Para permitir a construc¸a˜o usando tempo e espac¸o θ(n) rotulamos cada aresta de T
+com o ı´ndice em T do caractere inicial de seu ro´tulo e com o comprimento do ro´tulo (ou
+enta˜o o ı´ndice do seu caractere final em T ). Assim cada ro´tulo consome o espac¸o constante
+de 2 nu´meros inteiros para sua representac¸a˜o.
+Para a construc¸a˜o em tempo θ(n) ambos os algoritmos usam ponteiros de sufixos
+(sufix links) para acelerar a atualizac¸a˜o dos ro´tulos.
+Seja x¯ a palavra formada pela concatenac¸a˜o dos ro´tulos das arestas no caminho da
+raiz de T ate´ o no´ x, na ordem em que sa˜o visitados, note que se x e´ a raiz de T enta˜o
+x¯ = . Enta˜o seja o no´ x tal que x¯ = αβ onde α seja um caractere e β uma palavra
+(possivelmente a palavra vazia ). Enta˜o o ponteiro de sufixos desse no´ apontara´ para o
+no´ interno y tal que y¯ e´ prefixo de β (se y existir).
+23
+A primeira utilidade da a´rvore de sufixos e´ a pesquisa exata de padro˜es. Dadas as
+palavras T e P , e a´rvore de sufixos T constru´ıda a partir de T , a consulta para saber se
+P e´ subpalavra de T e´ θ(m). A consulta pode ser feita da seguinte forma:
+1. Fazemos o no´ x igual a raiz de T.
+2. Se x e´ uma folha, enta˜o P na˜o e´ subpalavra de T .
+3. Selecionamos a aresta saindo de x para o no´ y filho de x tal que o seu ro´tulo se
+inicia com o caractere p1, se na˜o existe essa aresta enta˜o P na˜o e´ uma subpalavra
+de T .
+4. Caso contra´rio seja R = r1...rk o ro´tulo da aresta selecionada.
+5. Comparamos r2 com p2, r3 com p3 e assim sucessivamente ate´ que todo os caracteres
+do R ou de P tenham sido comparados, ou ate´ que encontremos i (1 < i ≤ m e
+1 < i ≤ k) tal que ri 6= pi
+6. Se encontramos i descrito no passo anterior, enta˜o P na˜o e´ subpalavra de T .
+7. Se m ≤ k e na˜o encontramos i no passo 5 acima, enta˜o P e´ uma subpalavra de T ,
+e y e´ o no´ mais pro´ximo da raiz tal que P e´ subpalavra de y¯.
+8. Caso contra´rio, m > k, enta˜o fazemos x = y, P = Pk+1 e voltamos ao passo 2.
+Encontrado P em y¯, todas as folhas na sub-a´rvore de x representam os sufixos de
+T do qual P e´ um prefixo. Ale´m disso, a quantidade de folhas na sub-a´rvore de y e´ a
+quantidade de vezes que P esta´ em T .
+Na pra´tica, a implementac¸a˜o e construc¸a˜o eficiente de a´rvores de sufixos e´ complexa.
+Kurtz(13) mostra que apesar de uma a´rvore de sufixos usar espac¸o que e´ linear com
+respeito ao comprimento da palavra, muitas implementac¸o˜es sa˜o pouco eficientes no uso de
+espac¸o e possuem um fator multiplicador de n que e´ grande demais (maior que 24n bytes na
+maioria das implementac¸o˜es). No mesmo artigo Kurtz analisa em detalhe as informac¸o˜es
+necessa´rias para construir uma a´rvore de sufixos e descreve te´cnicas de implementac¸a˜o
+que melhoram o uso de espac¸o da a´rvore de sufixos de forma que o espac¸o utilizado seja
+de 10n a 12n bytes para palavras de ate´ 128 milho˜es de caracteres.
+A´rvores de sufixos sa˜o muito utilizadas para aplicac¸o˜es em biologia computacional,
+como nos sistemas MUMMER (15) que faz alinhamento de sequ¨eˆncias biolo´gicas, e RE-
+Puter (16) que encontra repetic¸o˜es em sequ¨eˆncias biolo´gicas, ambos capazes de trabalhar
+24
+com massas de dados do tamanho de genomas inteiros. Para poder processar palavras
+desse porte, a implementac¸a˜o de a´rvore de sufixos do sistema MUMMER usa cerca de
+15n bytes para cadeias de DNA.
+3.1.2 Ca´lculo do LCA em O(1) para uma a´rvore bina´ria com-
+pleta
+O algoritmo de Landau e Vishkin usa um ca´lculo de LCA em uma a´rvore bina´ria
+completa com complexidade O(1) para calcular o LCA em uma a´rvore gene´rica em O(1).
+Nesta sec¸a˜o apresentamos o ca´lculo para a a´rvore bina´ria completa B.
+Seja B a a´rvore bina´ria completa com p folhas (ver sec¸a˜o 2.1.2). Como B e´ completa,
+B possui n = 2p − 1 no´s, e todas as suas folhas esta˜o a` mesma distaˆncia da raiz e cada
+sub-a´rvore dos no´s filhos da raiz tem exatamente p − 1 no´s. Rotulamos cada no´ de B
+com um nu´mero bina´rio de (d+1) bits, onde d = log2 p. Esse ro´tulo e´ obtido com uma
+visita em-ordem (17) de cada no´ v de B, numerando cada no´ na medida em que esse seja
+visitado. Para efeitos de notac¸a˜o, vamos identificar um no´ de B com seu ro´tulo.
+Seja h(v) a func¸a˜o que retorna a altura do no´ v, ou seja o nu´mero de no´s presentes
+no caminho v ate´ as folhas da sub-a´rvore da qual e´ raiz. Calculamos h(v) como sendo a
+posic¸a˜o (contada a partir do bit mais a` direita) do bit igual a 1 menos significativo (mais
+a` direita) do ro´tulo de v. Diremos que o bit i de v e´ o bit na posic¸a˜o i contada a partir
+do bit mais a` direita de v.
+Note que B possui p folhas e 2p − 1 no´s. Como B e´ completa enta˜o a sub-a´rvore de
+cada um dos filhos da raiz (se existirem) tera´ p
+2
+folhas e p− 1 no´s. Seja v a raiz de B. Se
+p = 1 B possui 2p−1 = 1 no´ e h(v) = 1. Se p = 2 folhas enta˜o v tem exatamente 2 filhos,
+B possui 2p− 1 = 3 no´s e h(v) = 2. Se p = 4 enta˜o B possui 2p− 1 = 7 no´s, e h(v) = 3.
+E´ fa´cil verificar que se v e´ a raiz de B, enta˜o B tera´ 2h(v)−1 no´s, e 2h(v)−1 folhas. Como a
+numerac¸a˜o dos no´s e´ feita em-ordem, enta˜o temos que se i = h(v), numeramos os no´s na
+sub-a´rvore do filho a` esquerda de v com os valores do intervalo 1 . . . 2i−1 − 1, numeramos
+v com 2i−1, e os no´s na sub-a´rvore do filho a` direita de v com os valores do intervalo
+2i−1 + 1 . . . 2i+1 − 1. Note que h(v) depende apenas de v, e que e´ o valor exatamente na
+metade do intervalo que define os valores dos ro´tulos na sua sub-a´rvore, e que o tamanho
+desse intervalo pode ser calculado de h(v).
+Assim, seja v a raiz de uma sub-a´rvore qualquer de B. Enta˜o a sua sub-a´rvore possui
+2h(v)−1 no´s, e seus ro´tulos sera˜o os ro´tulos vi onde v−(2h(v)−1−1) ≤ vi ≤ v+(2h(v)−1−1),
+25
+independentemente do valor de v e do tamanho de B (pois B e´ completa e os ro´tulos
+numerados em-ordem).
+Podemos verificar se dados dois no´s v e w, v 6= w, se um e´ ancestral do outro da
+seguinte forma:
+• Seja hv = h(v) e hw = h(w). Se hv = hw enta˜o nem v e´ ancestral de w e nem w e´
+ancestral de v.
+• Suponha que hv > hw, enta˜o para verificar se v e´ ancestral de w verificamos se
+v − (2hv−1 − 1) ≤ w ≤ v + (2hv−1 − 1).
+• Em caso afirmativo v e´ ancestral de w, caso contra´rio nem v e´ ancestral de w e nem
+w e´ ancestral de v.
+Exemplo 3.1.1 (Verificac¸a˜o se um de dois no´s e´ ancestral do outro). Tomemos como
+exemplo a a´rvore bina´ria completa ilustrada na figura 4(b).
+Seja v = 10 e w = 3, hv = h(10) = 2 e hw = h(3) = 1. Como hv > hw, e verificamos
+que na˜o e´ verdade que 10 − (22−1 − 1) ≤ 3 ≤ 10 + (22−1 − 1), enta˜o v na˜o e´ ancestral
+de v e nem w e´ ancestral de v.
+Agora seja v = 6 e w = 4, hv = h(6) = 2 e hw = h(4) = 3. Como hv < hw, e
+verificamos que 4− (23−1 − 1) ≤ 6 ≤ 4 + (23−1 − 1), enta˜o w e´ ancestral de v.
+Para encontrar o LCA x de dois no´s v e w de B verificamos primeiro se v esta´ na
+sub-a´rvore de w ou vice-versa. Se na˜o for esse o caso, enta˜o seja o no´ x = LCA(v, w). Sem
+perda de generalidade, podemos dizer que x sera´ um no´ tal que v esta´ na sub-a´rvore de seu
+filho a` esquerda, e w na sub-a´rvore de seu filho a` direita, ou seja x− (2h(x)−1− 1) ≤ v < x
+e x > w ≤ x+ (2h(x)−1 − 1), e h(x) > h(v) e h(x) > h(w).
+Observe que uma maneira de encontrar x a partir de v e w e´ subir a a´rvore a partir
+de v ou w, ate´ chegarmos num no´ que e´ ancestral de v e de w ao mesmo tempo. Para
+isso precisamos primeiro descobrir como encontrar o no´ v′ que e´ pai de v manipulando o
+ro´tulo de v:
+Proposic¸a˜o 3.1.1. Seja h(v) a altura do no´ v. O no´ v′ ancestral de v sera´ o no´ cujo
+ro´tulo e´ igual ao ro´tulo de v com o bit h(v) + 1 alterado para 1, o bit h(v) alterado para
+0.
+Demonstrac¸a˜o. Suponha que h(v) = 1. Enta˜o o u´ltimo bit de v e´ 1. Como B e´ completa,
+h(v′) = 2, e vale v′ − (2h(v′)−1 − 1) ≤ v ≤ v′ + (2h(v′)−1 − 1), de onde obtemos que
+26
+v = v′ − 1 ou v = v′ + 1. Como h(v) = 1 enta˜o os u´ltimos 2 bits de v podem ser 01
+ou 11. Da numerac¸a˜o em-ordem sabemos que se v < v′ enta˜o os u´ltimos 2 bits de v
+sera˜o 01. Nesse caso v = v′ − 1 => v′ = v + 1, de forma que os u´ltimos 2 bits de v′
+sera˜o 10 e vale a proposic¸a˜o. Se v > v′ enta˜o os u´ltimos 2 bits de v sera˜o 11. Nesse caso
+v = v′+1 => v′ = v−1, de forma que os u´ltimos 2 bits de v′ sera˜o 10 e vale a proposic¸a˜o.
+Se v′ e´ ancestral de v, enta˜o h(v′) = h(v) + 1, e v′ − (2h(v) − 1) ≤ v ≤ v′ + (2h(v) − 1).
+Da definic¸a˜o de h sabemos que v′ tem seus u´ltimos h(v) bits com valor 0, precedido por
+um bit 1. Resta mostrar que os bits a` esquerda do bit h(v′) sa˜o iguais em v e v′. Suponha
+que exista um bit b > h(v′) em v a´ esquerda de h(v’) que seja diferente do mesmo bit b
+em v′. Se esse bit for 1 em v e 0 em v′, enta˜o temos que v > v′. Ora, sabemos que a
+sub-a´rvore a direita de v′ tem 2h(v
+′)−1− 1 no´s, e o maior ro´tulo de um no´ nessa suba´rvore
+sera´ v′ + 2h(v
+′)−1 − 1. Como todos os bits a` direita do bit h(v′) sa˜o zero, e o bit mais
+significante de 2h(v
+′)−1 e´ o bit h(v) = h(v′)− 1, enta˜o v > v′ + (2h(v′)−1 − 1) e v na˜o pode
+estar na sub-a´rvore de v′ o que e´ uma contradic¸a˜o. De forma ana´loga, se o bit b for 0
+em v e 1 em v′, v < v′ e v estaria na sub-a´rvore a` esquerda de v′. Mas temos enta˜o que
+v < v′ − (2h(v) − 1) o que e´ uma contradic¸a˜o e temos que o bit b > h(v′) possui o mesmo
+valor em v e v′.
+Como sabemos achar o pai de v a partir de v, e´ fa´cil calcular x = LCA(v, w). Esco-
+lhemos o no´ dentre v e w que tem a menor altura, e subimos na a´rvore ate´ encontrarmos
+o seu ancestral que possui altura igual a` do outro no´. Feito isso, subimos na a´rvore a
+partir de ambos os no´s, um n´ıvel por vez, ate´ que o ancestral encontrado subindo a a´rvore
+a partir de v e w seja o mesmo. Esse procedimento e´ correto porque cada no´ possui
+exatamente um u´nico no´ pai (exceto a raiz, que na˜o possui nenhum) e a raiz e´ ancestral
+de todos os no´s.
+Para verificar que na˜o e´ necessa´rio subir a a´rvore a partir de cada no´ para chegar
+no LCA de v e w, observe que esse ancestral x de v e w tem no seu ro´tulo todos os
+bits a` esquerda do bit h(x) iguais aos bits correspondentes em v e w, e que exatamente
+nessa posic¸a˜o os bits em v e w sera˜o diferentes, indicando que v esta´ na sub-a´rvore a`
+esquerda de x (pois x − (2h(x)−1 − 1) ≤ v < x) e w esta´ na sub-a´rvore a` direita de x
+(pois x > w ≤ x+ (2h(x)−1− 1)). Enta˜o basta descobrir essa posic¸a˜o h(x) para podermos
+descobrir x a partir de v ou w. Como os bits em v e w a` esquerda do bit h(x) sa˜o iguais,
+e o bit h(x) e´ diferente, basta fazer uma operac¸a˜o OU-EXCLUSIVO ou XOR dos ro´tulos
+de v e x e procurar a posic¸a˜o do primeiro bit com valor 1 a partir da esquerda (primeira
+27
+posic¸a˜o onde ha´ divergeˆncia entre os bits de v e w). Isso vai nos dar a posic¸a˜o do bit h(x).
+Pela definic¸a˜o de h sabemos que todos os bits a` direita dessa posic¸a˜o tera˜o valor 0. Ale´m
+disso da proposic¸a˜o 3.1.1 temos que os bits a` esquerda dessa posic¸a˜o sera˜o iguais aos bits
+nessas posic¸o˜es em v e w, enta˜o basta pegar o ro´tulo de v ou de w, fazer o bit h(x) igual 1
+e completar com h(x)− 1 bits 0 a` direita do bit h(x), e com isso encontramos o x (ro´tulo
+do no´ que e´ LCA de v e w).
+Assim, rotulada a a´rvore, podemos encontrar o LCA x de dois no´s v e w de B em
+O(1) da seguinte forma:
+i. Sejam hv = h(v) e hw = h(w)
+ii. Se hv < hw enta˜o se w − (2hw−1) + 1 ≤ v ≤ w + (2hw−1)− 1 enta˜o x = w
+iii. Sena˜o se v − (2hv−1 + 1) ≤ w ≤ v + (2hv−1 − 1) enta˜o x = v
+iv. Se nem (ii.) e nem (iii.) valem, enta˜o calculamos x:
+– x′ = v XOR w
+– k = posic¸a˜o do bit 1 mais a` esquerda de x′
+– x′′ = v com seus bits deslocados d+ 1− k bits para a direita
+– x′′′ = x′′ com o seu bit menos significante alterado para 1
+– x = x′′′ com seus bits deslocados d+ 1− k para a esquerda.
+Dessa forma calculamos o ro´tulo x do no´ que e´ o LCA de v e w em O(1).
+Observac¸a˜o 3.1.1 (Operac¸o˜es bit-a-bit em tempo constante). Algumas das operac¸o˜es
+bit-a-bit que tratamos como constantes sa˜o na realidade θ(log2n). Na pra´tica, fixamos
+n para essas operac¸o˜es como sendo o maior valor inteiro que a arquitetura da ma´quina
+suporta. Uma vez fixado n independente do tamanho da entrada para o algoritmo, a
+complexidade dessas operac¸o˜es bit-a-bit pode ser analisada como O(1).
+As operac¸o˜es em questa˜o sa˜o a pesquisa da posic¸a˜o do bit 1 mais significativo ou
+menos significativo de um nu´mero inteiro, que usam consultas em tempo O(1) em uma
+tabela.
+Exemplo 3.1.2 (Ca´lculo do LCA em uma a´rvore bina´ria completa). Seja a B a a´rvore
+bina´ria completa como na figura 4 (a). B possui p = 8 folhas, e n = 2p − 1 = 15 no´s,
+d = log2 p = 3. Primeiramente visitamos todos os no´s de B em-ordem e rotulamos os no´s
+28
+Figura 4: Ca´lculo em O(1) de LCA em a´rvore bina´ria completa
+com um nu´mero de d+1 = 4 bits na ordem em que sa˜o visitados, de forma que os ro´tulos
+ficam como na figura 4 (b).
+Dados dois no´s v e w de B, temos dois casos distintos:
+• v e´ ancestral de w, ou seja LCAB(v, w) = v.
+• LCAB(v, w) = x, onde x 6= v e x 6= w.
+No caso de w ser ancestral de v, simplesmente chamamos v de w e w de v.
+Caso 1. Vamos escolher os no´s v = 4 = 0100 e w = 7 = 0111. Enta˜o hv = h(0100) =
+3, e hw = h(0111) = 1. Como hw < hv enta˜o fazemos k = 2
+hv−1 = 22 = 4 e verificamos
+que v − k + 1 ≤ w ≤ v + k − 1, logo o LCAB(v, w) = v = 4.
+Caso 2. Vamos escolher os no´s v = 9 = 1001 e w = 14 = 1110. Nesse caso
+hv = h(1001) = 1 e hw = h(1110) = 2. Como hv < hw, fazemos k = 2
+hw−1 = 2 e
+verificamos que w − k + 1 > v e logo LCAB(v, w) = x 6= v 6= w. Para encontrar x enta˜o
+seguimos com o algoritmo:
+• x′ = v XOR w = 1001 XOR 1110 = 0111.
+• k = 2
+• x′′ = 0010 (1001 com seus bits deslocados 3 + 1− 2 = 2 bits para a direita)
+• x′′′ = 0011 (0010 com o seu bit menos significante alterado para 1)
+• x = 1100 (0011 com seus bits deslocados 3 + 1− 2 para a esquerda)
+Logo, para o caso 2, temos corretamente que LCAB(v, w) = 12.
+29
+3.1.3 Pre´-processamento para ca´lculo do LCA de uma a´rvore
+qualquer
+Para calcular o LCA de duas folhas de uma a´rvore de sufixos T com complexidade
+O(1) construimos um mapeamento de T para a a´rvore bina´ria completa B.
+Visitamos cada no´ de T numa visita em pre´-ordem (17), rotulando cada no´ com a
+ordem em que e´ visitado, e vamos identificar um no´ com o seu ro´tulo.
+Definimos uma func¸a˜o I como um mapeamento de no´s da a´rvore gene´rica T na a´rvore
+bina´ria completa B, ou seja, dado o no´ v de T, I(v) = w, onde w e´ um no´ de B, e
+calculamos w da seguinte forma:
+Se v e´ uma folha em T, enta˜o w = v (o ro´tulo do no´ w em B sera´ o ro´tulo v). Se v
+na˜o for uma folha, enta˜o w sera´ o ro´tulo de um no´ v′ na sub-a´rvore de v tal que para todo
+outro no´ x na sub-a´rvore de v, h(v′) > h(x).
+A definic¸a˜o de I e´ bem formada porque garante a unicidade de w na sub-a´rvore de v.
+Observe que a altura de um no´ com ro´tulo w em B na˜o depende do tamanho de B, mas
+e´ determinada pela quantidade de zeros a` direita do bit 1 menos significativo de w. Ale´m
+disso observe que se existirem dois no´s v′ e v′′ na sub-a´rvore de v tal que h(v) = h(v′),
+enta˜o teremos um no´ w onde v ≤ w ≤ v′ tal que h(w) > h(v).
+A func¸a˜o I particiona T em conjuntos de no´s que sa˜o mapeados para o mesmo no´
+I(v) de B. Dizemos que a cabec¸a de cada uma dessas partic¸o˜es e´ o no´ v de T na partic¸a˜o
+que esta´ mais pro´ximo da raiz de T.
+O ca´lculo de I pode ser feito em tempo O(n) visitando cada no´ v de T em pre´-ordem
+com o seguinte algoritmo recursivo:
+Algoritmo 1 Ca´lculo do mapeamento I(v)
+1. Se v e´ uma folha, ent~ao I(v) = v.
+2. Caso Contra´rio, sejam w1 ...wk os k filhos de v:
+2.1 Fazemos Ii = I(wi) para 1 ≤ i ≤ k (executando este algoritmo
+recursivamente para cada filho wi de v).
+2.2. Seja h0 = h(v) e hi = h(Ii) para 1 ≤ i ≤ k.
+2.3. Seja m o ı´ndice tal que hm e´ o ma´ximo de h0 . . . hk.
+2.4. Se m = 0 ent~ao I(v) = v, sen~ao I(v) = Im
+Ale´m de I, precisamos de mais informac¸a˜o da estrutura de T. Assim calculamos as
+func¸o˜es L e A, onde L(v) e´ a cabec¸a da partic¸a˜o I(v) e A(v) e´ o nu´mero bina´rio tal que
+o i-e´simo bit de A(v) e´ 1 se o no´ v possui um ancestral u em T tal que h(I(u)) = i, e 0
+30
+caso contra´rio. Ou seja, L indica o no´ mais pro´ximo da raiz de T que e´ mapeado para o
+mesmo no´ I(v) em B e A codifica parte da estrutura hiera´rquica de T da raiz ate´ o no´ v.
+L pode ser calculado juntamente com I. Para isso acrescentamos um passo 3 ao
+algoritmo 1 no qual fazemos L(I(v)) = v.
+Tendo calculado I, calculamos A com uma visita em pre´-ordem aos no´s de T, sendo
+que se v e´ no´ filho de v′, enta˜o A(v) sera´ o valor de A(v′) com o bit h(I(v)) com o valor 1.
+Como cada uma das func¸o˜es e´ calculada por um percurso em pre´-ordem de T que
+percorre exatamente 2 vezes cada no´ para rotular cada no´ e calcular I e L, e 1 vez cada
+no´ para calcular A, enta˜o a complexidade total e´ θ(n) para uma a´rvore com n no´s.
+Exemplo 3.1.3 (Mapeamento da a´rvore de sufixos T para a a´rvore bina´ria completa B).
+Seja a a´rvore de sufixos T mostrada na figura 5. Observe que a numerac¸a˜o da visita em
+pre´-ordem de cada no´ esta´ representada por um nu´mero sublinhado pro´ximo ao no´. Vamos
+mostrar o ca´lculo de I, A e L para a sub-a´rvore do no´ com ro´tulo v = 5 (representado
+por 5 na figura).
+Mostramos primeiro o ca´lculo de I e L para a sub-a´rvore de v:
+• Primeiro calculamos I(vi) para cada filho de vi, visitando cada um em pre´-ordem:
+– Seja v1 = 6. Como v1 e´ uma folha enta˜o I(6) = 6, e fazemos L(I(v1)) =
+L(6) = 6.
+– Seja v2 = 7. Como v2 e´ uma folha enta˜o I(7) = 7, e fazemos L(I(v2)) =
+L(7) = 7.
+– Seja v3 = 8. Como v3 e´ uma folha enta˜o I(8) = 8, e fazemos L(I(v3)) =
+L(8) = 8.
+– Como na˜o ha´ mais filhos de v, voltamos para v para calcular I(v) e L(v).
+• Fazemos h0 = h(v) = h(5) = 1, h1 = h(v1) = h(6) = 2, h2 = h(v2) = h(7) = 1 e
+h3 = h(v3) = h(8) = 4.
+• Escolhemos i tal que hi e´ ma´ximo. No caso, i = 3 pois h3 = 4 e´ a maior altura
+dentre os valores selecionados.
+• Como 3 = i 6= 0, fazemos I(v) = I(vi) = I(8) = 8.
+• Fazemos L(I(v)) = L(8) = v = 5.
+31
+Figura 5: Mapeamento da a´rvore de sufixos T para a a´rvore bina´ria completa B
+O ca´lculo para os demais no´s se faz de maneira similar. Neste exemplo, em especial,
+observe que I(1) sera´ 8.
+Calculados I e L, vamos ilustrar agora o ca´lculo de A para a sub-a´rvore de v. Da
+figura, sabemos que o pai de v e´ a pro´pria raiz da a´rvore, o no´ 1. Note que I(1) = 8 e
+L(8) = 1.
+Vamos calcular os valores de A para a raiz e a sub-a´rvore de v = 5.
+• Como o no´ 1 e´ a raiz da a´rvore (na˜o possui pai), o valor de A(1) sera´ o nu´mero
+bina´rio 0000 com o bit h(I(1)) alterado para o valor 1. Assim A(1) = 1000 = 8.
+• Como o no´ 1 e´ o pai de v, Calculamos A(v) = A(5) como sendo A(1) com o bit
+h(I(v)) alterado para 1. Observe que temos I(v) = 8 e h(8) = 4, logo A(5) =
+1000 = 8.
+• Agora calcular A(vi) para cada filho vi de v:
+– Seja v1 = 6. I(6) = 6, e h(6) = 2, fazemos A(6) como sendo A(5) com o bit 2
+com valor 1. Assim, A(6) = 1010 = 10.
+– Seja v2 = 7. I(7) = 7, e h(7) = 1, fazemos A(7) como sendo A(5) com o bit 1
+com valor 1. Assim, A(7) = 1001 = 9.
+– Seja v3 = 8. I(8) = 8, e h(8) = 4, fazemos A(8) como sendo A(5) com o bit 4
+com valor 1. Assim, A(8) = 1000 = 8.
+Dessa forma ilustramos o ca´lculo de I, L e A. Na figura 5 mostramos as tabelas I, L
+e A completas para a a´rvore T.
+32
+3.1.4 Ca´lculo do LCA em O(1) em uma a´rvore de sufixos
+Uma vez calculados I, L e A, podemos calcular o LCA de dois no´s v e w de T em
+O(1) usando a seguintes propriedade:
+Propriedade 3.1.1. Se z e´ ancestral de x em T enta˜o I(z) e´ ancestral de I(x) em B.
+Assim, seja z o LCA de v e w em T, e seja o b = LCAB(I(v), I(w)) o LCA de I(v)
+e I(w) em B. Como B e´ uma a´rvore bina´ria completa, b pode ser encontrado em O(1)
+como vimos na subsec¸a˜o 3.1.2.
+Podemos usar b para encontrar a altura de I(z) a partir da informac¸a˜o da estrutura
+de T armazenda em A. Observe que A(v) codifica a altura h(I(v′)) de cada ancestral v′ de
+v. A(w) armazena a mesma informac¸a˜o para w. Ora, z = LCAT(v, w) por ser ancestral
+de v e de w tera´ a altura do seu mapeamento j = h(I(z)) mapeada em A(v) e em A(w),
+ou seja, o bit j tera´ o valor 1 em A(v) e em A(w). Para encontrar j observamos que os
+primeiros bons candidatos sa˜o as alturas mapeadas em ambos A(v) e A(w) (pois o bit j
+estara´ com o valor 1 em ambos). Ale´m disso, pela propriedade 3.1.1 sabemos que a altura
+de j sera´ no mı´nimo a altura de b. Enta˜o j sera´ a posic¸a˜o do primeiro bit a` esquerda do
+bit i = h(b) que tem o valor 1 em A(v) e A(w).
+Se h(b) = i, enta˜o podemos encontrar j = h(I(z)) em O(1) da seguinte forma:
+• Seja x = A(v) AND A(w) (observe que dessa forma deixamos com valor 1 apenas
+os bits que marcam as alturas comuns em B dos ancestrais de v e w).
+• x′ = x com seus bits deslocados para a direita e de volta i− 1 bits (zeramos os bits
+a` direita do (i)-e´simo bit).
+• j = h(x′)
+Sabendo a altura do mapeamento de z, podemos encontrar os no´s v¯ e w¯ que sa˜o
+ancestrais de v e w, respectivamente, que possuem o mesmo mapeamento que z. Para
+isso encontramos I(x), onde x e´ um no´ em uma partic¸a˜o cuja cabec¸a L(I(x)) e´ um no´ filho
+de v¯. Assim, ao encontrar I(x) encontramos v¯ facilmente. De forma ana´loga encontramos
+w¯. Perceba que v¯ e´ ancestral de v tal que I(v¯) = I(z) assim como w¯ e´ ancestral de w tal
+que I(w¯) = I(z). Enta˜o pela numerac¸a˜o em pre´-ordem, z = min(v¯, w¯).
+Podemos encontrar v¯ da seguinte forma:
+33
+• Seja v¯ o no´ ancestral de v que esta´ na mesma partic¸a˜o de z (ou seja, I(v¯) = I(z)):
+– se h(I(v)) = h(I(z)) enta˜o v¯ = v.
+– caso contra´rio v¯ 6= v (h(v) < j):
+∗ seja x o ancestral de v tal que v¯ seja o no´ pai de x. Enta˜o h(I(x)) = k e´ a
+maior posic¸a˜o de um bit 1 em A(v) que e´ menor que j.
+∗ encontramos I(x) = bits de I(v) a` esquerda da posic¸a˜o k seguida de um
+bit 1 e completada com zeros.
+∗ O no´ v¯ sera´ o no´ pai de L(I(x)).
+• calculamos w¯ de forma similar a v¯.
+• se v¯ < w¯ enta˜o o LCA de v e w e´ v¯ caso contra´rio e´ w¯.
+Exemplo 3.1.4 (Ca´lculo do LCA em uma a´rvore de sufixos T). Seja a a´rvore de sufixos
+T mostrada na figura 5. Sejam os no´s v = 6 e w = 8. Vamos encontrar o z = LCA(v, w).
+• Em primeiro lugar fazemos Iv = I(v) = 6 e Iw = I(w) = 8, e calculamos b =
+LCAB(Iv, Iw) como vimos na sec¸a˜o 3.1.2. Como h(Iv) < h(Iw) verificamos que
+8− (2h(8)−1 − 1) ≤ 6 ≤ 8 + (2h(8)−1 − 1), de forma que o LCAB(6, 8) = 8.
+• Fazemos i = h(b) = h(8) = 4.
+• Encontramos em seguida j = h(I(z)) a partir de b. Calculamos x = A(v) AND
+A(w) = 1010 AND 1000 = 1000, e zeramos os bits a` direita do bit i e obtemos
+x′ = 1000, e j = h(x′) = 4.
+• Vamos encontrar v¯ e w¯:
+– Observe que h(v) < j. Enta˜o seja x ancestral de v tal que o pai de x seja v¯.
+Calculamos k = h(I(x)) como sendo a posic¸a˜o do bit 1 mais significante de
+A(v) que esta´ a` direita do bit j. Como A(v) = 1010 enta˜o k = 2.
+– Fazemos I(x) = I(v) com o bit na posic¸a˜o k igual a 1 e os bits a` direita da
+posic¸a˜o k iguais a 0. Como I(v) = 0110 = 6, enta˜o I(x) = 0110 = 6.
+– O no´ v¯ sera´ o no´ pai do no´ L(I(x)). Como L(6)=6, v¯ = 5.
+– Como h(w) = j, enta˜o w¯ = w = 8.
+• Como v¯ < w¯, enta˜o z = v¯ = 5.
+Dessa forma ilustramos a busca do LCA de dois no´s 6 e 8 de T, e encontramos o no´
+5.
+34
+3.2 Fase de iterac¸a˜o
+Na fase de iterac¸a˜o do algoritmo constru´ımos caminhos seguindo as diagonais da
+tabela de programac¸a˜o dinaˆmica.
+Na tabela de programac¸a˜o dinaˆmica D, supondo que o caractere tj do texto rotula
+a coluna j da tabela, e o caractere pi do padra˜o rotula a linha i, uma ocorreˆncia de P
+em T forma um caminho sem ciclos que percorre a tabela iniciando na primeira linha e
+terminando na u´ltima linha.
+Mais formalmente, dizemos que:
+• Uma diagonal d da tabela de programac¸a˜o dinaˆmica D sa˜o todas as ce´lulas D(i, j)
+tal que j − i = d.
+• A diagonal principal e´ a diagonal 0 de D composta pelas ce´lulas D(i, i) onde 0 ≤
+i ≤ m ≤ n.
+• Duas ce´lulas D(i, j) e D(i′, j′) sa˜o ditas adjacentes se i′ 6= i ou j′ 6= j e ale´m disso
+i ≤ i′ ≤ i+ 1 e j ≤ j′ ≤ j + 1.
+• Um caminho na tabela de programac¸a˜o dinaˆmica e´ uma sequ¨eˆncia de ce´lulas C0 . . . Ck
+onde para qualquer k′ ∈ {0 . . . k − 1}, Ck′ e Ck′+1 sa˜o adjacentes.
+• Se a ce´lula Ck+1 = D(i, j) e´ a ce´lula que segue a ce´lula Ck = D(i − 1, j − 1) em
+um caminho, enta˜o dizemos que e´ um descasamento se tj 6= pi, e um casamento se
+tj = pi.
+• Se a ce´lula Ck+1 = D(i + 1, j) ou a ce´lula Ck+1 = D(i, j + 1) segue a ce´lula Ck =
+D(i, j) em um caminho enta˜o dizemos que e´ um espac¸o.
+• Um erro em um caminho e´ um descasamento ou um espac¸o.
+• Um d-caminho em D e´ um caminho que se inicia ou na coluna 1 antes da linha d+1
+ou na linha 1 e possui as propriedades:
+– Caminhos que iniciem na linha 1 comec¸am com 0 erros e caminhos que iniciem
+na ce´lula C0 = D(i, 1) para 1 ≤ i ≤ d iniciam com i erros.
+– Se a ce´lula Ck = D(i, j) esta´ no caminho, enta˜o a ce´lula Ck+1 = D(i
+′, j′) e´ a
+ce´lula imediatamente apo´s Ck no caminho (se existir) e D(i
+′, j′) ∈ {D(i+1, j+
+1), D(i, j + 1), D(i+ 1, j)}.
+35
+Figura 6: Caminho de maior alcance na diagonal i
+– Possui exatamente d erros.
+– Um d-caminho e´ o de maior alcance na diagonal i se e´ um d-caminho que
+termina em uma ce´lula Ck = D(r, c) na diagonal i e o ı´ndice c da coluna de
+Ck e´ maior ou igual ao ı´ndice da coluna da ce´lula final de todos os outros
+d-caminhos que terminem na diagonal i.
+Na figura 6 mostramos dois caminho que terminam na diagonal i. Na figura o caminho
+que se inicia na diagonal k ≤ i− 1 e´ o caminho de maior alcance na diagonal i.
+A fase de iterac¸a˜o do algoritmo de Landau e Vishkin constro´i todos os 0-caminhos da
+tabela de programac¸a˜o dinaˆmica, e a partir desses todos os 1-caminhos, e a partir desses
+todos os 2-caminhos, e assim sucessivamente ate´ que todos os d-caminhos procurados
+foram constru´ıdos. Isso e´ feito percorrendo cada diagonal i de D e extendendo os (d− 1)-
+caminhos nas diagonais i− 1, i, e i+ 1 para a diagonal i como sera´ mostrado a seguir.
+3.2.1 Construc¸a˜o e extensa˜o de d-caminhos
+Usaremos a notac¸a˜o LCE(i, j) para indicar o LCEP,T (i, j) (ver sec¸a˜o 2.1).
+Um d-caminho e´ constru´ıdo em D da seguinte forma.
+Se d = 0 enta˜o um 0-caminho que inicia na diagonal i e´ o caminho que comec¸a na
+36
+ce´lula D(1, i) e e´ estendido na diagonal i ate´ a ce´lula D(j, i+ j), onde j e´ o LCE(1,i+1).
+Um d-caminho comec¸ando na ce´lula D(d, 1), para 0 < d ≤ m e´ estendido ate´ a ce´lula
+D(d+ j, j), onde j e´ o LCE(d, 1).
+Se d > 0 enta˜o um d-caminho e´ constru´ıdo a partir de um (d−1)-caminho cuja ce´lula
+final Ck = D(r, c) esta´ na diagonal i estendendo-o inicialmente para a ce´lula D(r
+′, c′) na
+diagonal i′ de uma de treˆs formas:
+• o caminho e´ estendido uma ce´lula para a direita para a ce´lula Dr′,c′ = D(r, c + 1)
+na diagonal i′ = i+1, significando a inserc¸a˜o de um espac¸o no padra˜o na posic¸a˜o r;
+• o caminho e´ estendido uma ce´lula para baixo para a ce´lula Dr′,c′ = D(r + 1, c) na
+diagonal i′ = i− 1, significando a inserc¸a˜o de um espac¸o no texto na posic¸a˜o c;
+• o caminho e´ estendido uma ce´lula na diagonal i′ = i para a ce´lula Dr′,c′ = D(r +
+1, c+ 1), significando um descasamento entre tc e pr.
+Apo´s estender o (d − 1)-caminho para a ce´lula (r′, c′) na diagonal i′, o caminho e´
+estendido l ce´lulas na diagonal i′ onde l = LCE(r′, c′).
+3.2.2 A iterac¸a˜o
+O algoritmo de Landau e Vishkin, apresentado no algoritmo 2, percorre cada diagonal
+i da tabela de programac¸a˜o dinaˆmica, construindo os d-caminhos que sa˜o de maior alcance
+em cada diagonal, comec¸ando com todos os 0-caminhos, e depois desses calculando todos
+os 1-caminhos e assim sucessivamente ate´ que todos os k-caminhos sejam encontrados.
+Os k′-caminhos (onde 0 ≤ k′ ≤ k) que terminem na linha m da tabela de programac¸a˜o
+dinaˆmica sa˜o ocorreˆncias de P em T com no ma´ximo k diferenc¸as.
+Em cada iterac¸a˜o calculamos o d-caminho de maior alcance na diagonal i da seguinte
+forma:
+• Se d = 0 enta˜o o 0-caminho que inicia na diagonal i e´ o 0-caminho de maior alcance
+em i.
+• Se d > 0, encontramos o d-caminho de maior alcance em i a partir dos (d − 1)-
+caminhos de maior alcance nas diagonais i− 1, i e i+ 1 da seguinte forma:
+37
+Figura 7: Extensa˜o de caminhos para a diagonal i
+– Estendemos o (d− 1)-caminho de maior alcance na diagonal i− 1 uma ce´lula
+para a direita para a ce´lula D(ih, jh) na diagonal i e enta˜o o estendemos lh =
+LCE(ih, jh) ce´lulas ao longo da diagonal i como descrito na subsec¸a˜o 3.2.1.
+– De forma similar estendemos o (d− 1)-caminho de maior alcance na diagonal
+i + 1 uma ce´lula para a baixo para a ce´lula D(iv, jv) na diagonal i e enta˜o o
+estendemos lv = LCE(iv, jv) ce´lulas ao longo de i.
+– Estendemos tambe´m o (d − 1)-caminho de maior alcance na diagonal i uma
+ce´lula ao longo da diagonal i para a ce´lula D(id, jd), e enta˜o o estendemos
+ld = LCE(id, jd) ce´lulas ao longo de i.
+– O d-caminho de maior alcance na diagonal i e´ escolhido dos treˆs constru´ıdos
+acima como sendo aquele que tem o maior ı´ndice na coluna de sua ce´lula final.
+Na figura 7 ilustramos a extensa˜o dos d − 1 caminhos nas diagonais i − 1, i e i + 1
+para a diagonal i com o acre´scimo de 1 erro representado por uma linha pontilhada e a
+extensa˜o ao longo da diagonal i.
+Observe que uma vez que constru´ımos uma arvore de sufixos T para a concatenac¸a˜o de
+P e T , todos os sufixos de P e de T sera˜o folhas em T. Assim, dados i e j correspondentes
+a Pi e Tj, respectivamente, o LCAT das folhas correspondentes nos da´ o LCP (i, j), e
+portanto o LCE(i, j). Dessa forma, o ca´lculo do LCE para a extensa˜o dos d-caminhos
+38
+depende do ca´lculo do LCA na a´rvore de sufixos.
+3.3 O algoritmo
+No algoritmo 2 apresentamos as duas fases do algoritmo de Landau e Vishkin. Na
+primeira fase constru´ımos uma a´rvore de sufixos generalizada T para P e T , e a pro-
+cessamos para que seja poss´ıvel calcular o LCA de duas folhas quaisquer em O(1). Em
+seguida constru´ımos todos os 0-caminhos e executamos a iterac¸a˜o ate´ encontrarmos todos
+os k-caminhos.
+Algoritmo 2 Algoritmo de Landau e Vishkin para pesquisa aproximada de padro˜es
+1. Construimos a a´rvore de sufixos generalizada T para P e T.
+2. Processamos T em O(n) de forma a responder consultas LCA em O(1).
+3. Para cada diagonal i da tabela de programac¸~ao dina^mica, encontramos
+o seu 0-caminho de maior alcance com uma consulta de LCA entre P
+e Ti+1.
+4. Para d = 1 ...k:
+4.1 Para cada diagonal i da tabela de programac¸~ao dina^mica:
+4.1.1 Estendemos o (d− 1)-caminho de maior alcance na diagonal i− 1
+uma ce´lula para a direita para a ce´lula D(r, s) na diagonal i
+4.1.2 Estendemos esse caminho ao longo da diagonal i pela
+quantidade de ce´lulas igual a` profundidade do
+LCA dos sufixos correspondentes de P e T
+(P [r]...P [m] e T [s]..T [n]).
+4.1.3 Estendemos o (d− 1)-caminho de maior alcance na diagonal i+ 1
+uma ce´lula para a baixo para a ce´lula D(r′, s′) na diagonal i
+4.1.4 Estendemos esse caminho ao longo da diagonal i pela
+quantidade de ce´lulas igual a` profundidade do
+LCA dos sufixos correspondentes de P e T
+(P [r′]...P [m] e T [s′]..T [n]).
+4.1.5 Estendemos o (d− 1)-caminho de maior alcance na diagonal i
+uma ce´lula ao longo da diagonal i para a ce´lula D(r′′, s′′)
+4.1.6 Estendemos esse caminho ao longo da diagonal i pela
+quantidade de ce´lulas igual a` profundidade do
+LCA dos sufixos correspondentes de P e T
+(P [r′′]...P [m] e T [s′′]..T [n]).
+4.1.7 Escolhemos o d-caminho de maior alcance dentre os tre^s.
+5. Cada caminho que alcanc¸ar a linha m e´ uma ocorre^ncia de P em T
+com no ma´ximo k erros.
+39
+3.4 Ana´lise do algoritmo
+Vamos analisar cada fase em separado.
+3.4.1 A fase de pre´-processamento
+A fase de pre´-processamento possui duas etapas distintas.
+i. constru´ımos a a´rvore de sufixos generalizada T para P e T em θ(n).
+ii. pre´-processamos T em θ(n) para o ca´lculo do LCA em O(1)
+Sabemos que a a´rvore de sufixos pode ser constru´ıda com complexidade de espac¸o e
+tempo linear, enta˜o a etapa (i) e´ executada em θ(n+m) = θ(n) (pois n ≥ m).
+A segunda etapa e´ executada com complexidade de tempo e espac¸o linear sobre o
+nu´mero de no´s da a´rvore. Como o nu´mero de no´s da a´rvore de sufixos e´ θ(n), enta˜o a
+segunda etapa tambe´m e´ executada em θ(n), de forma que a complexidade geral da fase
+de pre´-processamento e´ θ(n).
+3.4.2 A fase de iterac¸a˜o
+A fase de iterac¸a˜o e´ composta de k + 1 passos onde percorremos n + k diagonais.
+Como o ca´lculo do LCA de duas folhas da a´rvore de sufixos e´ O(1) apo´s a fase de pre´-
+processamento, enta˜o para cada diagonal fazemos 3 operac¸o˜es de extensa˜o de caminho
+em tempo O(1), de forma que a complexidade total do algoritmo e´ θ(kn).
+A complexidade de espac¸o tambe´m e´ θ(kn) se for necessa´rio apresentar os alinha-
+mentos das ocorreˆncias de P em T . Se somente os pares de posic¸o˜es inicial e final de
+cada ocorreˆncia de P em T forem necessa´rios, enta˜o o uso de espac¸o pode ser reduzido
+para θ(n) pois basta manter somente a lista das posic¸o˜es finais dos (d− 1)-caminhos para
+calcular as posic¸o˜es finais dos d-caminhos.
+40
+4 Algoritmo de Landau e Vishkin
+Modificado para Usar Arranjos
+de Sufixos
+Identificamos no uso de a´rvores de sufixos uma oportunidade de melhorar o uso de
+espac¸o do algoritmo de Landau e Vishkin. Nossa proposta e´ substituir o uso de uma
+a´rvore de sufixos nesse algoritmo por um arranjo de sufixos e estruturas adicionais para
+calcular em tempo constante os comprimentos dos maiores prefixos comuns de sufixos
+do texto e do padra˜o. A vantagem dessa modificac¸a˜o e´ diminuir o uso de memo´ria com
+relac¸a˜o ao algoritmo original.
+A maior parte da modificac¸a˜o foi realizada na fase de pre´-processamento, e as mu-
+danc¸as na fase de iterac¸a˜o sa˜o mı´nimas.
+4.1 Arranjo de Sufixos
+O arranjo de sufixos e´ uma estrutura de dados introduzida por Manber e Myers(18)
+em 1989 com propo´sito similar ao da a´rvore de sufixos (ver sec¸a˜o 3.1.1), que e´ formar um
+ı´ndice de todos os sufixos de uma palavra para facilitar consultas a`s suas subpalavras.
+Definic¸a˜o 4.1.1 (Arranjo de sufixos). Um arranjo de sufixos Pos para a palavra T e´ um
+arranjo que conte´m a sequ¨eˆncia dos sufixos de T segundo a ordem lexicogra´fica (18).
+Para a construc¸a˜o do arranjo de sufixos Pos, o alfabeto Σ precisa ser ordenado com
+uma ordem total. Costuma-se adicionar um caractere sentinela $ ao fim de T para garantir
+que nenhum sufixo de T e´ prefixo de outro sufixo de T , e que possui a propriedade de ser
+ou maior ou menor que qualquer s´ımbolo de Σ.
+Como Pos e´ um arranjo de ı´ndices de posic¸o˜es em T , um arranjo de sufixos usa espac¸o
+n log n bits (θ(n) bytes). Tipicamente o espac¸o utilizado por um arranjo de sufixos e´ 4n
+41
+bytes para um processador de 32-bits (para palavras com comprimento de ate´ 4 bilho˜es
+de caracteres).
+O arranjo de sufixos Pos para a palavra T pode ser constru´ıdo em tempo θ(n) a partir
+da a´rvore de sufixos T para T . Al’em disso existem algoritmos θ(n) de construc¸a˜o direta
+– que na˜o precisam de construir uma a´rvore de sufixos – como os de Ko e Aluru(19), de
+Ka¨rkka¨inen e Sanders(20) e Kim et al.(21). Ale´m disso existem algoritmos com pior caso
+O(n2) que sa˜o mais ra´pidos que os algoritmos lineares para praticamente todos os casos1.
+Os algoritmos de Ko e Aluru e de Ka¨rkka¨inen e Sanders usam as ide´ias introduzidas
+por Farach(23) para chegar num algoritmo recursivo que seja θ(n) para a construc¸a˜o de
+arranjos de sufixos. A ide´ia ba´sica e´ particionar a palavra em dois conjuntos de sufixos
+e ordenar um desses subconjuntos recursivamente. Feito isso o subconjunto ordenado e´
+combinado com o subconjunto na˜o ordenado usando caracter´ısticas do crite´rio de parti-
+cionamento para acelerar a ordenac¸a˜o.
+Como Pos e´ ordenado lexicograficamente, para pesquisar o padra˜o P em T usamos o
+algoritmo de busca bina´ria e realizamos θ(m log2 n) comparac¸o˜es para responder se P e´
+subpalavra de T . Ale´m disso, em caso afirmativo, a resposta da pesquisa nos da´ todos os
+sufixos de T do qual P e´ prefixo.
+Acrescentamos ao arranjo de sufixos um arranjo chamado lcp. Dado o arranjo de
+sufixos Pos para a palavra T = t1...tn, o arranjo lcp e´ um arranjo de n elementos tal que
+lcp(i) e´ o comprimento do maior prefixo comum de TPos(i) e TPos(i+1). O arranjo lcp pode
+ser constru´ıdo em tempo linear a partir do arranjo de sufixos como descrito em (24). Um
+arranjo de sufixos acompanhado do arranjo lcp correspondente tambe´m e´ conhecido como
+arranjo de sufixos melhorado (25). Na figura 8 apresentamos o arranjo de sufixos Pos
+para a palavra GATGACCA$, e o arranjo lcp correspondente.
+Operac¸o˜es de pesquisa de subpalavras de que podem ser realizadas com a´rvores de
+sufixos podem ser realizadas com arranjos de sufixos com a complexidade aumentada por
+um fator multiplicativo θ(log2 n). A tabela LCP pode transformar esse fator numa soma
+de θ(log2 n) ao inve´s de uma multiplicac¸a˜o.
+1Nas medidas de Manzini e Ferragina (22) os u´nicos casos em que a construc¸a˜o linear no pior caso foi
+melhor que a contruc¸a˜o linear no caso me´dio foram casos patolo´gicos onde as palavras eram exclusivamente
+repetic¸o˜es de pequenas cadeias de caracteres (ou seja, o LCP me´dio entre dois sufixos adjacentes no arranjo
+de sufixos era muito alto).
+42
+Figura 8: Arranjo de sufixos e LCP
+4.2 Ca´lculo do Comprimento do Maior Prefixo Co-
+mum Usando Arranjos de Sufixos
+O que permite o algoritmo de Landau e Vishkin manter a complexidade θ(kn) de
+tempo e espac¸o e´ o ca´lculo em tempo constante do comprimento do maior prefixo co-
+mum de sufixos do texto e do padra˜o. Mostramos aqui que e´ poss´ıvel fazer esse mesmo
+ca´lculo em tempo constante usando arranjos de sufixos melhorados acrescidos de algumas
+estruturas de dados, mantendo a complexidade linear na fase de pre´-processamento, e
+economizando espac¸o.
+Dado o arranjo de sufixos melhorado Pos para a palavra P#T$, no´s podemos proces-
+sar o arranjo lcp correspondente e responder consultas do comprimento do maior prefixo
+comum de sufixos de P#T$ em tempo constante. A chave para essa operac¸a˜o e´ o teorema
+que segue.
+Teorema 4.2.1. A maior extensa˜o comum LCES,S(a, b) de dois sufixos Sa e Sb de S pode
+ser obtido do arranjo lcp da seguinte forma:
+Seja i a posic¸a˜o de Sa entre os sufixos ordenados de S (ou seja, Pos(i) = a). Seja j a
+posic¸a˜o de Sb entre os sufixos ordenados de S. Podemos assumir que i < j sem perda de
+generalidade. Enta˜o a maior extensa˜o comum de Sa e Sb e´ LCE(a, b) = mini≤k<jlcp(k).
+Demonstrac¸a˜o. Sejam Sa = sa...sa+c...sn e Sb = sb...sb+c...sn, e seja c = LCE(a, b).
+Se i = j − 1 enta˜o k = i e LCE(a, b) = c = lcp(i).
+43
+Se i < j − 1 enta˜o selecionamos k tal que lcp(k) e´ o mı´nimo valor no intervalo
+lcp(i) . . . lcp(j − 1). Temos enta˜o dois casos poss´ıveis:
+• Se c < lcp(k) temos uma contradic¸a˜o porque sa . . . sa+lcp(k)−1 = sb . . . sb+lcp(k)−1 pela
+definic¸a˜o do arranjo lcp, e o fato que as entradas de lcp correspondem aos sufixos
+ordenados de S.
+• se c > lcp(k), seja j = Pos(k) tal que Sj e´ o sufixo associado a` posic¸a˜o k. Sk e´ tal que
+sj . . . sj+lcp(k)−1 = sa . . . sa+lcp(k)−1 e sj . . . sj+lcp(k)−1 = sb . . . sb+lcp(k)−1, mas como
+sa . . . sa+c−1 = sb . . . sb+c−1 temos que o arranjo lcp estaria ordenado erroˆneamente
+o que e´ uma contradic¸a˜o.
+Logo vale LCE(a, b) = c = lcp(k)
+Dessa forma reduzimos a busca da maior extensa˜o comum a uma consulta do valor
+mı´nimo em um intervalo do arranjo lcp. Essa consulta e´ conhecida por RMQ (Range
+Minimum Query).
+Para resolver a consulta de valor mı´nimo num intervalo utilizaremos um algoritmo
+baseado em A´rvores Cartesianas apresentadas em 1984 por Gabow, Bentley e Tarjan(26).
+Construiremos em θ(n) uma a´rvore cartesiana para o arranjo lcp tal que seja poss´ıvel fazer
+a consulta de valor mı´nimo de qualquer intervalo em lcp em tempo constante utilizando
+uma consulta ao LCA de dois no´s da a´rvore cartesiana em tempo constante.
+Definic¸a˜o 4.2.1 (A´rvores Cartesianas). Uma a´rvore cartesiana C para a sequ¨eˆncia de
+nu´meros inteiros x1 . . . xn e´ a a´rvore bina´ria com no´s rotulados por esses nu´meros tal que
+a raiz da a´rvore e´ rotulada por m onde xm = min xi | 1 ≤ i ≤ n, a sub-a´rvore a` esquerda
+e´ a a´rvore cartesiana para x1...xm−1 e a sub-a´rvore a` direita e´ a a´rvore cartesiana para
+xm+1 . . . xn. Na figura 9 apresentamos a a´rvore cartesiana para a sequ¨eˆncia de nu´meros
+< 1, 1, 0, 1, 0, 2, 0, 0, 0 > que corresponde ao arranjo lcp na figura 8. Acima de cada no´
+apresentamos o seu ro´tulo, e abaixo o ı´ndice em lcp correspondente a esse valor.
+Proposic¸a˜o 4.2.1. O menor valor num intervalo xi . . . xj pode ser encontrado por uma
+busca do LCAC(i, j) de dois no´s i e j da a´rvore cartesiana C constru´ıda com os valores
+do intervalo.
+Demonstrac¸a˜o. Dados os no´s i e j na a´rvore cartesiana C, e seja v o LCA de i e j, e
+suponha que i < j. A estrutura de C e´ tal que se um no´ v = LCA(i, j), enta˜o i ≤ v ≤ j,
+44
+Figura 9: A´rvore cartesiana
+pois da construc¸a˜o da a´rvore cartesiana todo outro ancestral de v fica ou a` esquerda de i
+e j, ou a` direita de ambos. Ale´m disso, da construc¸a˜o da a´rvore, o no´ v e´ o no´ tal que xv
+e´ o menor valor de sua suba´rvore, e assim encontrar v, ancenstral comum mais profundo
+de i e j tambe´m significa encontrar o menor valor xv no intervalo xi . . . xj.
+Como ja´ sabemos processar uma a´rvore qualquer em tempo linear para consultar o
+LCA de qualquer par de no´s em tempo constante (ver sec¸a˜o 3.1.3), o mesmo vale para
+uma a´rvore cartesiana.
+Precisamos mostrar enta˜o como construir uma a´rvore cartesiana em θ(n). Isso pode
+ser feito usando o algoritmo mostrado em (26) e (27).
+Constru´ımos a a´rvore cartesiana Ci para o arranjo x1, . . . , xi da a´rvore cartesiana Ci−1
+para o arranjo x1, . . . , xi−1 da seguinte forma.
+• se i = 1, enta˜o C1 e´ a a´rvore com um u´nico no´ 1 que e´ rotulado por x1.
+• se i > 1, enta˜o constru´ımos Ci seguindo o caminho mais a` direita da a´rvore desde a
+folha ate´ a raiz, ate´ encontrarmos um no´ k tal que xi ≥ xk.
+• uma vez que encontramos o no´ k, definimos que a sub-a´rvore a` esquerda do no´ i
+sera´ a sub-a´rvore a` direita de k, e fazemos o no´ i como sendo a sub-a´rvore a` direita
+do no´ k.
+Acrescentamos cada valor a` a´rvore um valor de cada vez. A cada iterac¸a˜o acrescenta-
+mos o novo no´ ao caminho mais a direita comparando-o com os demais no´s desse caminho
+ate´ encontrar um no´ cujo ro´tulo seja menor que o seu. Observe que se o caminho mais a`
+45
+direita possui k no´s e se for preciso realizar k′ ≤ k comparac¸o˜es para acrescentar um no´ i,
+na pro´xima iterac¸a˜o sera´ necessa´rio fazer no ma´ximo k−k′+1 comparac¸o˜es porque todos
+os no´s que estavam nesse caminho e eram maiores que i foram passados para a sub-a´rvore
+a` esquerda de i e na˜o sera˜o feitas novas comparac¸o˜es com eles. Ou seja, sempre que for
+preciso fazer n + 1 comparac¸o˜es ao acrescentar um no´ a C (com n > 0)), diminuimos o
+caminho mais a direita em n no´s e consequ¨entemente o nu´mero ma´ximo de comparac¸o˜es
+para a inserc¸a˜o do pro´ximo no´. Cada no´ pode ser adicionado ao caminho mais a` direita
+no ma´ximo uma vez, e sair desse caminho no ma´ximo uma vez, o algoritmo executa em
+tempo θ(n).
+Finalmente, para realizar consultas do comprimento do maior prefixo comum em O(1)
+apo´s um pre´-processamento em θ(n) fazemos:
+• Construimos um arranjo de sufixos em θ(n) para o texto concatenado com o padra˜o,
+usando caracteres sentinelas.
+• Construimos em θ(n) a tabela lcp para o arranjo de sufixos, e uma tabela de ı´ndices
+reversos R tal que Pos(R(i)) = i.
+• Construimos em θ(n) a a´rvore cartesiana C para a tabela lcp
+• Processamos C em θ(n) para respondermos consultas ao LCA de qualquer par de
+no´s de C em O(1).
+Dados os sufixos i e j (i < j) da palavra P#T$, o comprimento do seu maior prefixo
+comum vai ser o menor valor no intervalo of [lcp(R(i)) . . . lcp(R(j) − 1)], que sera´ dado
+por uma consulta do ancestral comum mais profundo em O(1) na a´rvore cartesiana C.
+4.3 O algoritmo proposto
+O algoritmo proposto e´ o mesmo algoritmo de Landau e Vishkin, substituindo a a´rvore
+de sufixos por um arranjo de sufixos melhorado, e a consulta do LCA na a´rvore de sufixos
+por uma consulta do valor mı´nimo num intervalo da tabela LCP por meio de uma consulta
+de LCA em uma a´rvore cartesiana, que descrevemos como o Algoritmo 3.
+46
+Algoritmo 3 Algoritmo de Landau e Vishkin Modificado para pesquisa aproximada de
+padro˜es
+1. Construı´mos o arranjo de sufixos melhorado Pos para P#T$.
+2. Construı´mos a a´rvore cartesiana C para o arranjo lcp
+3. Processamos C em O(n) de forma a responder consultas LCA em O(1).
+4. Para cada diagonal i da tabela de programac¸~ao dina^mica,
+encontramos o seu 0-caminho de maior alcance
+com uma consulta do menor valor no intervalo
+correspondente em lcp.
+5. Para d = 1 ...k:
+5.1 Para cada diagonal i da tabela de programac¸~ao dina^mica:
+5.1.1 Estendemos o (d− 1)-caminho de maior alcance na diagonal
+i− 1 uma ce´lula para a direita para a ce´lula D(r, s) na
+diagonal i
+5.1.2 Estendemos esse caminho ao longo da diagonal i pela
+quantidade de ce´lulas igual ao menor valor no intervalo
+correspondente de lcp dado pela consulta do LCA em C.
+5.1.3 Estendemos o (d− 1)-caminho de maior alcance na diagonal i+ 1
+uma ce´lula para a baixo para a ce´lula D(r′, s′) na diagonal i
+5.1.4 Estendemos esse caminho ao longo da diagonal i pela
+quantidade de ce´lulas igual ao menor valor no intervalo
+correspondente de lcp dado pela consulta do LCA em C.
+5.1.5 Estendemos o (d− 1)-caminho de maior alcance na diagonal i
+uma ce´lula ao longo da diagonal i para a ce´lula D(r′′, s′′)
+5.1.6 Estendemos esse caminho ao longo da diagonal i pela
+quantidade de ce´lulas igual ao menor valor no intervalo
+correspondente de lcp dado pela consulta do LCA em C.
+5.1.7 Escolhemos o d-caminho de maior alcande dentre os tre^s.
+6. Cada caminho que alcanc¸ar a linha m e´ uma ocorre^ncia de P em T
+com no ma´ximo k erros.
+47
+4.4 Ana´lise do algoritmo proposto
+Somente a fase de pre´-processamento foi significativamente alterada, ja´ que a consulta
+ao valor mı´nimo num intervalo de lcp continua sendo dado por uma consulta ao LCA em
+O(1), que e´ a mesma operac¸a˜o realizada no algoritmo original, acrescida de duas consultas
+diretas na tabela R (que conte´m os ı´ndices reversos que mapeiam os sufixos de P e T na
+suas posic¸o˜es em Pos).
+Teorema 4.4.1 (Complexidade de tempo e espac¸o do algoritmo modificado). O algoritmo
+modificado de Landau e Vishkin para pesquisa aproximada de padro˜es possui complexidade
+de tempo e espac¸o θ(nk).
+Demonstrac¸a˜o. Como comentado acima, a construc¸a˜o e manutenc¸a˜o de arranjos de sufixos
+pode ser feita em θ(n) tempo e espac¸o (19, 20, 21) assim como a construc¸a˜o e manutenc¸a˜o
+de a´rvores cartesianas. Como o pre´-processamento para a consulta de LCA em tempo
+constante e´ θ(n), enta˜o a complexidade do pre´-processamento com respeito ao uso de
+tempo e espac¸o tambe´m e´ θ(n).
+O acre´scimo a` fase de iterac¸a˜o sa˜o duas consultas O(1) em uma tabela, de forma que
+a complexidade da fase de iterac¸a˜o no algoritmo modificado e´ θ(kn) > θ(n). Dessa forma,
+o algoritmo modificado tambe´m usa tempo e espac¸o da ordem θ(kn).
+Apesar dos limites teo´ricos do algoritmo modificado coincidirem com os do algoritmo
+original, a nossa versa˜o utiliza menos espac¸o durante o pre´-processamento das palavras T
+e P , e tambe´m na execuc¸a˜o completa do algoritmo.
+Suponha que a implementac¸a˜o da a´rvore de sufixos seja boa o suficiente, como a
+implementac¸a˜o de Kurtz, e utilize 12n bytes para a representac¸a˜o da a´rvore de sufixos,
+constru´ıda com 3
+2
+n no´s. Enta˜o o espac¸o total para o pre´-processamento sera´ 12n + S 3
+2
+n,
+onde S e´ o espac¸o por no´ utilizado no pre´-processamento para ca´lculo do ancestral comum
+mais profundo.
+Ora, supondo que a implementac¸a˜o da a´rvore de sufixos contenha toda a informac¸a˜o
+necessa´ria para o pre´-processamento, enta˜o S = SI+SL+SA+Sid, onde SI , SL e SA sa˜o os
+espac¸os necessa´rios para as func¸o˜es A, I e L, e Sid o espac¸o necessa´rio para a numerac¸a˜o
+dos no´s de T. Usando um inteiro de 32-bits (4 bytes) por entrada em cada uma dessas
+tabelas, temos que S = 16 bytes e o uso de espac¸o do pre´-processamento com a´rvores de
+48
+sufixos sera´ 36n bytes.
+Para a versa˜o modificada, uma vez constru´ıda a a´rvore cartesiana, na˜o e´ mais ne-
+cessa´ria a manutenc¸a˜o do arranjo de sufixos, mas somente do arranjo lcp que usa 4n
+bytes, do ı´ndice reverso R que tambe´m usa 4n bytes e da a´rvore cartesiana que usa 8n
+bytes. Como a a´rvore cartesiana tem exatamente n no´s, enta˜o o uso de espac¸o do pre´-
+processamento para arranjos de sufixos sera´ 4n+8n+4n+16n = 32n que e´ uma economia
+de 4n bytes sobre a versa˜o original.
+Quanto ao tempo de execuc¸a˜o, em primeiro lugar e´ preciso comparar a construc¸a˜o da
+a´rvore de sufixos com a do arranjo de sufixos, porque as construc¸o˜es do arranjo lcp e da
+a´rvore cartesiana sa˜o muito mais ra´pidas que a do arranjo de sufixos. O pre´-processamento
+da a´rvore cartesiana e´ mais ra´pido que o da a´rvore de sufixos, pois ha´ menos no´s para
+serem processados. Em contrapartida entendemos que a fase iterac¸a˜o execute um pouco
+mais ra´pido com a versa˜o original porque nesse caso na˜o sa˜o necessa´rias as duas consultas
+ao ı´ndice reverso do sufixo de P e do sufixo de T para os quais estamos calculando o
+LCE.
+49
+5 Ana´lise Experimental
+Como ana´lise experimental avaliamos o comportamento da versa˜o original e da versa˜o
+modificada do algoritmo de Landau e Vishkin.
+Os primeiros experimentos foram realizados com dados gerados de forma aleato´ria.
+Geramos va´rias palavras e padro˜es de tamanhos crescentes com quatros alfabetos de
+tamanhos distintos — |Σ| = 2, |Σ| = 4, |Σ| = 26 e |Σ| = 93 — valores que representam os
+tamanhos dos alfabetos bina´rio, quartena´rio (RNA e DNA), alfabeto da l´ıngua inglesa e
+caracteres ASCII que podem ser impressos (que neste trabalho chamamos de ASCII93).
+Para os dados reais, dividimos a ana´lise em duas partes. Na primeira parte usamos
+textos e sequ¨eˆncias retiradas do projeto Gutenberg (28), do NCBI Genbank (29) e do
+corpus de Canterbury (30). Na segunda parte selecionamos sequ¨eˆncias biolo´gicas de
+escala cromossoˆmica (por exemplo, todo o cDNA do cromossomo 22 do H. sapiens) e
+fizemos pesquisas de porc¸o˜es de cDNA nessas sequ¨eˆncias usando as variantes que usam
+espac¸o θ(n) dos algoritmos.
+5.1 Implementac¸o˜es utilizadas
+Buscamos utilizar implementac¸o˜es eficientes para as estruturas de dados. Em especial,
+usamos para a a´rvore de sufixos a implementac¸a˜o na linguagem de programac¸a˜o C de
+Kurtz que e´ usada em um programa de alinhamento de genomas, e para arranjos de
+sufixos a implementac¸a˜o de Manzini e Ferragina da ordenac¸a˜o de sufixos de uma palavra
+(tambe´m escrita na linguagem C). O arranjo lcp foi implementado na linguagem C++ pelo
+autor a partir de (24), e as demais estruturas de dados e algoritmos foram implementados
+pelo autor em C++.
+50
+5.1.1 A´rvore de sufixos
+A implementac¸a˜o da a´rvore de sufixos utilizada foi a implementac¸a˜o de Kurtz para o
+software MUMMER 3.0 (15) (31), que utiliza as te´cnicas descritas em (13) para diminuir
+o uso de espac¸o da estrutura de dados. O algoritmo utilizado para a construc¸a˜o de a´rvores
+de sufixos e´ o de McCreight (11). O co´digo foi compilado com a opc¸a˜o HUGE que prepara a
+a´rvore de sufixos para aceitar palavras maiores que 128 megabytes, ao custo de um espac¸o
+adicional, aumentando de cerca de 12 bytes por caractere para 15 bytes por caractere na
+construc¸a˜o de a´rvores de sufixos para palavras com |Σ| = 4. Foi preciso realizar algumas
+modificac¸o˜es pequenas no co´digo para que a busca em profundidade funcionasse como
+esperado, pois a busca em profundidade como estava implementada na˜o fazia a visita
+inicial a` raiz da a´rvore.
+A implementac¸a˜o e´ bastante eficiente na execuc¸a˜o e no uso de espac¸o, mas por isso foi
+necessa´rio acrescentar um pouco mais de informac¸o˜es a` estrutura que e´ gerada durante a
+fase de pre´-processamento do algoritmo de Landau e Vishkin. Ale´m das estruturas t´ıpicas
+descritas na sec¸a˜o 3.1.3(tabelas I, L, A e de ro´tulos dos no´s), foi necessa´rio um arranjo
+com os ponteiros para os no´s pais de cada no´ e mais um arranjo com os ro´tulos dos no´s
+pais, porque o resultado do ca´lculo LCA(v, w) e´ o ro´tulo na pesquisa em profundidade
+do no´ que e´ o LCA de v e w. A implementac¸a˜o utilizada tambe´m na˜o expo˜e diretamente
+todos os no´s da a´rvore, mas apenas as folhas. Essa caracter´ıstica faz com que o ca´lculo
+LCA(v, w) em O(1) implementado funcione apenas se tanto v quanto w forem folhas de
+T. Como esse e´ exatamente o caso, na˜o causou maiores impactos no algoritmo de Landau
+e Vishkin, mas para uma utilizac¸a˜o diferente que precise calcular o LCA de no´s arbitra´rios
+seria necessa´rio uma implementac¸a˜o mais complexa e que usasse espac¸o adicional para
+mapear os no´s internos da a´rvore. Assim, sendo n o comprimento de T#P$ e v o nu´mero
+de no´s de T, o espac¸o total para o pre´-processamento foi de 20v + 4n + ST, onde ST e´ o
+espac¸o usado pela a´rvore de sufixos em si. Se assumirmos que ST = 12n e v =
+3
+2
+n, enta˜o
+o espac¸o usado no pre´-processamento seria 46n bytes. Na pra´tica o ca´lculo exato e´ dif´ıcil
+de determinar, pois a quantidade de no´s da a´rvore depende do alfabeto utilizado e da
+estrutura da palavra indexada pela a´rvore de sufixos — em especial quando |Σ| e´ grande,
+a a´rvore de sufixos tende a precisar de menos no´s. O uso de espac¸o na implementac¸a˜o
+utilizada e´ de 14n a 15n para alfabetos pequenos (DNA, RNA) e 10n a 11n para alfabetos
+maiores (ASCII). Na sec¸a˜o 5.2 sera´ apresentada a avaliac¸a˜o realizada para alguns valores
+de v.
+51
+5.1.2 Arranjos de sufixos
+A escolha de implementac¸a˜o da construc¸a˜o arranjo de sufixos vai influenciar a veloci-
+dade total do algoritmo, mas na˜o o uso de espac¸o, porque o espac¸o utilizado pelo arranjo
+Pos e´ fixo em 4n bytes como descrito na sec¸a˜o 4.1, e na˜o e´ influenciado pelo alfabeto ou
+a estrutura da palavra. Apo´s a construc¸a˜o do arranjo lcp e do ı´ndice reverso, o arranjo
+Pos na˜o e´ mais necessa´rio e pode ser descartado. A a´rvore cartesiana usa exatamente 8n
+bytes e mais 4n bytes para o arranjo lcp. O ı´ndice reverso — necessa´rio para mapear um
+sufixo de T#P$ em lcp — usa 4n bytes. A estrutura do pre´-processamento adiciona um
+fator de 20n bytes perfazendo um total de 36n bytes.
+5.1.3 Usando algoritmos que melhoram o caso me´dio
+Uma avaliac¸a˜o da literatura sobre arranjos de sufixos apresentou alguns resultados
+interessantes. Existem me´todos de construc¸a˜o direta dos arranjos de sufixos com com-
+plexidade linear para o pior caso, como os algoritmos propostos por Ko e Aluru(19),
+Ka¨rkka¨inen e Sanders(20) e Kim et al.(21). Num estudo realizado por Puglisi, Smyth e
+Turpin(32) va´rios algoritmos de construc¸a˜o de arranjos de sufixos de complexidade linear
+e linear no caso me´dio foram avaliados e os autores verificaram que, em praticamente
+todos os casos, algoritmos cujo pior caso e´ quadra´tico mas que no caso me´dio sa˜o lineares
+teˆm desempenho bem melhor que os algoritmos lineares no pior caso. Esses algoritmos
+costumam se comportar mal em casos patolo´gicos, em que o valor me´dio do arranjo lcp
+e´ alto relativo ao texto (ou seja o texto e´ composto por muitas repetic¸o˜es). Dentre esses
+algoritmos escolhemos o Deep-Shallow Sort, desenvolvido por Manzini e Ferragina(22).
+O algoritmo Deep-Shallow Sort se caracteriza por dividir a ordenac¸a˜o dos sufixos de
+T em duas fases. Na primeira fase, chamada de fase rasa (shallow) ordena os sufixos de
+T com base nos seus prefixos de ate´ L caracteres usando o algoritmo multikey quicksort
+de Bentley e Sedgewick(33). Nesse ponto temos todos os sufixos de T ordenados ate´
+o seu L-e´simo caractere. Na segunda fase, chamada de profunda (deep), utiliza-se uma
+combinac¸a˜o de dois algoritmos, blind sorting, apresentado por Ferragina e Grossi em (34) e
+ternary quicksort apresentado por Bentley e McIlroy em (35), de forma a usar o algoritmo
+mais eficiente para as palavras que esta˜o sendo ordenadas em cada passo do algoritmo.
+A implementac¸a˜o utilizada e´ a implementac¸a˜o em linguagem C de Manzini e Ferra-
+gina(22).
+52
+5.1.4 Diminuindo mais o uso de espac¸o
+Analisando com cuidado a implementac¸a˜o da a´rvore cartesiana, percebemos que apo´s
+o pre´-processamento a mesma na˜o e´ mais necessa´ria, de forma que o uso de espac¸o cairia
+para 28n bytes, usados basicamente para o arranjo lcp, o ı´ndice reverso (4n cada) e as
+estruturas de pre´-processamento para a consulta LCA em tempo constante. Acreditamos
+ser poss´ıvel fazer uma economia similar para versa˜o baseada em a´rvores de sufixos para
+reduzir o espac¸o final para 30n a 36n bytes, mantendo o pico de uso de espac¸o da ordem
+de 41n a 51n bytes. O pico do uso de espac¸o para o pre´-processamento de arranjos de
+sufixos continua sendo 36n bytes. A implementac¸a˜o baseada em a´rvores de sufixos aqui
+descrita na˜o incluiu essa modificac¸a˜o.
+5.2 Ana´lise e Comparac¸a˜o de resultados
+Para fazer a ana´lise experimental, foram usados dados gerados aleatoriamente e dados
+reais retirados do Projeto Gutenberg (28), NCBI Genbank (29) e do corpus de Canterbury
+(30). O uso duas massas de dados com caracter´ısticas diferentes quanto a` distribuic¸a˜o dos
+caracteres permite uma ana´lise de como o algoritmo tende a se comportar em situac¸o˜es
+diversas.
+Observe que com relac¸a˜o aos valores percentuais apresentados, o valor de refereˆncia
+(100%) sera´ sempre o valor do algoritmo de Landau e Vishkin original (baseado em a´rvores
+de sufixos).
+5.2.1 Ambiente computacional
+Os testes experimentais foram executados em um computador DELL PowerEdge 1800
+com 2 GB de memo´ria RAM e processador Intel Xeon de 3.0 GHz com 2MB de cache L2
+e acesso a` memo´ria controlado por um FSB de 800MHz. O sistema operacional utilizado
+foi o Red Hat Enterprise Linux usando Linux 2.6.9-5, com compilador gcc versa˜o 3.4.3 e
+biblioteca glibc versa˜o 2.3.4-2. Ale´m disso, para o gerador de palavras aleato´rias usamos
+um programa python rodando em uma VM Python 2.3.4, usando o dispositivo provedor
+de entropia /dev/random e o algoritmo de gerac¸a˜o de nu´meros pseudo aleato´riosMersenne
+Twister.
+53
+5.2.2 Dados aleato´rios
+Optamos por executar 5 se´ries de testes aleato´rios para quatro tamanhos de alfabeto,
+a saber 2 (bina´rio), 4 (DNA), 26 (alfabeto) e 93 (caracteres ASCII93 ). As se´ries sa˜o
+baseadas no tamanho do texto utilizado na pesquisa aproximada e o nu´mero ma´ximo de
+erros permitidos. As se´ries utilizadas foram de:
+• 1000 a 10.000 caracteres, em intervalos de 1000 caracteres, usando padra˜o de 100
+caracteres.
+• 10.000 a 100.000 caracteres, em intervalos de 10.000 caracteres, usando padra˜o de
+100 caracteres.
+• 100.000 a 1.000.000 caracteres, em intervalos de 100.000 caracteres, usando padra˜o
+de 1.000 caracteres.
+• 1.000.000 a 10.000.000 caracteres, em intervalos de 1.000.000 caracteres, usando
+padra˜o de 1.000 caracteres.
+• 11.000.000 a 20.000.000 caracteres, em intervalos de 1.000.000 caracteres, usando
+padra˜o de 10.000 caracteres.
+Para cada tamanho de texto de cada se´rie foram gerados 5 arquivos aleato´rios de
+cada alfabeto, e o uso de memo´ria e tempo de execuc¸a˜o informados sa˜o a me´dia dos dados
+recolhidos desses 5 arquivos. Como para palavras de tamanho pequeno as diferenc¸as
+na˜o sa˜o significativas, apresentamos nas tabelas e gra´ficos apenas os resultados para n ≥
+1.000.000. Nas tabelas 1, 2, 3 e 4 temos a comparac¸a˜o com ponto de vista de uso de espac¸o
+para o algoritmo que usa a construc¸a˜o de a´rvore de sufixos no seu pre´-processamento e o
+algoritmo que usa arranjos de sufixos para seu pre´-processamento.
+A comparac¸a˜o de tempo foi dividida em duas tabelas para cada tamanho de alfabeto,
+uma tabela para o tempo de execuc¸a˜o, e outra para o tempo do processador. E´ importante
+fazer a distinc¸a˜o entre essas duas medidas para que os resultados sejam interpretados
+corretamente:
+• Por tempo de execuc¸a˜o entendemos a medida de tempo total que o algoritmo levou
+para ser executado com sucesso no ambiente computacional. O tempo de execuc¸a˜o
+pode ser afetado por outros programas executando no sistema, pelo uso de memo´ria
+virtual, carga de processamento da ma´quina e eventos e originados pelo sistema
+operacional ou outros programas que interrompam a execuc¸a˜o do programa.
+54
+• Por tempo do processador entendemos o tempo de uso do processador que o algo-
+ritmo usou no seu processamento. O tempo do processador e´ equivalente ao tempo
+que o algoritmo total usaria se fosse o u´nico programa em execuc¸a˜o no sistema e
+todos os dados utilizados coubessem na memo´ria principal, e na˜o sofre influeˆncia de
+eventos externos ao programa que interrompam a sua execuc¸a˜o.
+Nos experimentos realizados, o computador estava dedicado a` execuc¸a˜o de nossos
+experimentos, de forma que diferenc¸as significativas entre tempo de processador e tempo
+de execuc¸a˜o coletados dizem respeito ao uso de memo´ria virtual.
+As tabelas 6, 8, 10 e 12 apresentam as comparac¸o˜es do ponto de vista do tempo do
+processador, enquanto as tabelas 9, 7, 11 e 13 apresentam as comparac¸o˜es do ponto de
+vista do tempo de execuc¸a˜o.
+As tabelas 1, 2, 3 e 4 que descrevem o uso de espac¸o esta˜o estruturadas da seguinte
+forma:
+• Uma coluna descrevendo o tamanho do problema — N — para a execuc¸a˜o do algo-
+ritmo, contado em milhares de caracteres
+• Quatro colunas descrevendo o uso de espac¸o para a implementac¸a˜o baseada em
+arranjos de sufixos e quatro para a baseada em a´rvores de sufixos, nessa ordem,
+sendo que essas quatro colunas esta˜o dispostas da seguinte forma:
+– Duas colunas descrevendo o espac¸o utilizado apo´s o te´rmino da fase de pre´-
+processamento, descrevendo a quantidade total de KBytes (KB) e a quantidade
+em bytes por caractere (Bpc).
+– Duas colunas descrevendo o uso de espac¸o total do algoritmo de Landau e
+Vishkin – incluindo o espac¸o utilizado pela fase de pre´-processamento – des-
+crevendo a quantidade total de KBytes (KB) e a quantidade em bytes por
+caractere (Bpc).
+• Quatro colunas descrevendo a diferenc¸a no uso de espac¸o, sendo:
+– Duas colunas com a diferenc¸a do uso de espac¸o da implementac¸a˜o baseada em
+a´rvores de sufixos e o uso de espac¸o da implementac¸a˜o baseada em arranjos de
+sufixos, em KBytes e bytes por caractere, onde um valor positivo indica que o
+uso de espac¸o da versa˜o baseada em a´rvores de sufixos e´ maior.
+55
+Tabela 1: Uso de espac¸o para |Σ| = 93, k = 20
+Arranjo de Sufixos A´rvore de Sufixos Economia de Espac¸o
+Pre-proc Total Pre-proc Total bytes Bpc Pre-Proc Total
+N (×1000) KB Bpc. KB Bpc KB Bpc KB Bpc
+1.000 27.371 28 86.943 89 38.872 40 98.444 101 11.501 12 29,59% 11,68%
+2.000 54.715 28 173.858 89 78.402 40 197.545 101 23.687 12 30,21% 11,99%
+3.000 82.059 28 260.772 89 112.889 39 291.602 100 30.830 11 27,31% 10,57%
+4.000 109.402 28 347.686 89 144.432 37 382.715 98 35.029 9 24,25% 9,15%
+5.000 136.746 28 434.600 89 174.889 36 472.742 97 38.143 8 21,81% 8,07%
+6.000 164.090 28 521.514 89 205.161 35 562.585 96 41.072 7 20,02% 7,30%
+7.000 191.434 28 608.428 89 235.634 34 652.628 95 44.200 6 18,76% 6,77%
+8.000 218.777 28 695.342 89 266.429 34 742.993 95 47.651 6 17,89% 6,41%
+9.000 246.121 28 782.256 89 297.581 34 833.716 95 51.460 6 17,29% 6,17%
+10.000 273.465 28 869.170 89 329.169 34 924.874 95 55.704 6 16,92% 6,02%
+11.000 301.055 28 956.330 89 361.381 34 1.016.656 95 60.326 6 16,69% 5,93%
+12.000 328.399 28 1.043.244 89 393.703 34 1.108.548 95 65.304 6 16,59% 5,89%
+13.000 355.742 28 1.130.158 89 426.370 34 1.200.786 95 70.628 6 16,56% 5,88%
+14.000 383.086 28 1.217.072 89 459.403 34 1.293.390 95 76.317 6 16,61% 5,90%
+15.000 410.430 28 1.303.986 89 492.793 34 1.386.350 95 82.363 6 16,71% 5,94%
+16.000 437.774 28 1.390.900 89 526.522 34 1.479.649 95 88.749 6 16,86% 6,00%
+17.000 465.117 28 1.477.815 89 560.489 34 1.573.187 95 95.372 6 17,02% 6,06%
+18.000 492.461 28 1.564.729 89 594.882 34 1.667.149 95 102.421 6 17,22% 6,14%
+19.000 519.805 28 1.651.643 89 629.554 34 1.761.392 95 109.749 6 17,43% 6,23%
+20.000 547.149 28 1.738.557 89 664.506 34 1.855.915 95 117.358 6 17,66% 6,32%
+Tabela 2: Uso de espac¸o para |Σ| = 26, k = 20
+Arranjo de Sufixos A´rvore de Sufixos Economia de Espac¸o
+Pre-proc Total Pre-proc Total bytes Bpc Pre-Proc Total
+N (×1000) KB Bpc. KB Bpc KB Bpc KB Bpc
+1.000 27.371 28 86.943 89 40.829 42 100.402 103 13.458 14 32,96% 13,40%
+2.000 54.715 28 173.858 89 77.724 40 196.867 101 23.009 12 29,60% 11,69%
+3.000 82.059 28 260.772 89 112.830 38 291.543 99 30.771 10 27,27% 10,55%
+4.000 109.402 28 347.686 89 148.997 38 387.280 99 39.594 10 26,57% 10,22%
+5.000 136.746 28 434.600 89 186.654 38 484.508 99 49.908 10 26,74% 10,30%
+6.000 164.090 28 521.514 89 225.621 38 583.045 99 61.531 10 27,27% 10,55%
+7.000 191.434 28 608.428 89 265.680 39 682.674 100 74.246 11 27,95% 10,88%
+8.000 218.777 28 695.342 89 306.579 39 783.144 100 87.802 11 28,64% 11,21%
+9.000 246.121 28 782.256 89 348.167 40 884.302 101 102.046 12 29,31% 11,54%
+10.000 273.465 28 869.170 89 390.300 40 986.006 101 116.836 12 29,93% 11,85%
+11.000 301.055 28 956.330 89 433.174 40 1.088.449 101 132.119 12 30,50% 12,14%
+12.000 328.399 28 1.043.244 89 475.847 41 1.190.693 102 147.449 13 30,99% 12,38%
+13.000 355.742 28 1.130.158 89 518.654 41 1.293.070 102 162.911 13 31,41% 12,60%
+14.000 383.086 28 1.217.072 89 561.515 41 1.395.501 102 178.429 13 31,78% 12,79%
+15.000 410.430 28 1.303.986 89 604.317 41 1.497.873 102 193.887 13 32,08% 12,94%
+16.000 437.774 28 1.390.900 89 647.032 41 1.600.159 102 209.258 13 32,34% 13,08%
+17.000 465.117 28 1.477.815 89 689.596 42 1.702.293 102 224.479 14 32,55% 13,19%
+18.000 492.461 28 1.564.729 89 731.948 42 1.804.216 103 239.487 14 32,72% 13,27%
+19.000 519.805 28 1.651.643 89 774.101 42 1.905.939 103 254.296 14 32,85% 13,34%
+20.000 547.149 28 1.738.557 89 816.031 42 2.007.439 103 268.882 14 32,95% 13,39%
+– Duas colunas indicando a porcentagem que espac¸o economizado representa do
+espac¸o utilizado pela implementac¸a˜o baseada em a´rvores de sufixos para o pre´-
+processamento e para o uso total de espac¸o do algoritmo
+As figuras 10, 11, 12 e 13 apresentam de forma gra´fica a diferenc¸a no uso de espac¸o
+no pre´-processamento e total paras palavras usadas com mais de 1.000.000 de caracteres.
+Analisando as tabelas e os gra´ficos de uso de espac¸o vemos que consistentemente a
+implementac¸a˜o do algoritmo modificado usou menos espac¸o. A diferenc¸a e´ maior para
+alfabetos pequenos, chegando a ser de 45% para a fase de pre´-processamento quando
+|Σ| = 4. A economia de espac¸o para o algoritmo completo (pre´-processamento e iterac¸a˜o)
+e´ menor, e percebe-se que na medida em que o valor do paraˆmetro k aumenta, o efeito
+dessa economia de espac¸o na execuc¸a˜o completa do algoritmo fica menos significativa.
+56
+Tabela 3: Uso de espac¸o para |Σ| = 4, k = 20
+Arranjo de Sufixos A´rvore de Sufixos Economia de Espac¸o
+Pre-proc Total Pre-proc Total bytes Bpc Pre-Proc Total
+N (×1000) KB Bpc. KB Bpc KB Bpc KB Bpc
+1.000 27.371 28 86.943 89 50.381 52 109.953 112 23.010 24 45,67% 20,93%
+2.000 54.715 28 173.858 89 100.623 51 219.765 112 45.908 23 45,62% 20,89%
+3.000 82.059 28 260.772 89 151.093 52 329.806 113 69.034 24 45,69% 20,93%
+4.000 109.402 28 347.686 89 201.362 52 439.646 113 91.960 24 45,67% 20,92%
+5.000 136.746 28 434.600 89 251.497 51 549.351 112 114.751 23 45,63% 20,89%
+6.000 164.090 28 521.514 89 301.668 51 659.092 112 137.578 23 45,61% 20,87%
+7.000 191.434 28 608.428 89 351.953 51 768.947 112 160.519 23 45,61% 20,88%
+8.000 218.777 28 695.342 89 402.339 51 878.904 112 183.562 23 45,62% 20,89%
+9.000 246.121 28 782.256 89 452.816 52 988.951 113 206.695 24 45,65% 20,90%
+10.000 273.465 28 869.170 89 503.337 52 1.099.042 113 229.872 24 45,67% 20,92%
+11.000 301.055 28 956.330 89 554.249 52 1.209.524 112 253.194 24 45,68% 20,93%
+12.000 328.399 28 1.043.244 89 604.684 52 1.319.530 113 276.285 24 45,69% 20,94%
+13.000 355.742 28 1.130.158 89 655.028 52 1.429.444 113 299.286 24 45,69% 20,94%
+14.000 383.086 28 1.217.072 89 705.353 52 1.539.339 113 322.267 24 45,69% 20,94%
+15.000 410.430 28 1.303.986 89 755.579 52 1.649.135 113 345.149 24 45,68% 20,93%
+16.000 437.774 28 1.390.900 89 805.808 52 1.758.935 113 368.034 24 45,67% 20,92%
+17.000 465.117 28 1.477.815 89 855.938 52 1.868.636 112 390.821 24 45,66% 20,91%
+18.000 492.461 28 1.564.729 89 906.086 52 1.978.353 112 413.625 24 45,65% 20,91%
+19.000 519.805 28 1.651.643 89 956.233 52 2.088.071 112 436.429 24 45,64% 20,90%
+20.000 547.149 28 1.738.557 89 1.006.329 51 2.197.737 112 459.180 23 45,63% 20,89%
+Tabela 4: Uso de espac¸o para |Σ| = 2, k = 20
+Arranjo de Sufixos A´rvore de Sufixos Economia de Espac¸o
+Pre-proc Total Pre-proc Total bytes Bpc Pre-Proc Total
+N (×1000) KB Bpc. KB Bpc KB Bpc KB Bpc
+1.000 27.371 28 86.943 89 61.897 63 121.470 124 34.526 35 55,78% 28,42%
+2.000 54.715 28 173.858 89 123.733 63 242.876 124 69.018 35 55,78% 28,42%
+3.000 82.059 28 260.772 89 185.574 63 364.287 124 103.515 35 55,78% 28,42%
+4.000 109.402 28 347.686 89 247.409 63 485.693 124 138.007 35 55,78% 28,41%
+5.000 136.746 28 434.600 89 309.242 63 607.096 124 172.496 35 55,78% 28,41%
+6.000 164.090 28 521.514 89 371.080 63 728.503 124 206.990 35 55,78% 28,41%
+7.000 191.434 28 608.428 89 432.912 63 849.906 124 241.478 35 55,78% 28,41%
+8.000 218.777 28 695.342 89 494.749 63 971.313 124 275.972 35 55,78% 28,41%
+9.000 246.121 28 782.256 89 556.582 63 1.092.717 124 310.461 35 55,78% 28,41%
+10.000 273.465 28 869.170 89 618.427 63 1.214.132 124 344.962 35 55,78% 28,41%
+11.000 301.055 28 956.330 89 680.825 63 1.336.100 124 379.770 35 55,78% 28,42%
+12.000 328.399 28 1.043.244 89 742.659 63 1.457.504 124 414.260 35 55,78% 28,42%
+13.000 355.742 28 1.130.158 89 804.498 63 1.578.914 124 448.756 35 55,78% 28,42%
+14.000 383.086 28 1.217.072 89 866.329 63 1.700.316 124 483.243 35 55,78% 28,42%
+15.000 410.430 28 1.303.986 89 928.166 63 1.821.723 124 517.737 35 55,78% 28,42%
+16.000 437.774 28 1.390.900 89 989.990 63 1.943.117 124 552.216 35 55,78% 28,42%
+17.000 465.117 28 1.477.815 89 1.051.840 63 2.064.537 124 586.723 35 55,78% 28,42%
+18.000 492.461 28 1.564.729 89 1.113.673 63 2.185.941 124 621.212 35 55,78% 28,42%
+19.000 519.805 28 1.651.643 89 1.175.505 63 2.307.343 124 655.700 35 55,78% 28,42%
+20.000 547.149 28 1.738.557 89 1.237.345 63 2.428.753 124 690.196 35 55,78% 28,42%
+57
+Tabela 5: Uso espac¸o nas a´rvores de sufixo
+Σ |Σ| # no´s Espac¸o T Espac¸o Pre´-proc T Espac¸o Pre´-proc SA
+Bina´rio 2 1.8n 19n 63n 28n
+DNA 4 1.6n 15n 51n 28n
+Alfabeto 26 1.3n 10n 40n 28n
+Caracteres ASCII93 93 1.2n 9n 37n 28n
+Figura 10: Gra´fico de uso de espac¸o |Σ| = 93, k = 20
+Observe que o uso de espac¸o da a´rvore de sufixos depende da estrutura da palavra
+e do alfabeto utilizado. Compilamos na tabela 5 a relac¸a˜o encontrada entre o alfabeto
+utilizado e a estrutura da a´rvore de sufixos constru´ıda, incluindo nu´mero total de no´s e
+espac¸o utilizado por caractere para a a´rvore de sufixos e para a estrutura gerada pelo
+pre´-processamento para ca´lculo do LCA. Os valores foram obtidos a partir dos valores
+me´dios para cada alfabeto. A coluna Espac¸o Pre´-proc SA descreve o espac¸o utilizado pela
+versa˜o baseada em arranjos de sufixos para comparac¸a˜o.
+Como descrito na sec¸a˜o 5.1.1 a implementac¸a˜o de a´rvore de sufixos utilizada foi a de
+Kurtz usada no software MUMMER (15). Os valores apresentados na tabela 5 sa˜o os
+valores me´dios para o uso de espac¸o, aproximados para o nu´mero inteiro mais pro´ximo.
+Para alfabetos pequenos, a a´rvore de sufixos usa mais espac¸o. E´ interessante comentar
+que para o caso do alfabeto grande (na tabela, os caracteres ASCII93), o uso de espac¸o
+e´ tal que, descartada a a´rvore de sufixos, o espac¸o final ficaria praticamente igual ao da
+versa˜o baseada em arranjos de sufixos. Entretanto verificamos que para esses casos o
+58
+Figura 11: Gra´fico de uso de espac¸o |Σ| = 26, k = 20
+Figura 12: Gra´fico de uso de espac¸o |Σ| = 4, k = 20
+59
+Figura 13: Gra´fico de uso de espac¸o |Σ| = 2, k = 20
+tempo de pre´-processamento e´ bem maior na versa˜o baseada em a´rvores de sufixos que na
+versa˜o baseada em arranjos de sufixos, e para k = 20 fez com que o tempo de processador
+do algoritmo original fosse maior que o do modificado.
+As tabelas 6, 7, 8, 9, 10, 11, 12 e 13 que descrevem o comportamento do algoritmo
+com relac¸a˜o a tempo de execuc¸a˜o e de processador esta˜o estruturadas da seguinte forma:
+• Uma coluna descrevendo o tamanho do problema (N) para a execuc¸a˜o do algoritmo.
+• Duas colunas descrevendo o tempo para a implementac¸a˜o baseada em arranjos de
+sufixos e duas para a baseada em a´rvores de sufixos, nessa ordem, sendo uma coluna
+para a fase de pre´-processamento e uma coluna para a execuc¸a˜o total do algoritmo.
+• Duas colunas com a diferenc¸a percentual do tempo da implementac¸a˜o baseada em
+a´rvores de sufixos e da implementac¸a˜o baseada em arranjos de sufixos, para o pre´-
+processamento e o algoritmo completo, sendo que um valor positivo em uma linha
+indica que o tempo de execuc¸a˜o para a versa˜o baseada em a´rvores de sufixos foi
+maior.
+Analisando as tabelas com os resultados de tempo de execuc¸a˜o podemos fazer duas
+observac¸o˜es interessantes:
+60
+Tabela 6: Tempo do Processador para |Σ| = 93, k = 20
+Arranjo de Sufixos A´rvore de sufixos Diferenc¸a
+N (×1000) Pre-Proc Total Pre-Proc Total Pre-Proc Total
+1.000 0,606 3,440 4,460 7,246 86% 53%
+2.000 1,380 7,132 13,410 19,022 90% 63%
+3.000 2,178 10,858 23,066 31,494 91% 66%
+4.000 3,010 14,612 32,540 43,790 91% 67%
+5.000 3,820 18,394 41,890 55,976 91% 67%
+6.000 4,602 22,086 51,134 68,034 91% 68%
+7.000 5,410 25,824 60,560 80,248 91% 68%
+8.000 6,298 29,714 70,030 92,652 91% 68%
+9.000 7,082 33,398 80,020 105,352 91% 68%
+10.000 7,928 38,318 89,730 117,806 91% 67%
+11.000 10,453 44,127 99,773 131,660 90% 66%
+12.000 9,620 45,523 109,787 144,953 91% 69%
+13.000 10,567 50,343 119,863 157,993 91% 68%
+14.000 11,403 53,230 131,540 172,010 91% 69%
+15.000 12,183 56,917 140,597 184,013 91% 69%
+16.000 13,080 61,817 151,527 199,650 91% 69%
+17.000 14,010 68,957 162,197 217,063 91% 68%
+18.000 14,887 75,177 176,477 233,283 92% 68%
+19.000 15,653 80,423 184,423 246,800 92% 67%
+20.000 16,680 84,923 195,453 260,883 91% 67%
+Tabela 7: Tempo de Execuc¸a˜o para |Σ| = 93, k = 20
+Arranjo de Sufixos A´rvore de sufixos Diferenc¸a
+N (×1000) Pre-Proc Total Pre-Proc Total Pre-Proc Total
+1.000 0,608 3,442 4,465 7,252 86% 53%
+2.000 1,385 7,137 13,412 19,028 90% 62%
+3.000 2,183 10,863 23,070 31,499 91% 66%
+4.000 3,014 14,616 32,543 43,793 91% 67%
+5.000 3,826 18,400 41,896 55,980 91% 67%
+6.000 4,604 22,088 51,139 68,040 91% 68%
+7.000 5,412 25,826 60,563 80,251 91% 68%
+8.000 6,301 29,717 70,032 92,656 91% 68%
+9.000 7,084 33,400 80,026 105,354 91% 68%
+10.000 7,931 38,321 89,733 117,808 91% 67%
+11.000 10,456 44,337 99,785 131,679 90% 66%
+12.000 9,628 45,531 109,801 144,968 91% 69%
+13.000 10,569 50,352 119,876 158,005 91% 68%
+14.000 11,406 53,233 131,553 172,024 91% 69%
+15.000 12,181 56,922 140,610 184,027 91% 69%
+16.000 13,087 62,257 151,534 205,667 91% 70%
+17.000 14,008 93,450 162,391 271,528 91% 66%
+18.000 14,892 178,667 176,489 335,989 92% 47%
+19.000 15,661 262,197 184,640 414,900 92% 37%
+20.000 16,681 424,762 195,468 545,217 91% 22%
+Tabela 8: Tempo do Processador para |Σ| = 26, k = 20
+Arranjo de Sufixos A´rvore de sufixos Diferenc¸a
+N (×1000) Pre-Proc Total Pre-Proc Total Pre-Proc Total
+1.000 0,636 4,120 2,432 5,678 74% 27%
+2.000 1,410 8,570 5,948 12,468 76% 31%
+3.000 2,230 13,086 9,542 19,356 77% 32%
+4.000 3,120 17,706 13,252 26,402 76% 33%
+5.000 3,994 22,274 17,244 33,754 77% 34%
+6.000 4,824 26,884 21,292 41,148 77% 35%
+7.000 5,740 31,732 25,582 49,062 78% 35%
+8.000 6,714 36,484 30,056 56,838 78% 36%
+9.000 7,574 41,218 34,610 64,914 78% 37%
+10.000 8,512 45,790 39,298 72,932 78% 37%
+11.000 11,163 53,497 44,110 82,143 75% 35%
+12.000 10,403 55,610 48,980 90,517 79% 39%
+13.000 11,497 61,163 53,927 99,307 79% 38%
+14.000 12,417 65,897 59,013 107,397 79% 39%
+15.000 13,293 70,723 64,090 117,043 79% 40%
+16.000 14,277 76,160 69,337 133,700 79% 43%
+17.000 15,370 83,627 74,687 146,910 79% 43%
+18.000 16,387 105,817 79,923 160,007 79% 34%
+19.000 17,190 105,137 85,327 166,317 80% 37%
+20.000 18,387 115,130 91,060 184,693 80% 38%
+61
+Tabela 9: Tempo de Execuc¸a˜o para |Σ| = 26, k = 20
+Arranjo de Sufixos A´rvore de sufixos Diferenc¸a
+N (×1000) Pre-Proc Total Pre-Proc Total Pre-Proc Total
+1.000 0,638 4,122 2,435 5,681 74% 27%
+2.000 1,414 8,574 5,952 12,472 76% 31%
+3.000 2,233 13,089 9,545 19,359 77% 32%
+4.000 3,124 17,710 13,256 26,406 76% 33%
+5.000 3,998 22,278 17,247 33,757 77% 34%
+6.000 4,826 26,886 21,295 41,151 77% 35%
+7.000 5,742 31,734 25,584 49,064 78% 35%
+8.000 6,717 36,487 30,060 56,842 78% 36%
+9.000 7,577 41,221 34,612 64,916 78% 37%
+10.000 8,514 45,792 39,301 72,935 78% 37%
+11.000 11,164 53,503 44,118 82,156 75% 35%
+12.000 10,407 55,616 48,987 90,530 79% 39%
+13.000 11,506 61,172 53,936 99,315 79% 38%
+14.000 12,421 65,900 59,019 107,409 79% 39%
+15.000 13,296 70,728 64,094 119,189 79% 41%
+16.000 14,495 76,388 69,343 184,856 79% 59%
+17.000 15,381 101,361 74,697 310,134 79% 67%
+18.000 16,390 270,983 79,931 409,047 79% 34%
+19.000 17,196 641,710 85,333 728,444 80% 12%
+20.000 18,388 1.031,485 91,071 1.219,468 80% 15%
+Tabela 10: Tempo do Processador para |Σ| = 4, k = 20
+Arranjo de Sufixos A´rvore de sufixos Diferenc¸a
+N (×1000) Pre-Proc Total Pre-Proc Total Pre-Proc Total
+1.000 0,652 9,756 1,538 8,638 58% -13%
+2.000 1,452 20,344 3,418 17,874 58% -14%
+3.000 2,324 30,928 5,398 27,032 57% -14%
+4.000 3,274 41,912 7,418 36,430 56% -15%
+5.000 4,200 52,774 9,536 46,318 56% -14%
+6.000 5,102 63,934 11,512 55,592 56% -15%
+7.000 6,038 74,856 13,612 65,850 56% -14%
+8.000 7,022 86,926 15,748 75,970 55% -14%
+9.000 7,898 98,840 17,906 84,752 56% -17%
+10.000 8,834 108,832 20,094 94,704 56% -15%
+11.000 11,480 118,933 22,270 101,780 48% -17%
+12.000 10,787 124,067 24,513 110,613 56% -12%
+13.000 11,843 135,643 26,707 120,673 56% -12%
+14.000 12,810 149,580 29,030 130,683 56% -14%
+15.000 13,693 157,630 31,240 144,953 56% -9%
+16.000 14,650 170,177 33,537 160,777 56% -6%
+17.000 15,813 184,343 35,897 175,693 56% -5%
+18.000 16,790 208,327 38,360 187,250 56% -11%
+19.000 17,603 221,323 40,573 215,793 57% -3%
+20.000 18,770 304,000 43,010 309,043 56% 2%
+Tabela 11: Tempo de Execuc¸a˜o para |Σ| = 4, k = 20
+Arranjo de Sufixos A´rvore de sufixos Diferenc¸a
+N (×1000) Pre-Proc Total Pre-Proc Total Pre-Proc Total
+1.000 0,655 9,759 11,296 18,396 94% 47%
+2.000 1,454 20,346 23,764 38,220 94% 47%
+3.000 2,327 30,931 36,328 57,962 94% 47%
+4.000 3,276 41,914 49,334 78,346 93% 47%
+5.000 4,204 52,778 62,312 99,094 93% 47%
+6.000 5,104 63,936 75,450 119,530 93% 47%
+7.000 6,040 74,858 88,470 140,708 93% 47%
+8.000 7,025 86,929 102,676 162,898 93% 47%
+9.000 7,900 98,842 116,749 183,595 93% 46%
+10.000 8,837 108,835 128,928 203,538 93% 47%
+11.000 11,487 118,948 22,279 101,799 48% -17%
+12.000 10,786 124,074 24,527 110,624 56% -12%
+13.000 11,849 135,655 26,714 120,686 56% -12%
+14.000 12,813 149,591 29,041 131,119 56% -14%
+15.000 13,701 157,644 31,244 201,778 56% 22%
+16.000 14,658 170,194 33,537 345,019 56% 51%
+17.000 15,819 200,034 35,899 570,844 56% 65%
+18.000 16,797 611,849 38,364 894,459 56% 32%
+19.000 17,607 887,734 40,576 1.928,291 57% 54%
+20.000 18,772 5.455,711 43,017 11.437,399 56% 52%
+62
+Tabela 12: Tempo do Processador para |Σ| = 2, k = 20
+Arranjo de Sufixos A´rvore de sufixos Diferenc¸a
+N (×1000) Pre-Proc Total Pre-Proc Total Pre-Proc Total
+1.000 0,605 14,629 1,572 12,337 62% -19%
+2.000 1,372 30,982 3,352 25,538 59% -21%
+3.000 2,176 47,998 5,192 38,682 58% -24%
+4.000 3,064 64,056 7,040 52,084 56% -23%
+5.000 3,918 80,202 8,932 66,112 56% -21%
+6.000 4,728 98,122 10,884 79,478 57% -23%
+7.000 5,608 115,474 12,772 94,630 56% -22%
+8.000 6,510 132,102 14,752 107,136 56% -23%
+9.000 7,314 151,738 16,752 123,754 56% -23%
+10.000 8,200 168,560 18,764 139,736 56% -21%
+11.000 10,747 194,140 20,877 155,527 49% -25%
+12.000 9,953 202,100 22,963 165,077 57% -22%
+13.000 10,917 219,023 25,140 181,083 57% -21%
+14.000 11,823 239,107 27,220 201,173 57% -19%
+15.000 12,630 256,097 29,247 223,907 57% -14%
+16.000 13,487 275,207 31,450 244,030 57% -13%
+17.000 14,550 299,187 33,657 260,900 57% -15%
+18.000 15,477 333,623 35,933 291,047 57% -15%
+19.000 16,237 357,973 38,090 367,090 57% 2%
+20.000 17,313 452,457 40,257 434,663 57% -4%
+Tabela 13: Tempo de Execuc¸a˜o para |Σ| = 2, k = 20
+Arranjo de Sufixos A´rvore de sufixos Diferenc¸a
+N (×1000) Pre-Proc Total Pre-Proc Total Pre-Proc Total
+1.000 0,612 14,637 1,577 12,341 61% -19%
+2.000 1,376 30,984 3,353 25,543 59% -21%
+3.000 2,181 48,003 5,192 38,682 58% -24%
+4.000 3,063 64,061 7,042 52,085 57% -23%
+5.000 3,917 80,207 8,932 66,238 56% -21%
+6.000 4,736 98,134 10,890 79,617 57% -23%
+7.000 5,615 115,491 12,780 94,640 56% -22%
+8.000 6,514 132,115 14,755 107,146 56% -23%
+9.000 7,316 151,747 16,755 123,763 56% -23%
+10.000 8,200 168,573 18,765 139,744 56% -21%
+11.000 10,748 194,160 20,882 155,547 49% -25%
+12.000 9,955 202,315 22,972 165,096 57% -23%
+13.000 10,919 219,044 25,146 181,125 57% -21%
+14.000 11,826 239,129 27,222 334,518 57% 29%
+15.000 12,630 256,298 29,250 347,950 57% 26%
+16.000 13,496 275,230 31,454 579,657 57% 53%
+17.000 14,550 308,850 33,662 852,980 57% 64%
+18.000 15,482 644,768 35,937 1.531,532 57% 58%
+19.000 16,238 1.024,395 38,095 7.525,399 57% 86%
+20.000 17,314 5.822,213 40,268 13.809,782 57% 58%
+63
+(i) A fase de iterac¸a˜o da versa˜o baseada em a´rvores de sufixos e´ em geral mais ra´pida
+que a versa˜o baseada em arranjos de sufixos.
+(ii) Quando |Σ| e´ grande o tempo de pre´-processamento e´ muito menor na versa˜o
+baseada em arranjos de sufixos, e pode influenciar fortemente no tempo total de
+execuc¸a˜o.
+Nossa ana´lise indica que a observac¸a˜o (i) acima e´ causada pela necessidade de fazer
+consultas ao ı´ndice reverso (que mapeia os sufixos Pj e Tk na sua posic¸a˜o no arranjo Pos),
+para podermos identificar os no´s da a´rvore cartesiana cujo LCA sera´ consultado. Esta
+uma operac¸a˜o na˜o e´ necessa´ria na versa˜o baseada em a´rvores de sufixos, e, ale´m disso,
+como as posic¸o˜es de Pos que sera˜o consultadas na˜o sa˜o facilmente previstas a partir de j
+e k, e provavelmente causam erros na consulta a` memo´ria cache e uma busca da memo´ria
+RAM.
+A observac¸a˜o (ii) acima e´ consequ¨eˆncia direta da implementac¸a˜o de a´rvore de sufixos
+utilizada e da frequ¨eˆncia de distribuic¸a˜o aleato´ria dos caracteres, pois o tipo de a´rvore de
+sufixos constru´ıda e´ a variante ILLI descrita em (13), que usa uma lista ligada para guardar
+as arestas dos filhos de cada no´. Como |Σ| e´ grande, as buscas nas arestas para identificar
+se ja´ existe uma aresta cujo ro´tulo comec¸a com determinado caractere geram uma busca
+linear O(|Σ|). Para resolver isso, seria necessa´rio usar a variante IHTI (13) baseada em
+tabelas de hash, mas a implementac¸a˜o que obtivemos suporta apenas a construc¸a˜o de
+a´rvores do tipo ILLI. De qualquer forma, o nosso foco e´ a economia de espac¸o e segundo
+Kurtz(13) a versa˜o IHTI usa mais espac¸o que a versa˜o ILLI. Por exemplo, para o genoma
+da bacte´ria E. coli a versa˜o ILLI usa 12,56 bytes por caractere, enquanto a versa˜o IHTI
+usa 17,14 bytes por caractere.
+Percebemos que aumentar a quantidade de diferenc¸as permitidas aumenta o custo da
+fase de iterac¸a˜o, o que diminui a vantagem que o algoritmo modificado poderia ter por uma
+fase de pre´-processamento mais ra´pida. Assim, na medida em que k aumente, a tendeˆncia
+e´ que o custo da fase de iterac¸a˜o domine a execuc¸a˜o total do algoritmo, minimizando a
+vantagem que o algoritmo modificado tem na fase de pre´-processamento.
+Com respeito ao uso de espac¸o, o algoritmo modificado usa menos espac¸o em todos
+os casos. Na versa˜o com espac¸o θ(kn) do algoritmo, se aumentamos o valor de k tambe´m
+aumentamos o uso de espac¸o da fase de iterac¸a˜o e isso diminui a vantagem de uso de
+espac¸o do algoritmo modificado, pois para k grande o espac¸o utilizado na fase de iterac¸a˜o
+sera´ bem maior que o utilizado na fase de pre´-processamento. A versa˜o com espac¸o θ(n)
+64
+Figura 14: Gra´fico de uso de processador |Σ| = 93, k = 20
+Figura 15: Gra´fico de tempo de execuc¸a˜o |Σ| = 93, k = 20
+65
+Figura 16: Gra´fico de uso de processador |Σ| = 26, k = 20
+Figura 17: Gra´fico de tempo de execuc¸a˜o |Σ| = 26, k = 20
+66
+Figura 18: Gra´fico de uso de processador |Σ| = 4, k = 20
+Figura 19: Gra´fico de tempo de execuc¸a˜o |Σ| = 4, k = 20
+67
+Figura 20: Gra´fico de uso de processador |Σ| = 2, k = 20
+Figura 21: Gra´fico de tempo de execuc¸a˜o |Σ| = 2, k = 20
+68
+do algoritmo modificado sempre usara´ menos espac¸o independente de k, mas necessitara´
+de uma fase adicional para construir os alinhamentos das palavras.
+5.2.3 Dados reais
+Para a avaliac¸a˜o do comportamento do algoritmo com dados reais, usamos sequ¨eˆncias
+do Genbank e textos do projeto Gutenberg, acess´ıveis pela internet. Dividimos a avaliac¸a˜o
+em duas partes.
+Na primeira parte avaliamos o comportamento das variac¸o˜es do algoritmo com a´rvores
+e arranjos de sufixos, utilizando dados reais retirados do Genbank e do projeto Gutenberg.
+Sa˜o palavras que cabem completamente na memo´ria principal do computador utilizado
+nos experimentos e servem somente para validar as observac¸o˜es de uso de espac¸o e tempo
+feitas sobre os experimentos com dados aleato´rios.
+Na segunda parte avaliamos o uso do algoritmo com problemas de dimenso˜es maiores,
+que precisam ser tratados pela variante que usa espac¸o θ(n) por usarem massas de dados
+muito grandes e exigirem valores grandes para k.
+Como dados reais utilizamos as seguinte sequ¨eˆncias do Genbank:
+• Halo. – Halobacterium NRC-1 plasmı´deo pNRC100, sequ¨eˆncia completa.
+• E. rumin. – Ehrlichia ruminantium str. Welgevonden, genoma completo.
+• Influenza C, v´ırus, segmento 5, sequ¨eˆncia completa (usado como padra˜o).
+• Coliphage phiX174, v´ırus, genoma completa (usado como padra˜o).
+Ale´m disso, usamos os seguintes textos retirados do projeto Gutenberg e do corpus
+de Canterbury:
+• Fifteen – Fifteen Thousand Useful Phrases, por Greenville Kleiser ( EBook #18362
+do Projeto Gutenberg).
+• Moby Dick – Moby Dick, por Herman Melville ( Etext #2701 do Projeto Gutenberg)
+• Shakespeare – Compilac¸a˜o de obras de William Shakespeare (Etexts #2253, #1103,
+#1107, #1113, #1114, #1127, #1794, #1129, #1135, #1522 e #1524 do Projeto
+Gutenberg)
+69
+Tabela 14: Uso de espac¸o para dados reais
+Arranjo de Sufixos A´rvore de Sufixos Economia de Espac¸o
+PP Total PP Total MB Bpc PP Total
+|Σ| N (KB) MB Bpc. MB Bpc MB Bpc MB Bpc
+Halo. 4 191 5 29 15 79 10 53 19 104 5 25 46,38% 23,68%
+E. rumin. 4 1.516 42 28 117 79 78 53 154 104 36 25 46,70% 23,72%
+E. coli 4 4.639 127 28 358 79 236 52 467 103 109 24 46,13% 23,29%
+Biblia 62 4.047 111 28 312 79 185 47 387 98 75 19 40,32% 19,32%
+Fifteen 85 589 16 28 45 79 27 46 56 97 10 18 39,33% 18,69%
+Moby Dick 90 1.256 34 28 97 79 56 46 119 97 22 18 38,88% 18,40%
+Shakespeare 93 1.875 51 28 145 79 84 46 178 97 33 18 39,10% 18,54%
+world192 93 2.473 68 28 191 79 112 46 235 97 44 18 39,36% 18,70%
+Tabela 15: Tempo de execuc¸a˜o para dados reais
+Arranjo de Sufixos A´rvore de sufixos Diferenc¸a
+|Σ| N (KB) Pre-Proc Total Pre-Proc Total Pre-Proc Total
+Halo. 4 191 0,080 0,753 0,185 0,790 57% 4,7%
+E. rumin. 4 1.516 1,030 7,820 2,438 7,810 58% -0,1%
+E. coli 4 4.639 3,875 25,605 8,595 25,340 55% -1,0%
+Biblia 62 4.047 3,070 13,000 6,847 15,503 55% 16,1%
+Fifteen 85 589 0,310 1,480 0,713 1,823 57% 18,8%
+Moby Dick 90 1.256 0,830 3,370 2,167 4,550 62% 25,9%
+Shakespeare 93 1.875 1,310 5,137 3,227 6,767 59% 24,1%
+world192 93 2.473 1,790 7,277 3,677 8,570 51% 15,1%
+• Bı´blia – B´ıblia do Rei Jaime (do arquivo large do corpus de Canterbury).
+• E.coli – Genoma da E. coli (do arquivo large do corpus de Canterbury).
+• world192 – CIA World Factbook de 1992 (do arquivo large do corpus de Canterbury).
+Nas tabela 14 temos a comparac¸a˜o do uso de espac¸o para o algoritmo que usa a
+construc¸a˜o de a´rvore de sufixos no seu pre´-processamento e o algoritmo que usa arranjos
+de sufixos para seu pre´-processamento, e na tabela 15 temos a comparac¸a˜o do tempo de
+execuc¸a˜o. Como em todos os casos as informac¸o˜es cabiam completamente na memo´ria
+principal, na˜o houve diferenc¸a significativa entre tempo de execuc¸a˜o e tempo de processa-
+dor e apresentamos apenas o tempo de processador. Essas tabelas teˆm estrutura similar a
+das tabelas de resultados para dados aleato´rios (apenas acrescentamos uma identificac¸a˜o
+da sequ¨eˆncia e o tamanho de Σ para cada experimento).
+Verificamos que o comportamento e´ similar ao dos dados gerados de forma aleato´ria,
+e as mesmas considerac¸o˜es se aplicam. Em todos os casos, o pre´-processamento e´ mais
+ra´pido no algoritmo modificado, e a fase de iterac¸a˜o do algoritmo original e´ mais ra´pida.
+Para alfabetos pequenos (DNA), a vantagem no pre´-processamento do algoritmo modifi-
+cado e´ pequena o suficiente para na˜o se converter em vantagem no tempo total de execuc¸a˜o
+do algoritmo, mas para os casos de alfabetos grandes, a diferenc¸a foi suficiente para que
+o desempenho total do algoritmo modificado fosse superior. Em todos os casos, o uso
+de espac¸o da versa˜o baseada em arranjos de sufixos foi menor, sendo que quando |Σ| e´
+70
+grande, a diferenc¸a de uso de espac¸o e´ menor e o tempo de execuc¸a˜o e´ maior.
+Observe que mesmo para alfabetos grandes a diferenc¸a no uso de espac¸o continua
+significativa, e maior que no caso dos dados aleato´rios. Isso ocorre porque tanto textos
+de literatura quanto sequ¨eˆncias biolo´gicas possuem uma certa estrutura, e a frequ¨eˆncia de
+cada caractere (ou de codons) na˜o e´ uniforme, o que gera uma quantidade maior de no´s
+na a´rvore de sufixos que no caso aleato´rio. Isso aumenta o espac¸o utilizado tanto para a
+pro´pria a´rvore de sufixos como para a estrutura usada para o ca´lculo do LCA.
+Sabemos que no computador utilizado para a ana´lise experimental rapidamente chega-
+mos ao ponto em que na˜o e´ poss´ıvel processar de forma realista palavras grandes, como as
+palavras que formariam todas as regio˜es codificadoras de um cromossomo. Isso acontece
+em parte porque qualquer resultado significativo exigiria um valor alto para k.
+Ora, para realizar buscas exatas nessas palavras o caminho usual seria realizar o
+algoritmo de programac¸a˜o dinaˆmica em tempo linear, que marcaria todas as posic¸o˜es em
+T onde encontramos uma ocorreˆncia de P compat´ıveis com o crite´rio de busca, e enta˜o
+posteriormente construir´ıamos os respectivos alinhamentos usando tempo θ(m2) e espac¸o
+θ(m), sendo que m e´ muito menor que n.
+Vamos usar a mesma abordagem para estender o limite das palavras que podemos
+processar independente da quantidade de diferenc¸as admitidas. Dessa forma o valor de
+k somente interferira´ no tempo de execuc¸a˜o do algoritmo, mas na˜o no uso de espac¸o que
+sera´ θ(n).
+Para esse esperimento escolhemos como padra˜o regio˜es de cDNA do ser humano re-
+tirado do NCBI Genbank de comprimentos da ordem de 8, 9, e 11 mil caracteres (H.
+sapiens adenomatosis polyposis coli, H. sapiens dystrophin e H. sapiens talin 1).
+Para texto usamos:
+• Drosophila melanogaster, cDNA release 5 de 17 de Abril de 2006, eucromatina e
+heterocroma:
+– Brac¸o 2R (21 milho˜es de caracteres).
+– Brac¸o 2L (23 milho˜es de caracteres).
+– Brac¸o 3L (25 milho˜es de caracteres).
+– Brac¸o 3R (28 milho˜es de caracteres).
+– Brac¸o U Extra, (29 milho˜es de caracteres).
+71
+Tabela 16: Dados reais - uso de espac¸o para pesquisa em DNA
+Arranjo de Sufixos (MB) A´rvore de Sufixos (MB) Economia de Espac¸o
+M (KB) N (MB) Pre-Proc Total Pre-Proc Total MB Bpc %
+8 21 592 1.438 1.102 1.948 510 24 26%
+9 21 592 1.438 1.102 1.948 510 24 26%
+9 21 592 1.438 1.102 1.948 510 24 26%
+11 21 592 1.438 1.102 1.948 510 24 26%
+8 23 645 1.565 1.200 2.121 556 24 26%
+9 23 645 1.565 1.200 2.121 556 24 26%
+9 23 645 1.565 1.200 2.121 556 24 26%
+11 23 645 1.565 1.200 2.121 556 24 26%
+8 25 687 1.669 1.280 2.262 593 24 26%
+9 25 687 1.669 1.280 2.262 593 24 26%
+9 25 687 1.669 1.280 2.262 593 24 26%
+11 25 688 1.669 1.280 2.262 593 24 26%
+8 28 782 1.898 1.451 2.567 669 24 26%
+9 28 782 1.898 1.451 2.567 669 24 26%
+9 28 782 1.898 1.451 2.567 669 24 26%
+11 28 782 1.898 1.451 2.567 669 24 26%
+8 29 812 1.973 1.637 2.797 825 28 29%
+9 29 812 1.973 1.637 2.797 825 28 29%
+9 29 812 1.973 1.637 2.797 825 28 29%
+11 29 812 1.973 1.637 2.797 825 28 29%
+8 35 968 2.350 1.818 - - - -
+9 35 968 2.350 1.818 - - - -
+9 35 968 2.350 1.818 - - - -
+11 35 968 2.350 1.818 - - - -
+• Homo sapiens, cDNA do cromossomo 22 (34,5 milho˜es de caracteres)
+Observe que a avaliac¸a˜o feita aqui e´ de cara´ter estritamente algor´ıtmico, na˜o tendo
+sido realizada buscando um significac¸a˜o biolo´gica real. O alinhamento de sequ¨eˆncias
+biolo´gicas se beneficia mais de um algoritmo de maximizac¸a˜o de uma medida de simila-
+ridade, que leve em conta fatores como a probabilidade de mutac¸a˜o de uma base para
+outra, enquanto o algoritmo que estamos avaliando e´ um algoritmo de minimizac¸a˜o cujo
+crite´rio e´ a distaˆncia de edic¸a˜o.
+Na tabela 16 apresentamos os resultados com relac¸a˜o ao uso de espac¸o e nas tabelas
+17 e 18 os resultados com relac¸a˜o ao tempo de execuc¸a˜o para k = 50 e k = 100, respec-
+tivamente (como usamos a variante com espac¸o linear do algoritmo, na˜o ha´ diferenc¸a no
+uso de espac¸o para diferentes valores de k).
+Na figura 22 apresentamos um gra´fico comparativo do uso de espac¸o dos algoritmos,
+baseado na tabela 16. Nas figuras 23 e 24 apresentamos de forma gra´fica a comparac¸a˜o
+do tempo de processador para cada algoritmo, para k = 50 e k = 100, respectivamente.
+Nas figuras 25 e 26 apresentamos de forma gra´fica a comparac¸a˜o do tempo de execuc¸a˜o
+para cada algoritmo, para k = 50 e k = 100, respectivamente.
+Note que o texto de 34,5 milho˜es de caracteres (cromossomo 22 do H. sapiens) na˜o
+poˆde ser processado pelo algoritmo original. O espac¸o adicional de 845 MB usado no pre´-
+processamento do algoritmo foi decisivo para que a memo´ria total utilizada superasse a
+capacidade de memo´ria virtual do computador utilizado. Para o experimento de pesquisa
+72
+Figura 22: Gra´fico de uso de espac¸o para pesquisa em DNA
+Tabela 17: Dados reais – tempo de execuc¸a˜o para pesquisa em DNA — k = 50
+Arranjo de Sufixos (seg) A´rvore de Sufixos (seg) %
+M (KB) N (MB) PP CPU Total Total CPU PP CPU Total Total CPU Total CPU
+8 21 19,7350 428 428,4000 45,1400 360 359,9100 -19,0% -19,0%
+9 21 19,6350 508 507,5450 45,1100 408 408,3300 -24,3% -24,3%
+9 21 19,6300 506 505,8350 45,0100 408 407,7800 -24,0% -24,0%
+11 21 19,7000 476 476,3100 45,0050 387 386,9400 -23,1% -23,1%
+8 23 21,2300 458 458,2500 49,0550 428 389,8900 -7,2% -17,5%
+9 23 21,1550 557 556,7300 49,2300 485 446,5800 -14,7% -24,7%
+9 23 21,1850 555 554,8300 49,1600 484 445,9900 -14,7% -24,4%
+11 23 21,3900 525 525,0500 49,0400 466 425,2600 -12,6% -23,5%
+8 25 23,0900 504 504,4050 52,8950 509 421,6750 0,9% -19,6%
+9 25 23,0250 610 610,0750 52,7050 563 488,6500 -8,4% -24,8%
+9 25 23,0800 608 607,1250 52,7850 576 481,9650 -5,5% -26,0%
+11 25 23,3350 561 561,0250 52,8250 539 455,2300 -4,1% -23,2%
+8 28 26,3950 598 590,2850 61,1900 648 482,2800 7,7% -22,4%
+9 28 26,4900 732 696,1950 61,2850 767 558,8350 4,5% -24,6%
+9 28 26,4550 701 693,6900 61,2950 814 565,2350 13,9% -22,7%
+11 28 26,4250 659 649,6550 61,1850 797 539,9100 17,3% -20,3%
+8 29 27,2950 597 541,7650 47,1750 613 454,3500 2,6% -19,2%
+9 29 27,6300 723 641,4150 47,2800 907 523,7300 20,3% -22,5%
+9 29 27,5250 750 652,6300 47,0350 719 538,5300 -4,2% -21,2%
+11 29 28,0350 673 605,9550 47,3250 663 499,4850 -1,4% -21,3%
+8 35 32,5450 1.894 798,6850 72,7300 - - - -
+9 35 32,1750 1.772 895,3400 72,7750 - - - -
+9 35 31,9550 1.680 875,1150 72,6750 - - - -
+11 35 31,9500 1.983 824,2750 72,9100 - - - -
+73
+Tabela 18: Dados reais – tempo de execuc¸a˜o para pesquisa em DNA — k = 100
+Arranjo de Sufixos (seg) A´rvore de Sufixos (seg) %
+M (KB) N (MB) PP CPU Total Total CPU PP CPU Total Total CPU Total CPU
+8 21 19,6600 913 912,5000 45,2250 717 716,7350 -27,3% -27,3%
+9 21 19,6300 1.008 1.008,0200 44,9550 782 782,0000 -28,9% -28,9%
+9 21 19,6450 1.007 1.007,1350 45,0800 778 778,0500 -29,4% -29,4%
+11 21 19,6300 960 960,3950 45,0050 750 750,1250 -28,0% -28,0%
+8 23 21,2800 991 991,1750 49,0400 826 776,9900 -19,9% -27,6%
+9 23 21,1850 1.103 1.102,2950 49,2050 913 852,5700 -20,8% -29,3%
+9 23 21,2000 1.104 1.104,0250 49,1900 905 853,3050 -22,0% -29,4%
+11 23 21,3900 1.068 1.068,0450 49,1450 876 825,0950 -21,9% -29,4%
+8 25 23,1100 1.075 1.074,7000 52,7550 1.018 839,6100 -5,6% -28,0%
+9 25 23,0750 1.201 1.201,3150 52,7200 1.082 922,3450 -11,1% -30,2%
+9 25 23,0500 1.201 1.200,2350 52,7400 1.097 920,8450 -9,5% -30,3%
+11 25 23,2900 1.134 1.134,1700 52,9200 1.068 891,3500 -6,2% -27,2%
+8 28 26,4150 1.275 1.261,4500 61,3100 1.209 978,6850 -5,4% -28,9%
+9 28 26,4800 1.415 1.398,1900 61,2600 1.299 1.073,7400 -9,0% -30,2%
+9 28 26,3900 1.398 1.379,8300 61,2850 1.262 1.057,6400 -10,7% -30,5%
+11 28 26,4150 1.316 1.310,7350 61,2300 1.277 1.031,5550 -3,1% -27,1%
+8 29 27,3050 1.185 1.119,4400 47,2400 1.446 887,8850 18,1% -26,1%
+9 29 27,5500 1.404 1.260,3400 47,0800 1.199 988,0650 -17,0% -27,6%
+9 29 27,5450 1.319 1.256,0500 47,2800 1.325 988,6050 0,4% -27,1%
+11 29 28,0600 1.272 1.201,1700 47,2200 1.241 952,5350 -2,5% -26,1%
+8 35 32,6500 2.512 1.588,9400 72,8300 - - - -
+9 35 31,9050 2.516 1.691,7050 73,1050 - - - -
+9 35 31,8950 2.696 1.705,4500 72,7450 - - - -
+11 35 31,9300 2.568 1.629,1200 72,7450 - - - -
+Figura 23: Gra´fico de tempo de processador para pesquisa em DNA – k = 50
+74
+Figura 24: Gra´fico de tempo de processador para pesquisa em DNA – k = 100
+Figura 25: Gra´fico de tempo de execuc¸a˜o para pesquisa em DNA – k = 50
+75
+Figura 26: Gra´fico de tempo de execuc¸a˜o para pesquisa em DNA – k = 100
+em DNA a economia me´dia de espac¸o foi de 27%.
+Com respeito ao tempo de execuc¸a˜o, ao eliminarmos a tabela para manter a in-
+formac¸a˜o de construc¸a˜o dos alinhamentos (mantendo somente as posic¸o˜es iniciais e finais)
+ambas as verso˜es do algoritmo se comportaram melhor na presenc¸a da memo´ria virtual.
+Ja´ comentamos na sec¸a˜o 5.2.2 que a fase de iterac¸a˜o baseada em a´rvore de sufixos e´ mais
+ra´pida. Essa diferenc¸a fica mais expressiva na medida em que aumentamos k, como po-
+demos ver nas coluna que descrevem o tempo de processador utilizado (CPU). Apesar
+disso, quando a versa˜o baseada em a´rvore de sufixos comec¸a a usar a memo´ria virtual a
+diferenc¸a de tempo real de execuc¸a˜o passa a ser menor que a diferenc¸a do tempo de pro-
+cessador. Quando ambas as implementac¸o˜es esta˜o usando memo´ria virtual, as diferenc¸as
+sa˜o mı´nimas e em va´rios casos a implementac¸a˜o baseada em arranjos de sufixos foi mais
+ra´pida.
+5.2.4 Avaliac¸a˜o dos resultados
+A partir dos experimentos relatados nas sec¸o˜es 5.2.2 e 5.2.3 podemos fazer algumas
+observac¸o˜es comparando o algoritmo de Landau e Vishkin original e o algoritmo modifi-
+cado.
+• A fase de iterac¸a˜o do algoritmo original e´ mais ra´pida que a do algoritmo modificado.
+76
+• O pre´-processamento do algoritmo modificado e´ mais ra´pido que o do original.
+• Para alfabetos grandes, a diferenc¸a no tempo de pre´-processamento e´ ainda maior,
+embora a economia de espac¸o seja reduzida.
+• O algoritmo modificado usa menos espac¸o que o algoritmo original. Em especial, ao
+usarmos a versa˜o com espac¸o linear, a diferenc¸a e´ ma´xima.
+Em todos os casos o algoritmo modificado usou menos espac¸o que o algoritmo ori-
+ginal, e pudemos apresentar dados reais que puderam ser processados com o algoritmo
+modificado que na˜o puderam ser processados com o algoritmo original no ambiente com-
+putacional utilizado para os experimentos.
+Em geral, se k for grande e toda a informac¸a˜o usada pelo algoritmo couber na memo´ria
+principal do computador, a versa˜o original do algoritmo tera´ desempenho melhor que
+a versa˜o modificada. Em contrapartida, quando o uso de espac¸o passar do limite da
+memo´ria principal do computador e comec¸ar a fazer uso de memo´ria virtual, a vantagem
+de processamento do algoritmo original tende a diminuir, ate´ efetivamente desaparecer
+quando houver palavras que na˜o podem ser processadas pelo algoritmo original e que
+puderem ser processadas pelo algoritmo modificado.
+77
+6 Conclusa˜o e caminhos futuros
+Estudamos o algoritmo de Landau e Vishkin e identificamos uma oportunidade de
+melhorar o seu uso de espac¸o ao substituir as a´rvores de sufixos utilizadas no algoritmo
+original por arranjos de sufixos, que sa˜o estruturas de dados mais compactas. Para isso
+foi necessa´rio um estudo que nos permitiu chegar a um ca´lculo em tempo constante do
+menor valor em um intervalo de um arranjo (tambe´m conhecido como RMQ — range
+minimum query), e verificar que esse ca´lculo seria suficiente para que a nossa proposta
+fosse via´vel.
+Desenvolvemos nossa proposta e apresentamos neste trabalho um algoritmo para o
+problema de pesquisa aproximada de padro˜es em palavras baseado no algoritmo de Landau
+e Vishkin(4) de complexidades θ(kn) para execuc¸a˜o e θ(kn) ou θ(n) para uso de espac¸o.
+O algoritmo de Landau e Vishkin usa uma consulta em tempo constante do LCA de pares
+de folhas de uma a´rvore de sufixos para calcular saltos em tempo constante ao longo das
+diagonais da tabela de programac¸a˜o dinaˆmica.
+Em primeiro lugar verificamos que a informac¸a˜o essencial para esses saltos e´ o com-
+primento do maior prefixo comum de um sufixo do texto e um sufixo do padra˜o. Seguindo
+as ide´ias expostas por Abouelhoda, Kurtz e Ohlebusch(25), pudemos verificar que esse
+comprimento seria igual ao valor mı´nimo em um intervalo do arranjo lcp constru´ıdo a
+partir do arranjo de sufixos. A chave para realizarmos esse ca´lculo em tempo constante
+foram as a´rvores cartesianas (26), apo´s serem processadas para responder consultas de
+LCA em tempo constante.
+O nosso objetivo foi diminuir o uso de espac¸o do algoritmo de Landau e Vishkin.
+Apesar de aumentarmos a quantidade de passos na fase de pre´-processamento, e introdu-
+zirmos uma quantidade maior de estruturas de dados, verificamos que a versa˜o modificada
+do algoritmo usava menos espac¸o que a original, mantendo a complexidade linear para a
+fase de pre´-processamento e θ(kn) para a fase de iterac¸a˜o.
+Em (5) apresentamos uma previsa˜o teo´rica de economia de espac¸o da ordem de 4n
+78
+bytes — que neste trabalho modificamos para 12n bytes — sobre uma implementac¸a˜o
+de a´rvores de sufixos que utilizasse 12n bytes. Na pra´tica essa medida na˜o e´ exata por-
+que o uso exato de espac¸o de uma a´rvore de sufixos depende do alfabeto utilizado e da
+sua estrutura (frequ¨eˆncia de cada caractere, quantidade e tamanho de repetic¸o˜es). Nos
+experimentos realizados, o uso de espac¸o da a´rvore de sufixos ficou entre 10n e 19N , de
+acordo com o alfabeto utilizado, e a economia me´dia de espac¸o no pre´-processamento
+variou de 8n a 35n (para caracteres ASCII que podem ser impressos e alfabeto bina´rio,
+respectivamente).
+Fizemos uma avaliac¸a˜o experimental com dados gerados aleato´riamente para va´rios
+tamanhos e alfabetos e para dados reais, dispon´ıveis publicamente e retirados dos projetos
+NCBI Genbank, Projeto Gutenberg e Corpus de Canterbury.
+A avaliac¸a˜o experimental foi satisfato´ria, pois comprovou o ganho de espac¸o esperado.
+O uso de alfabetos maiores diminui o espac¸o utilizado pela a´rvore de sufixos do algoritmo
+original e diminui a economia obtida, ao passo que alfabetos pequenos (como o alfabeto
+bina´rio e DNA) aumentam o uso de espac¸o da a´rvore de sufixos e fazem com que a
+economia de espac¸o do algoritmo modificado seja mais expressiva.
+Em especial para alfabetos de 4 s´ımbolos (sequ¨eˆncias de DNA) o ganho foi em me´dia
+27% no ca´lculo com espac¸o linear para dados reais, e em me´dia 20,9% para palavras
+aleato´rias no algoritmo com espac¸o θ(kn) quando k = 20. A economia me´dia para alfa-
+betos de tamanho 4 foi de 24n bytes. Ale´m disso o algoritmo original na˜o foi capaz de
+processar uma sequ¨eˆncia baseada no cromossomo 22 do H. sapiens porque precisou de
+mais espac¸o que a memo´ria virtual do computador utilizado foi capaz de prover, enquanto
+a mesma sequ¨eˆncia poˆde ser processada pelo algoritmo modificado.
+Quanto ao tempo de execuc¸a˜o, o algoritmo modificado e´ mais lento que o original na
+fase de iterac¸a˜o e mais ra´pido na fase de pre´-processamento. Isso faz com que o algoritmo
+modificado seja competitivo principalmente quando k e´ pequeno e |Σ| e´ grande. Nos
+demais casos ainda assim a diferenc¸a de uso do processador foi de 22% e 28% para k = 50
+e k = 100 no experimento com sequ¨eˆncias de DNA. Apesar disso a diferenc¸a do tempo
+real de execuc¸a˜o diminuiu na medida em que o algoritmo original usava mais espac¸o e
+comec¸ou a demandar memo´ria virtual do computador utilizado.
+Do ponto de vista teo´rico, entendemos que o estudo desse algoritmo e a sua imple-
+mentac¸a˜o sa˜o de grande utilidade para dominar as ferramentas complexas que ele utiliza,
+como o processamento de a´rvores para consultas de LCA em tempo constante. Ale´m
+disso, ao implementar uma te´cnica nova para alguns dos componentes utilizados por esse
+79
+algoritmo foi poss´ıvel testar essa te´cnica e comparar com a te´cnica original, e entender as
+vantagens e desvantagens que cada te´cnica apresenta ao ser utilizada num problema real.
+Entendemos que a maior contribuic¸a˜o deste trabalho e´ justamente a implementac¸a˜o e
+avaliac¸a˜o da te´cnica para ca´lculo do LCE de dois sufixos de uma palavra usando arranjos
+de sufixos ao inve´s de a´rvores de sufixos, e uma ferramenta para avaliar empiricamente
+outras te´cnicas para o ca´lculo do LCE de dois sufixos de uma palavra que possam vir a
+serem desenvolvidos.
+Recentemente foi publicado na confereˆncia Combinatorial Pattern Matching 2006 um
+artigo de Fischer e Heun(36) que descreve um algoritmo para calcular o LCE de dois
+sufixos de uma palavra em tempo constante, apo´s pre´-processamento linear que na˜o ne-
+cessita da construc¸a˜o de uma a´rvore cartesiana e do ca´lculo de LCA. O primeiro trabalho
+futuro que enxergamos seria atualizar a nossa versa˜o do algoritmo de Landau e Vishkin
+para utilizar essa te´cnica e comparar o uso de espac¸o e o tempo de execuc¸a˜o com a versa˜o
+original e com a que desenvolvemos.
+Outro caminho futuro que visualizamos seria tentar adaptar o algoritmo de Landau
+e Vishkin para a utilizac¸a˜o em alinhamento de sequ¨eˆncias biolo´gicas, transformando-o
+num algoritmo de maximizac¸a˜o exato baseado em similaridade, que utilize matrizes de
+pontuac¸a˜o como e´ poss´ıvel fazer com os algoritmos FASTA, BLAST e de programac¸a˜o
+dinaˆmica.
+Se pudermos estabeler a aplicabilidade do algoritmo de Landau e Vishkin para dados
+biolo´gicos, a sua utilizac¸a˜o de forma paralela seria uma consequ¨eˆncia imediata. O ano de
+2006 foi marcado pela proliferac¸a˜o de processadores com mu´ltiplos nu´cleos (multi-core)
+dispon´ıveis ja´ em prec¸os acess´ıveis para computadores pessoais de mesas e porta´teis. Ao
+quebrar o texto sendo pesquisado em palavras com alguma sobreposic¸a˜o e´ poss´ıvel realizar
+o pre´-processamento e a iterac¸a˜o de cada uma dessas partes em paralelo, e a comunicac¸a˜o
+entre cada uma dessas execuc¸o˜es seria mı´nima, o que resultaria em um speed-up expressivo.
+No caso distribu´ıdo, a memo´ria adicional presente em cada no´ do sistema seria melhor
+aproveitada pelo nosso algoritmo, permitindo aumentar o tamanho da massa de dados
+processada por cada componente do sistema. Uma aplicac¸a˜o poss´ıvel para isso seria a
+pesquisa de uma sequ¨eˆncia em bases de dados de prote´ınas como o Swissprot.
+80
+Refereˆncias
+1 NEEDLEMAN, S. B.; WUNSCH, C. D. A general method applicable to the search
+for similarities in the amino acid sequence of two proteins. J Mol Biol, v. 48, n. 3, p.
+443–453, March 1970. ISSN 0022-2836.
+2 SMITH, T. F.; WATERMAN, M. S. Identification of common molecular subsequences.
+J Mol Biol, v. 147, n. 1, p. 195–197, March 1981. ISSN 0022-2836.
+3 HIRSCHBERG, D. A linear space algorithm for computing the maximal common
+subsequences. Communications of the ACM, v. 18, p. 341–343, 1975.
+4 LANDAU, G.; VISHKIN, U. Introducing efficient parallelism into approximate string
+matching and a new serial algorithm. In: STOC ’86: Proceedings of the eighteenth
+annual ACM symposium on Theory of computing. New York, NY, USA: ACM Press,
+1986. p. 220–230. ISBN 0-89791-193-8.
+5 MIRANDA, R. de C.; AYALA-RINCO´N, M. A Modification of the Landau-Vishkin
+Algorithm Computing Longest Common Extensions via Suffix Arrays (resumo estendido
+– publicada como artigo completo no XXXI CLEI). In: Brazilian Symposium on
+Bioinformatics. Sa˜o Leopoldo, RS, Brasil: Springer Verlag, 2005. (Lecture Notes in
+Bioinformatics, v. 3594), p. 210–213.
+6 KNUTH, D. E. The art of computer programming, volume 1 (3rd ed.): fundamental
+algorithms. Redwood City, CA, USA: Addison Wesley Longman Publishing Co., Inc.,
+1997. ISBN 0-201-89683-4.
+7 DURBIN, R. et al. Biological Sequence Analysis. Cambridge, UK: Cambridge
+University Press, 1998.
+8 PEVZNER, P. A. Computational Molecular Biology: An Algorithmic Approach.
+Cambridge, MA, USA: The MIT Press, 2000. ISBN 0262161974.
+9 GUSFIELD, D. Algorithms on Strings, Trees and Sequences: Computer Science and
+Computational Biology. New York, NY, USA: Cambridge University Press, 1997.
+10 WEINER, P. Linear pattern matching algorithm. In: 14th Annual Symposium on
+Switching and Automata Theory. [S.l.: s.n.], 1973. p. 1–11.
+11 MCCREIGHT, E. M. A Space-Economical Suffix Tree Construction Algorithm.
+Journal of the Association for Computing Machinery, v. 23, n. 2, p. 262–272, abr. 1976.
+12 UKKONEN, E. On-line Construction of Suffix-Trees. Algorithmica, v. 14, p. 249–260,
+1995.
+81
+13 KURTZ, S. Reducing the space requirement of suffix trees. Softw., Pract. Exper.,
+v. 29, n. 13, p. 1149–1171, 1999.
+14 KURTZ, S.; GIEGERICH, R. From Ukkonen to McCreight and Weiner: A unifying
+view of linear-time suffix tree construction. Algorithmica, p. 331–353, 1997.
+15 MUMMER Home Page. Dispon´ıvel em: <http://mummer.sourceforge.net/>. Acesso
+em: 11/2006.
+16 KURTZ, S. et al. Reputer: The manifold applications of repeat analysis on a genomic
+scale. Nucleic Acids Research, v. 29, n. 22, p. 4633–4642, 2001.
+17 SEDGEWICK, R. Algorithms in Java, 3rd Edition, parts 1–4. USA: Addison-Wesley,
+2003.
+18 MANBER, U.; MYERS, G. Suffix arrays: A new method for on-line string searches.
+[S.l.], 1989.
+19 KO, P.; ALURU, S. Space-Efficient Linear Time Construction of Suffix Arrays.
+Journal of Discrete Algorithms, v. 3, n. 2-4, p. 143–156, 2005.
+20 Ka¨RKKa¨INEN, J.; SANDERS, P. Simpler linear work suffix array construction.
+In: Int. Colloquium on Automata, Languages and Programming. [S.l.]: Springer Verlag,
+2003. (Lecture Notes in Computer Science, v. 2719), p. 943–955.
+21 KIM, D. K. et al. Linear-time construction of suffix arrays. In: 14th Annual
+Symposium on Combinatorial Pattern Matching. [S.l.]: Springer Verlag, 2003. (Lecture
+Notes in Computer Science, v. 2676), p. 186–199.
+22 MANZINI, G.; FERRAGINA, P. Engineering a lightweight suffix array construction
+algorithm. Algorithmica, v. 23, n. 40, p. 33–50, 2004.
+23 FARACH, M. Optimal suffix tree construction with large alphabets. In: . [S.l.: s.n.],
+1997. p. 137–143.
+24 KASAI, T. et al. Linear-Time Longest-Common-Prefix Computation in Suffix Arrays
+and Its Applications. In: 12th Annual Symposium on Combinatorial Pattern Matching.
+[S.l.]: Springer Verlag, 2001. (Lecture Notes in Computer Science, v. 2089), p. 181–192.
+25 ABOUELHODA, M.; KURTZ, S.; OHLEBUSCH, E. The enhanced suffix array
+and its applications to genome analysis. In: Workshop on Algorithms in Bioinformatics.
+[S.l.]: Springer Verlag, 2002. (Lecture Notes in Computer Science, v. 2452).
+26 GABOW, H. N.; BENTLEY, J. L.; TARJAN, R. E. Scaling and related techniques
+for geometry problems. In: 16th ACM STOC. [S.l.: s.n.], 1984. p. 135–143.
+27 BENDER, M.; FARACH-COLTON, M. The LCA Problem Revisited. In: LATIN
+2000. London, UK: Springer Verlag, 2000. (Lecture Notes in Computer Science, v. 1776),
+p. 88–94.
+28 PROJECT Gutenberg. Dispon´ıvel em: <http://www.gutenberg.org/>. Acesso em:
+11/2006.
+82
+29 NCBI Genbank. Dispon´ıvel em: <http://ncbi.nlm.nih.gov/Genbank/index.html>.
+Acesso em: 11/2006.
+30 CANTERBURY Corpus. Dispon´ıvel em: <http://corpus.canterbury.ac.nz/>.
+Acesso em: 11/2006.
+31 KURTZ, K. et al. Versatile and open software for comparing large genomes. Genome
+Biology, v. 5, p. R12, 2004.
+32 PUGLISI, S. J.; SMYTH, W. F.; TURPIN, A. The Performance of Linear
+Time Suffix Sorting Algorithms. In: DCC ’05: Proceedings of the Data Compression
+Conference. Washington, DC, USA: IEEE Computer Society, 2005. p. 358–367.
+33 BENTLEY, J.; SEDGEWICK, R. Fast Algorithms for Sorting and Searching Strings.
+In: SODA ’97: Proceedings of the eighth annual ACM-SIAM symposium on Discrete
+algorithms. Philadelphia, PA, USA: Society for Industrial and Applied Mathematics,
+1997. p. 360–369.
+34 FERRAGINA, P.; GROSSI, R. The string b-tree: A new data structure for string
+search in external memory and its applications. Journal of the ACM, v. 46, n. 2, p.
+236–280, 1999.
+35 BENTLEY, J.; MCILROY, M. D. Engineering a sort function. Software, Practice
+and Experience, v. 23, n. 11, p. 1249–1265, 1993.
+36 FISCHER, J.; HEUN, V. Theoretical and Practical Improvements on the RMQ-
+Problem, with Applications to LCA and LCE. In: Combinatorial Pattern Matching.
+[S.l.]: Springer Verlag, 2006. (Lecture Notes in Computer Science, v. 4009), p. 36–48.

@@ -1,0 +1,1474 @@
+ 
+ 
+ 
+ 
+Abstract— Xilinx Virtex FPGAs offer the possibility of dy-
+namic and partial run-time reconfiguration. If a system uses 
+this feature the designer has to take care, that no signal lines 
+cross the border to other reconfigurable regions. Traditional 
+solutions connecting modules on a dynamic and partial recon-
+figurable system use TBUF elements for connection and sepa-
+ration of the functional blocks. While automatically placing 
+and routing the design, the routing-tool sometimes uses signal 
+lines which cross the module border. The constraints given by 
+the designer are ignored. To solve this problem we use slices 
+instead of TBUF elements which leads to a benefit by using an 
+automatic modular design flow. This novel method for com-
+munication interfaces enables an exact separation of recon-
+figurable parts within a design. The possibility of integrating 
+logic-elements into the LUT-elements provides a fast and intel-
+ligent bus-system. This paper gives an overview of the used 
+technique and the complete system on a Xilinx XC2V3000 
+FPGA. 
+ 
+Index Terms— Dynamic partial reconfiguration, Virtex 
+I. INTRODUCTION 
+Xilinx Virtex FPGAs offer the possibility of dynamic 
+and partial run-time reconfiguration. New approaches use 
+this feature by outsourcing configuration data which makes 
+it possible to use FPGAs with smaller configuration mem-
+ory and consequently smaller chip size. Thus it is possible 
+to save costs and reduce power consumption because not 
+actually used modules of a complete system do not allocate 
+configuration memory and corresponding power consuming 
+hardware [1]. Nevertheless power dissipation during recon-
+figuration has to be considered [2]. [3] raise this issue with 
+the main focus on energy saving and basis for new design 
+methodology. The designer of a dynamic and partial recon-
+figurable system on an FPGA must be sure, that no signal 
+lines of a module cross the border to another functional 
+block. During reconfiguration such a signal line might 
+cause a malfunction or a short-circuit, which destroys the 
+FPGA. Because of this it is necessary to implement inter-
+faces which are used as fixed routing resources. These in-
+terfaces, called BUS Macros, are placed in the same posi-
+tion for each functional block. Connecting the modules with 
+signal lines on the same position grants the option, to sub-
+stitute a module by another. Traditional techniques using 
+TBUF elements as BUS Macro, are able to separate the 
+modules and provide a resource for automatic routing. Un-
+fortunately the autorouter of the Xilinx ISE design software 
+ignores the constraints which disallow the use of routing 
+resources across the border of a module area. This leads to a 
+very time consuming and difficult manual debugging which 
+is not acceptable. A more detailed schematic of the tradi-
+tional TBUF interface is shown in Figure 1. To send a sig-
+nal from left to right, for example the LE(0) input of the 
+Tristate gate is on enable level, while RE(0) switches the 
+second gate into Tristate mode. The signal of LI(0) is now 
+connected to the Output(0) line which connects the two 
+sides. In the opposite direction communication is possible 
+by changing the mode of the Tristate gates. For more in-
+formation about the design section 0 describes the target 
+hardware and gives an overview of the complete system. 
+The following section II describes the hardware and recon-
+figuration technique. In section III an implemented method 
+for code decompression is presented. Section IV and V pre-
+sent basic information about functionalities within the re-
+configurable system and afterwards, the necessity of bus-
+macros and their design and implementation is shown in 
+VII and VIII. For an overview about the architecture of the 
+here used FPGAs, section VI introduces the Xilinx Virtex-
+II devices. IX describes the state-of-the-art design flow for 
+reconfigurable systems followed chapter X, the system in-
+tegration. A novel high-adaptive architecture is presented in 
+XII. The paper is closed with the conclusions and future 
+work in section XIV. 
+LE(0)
+LI(0) LI(1) LI(2) LI(3) RI(0) RI(1) RI(2) RI(3)
+LE(1) LE(2) LE(3) RE(0) RE(1) RE(2) RE(3)
+Output(3)
+Output(2)
+Output(1)
+Output(0)
+Module left Module right
+ 
+Figure 1Tristate gates of CLB interface 
+II. TARGET HARDWARE AND RECONFIGURATION 
+TECHNIQUES 
+The method which is introduced in this paper was used 
+on a dynamic and partial reconfigurable system imple-
+mented on a Xilinx Virtex-II FPGA (XC2V3000). To get an 
+overview of the complete system, Figure 2 shows the sche-
+matic picture with all used components. As a controlling 
+element, the Xilinx MicroBlaze [11] Soft-Core controller 
+was used. The internal block-RAM elements of the FPGA 
+include the run-time system which controls the activities 
+Michael Huebner (IEEE Student Member), Juergen Becker (IEEE Senior Member) 
+ 
+ITIV, Universitaet Karlsruhe (TH), Germany 
+http://www.itiv.uni-karlsruhe.de/ 
+{huebner, beckert, becker}@itiv.uni-karlsruhe.de 
+Dynamic and Partial FPGA Self-Reconfiguration Using Real-Time 
+LUT-Based Network-On-Chip Adaptive Topologies for Xilinx FPGAs 
+ 
+JOURNAL INTEGRATED CIRCUITS AND SYSTEMS, VOL 1, NO. 4, DECEMBER 2006. 43
+ 
+ 
+ 
+inside the complete system. A detailed description of the 
+run-time system and the tasks of the MicroBlaze controller 
+can be found in [7]. Via an arbiter the controller is con-
+nected to the bus macro. The arbiter controls the dataflow 
+for sending or receiving messages to or from the modules. 
+The bus was designed for our test scenario for automotive 
+control functions but it also can easily be adapted to other 
+usage. To connect the modules to the FPGA bus system, an 
+interface module called BUS-COM Module was designed. 
+This module enables a unified connection to functional 
+modules of other applications. Designers only have to adapt 
+Bus-Macro
+Arbiter
+M
+odule 1
+Bus Com 1
+ID 1
+M
+odule 1
+M
+odule 2
+Bus Com 2
+ID 2
+M
+odule 2
+M
+odule 0
+Bus Com 0
+ID 0
+M
+odule 0
+M
+odule 3
+Bus Com 3
+ID 3
+M
+odule 3
+Run-time
+Module
+Controller 
+µController
+(MicroBlaze)
+Flash-
+memory
+Boot-
+CPLD
+I/O (e.g. CAN)
+ICAP
+Decompressor
+Unit (LZSS)
+ 
+Figure 2 Dynamic reconfigurable system 
+their implementations to the specifications. The BUS-COM 
+Module receives signals from the arbiter to connect data 
+and signal lines of the modules to the bus system. The BUS-
+COM module also contains the slot identification number 
+which allows to assign a unique address for each module. 
+This id number won’t be overwritten if reconfiguration oc-
+curs. The BUS-COM Module is used like a connector for 
+multi-purpose applications which are designed in the slot-
+modules. 
+The FPGA of the Virtex-II series grants the option to use 
+the internal configuration access port (ICAP) [4] which al-
+lows a self-reconfiguration without demand of external wir-
+ing. The ICAP interface provides nearly the same features 
+as the SelectMap interface for external usage. Figure 3 
+shows the schematic of the modules used for reconfigura-
+tion procedure. Partial bitstreams are stored in an external 
+flash memory. The run-time system sends the start address 
+and endadress to the decompressor module. Afterwards a 
+start command enables the decompressor to read the com-
+pressed bitstream data from the flash, to decompress it and 
+write it through the ICAP interface. While this process is 
+running, the controller is able to work on further tasks. A 
+signal from the decompressor reports the end of the con-
+figuration process. The complete system is connected via a 
+CAN interface to its environment. The interface of the de-
+compressor is designed in a way that it can easily be inte-
+grated into an FPGA based run-time system for partial re-
+configuration. The decompressor consists of three parts: A 
+controller, a RAM block and a module that changes the bit 
+width of the output data. A detailed description of this de-
+compressor system can be found in [5]. 
+If more communication channels are needed it is possi-
+ble to implement more CAN controllers or other interfaces 
+to the FPGA. A detailed overview of the system can be 
+found in [2]. 
+III. METHODS OF COMPRESSION AND 
+DECOMPRESSION 
+Most of the popular loss less data compression schemes 
+described in the literature can be either classified as statisti-
+cal encoding techniques such as Huffman codes [15] or 
+arithmetic codes or phrase substitution codes such as LZ77 
+[16], LZ78, LZSS [17] or LZW. 
+All of the methods listed above work on data words with  
+D e c o m p re s s o r
+F la s h
+C o n tro lle r
+(M ic ro B la z e )
+IC A P
+R e fo n fig u ra tio n
+s ys te m
+ 
+Figure 3 Modules for reconfiguration using ICAP interface 
+a fixed but freely selectable bit width. As the configuration 
+bit streams that are supposed to be compressed are organ-
+ized on a higher level into 32 bit words but on a lower lever 
+into 18 bit words it is mandatory to analyze how different 
+word widths of the applied algorithms affect the compres-
+sion ratio. It is impractical to use very long words as this 
+would result in very large and therefore resource consuming 
+coding tables in statistic codes and less reoccurrence of pat-
+terns which would lead to bad compression ratio of phrase 
+codes. Therefore 8 bit words are analyzed as they are a 
+fourth of a 32 bit word and 6 bit words are analyzed as they 
+a third of 18 bit words. 
+Within the scope of this IP-design, a suitable method for 
+compression and decompression of partial bitstreams for 
+run-time reconfiguration has to be found and the corre-
+sponding decompression unit should be implemented on an 
+FPGA. By the deployment as a module of a run-time system 
+for dynamically and partial reconfiguration which should be 
+able to transfer applications within a certain time slot to the 
+FPGA, the following quality criteria should be fulfilled 
+preferably good: 
+Rating:  The method should lead to a low compression 
+ratio (compressed data amount divided by uncompressed 
+data amount). 
+Timing: The method should be fast to produce only a 
+small overhead in comparison to the time for reconfigura-
+tion. 
+Area: The implemented decompressor should utilize 
+only a small amount of logic cells. 
+44 HUEBNER et al.: DYNAMIC AND PARTIAL FPGA SELF-RECONFIGURATION USING REAL-TIME
+ 
+ 
+ 
+Self-evident is that the method has to work without loss 
+of data. 
+The compressor is implemented as a C++-program run-
+ning in a 32bit MS-Windows environment. It should be eas-
+ily transferable to any at least 32 bit operating system. The 
+compressor uses a sliding buffer that stores the last 512 in-
+put words and is initialized with zeros. In every compres-
+sion step the compressor tries to find a maximum length 
+string match between the data that is in the sliding buffer 
+and the data words that have to be compressed. If this 
+match length exceeds a certain threshold a token according 
+to table III is generated. If the threshold condition is not met 
+the data is put out. The end of the data stream is denoted by 
+an End-of-Stream byte. In order to increase the processing 
+speed, the actual string matching process is done by using 
+an optimized tree structure [18]. 
+The decompressor is implemented as a VHDL module 
+and synthesized on a Xilinx Virtex XC2V3000 FPGA. The 
+interface of the decompressor is designed in such a fashion 
+that it can be easily integrated into an FPGA based run-time 
+system for partial reconfiguration. Particularly the decom-
+pressor was designed is a fashion, that its 8 bit output port 
+can directly be connected to the SelectMAP- or ICAP-
+interface. Inserted as a part of a run-time system for partial 
+dynamically reconfiguration of the FPGA, the decompres-
+sor is controlled by the run-time controller. The decom-
+pressed data were sent directly to the reconfiguration inter-
+face. Used with a Virtex E FPGA the SelectMAP interface 
+will be used. Using a FPGA from the Virtex-II series the 
+internal reconfiguration access port (ICAP) can be con-
+nected to the decompressor (see Figure 4). This enables an 
+internal self reconfiguration.  
+After implementation on FPGA we found the results for 
+timing characteristic which are shown in table I. The timing 
+results demonstrate that there will be no problems to pro-
+vide the data for reconfiguration at real-time. The recon-
+figuration time only depends on the speed of the reconfigu-
+ration interface and on the amount of data to be transferred. 
+SelectMap interface with its maximum speed of 66MHz can 
+be used without any timing problems. The consumption of 
+the FPGA configuration memory is shown in table II. 
+Figure 4 shows a schematic of the decompressor integrated 
+in a Virtex-II FGPA. The module occupies a very small 
+amount of the complete area on FPGA. Because of this it is 
+possible to extend existing systems without having area 
+problems. 
+TABLE I  
+TIMING CHARACTERISTICS 
+Min. period 13,278 ns 
+Max. clock frequency 75 MHz 
+TABLE II 
+UTILIZATION OF FPGA 
+Ressource Utilization Complete Ratio 
+CLB Slices 129 19200 0,67 % 
+Block RAM 1 160 0,63 % 
+ 
+Figure 4 Complete decompressor module 
+IV. BUS-COM MODULE 
+To provide the stand-alone functionality of the modules 
+on the bus, the BUS-COM module is necessary. The main 
+task of this module is to buffer input data, signalize the ar-
+biter the occurrence of new output data from the functional-
+modules and transmit the write enable signal from the arbi-
+ter. The BUS-COM module contains a module id input, 
+which is connected to pre-programmed flip-flops. These 
+flip-flops are not overwritten during the reconfiguration and 
+thereby the modules have a unique address. If a module is 
+addressed, the data word of the bus is wrapped and con-
+nected to the module’s input. This data is stored until the 
+module is addressed again. If the output data of a module 
+change, the BUS-COM module enables the request output. 
+The arbiter recognizes this request and enables the module 
+to send data via the bus by addressing it. Afterwards the re-
+quest signal is disabled. 
+Additionally, the BUS-COM module contains a com-
+mand decoder which allows a context save or load beside 
+the normal bus communication. For that purpose a demulti-
+plexer is switched to connect context in- or output signals to 
+the bus system. This feature is used to store or load neces-
+sary data of the modules before substituting them by recon-
+figuration, or reload data after successful configuration on 
+the slot. The commands for context load- or save are con-
+nected via special bus signals. 
+V. MULTIFUNCTIONAL ARBITER 
+The arbiter is responsible for controlling the incoming 
+bus. Outgoing module data is solely synchronized by a reg-
+ister. There are no control functions necessary to transmit 
+both normal module data and context data.  
+The main task of the arbiter is to execute the requests of 
+the modules in a reasonable sequence and to transmit the 
+received data to the run time system together with the mod-
+ule address. For that purpose the arbiter enables writing 
+permission to the bus for the module which has been re-
+questing. Hereupon the module data arrives two clock cy-
+cles later at the arbiter. The module address which has been 
+delayed for two clock cycles is now joined together with the 
+data word and transmitted to the run time system. If the run 
+JOURNAL INTEGRATED CIRCUITS AND SYSTEMS, VOL 1, NO. 4, DECEMBER 2006. 45
+ 
+ 
+ 
+time system detects the need for a reconfiguration it sends 
+an instruction word to the arbiter to interrupt the normal 
+routine. Then the arbiter inquires which modules are busy 
+by polling each one. By the time the state of each module is 
+available the arbiter sends a status word to the run time sys-
+tem. The run time system is now able to choose an idle 
+module for replacing it. Afterwards the arbiter returns to the 
+normal routine. In order to save the context of a module the 
+normal routine has to be interrupted as well. Thereupon the 
+context data is transmitted cohesively to the run time sys-
+tem. After finishing the context save procedure, the arbiter 
+returns to his normal task. 
+VI. ARCHITECTURE OF XILINX VIRTEX-II FPGAS 
+The SRAM based Xilinx FPGAs of the Virtex-II series, 
+consist of configurable components like logic blocks 
+(CLB), block RAM, hardware multiplier, I/O-elements and 
+switch matrixes for connecting routing resources. In com-
+parison of coarse grained reconfigurable architecture [13], 
+this fine grained architecture allows path-width down to one 
+bit. Changing the content of the SRAM means changes of 
+the architecture which represents the actual configuration 
+(function) of the hardware. Design tools like Xilinx Inte-
+grated System Environment (ISE) [9] enable to generate 
+programming data for example from a VHDL description 
+after synthesis, translation, mapping and place and route 
+process. Those programming data can be downloaded as 
+bitstream to the FPGA which is then configured. After con-
+figuration the designed architecture starts working immedi-
+ately. All configurable elements of a Virtex-II FPGA are 
+organized in columns. Figure 5 shows a schematic view of 
+several components of the FPGA. Xilinx Virtex-II FPGAs 
+allow reconfiguring parts of the configuration area while 
+run-time (dynamic and partial reconfiguration). This is done 
+by programming the respective cells of the SRAM while 
+other memory areas stay unaffected. Also the memory of 
+those FPGAs is organized in columns. Therefore writing is 
+only possible in complete columns. The smallest change-
+able unit with the width of one bit, a so called frame, con-
+tents therefore configuration information of a complete col-
+umn. The complete configuration information e.g. for one 
+CLB column consist 22 frames. This segmentation of re-
+sources within the FPGA leads to the architecture we de-
+scribe in the following sections. The transmission of recon-
+figuration data can be done by courtesy of a JTAG inter-
+face, an external parallel interface (SelectMap) or the inter-
+nal reconfiguration access port (ICAP). The first named 
+JTAG interface in comparison to SelectMap and ICAP is 
+bit-serial while the faster eight bit parallel interfaces are 
+used for fast reconfiguration. Specifically the ICAP inter-
+face is very interesting for dynamic and partial self-
+reconfiguration. This interface is accessible from the com-
+ponents within the FPGA. Instantiating it as a component in 
+VHDL enable the access to the SRAM for configuration. 
+That feature is used to transmit the partial reconfiguration 
+data in the reconfigurable hardware system which is de-
+scribed in the following section. 
+ 
+Figure 5 Column based organization of Virtex-II FPGA 
+VII. BASICS OF LUT-BASED BUS MACRO 
+For a faultless data communication it is necessary to im-
+plement a structure with fixed signal lines. Figure 6 shows 
+the schematic of an implementation of several modules 
+without any interfaces between the reconfigurable areas. 
+Signal lines may be open or even two output ports of a 
+module are connected together 
+M
+odul A
+M
+odul B
+M
+odul C
+M
+odul D
+Signal lines eventually open or connected to composit signal level
+M
+odul A
+M
+odul B
+M
+odul C
+M
+odul D
+M
+odul A
+M
+odul B
+M
+odul C
+M
+odul D
+ 
+Figure 6 Unconstrained module communication ports 
+This definitely causes a damage of the chip and therefore 
+communication elements with fixed connection points and 
+wiring is necessary. Figure 7 shows a system with general-
+ized communication interfaces. As mentioned now fixed 
+connection points for each module are established and 
+while designflow the router connect all signals on a defined 
+position. Generalizing those interfaces enables also the in-
+terchange of modules on their positions. Ultimately not only 
+the fixed connection points in a reconfigurable system are 
+important for an undisturbed data transfer. It is also neces-
+sary to fix the used physical signal lines in each reconfigur-
+able area. While reconfiguration other modules run in paral-
+lel and might communicate via the bus. A change of routing 
+can cause a glitch or even a loss of information while recon- 
+46 HUEBNER et al.: DYNAMIC AND PARTIAL FPGA SELF-RECONFIGURATION USING REAL-TIME
+ 
+ 
+ 
+Interface (Macro)
+M
+odule A
+M
+odule B
+M
+odule C
+M
+odule D
+Geneneralized routing points (for each module) enables the
+possibility of interchangeable module positions
+M
+odule A
+M
+odule B
+M
+odule C
+M
+odule D
+M
+odule A
+M
+odule B
+M
+odule C
+M
+odule D
+ 
+Figure 7 System with fixed communication interfaces 
+figuration. A variety of tests were realized to placing in se-
+cure the save and undisturbed data. The architecture which 
+makes this possible is to use bus-macros. Bus-macros are a 
+combination of communication interfaces and fixed signal 
+lines. Because of unsymmetry of the routing resources at 
+the positions with block-ram elements, we designed a bus 
+macro which connects all module slots on the reconfigura-
+tion area [19]. Using of a macro which is dedicated to only 
+one module, leads to routing and placing problems because 
+slots can be positioned and routed while containing block-
+ram elements. 
+Bus Com 0 Bus Com 1 Bus Com 2 Bus Com 3
+Arbiter
+ID 0 ID 1 ID 2 ID 3
+Bus-Macro
+ 
+Figure 8 Bus Macro overview 
+In this case the unsymmetry causes a failure while rout-
+ing. Figure 8 shows the schematic view to the macro with 
+the connection to the arbiter in the position completely on 
+the right. 
+Each macro is able to transport 8 bits of data unidirec-
+tional. If more than 8 bits are needed, another macro can be 
+placed above or below. To enable a bidirectional bus an in-
+put and output macro was designed. More information 
+about the input macros can be found in [19]. The disadvan-
+tages of using unidirectional bus macros and the need of an 
+input and output channel are minor, versus the benefit of 
+using an automatic designflow without a time consuming 
+debugging and the search for signal lines crossing module 
+borders. In our implementation an input bus with the width 
+of 32 bit and an output bus with 16 bit were used. The dif-
+ference of these buses in comparison to buses using TBUF 
+elements is that macro external pins are placed on slices. 
+Each macro uses 20 slices as resource. The utilization of 
+resources within a slot and the arbiter is 4 slices. The com-
+plete bus consists of 6 macros. This means that 24 slices per 
+module slot are occupied by the bus system. In [6] an ap-
+proach using a serial connection as communication path is 
+described. Investigations in using serial protocols for com-
+munication have been done and will be adapted to the exist-
+ing system. 
+VIII. OUTPUT COMMUNICATION MACRO 
+Similar to the input macro the output macro also uses 20 
+slices. However the look up tables are initialized to realize a 
+multiplexer (see Figure 9). This is necessary to grant the 
+option of writing to the bus system with more than one 
+module. The output macro has a height of one CLB row and 
+connects all modules. Also the output macro has a delay 
+time of 5.5 ns. This makes it possible to use the full clock 
+speed for the complete bus system. Figure 10 shows the 
+schematic of the implemented output bus macro. The slices 
+on the right are used to connect to the arbiter. If a module is 
+allowed to write data on the bus, the select signal switches 
+the multiplexer inputs to the module’s side. Now Predeces-
+sor modules are not able to use the bus. After the bus trans-
+fer of data the select signal switches the inputs to the prede-
+cessor module and the bus can now be used for other mod-
+ules. For programming the LUT, Xilinx FPGA editor has to 
+be used. In Figure 11 a schematic view to one slice of a 
+CLB within a Virtex-II FPGA is shown. To initialize the 
+LUT for multiplexer functionality the equation as shown in 
+the picture has to be included. 
+CLB
+Input 1
+Input 2
+Input 2  from
+ M
+odule
+Select
+Output 1
+Output 2
+Look-Up-Tables 
+initialized as 
+MultiplexerInput 1  from
+ M
+odule Sel
+4
+4
+4
+4
+4
+4
+From predecessor module To successor module  
+Figure 9 Usage of slices for output macro 
+to Arbiter
+8
+8888 8
+Module 0 Module 1 Module 2 Module 3
+s
+8
+s
+8
+s
+8
+s
+Connection from the respective modules
+ 
+Figure 10 Schematic of output macro 
+LUT programmed as multiplexer
+e.g. D=(A3 * A2) + (A4 * A2)  
+Figure 11 Schematic view to a LUT of a Slice with Xilinx FPGA-
+Editior 
+To increase the number of signal lines per CLB row, an 
+optimization of the existing macros was performed. Using 
+JOURNAL INTEGRATED CIRCUITS AND SYSTEMS, VOL 1, NO. 4, DECEMBER 2006. 47
+ 
+ 
+ 
+up to 4 CLB enables the transfer of up to 32 bits in one 
+CLB row. Figure 12 shows an macro with 32 Bit signal 
+lines for connecting modules. This novel approach in macro 
+design is required, if buses with a high number of signals 
+have to be connected to different IP-cores. If the traditional 
+approach is used, a high number of CLB rows are occupied 
+by macros to transfer all necessary signals. Eventually not 
+enough rows are available for establishing the 8 Bits mac-
+ros.  
+ 
+Figure 12 32 Bit macro for optimization of area effort 
+IX. STATE-OF-THE-ART DESIGN-FLOW FOR DYNAMIC 
+AND PARTIAL RECONFIGURABLE SYSTEMS 
+Current tools of the Xilinx design suite do not support 
+the development of dynamic and partial reconfigurable sys-
+tems from a high abstraction level. To include soft-core 
+processors, like Xilinx MicroBlaze, also increases the diffi-
+culties of system integration, since it is not possible to gen-
+erate a reconfigurable architecture for the Xilinx Virtex-II 
+FPGA in the Embedded Development Toolkit (EDK). The 
+difficulties in the design process are caused by the commu-
+nication interfaces, the so called bus-macros, which are the 
+basis for adaptive, run-time reconfigurable systems. Within 
+such a system the well established and in EDK integrated 
+On-Chip Peripheral Bus (OPB) from IBM is used to estab-
+lish the communication between the MicroBlaze controller 
+and its IP-cores on the reconfigurable chip area. In com-
+parison to the approach described in [7], we use a 32 bit 
+parallel bus-system to increase the performance. The tradi-
+tional development of a reconfigurable embedded system, 
+based on the MicroBlaze soft core processor, starts with the 
+graphical or textual composition of the system and its com-
+ponents (Figure 13). The OPB bus is used to connect the IP 
+cores to the controller. Local memory buses can be used to 
+provide the MicroBlaze with its own local BRAM. 
+After composing the system with its devices, the EDK 
+tool provides two design flows for generating the bitstream 
+for configuration. With Xflow the tools in ISE for hardware 
+synthesis, mapping and place and route processes are in-
+voked by EDK so that the user does not have to work with 
+the Integrated System Environment (ISE) when generating 
+the configuration bitstream. The second possibility is to use 
+the ISE designflow, where the VHDL description and the 
+netlists of the system are exported to the ISE design suite. 
+Then the user has the possibility to interact by adding cer-
+tain components in VHDL to the system. Figure 14 shows a 
+schematic of the designflow using EDK and ISE. With the 
+traditional design flow, communication primitives (bus-
+macros) were added manually to the separate reconfigurable 
+parts in the system in ISE. The connection of the micro-
+processor to the communication primitives was done by us-
+ing general purpose I/O IP-cores. The instantiation of the 
+additional parts was done in a time-consuming hand-crafted 
+procedure. Also the correct positions of the components 
+(including the macros) must be fixed by writing a user con-
+straints file within the ISE development environment. After  
+ 
+Figure 13 Graphical view to embedded system in Xilinx EDK 
+• Design of the Hardware structure 
+and Software Sources
+• Export of the Embedded Processor 
+Hardware Platform 
+(Netlist/ VHDL-Description)
+• Generation of Bitfile (without Program data)
+Constraints eg. I/O-Ports are set with UCF
+• Update of Bitstream with program data
+(Configuration of BRAM blocks)
+EDK
+System Design
+ISE
+Integrated Software 
+Environment
+ISE
+Bitfile
+Generation
+EDK
+System Design
+Download
+• Final Bitstream for downloading to FPGA
+ 
+Figure 14 Designflow with Xilinx EDK and ISE 
+the place and route process, the generated bitstream can be 
+imported to the EDK to include the compiled program data 
+in the internal block-ram elements of the FPGA. The devel-
+opment of a new system leads to a re-design process (syn-
+thesis, translation, mapping and place and route) of all parts 
+including the VHDL changing procedure with its special 
+instantiations of for example the communication primitives. 
+Therefore a new designflow without time-consuming hand-
+crafted realization is necessary. Using a standardized bus-
+system like the OPB leads to a seamless designflow for a 
+variety of systems in comparison to the described system in 
+[7] where a specialized system specific bus system was de-
+veloped which has optimized characteristics for the specific 
+automotive system. The usage of the OPB, with its numer-
+ous signal lines, leads to a problem with a high number of 
+bus macros. For the new design flow using the OPB, a new 
+kind of bus-macro (Figure 12) was developed which allows 
+connecting more than 8 bits in one row of the FPGAs re-
+48 HUEBNER et al.: DYNAMIC AND PARTIAL FPGA SELF-RECONFIGURATION USING REAL-TIME
+ 
+ 
+ 
+configurable area. These bus-macros are based on the pre-
+vious work described in [19]. In the following sections the 
+architecture and system integration is described. 
+X. SYSTEM INTEGRATION 
+By using the Xilinx design software ISE [9] and the tool 
+EDK (Embedded Development Kit) [10] the complete sys-
+tem was implemented on the FPGA. Figure 15 shows the 
+complete three slot based system placed on a Xilinx Virtex-
+II XC2V3000 FPGA. The modular designflow [12] was 
+used to generate the partitioned design. Modular design 
+flow allows the creation of dynamic reconfigurable systems. 
+Figure 15 shows the separation of the used modules in de-
+tail. For example one function on the left is implemented to 
+show the first slot of the system. On the bottom the bus sys-
+tem with its signal lines connecting all modules is visible. 
+In this system a width of 8 columns was used for the sepa-
+rated modules. Therefore a value of 2048 slices can be util-
+ized in  
+Bus
+Arbiter
+MicroBlaze
+ICAP-Module
+CAN-Connection
+ 
+Figure 15 Complete system after placement and routing 
+each module slot. For the BUS-COM Module and the logic 
+for the bus-macro only 74 slices are utilized within the slot. 
+For dynamic and partial reconfiguration the different 
+functions have to be separated from the complete configura-
+tion bitstream. These partial bitstream are then stored within 
+an external memory. In the presented system an external 
+Flash memory is used. For cutting out the partial bitstream 
+the Java based class collection JBits from Xilinx is used. 
+JBits [14] is an Application Program Interface (API) to the 
+Xilinx configuration bitstream. It is designed for dynami-
+cally modification of Virtex-II bitstreams. JBits contains 
+Java classes which allow having access to internal resources 
+by modifying parts of a partial or complete configuration 
+bitstream. Modification of bitstreams generated by Xilinx 
+design tools or bitstreams read back from a device is possi-
+ble. 
+Designers are able having access to resources (e.g. 
+CLBs, IOBs, Block RAM and PIPs) and may modify them 
+before writing the bitstream back to the FPGA. Because of 
+the fast runtime of JBits, changes can be done very fast and 
+maybe even on runtime. 
+As an example JBits can be used to extract partial con-
+figuration data from a complete bitstream (see Figure 16). 
+This can be done after the modular design flow to generate 
+partial configuration data. These data can be stored into ex-
+ternal memory and used for partial reconfiguration by read-
+ing out external Flash memory and sending the data to the 
+Internal Configuration Access Port (ICAP) or the Select-
+MAP™ interface. In the presented approach JBits is only 
+used to extract data from an existing bitstream without 
+modification of the data. 
+Bitstream from Xilinx
+ISE tool
+JBits
+(Manipulation
+Application)
+Target FPGA (Virtex-II)
+Import
+Export
+)
+ 
+Figure 16 Design flow using JBits 
+For dynamic and partial self-reconfiguration the Internal 
+Configuration Access Port (ICAP) is used. This port can be 
+accessed with an IP-core presented in [4] or with the new 
+decompressor core [5] which allows a simultaneously ex-
+pansion of data while configuring the FPGA. The usage of 
+this core enables to use smaller external memory devices 
+since the compression ratio is up to 50 percent. 
+XI. REAL-TIME APPLICATION 
+As described the bus can run at full clock speed of 66 
+Mhz. In our system it is possible to transfer 252 MByte/s 
+with the input bus and 125 MByte/s with the output bus. 
+The used applications configured in the slots need to save 
+maximal 20 words with counter states or actual states of in-
+ternal finite state machines. Thus for a reconfiguration 
+process the time of 20 clock cycles (303 ns) is required for 
+saving and loading the data. The time of about 606 ns is a 
+fixed value for every context load or save process. Certainly 
+additional time is needed for writing the configuration bit-
+stream to the ICAP interface. In our case the amount of 
+configuration data is about 118 Kb. With the speed capacity 
+of 66 Mbyte/s it is possible to reconfigure one slot in 1.8 
+ms. This leads to a maximum reconfiguration frequency of 
+about 555 Hz. Of course the time for reconfiguration de-
+pends of the chosen size of the slots. Timing measurements 
+with the CAN-Simulation programme CANOE [8] shows, 
+that response times shorter that 3 µs without reconfiguration 
+JOURNAL INTEGRATED CIRCUITS AND SYSTEMS, VOL 1, NO. 4, DECEMBER 2006. 49
+ 
+ 
+ 
+are possible. If a slot has to be reconfigured, the response 
+time is smaller than 10 ms. These results are sufficient for 
+the automotive application we used for testing. Also the to-
+pology we designed with this bus structure is ideal for the 
+real scenario of the test application. The bus topology and 
+the possibility to use the run-time system as a central for 
+managing the incoming and outgoing messages enables a 
+fast and efficient transfer of data. The usage of the pre-
+sented LUT-based communicaton macros enables a save 
+and reliable design of dynamic and partial reconfigurable 
+system since the autorouter can connect modules signal 
+lines to fixed and unique position. Another important bene-
+fit of this kind of macros is, that TBUF elements become 
+unnecessary. New FPGA series like e.g. Spartan-III, 
+doesn’t contain TBUF elements. Due to this, the presented 
+approach is also suitable and unavoidable by introducing 
+new Xilinx FPGA series for new run-time reconfigurable 
+systems. 
+XII. OPTIMIZED MACRO STRUCTURE FOR NETWORK-ON-
+CHIP APPLICATIONS 
+The target system and its reconfigurable network are re-
+alized on a partial dynamic reconfigurable FPGA. In order 
+to execute a big variety of user tasks, we defined that the 
+target system contains five FPGA areas in which a partial 
+dynamic reconfiguration of modules is possible. Figure 17 
+shows a schematic view of the complete system. The recon-
+figurable areas are described as modules 0 to 4. All these 
+modules can contain different user-defined functions run-
+ning in parallel. The modules must have a possibility for 
+external communication via the bus structure. An adverse 
+solution would be a direct I/O-pin-connection within the 
+module area, because the amount and position of these pin-
+connections would be fixed by the printed circuit board 
+which leads to less flexibility. This is why a network is es-
+sential for a flexible communication system. A reconfigur-
+able network additionally offers the possibility to adapt the 
+network resources to the different performances of the 
+modules containing user functions. The realized reconfigur-
+able network also supports inter-module communication. 
+By this means modules can interact. For instance one mod-
+ule could use another one to perform an FFT. The access to 
+the network is given by the “Master-Module”. A so called 
+“Module Communication Unit” (Mod Com) is used to con-
+nect the module to the network. Similar to the Mod Com 
+Unit the “Run-time Module Controller” is linked via a 
+“Controller Communication Unit” (Controller Com). In 
+contrast to the Controller Com the Mod Com is configured 
+into a module area (reconfigurable area) and therefore to-
+gether with the user-function a part of the partial reconfigu-
+ration bit stream. The network offers the possibility to dis-
+connect a slot completely from the bi-directional bus lines 
+during a dynamic reconfiguration. This protects the bus 
+lines from error signals. The hardware platform of the sys-
+tem is also the Xilinx Virtex-II FPGA XC2V3000. Xilinx 
+also offers a microprocessor IP-core called MicroBlaze. The 
+“Run-time Module Controller” applies this IP-Core. The 
+Run-time Module Controller manages the external commu-
+nication, passes the user tasks to the modules and receives 
+the results. If a task requires a module which is not actually 
+configured, the Module Controller can start the replacement 
+of an unused or idle configured module. For this reason the 
+Controller has the possibility to buffer tasks. Incoming mes-
+sages for the new module are stored internally and sent after 
+a successful reconfiguration of a module. The partial dy-
+namic reconfiguration is managed by the Module Controller 
+and executed by using the Decompressor- and ICAP-Unit 
+inside and Flash-memory and Boot-CPLD outside the 
+FPGA. Furthermore the Module Controller handles inter-
+rupts triggered by external events. For instance this inter-
+rupt routine gets a message of the ICAP-Decompressor 
+when the dynamic partial reconfiguration has finished. 
+Decompessor
+Run-time
+Module
+Controller
+Bus-Macro
+Master-
+Module
+Controller Com
+ICAP
+Flash-
+memory
+Boot-CPLD
+I/O
+M
+od
+ul
+e 
+0
+Mod
+Com
+M
+od
+ul
+e 
+1
+Mod
+Com
+Mod
+Com
+M
+od
+ul
+e 
+2
+Mod
+Com
+M
+od
+ul
+e 
+3
+Mod
+Com
+M
+od
+ul
+e 
+4
+M
+od
+ul
+e 
+0
+M
+od
+ul
+e 
+1
+M
+od
+ul
+e 
+2
+M
+od
+ul
+e 
+3
+M
+od
+ul
+e 
+4
+ 
+Figure 17 Structural scheme of the target system with five reconfigur-
+able modules 
+In this implementation the communication protocol is re-
+alized for five slots and four bus lines with the width of 1 
+bit. The Master-Module provides a five bit counter for each 
+bi-directional bus line. This is a special counter which di-
+vides the bus-access time into timeslots. The counters have 
+the same structure but don’t necessarily have the same state 
+simultaneously. Every slot is provided with the four 5 bit 
+counter signals via a macro. The duration of a counter-value 
+represents a time-slot. This means that 32 time-slots could 
+be used for one bus line. The bus-arbitration is based on 
+these time-slots. The Mod Com Units and the Controller 
+Communication Unit have fixed amounts of time-slots cor-
+responding to the counter values for access to one or more 
+bus lines within this counter period. The time-slots are allo-
+cated during configuration. This is always done in a way 
+that only one unit has access to a bus line at the same time. 
+The allocation can be changed by reconfiguration. So the 
+distribution of network-resources and the network structure 
+can be adapted to the required bus-performance of the mod-
+ules. The Mod Com Units as well as the Controller Com-
+munication Unit have always read-access to all bus lines 
+and listen to it. According to the communication protocol 
+this implementation of the Master-Module allows static and 
+dynamic time-slots. The developer could also implement a 
+Master-Module which executes only the static or the dy-
+namic part. Whereas the static time-slots have a steady du-
+ration the dynamic time-slots have a flexible one. It is up to 
+the developer to fix an appropriate length for the static and 
+the several dynamic data-packages. At first a counter runs 
+through its static part. This ensures the real-time ability of 
+the system because every Mod Com Unit which is con-
+50 HUEBNER et al.: DYNAMIC AND PARTIAL FPGA SELF-RECONFIGURATION USING REAL-TIME
+ 
+ 
+ 
+nected to the bus line is able to send in a static time-slot. 
+That way these modules have a guaranteed bus access time 
+to send data. The same is true for the Run-time Module 
+Controller. In this implementation the counter runs a dy-
+namic part after finishing the static one. During the dynamic 
+part the counter expects to receive an answer after sending 
+within a dynamic time-slot. Because of this the Master 
+Module is connected to all the bus lines and thus able to de-
+tect the end of transmission. If no connected unit answers 
+via the bus line, the belonging counter immediately incre-
+ments to the next dynamic time-slot. Receiving a request to 
+send the counter remains in the dynamic time-slot for a 
+given time. This goes on and on till the end of the dynamic 
+part and afterwards the static part starts again. 
+The dynamic part is subdivided in to four priority-levels 
+of time-slots. The amount of dynamic slots is specified dur-
+ing the development phase, for example five time-slots in 
+this implementation. A module with a high priority level 
+has the possibility to send more frequently than a module 
+with a lower level. Thus higher priority modules can take 
+away the bus access of a lower one during the dynamic 
+phase. The priority level of a Mod Com Unit rises after be-
+ing rejected in the dynamic part. At least after some runs of 
+the counter the low level module gets the chance to send its 
+dynamic data-package. Besides the normal bus structure the 
+reconfigurable network can be configured to different net-
+structures. A bus line can be disconnected from a module 
+by giving the belonging Mod Com Unit no time-slots. 
+Thereby a star connection of the reconfigurable network 
+can be realized. The order in which the modules access the 
+bus line only depends on the value of the time-slots they 
+own. Taking advantage of this fact the reconfigurable net-
+work can realize a virtual ring-connection. Virtual ring-
+structure means that the bi-directional bus line isn’t closed 
+to a ring, but the bus-access-behavior of the modules is like 
+the one in a ring connection. Also mixed structures of the 
+suggested connections are possible. By this means the de-
+veloper has the possibility to realize a reconfigurable net-
+work-structure which fits the requirements of the applica-
+tion. 
+The bus structure is designed as a macro to ensure the 
+fixed routing for all different functions within the modules. 
+After and while substituting a module, the bus communica-
+tion must not be disturbed. By keeping the routing and logic 
+resources in the same place for every module, bus commu-
+nication can run in parallel to a partial reconfiguration 
+phase. Figure 18 shows the interface between the Controller 
+Com Unit and the bus-macro. It is shown that the Controller 
+Com Unit has to enable a Tristate buffer to send the data 
+package via the bus. The Controller Com Unit disables 
+empty or dynamically reconfigured slots via the “Enable 
+Slot” lines. If there is a user-task which claims a module 
+which isn’t configured yet the Run-time Module Controller 
+handles this situation by initiating a partial reconfiguration. 
+First the Module Controller checks if a module is idle. This 
+is done by sending a busy request via the bi-directional bus 
+lines to the modules. The Modules send their status back via 
+the bi-directional bus line. If there is no idle module this 
+process is repeated after a short time. As soon as an inactive 
+module is found the Module Controller sends a context-
+save message to this module. By saving the state and data of 
+a module it can be reconfigured with these values in case it 
+is needed again. After this procedure, the module is discon-
+nected from the bi-directional bus lines. For that purpose 
+the Controller Com Unit sets the low-active Enable-Slot 
+signal too high. Now the Run-time Module Controller starts 
+the partial dynamic reconfiguration. The partial bit-file of 
+the 
+Controller Com
+C
+ou
+nt
+er
+C
+ou
+nt
+er
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+Master-
+Module
+Counter for Bus 0
+Counter for Bus 1
+Counter for Bus 2
+Counter for Bus 3
+E
+na
+bl
+e
+S
+lo
+t0
+En
+ab
+le
+Sl
+ot
+1
+En
+ab
+le
+Sl
+ot
+2
+En
+ab
+le
+Sl
+ot
+3
+Bus 0
+Bus 2
+Bus 3
+Bus 1
+Enable Slots
+Counters
+Bus-Macro
+5
+5
+5
+5
+ 
+Figure 18 Bus-Macro connected with Controller Com Unit and Mas-
+ter-Module 
+required module with the right slot is loaded from the 
+Flash-memory by giving commands to the Decompressor 
+Unit. When reconfiguration is finished, ICAP sends a signal 
+via the decompressor module to the Run-time Module Con-
+troller triggering an interrupt. Afterwards the module can be 
+loaded with old context data to enable the correct restart of 
+the user-function. During the initialization phase, the Mod 
+Com Unit gets the values of its timeslots. Figure 19 show 
+that every module slot gets all counter-signals and the input 
+of all bus-signals. Write-access to a bus line is only possible 
+with acknowledgement of the Controller Com Unit. This is 
+to avoid disturbance or collision of signals on the bi-
+directional bus lines. Such errors could occur during recon-
+figuration or be created by an unused slot. 
+Figure 19 shows the bus-interface of a module slot. 
+Clock-line and reset-line are left out in the figures to pre-
+serve the clearness. A configured module slot contains a 
+user-function and a Mod Com Unit. For every output signal 
+of the different bus lines the Mod Com Unit owns a “re-
+ceiver” subunit which detects data packages for the module 
+by the receiver address. This enables a selection of the mod-
+ule slots with a unique address. These subunits pass the se-
+rial data package and analyze what kind of data type is 
+transmitted (sender address, dynamic length or data) and 
+what kind of timeslot is used. Developers of a user function 
+use this input interface for connecting their application. In 
+detail, the Mod Com Unit provides the receiver and sender 
+address, the data-length and the data itself. The modular 
+structure of the subunits within the Mod Com Unit makes a 
+reuse possible and the adaptation to additional bi-directional 
+bus lines easier if more performance is necessary. The 
+modules are able to send data packages to other modules or 
+to the Run-time Module Controller. This is just a matter of 
+using the corresponding receiver address. To receive data 
+JOURNAL INTEGRATED CIRCUITS AND SYSTEMS, VOL 1, NO. 4, DECEMBER 2006. 51
+ 
+ 
+ 
+packages the Mod Com Unit uses a “receiver” subunit for 
+every bus line. These subunits are exactly like the one used 
+of the Module Com Unit. The delay time of the bus system 
+is below of 5.5ns. This enables to run the system with a  
+& &&&
+Bus 0
+Bus 1
+Bus 3
+Bus 2
+Enable Slot
+Counter for Bus 0
+Counter for Bus 1
+Counter for Bus 2
+Counter for Bus 3
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+Module Communication Unit
+C
+ou
+nt
+er
+Bus-Macro
+5
+5
+5
+5
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+O
+ut
+InE
+na
+bl
+e
+C
+ou
+nt
+er
+ 
+Figure 19 Bus-interface of a module-slot 
+frequency of 66Mhz. First tests show, that the system re-
+sponse time is faster than 300µs if an external message trig-
+gers a process within a module. Figure 20 shows the im-
+plemented structure on the FPGA. On the bottom the sym-
+metrical bus-macro can be seen. As an example one module 
+is implemented. 
+ 
+Figure 20 Implemented Bus Structure and Module M1 
+Figure 21 shows an example of 2 different topologies 
+which can be realized with this approach. For example a 
+ring topology is useful for a MPEG application where data 
+has to pass a cascade of filters. These filters could be con-
+figured as different modules on the FPGA. The star topol-
+ogy has an advantage by running an application with con-
+trollers, where the communication path is not fixed. The 
+number of the communicating wires is flexible and can be 
+changed to any number that is necessary for the imple-
+mented modules and it is limited by the hardware. Also it is 
+possible to mix different bus topologies in the same imple-
+mentation. The topology can change during runtime. This 
+could be interesting if a module needs a higher bandwidth 
+for a short time. In this case it is possible do a run-time ad-
+aptation of the bus system. The module which needs more 
+bandwidth gets the exclusive right on one wire to any time. 
+This represents a kind of star topology. 
+M
+odule 0
+M
+odule 1
+M
+odule 2
+M
+odule 3
+M
+odule 4
+I/O
+-M
+odule
+To Run-Time Module
+Controller
+0
+2
+1
+I/O
+Ring
+3 4
+I/O
+Star
+M
+odule 0
+M
+odule 1
+M
+odule 2
+M
+odule 3
+M
+odule 4
+I/O
+-M
+odule
+ 
+Figure 21 Example of adapted topologies 
+ 
+XIII. CONCLUSIONS AND FUTURE WORK 
+This paper shows a novel implementation of a recon-
+figurable system using slices as connecting resources in-
+stead of TBUF elements. Using this design method an 
+automatic design flow without manual debugging is possi-
+ble. The system is implemented on a rapid prototyping sys-
+tem and runs at full clock speed of 66 Mhz. The bus system 
+can easily be adapted to other demands e.g. higher in- or 
+output width. Using the universal BUS-COM modules 
+makes it possible to design easy connectable functions and 
+allows saving important data before functions are substi-
+tuted by others. Also data can be reloaded after reconfigur-
+ing a function in order to start for example with identical 
+counter states. The number of module slots can easily be 
+adapted to the required amount by changing the bus macro. 
+Flexibility was the main focus while designing this system. 
+Further work will be to design a tool which allows imple-
+menting this design methodology into the ISE design flow. 
+This grants the option for a fast design for a dynamic and 
+partial reconfigurable system. Further on the bus system can 
+be adapted to the demands of run-time in future. In the sys-
+tem with the three slot approach, the topology and the width 
+of the bus is adapted to the requirements of the system. This 
+feature of a network on chip can help to save energy be-
+cause it uses only necessary resources of the FPGA. A new 
+possibility of reconfiguring rectangular shaped areas for a 
+better utilization of the area will be developed on the basis 
+of this work. This grants the option to configure smaller 
+functions without wasting precious reconfiguration area. 
+The development of such systems is only possible using 
+LUT-based communication elements since dedicated con-
+nection points avoid the routing across the borders of a rec-
+tangular shaped reconfigurable area. Also new Xilinx 
+FPGA does not include TBUF elements. Due to this, build-
+ing up reconfigurable systems with e.g. Spartan-III FPGAs 
+needs the usage of LUT-based communication elements. 
+A flexible, adaptive macro based system was presented 
+in this paper. The advantage of using a flexible communica-
+tion protocol makes it possible to adjust the necessary per-
+formance to the current running applications. The facility of 
+inter-module communication permits the possibility of a 
+changeable network topology. The design of the bus system 
+as a static macro, allows to reconfigure modules partial and 
+dynamically. Thus a wide range for applications and the 
+52 HUEBNER et al.: DYNAMIC AND PARTIAL FPGA SELF-RECONFIGURATION USING REAL-TIME
+ 
+ 
+ 
+benefits using this technique are opened with this system. 
+The bus system is scalable and thus the total width of the 
+bus-lines can be adapted to a necessary performance. Actu-
+ally the system is in implementation phase and first results 
+show, that a performance of more than 66Mbits/s can be 
+reached with one bus line. The response time of the system 
+by connection via a CAN-interface is below of 300µs. More 
+detailed performance data and a completely implemented 
+system can be presented in the final version of this paper. 
+This structure will be used in the future for multimedia ap-
+plications but also for modules with control functions. The 
+possibility for energy saving with run-time optimisation of 
+the bus will also be a part for further investigations. 
+XIV. REFERENCES 
+[1] J. Becker, M. Huebner, M. Ullmann: “Power Estimation and Power 
+Measurement of Xilinx Virtex FPGAs: Trade-offs and Limitations”, 
+SBCCI03, Sao Paulo, Sep. 03 
+[2] J. Becker, M. Huebner, M. Ullmann: “Real-Time Dynamically Run-
+Time Reconfiguration for Power-/Cost-optimized Virtex FPGA Re-
+alizations”, VLSI03, Darmstadt, Sep. 03 
+[3] L. Benini, G. De Micheli: “Networks on Chip: A New Paradigm for 
+Systems on Chip Design”, Date 02, March 3~7, Paris France 
+[4] B. Blodget, S. McMillan: “A lightweight approach for embedded 
+reconfiguration of FPGAs”, Date03, Munich Germany 
+[5] M. Huebner, M. Ullmann, F. Weissel, J. Becker: “Real-time Configu-
+ration Code Decompression for Dynamic FPGA Self-
+Reconfiguration”, RAW04, Santa Fee 
+[6] J.C. Palma, A. Vieira de Melo, F. G. Moraes, N. Calazans, "Core 
+Communication Interface for FPGAs", SBCCI02, Porto Alegre 
+BRAZIL 
+[7] M. Ullmann, M. Huebner, B. Grimm, J. Becker: “An FPGA Run-
+Time System for Dynamical On-Demand Reconfiguration”, RAW04, 
+Santa Fee 
+[8] http://www.vector-cantech.com 
+[9] http://www.xilinx.com/ise/design_tools/ 
+[10] http://www.xilinx.com/ise/embedded/edk.htm 
+[11] http://www.xilinx.com/ipcenter/processor_central/microblaze/literatu
+re.htm 
+[12] XAPP290: “Two Flows for Partial Reconfiguration: Module Based or 
+Small Bit Manipulations”, Xilinx Application Note 
+[13] R. Hartenstein: “A Decade of Reconfigurable Computing: a Vision-
+ary Retrospective”, Proceedings of the Design,Automation and Test 
+in Europe Conference and Exhibition (DATE’01); Munich, Germany 
+[14] http://www.xilinx.com/products/software/jbits/ 
+[15] David A. Huffman, “A Method for the Construction of Minimum-
+Redundancy Codes” Proc. IRE, pp. 1098-1101, September 1952 
+[16] Ziv J., Lempel A., “A Universal Algorithm for Sequential Data Com-
+pression”, IEEE Transactions on Information Theory, Vol. 23, No. 3, 
+pp. 337-343. 
+[17] J. Storer, T. Szymanski “Data Compression via textual substitution,” 
+J. ACM, 29, pp. 928-951, 1982 
+[18] Mark Nelson: “Datenkomprimierung – Effiziente Algorithmen in C“; 
+Hannover: Verlag Heinz Heise, 1st edition, 1993 
+[19] M. Huebner, T.Becker, J. Becker: “Real-Time LUT-Based Network 
+Topologies for Dynamic and Partial FPGA Self-Reconfiguration”, 
+SBCCI04, Brasil 
+ 
+JOURNAL INTEGRATED CIRCUITS AND SYSTEMS, VOL 1, NO. 4, DECEMBER 2006. 53

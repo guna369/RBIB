@@ -1,0 +1,1034 @@
+Under consideration for publication in Math. Struct. in Comp. Science
+HOL-λσ: an intentional first-order expression
+of higher-order logic
+G I L L E S D O W E K1 and T H E R E S E H A R D I N2 and C L A U D E K I R C H N E R3
+1 INRIA-Rocquencourt, B.P. 105, 78153 Le Chesnay Cedex, France
+Gilles.Dowek@inria.fr, http://coq.inria.fr/~dowek
+2 LIP6 & INRIA, UPMC, 4 place Jussieu, 75252 Paris Cedex 05, France
+Therese.Hardin@lip6.fr, http://www-spi.lip6.fr/~hardin
+3 LORIA & INRIA, 615, rue du Jardin Botanique, 54600 Villers-le`s-Nancy, France
+Claude.Kirchner@loria.fr, http://www.loria.fr/~ckirchne
+Received October 1999
+We give a first-order presentation of higher-order logic based on explicit substitutions.
+This presentation is intentionally equivalent to the usual presentation of higher-order
+logic based on λ-calculus, i.e. a proposition can be proved without the extensionality
+axioms in one theory if and only if it can be in the other. We show that the Extended
+Narrowing and Resolution first-order proof-search method can be applied to this theory.
+We get this way a step by step simulation of higher-order resolution. Hence expressing
+higher-order logic as a first-order theory and applying a first-order proof search method
+is a relevant alternative to a direct implementation. In particular, the well studied
+improvements of proof search for first-order logic could be reused at no cost for
+higher-order automated deduction. Moreover as we stay in a first-order setting,
+extensions, such as equational higher-order resolution, may be easier to handle.
+Introduction
+Higher-order logic is a formalism that allows a natural expression of program specifica-
+tions and of mathematics. It is used in many theorem provers such as HOL, Isabelle,
+PVS, λ-Prolog, etc. In this paper, we are concerned with the automation of proof search
+in this logic.
+Higher-order logic can be expressed in many different ways using combinators, λ-
+calculus, etc. Some of these formulations, but not all, present higher-order logic as a
+first-order theory. Such a formulation allows to use standard first-order methods for
+proof search and it may allow to handle extensions more easily. There are several ways to
+encode higher-order logic as a first-order theory and several proof search methods for each
+encoding, which are more or less efficient. For instance, higher-order logic can be encoded
+as a first-order theory using combinators. The theory obtained this way is equivalent to
+the standard presentation using λ-calculus, but it is not intentionally equivalent to it:
+some proofs use the extensionality axioms with combinators, while they do not in the
+standard presentation. Moreover, the additional use of the extensionality axioms which
+G. Dowek, Th. Hardin and C. Kirchner 2
+express that two pointwise equivalent functions are equal and that two sets that have
+the same elements are equal, induces inefficiencies in proof search.
+In this paper, which is a revised and extended version of (Dowek et al., 1999) and builds
+upon (Dowek et al., 1995) and (Dowek et al., 1998), we give a new first-order presentation
+of higher-order logic called HOL-λσ. It uses the fact already noticed by several authors
+that explicit substitutions simplify algorithms and speed up implementations (Nadathur
+and Wilson, 1990; Magnusson, 1994; Dowek et al., 1995; Dowek et al., 1996; Mun˜oz,
+1997b; Nadathur and Wilson, 1998). Making at work the calculus of explicit substitutions
+defined and studied in (Abadi et al., 1991; Curien et al., 1996), we first define HOL-λσ
+and show that it is intentionally equivalent to the usual presentation of higher-order logic
+based on λ-calculus, i.e. the theories are still equivalent when we drop the extensionality
+axioms in both cases.
+We then show that proof-search in this theory can be mechanized with the Extended
+Narrowing and Resolution (ENAR) method introduced in (Dowek et al., 1998). The
+proof search method for higher-order logic obtained this way is as efficient as higher-
+order resolution and in fact simulates it step by step: proof search steps correspond and
+β-reduction steps correspond to λσ-reduction steps. It keeps however the simplicity of
+first-order frameworks and could easily be extended, for instance with equational axioms.
+At last, a rather surprising side effect of this presentation of higher-order logic is that
+it provides a clarification of the intricate skolemization rule of higher-order logic (Miller,
+1983; Miller, 1987).
+HOL-λσ and the ENAR proof search method rely upon a presentation of first-order
+logic called deduction modulo that allows to build-in a congruence identifying not only
+terms but also propositions. This leads to shorter and more direct proofs by identifying
+congruent propositions instead of requiring explicit equivalence proofs. Hence, we shall
+express HOL-λσ in deduction modulo. In order to remain self contained, we recall the
+principal ideas of deduction modulo in section 1. Then, we recall in section 2 the usual
+presentation of higher-order logic based on λ-calculus (HOL-λ) and in section 3 its first-
+order presentation based on combinators. Section 4 introduces HOL-λσ and establishes
+its main properties (termination, confluence, consistency and cut elimination). Section
+5 is dedicated to the equivalence theorem between HOL-λ and HOL-λσ (which rests
+upon cut elimination). In section 6 we show that the rather intricate Skolem theorem for
+higher-order logic can be deduced from the first-order one. Finally, section 7 presents the
+ENAR proof search method (whose completeness rests also upon cut elimination) and
+its application to HOL-λσ.
+1. Deduction modulo
+In this paper we shall use a presentation of first-order logic, called deduction modulo
+(Dowek et al., 1998), that allows to identify propositions modulo a congruence.
+In deduction modulo, the notions of language, term and proposition are that of many-
+sorted first-order logic. We consider theories formed with a set of axioms Γ and a con-
+gruence, denoted ≡, defined on propositions. The deduction rules take into account this
+HOL-λσ 3
+equivalence, for instance, the right rule of the conjunction is not given as usual:
+Γ ` A,∆ Γ ` B,∆
+Γ ` A ∧B,∆
+but it is formulated as:
+Γ ` A,∆ Γ ` B,∆
+if C ≡ A ∧BΓ ` C,∆
+and all the rules of sequent calculus are stated in a similar way as described in figure 1.
+When Γ is a finite set of axioms and ≡ a congruence, a proposition P is said to be
+provable in (Γ,≡) if the sequent Γ ` P is derivable modulo ≡. When Γ is infinite, a
+proposition P is said to be provable in (Γ,≡) if it is provable in (Γ′,≡), where Γ′ is a
+finite subset of Γ.
+For instance, in sequent calculus modulo the congruence defined by the rewrite system:
+0 + y −→ y
+S(x) + y −→ S(x+ y)
+0× y −→ 0
+S(x)× y −→ x× y + y
+we can prove that the number 4 is even.
+axiom4 = 4 ` 2× 2 = 4 (x, x = x, 4) ∀-l∀x x = x ` 2× 2 = 4 (y, 2× y = 4, 2) ∃-r∀x x = x ` ∃y 2× y = 4
+Substituting the variable y by the term 2 in the proposition 2 × y = 4, as indicated
+on the side of the rule, yields the proposition 2 × 2 = 4, that is congruent to 4 = 4.
+The transformation of one proposition into the other, that would require several proof
+steps in sequent calculus using the axioms of arithmetic, does not appear here. Since the
+congruence is decidable, this computation needs not to be recorded in the proof itself.
+Notice that we do not use the axioms of addition and multiplication explicitly in the
+proof. Indeed, these axioms are now redundant: as the terms 0 + y and y are congruent,
+the axiom ∀y 0 + y = y is congruent to the equality axiom ∀y y = y. Hence, it can be
+dropped. Using the terminology introduced by Plotkin, these axioms have been built-
+in (Plotkin, 1972; Andrews, 1971; Peterson and Stickel, 1981; Stickel, 1985; Jouannaud
+and Kirchner, 1986; Marche´, 1994; Viry, 1995; Viry, 1998).
+In the example above, the congruence is just the congruent closure of the relation
+induced on terms by the term rewriting system. In many situations, it is also natural to
+consider congruences defined directly at the proposition level. For instance, we may add
+to the previous system the rule of integral domains
+x× y = 0 −→ x = 0 ∨ y = 0
+that rewrites an atomic proposition to a disjunction. As far as we know, this property
+cannot be expressed by term rewriting rules. Deduction modulo can consider congruences
+G. Dowek, Th. Hardin and C. Kirchner 4
+P ` Qaxiom if P ≡ Q
+Γ, P ` ∆ Γ ` Q,∆
+Γ ` ∆ cut if P ≡ Q
+Γ, Q1, Q2 ` ∆
+Γ, P ` ∆ contr-l if P ≡ Q1 ≡ Q2
+Γ ` Q1, Q2,∆
+Γ ` P,∆ contr-r if P ≡ Q1 ≡ Q2
+Γ ` ∆
+Γ, P ` ∆weak-l
+Γ ` ∆
+Γ ` P,∆weak-r
+Γ ` P,∆ Γ, Q ` ∆
+Γ, R ` ∆ ⇒-l if R ≡ (P ⇒ Q)
+P,Γ ` Q,∆
+Γ ` R,∆ ⇒-r if R ≡ (P ⇒ Q)
+Γ, P,Q ` ∆
+Γ, R ` ∆ ∧-l if R ≡ (P ∧Q)
+Γ ` P,∆ Γ ` Q,∆
+Γ ` R,∆ ∧-r if R ≡ (P ∧Q)
+Γ, P ` ∆ Γ, Q ` ∆
+Γ, R ` ∆ ∨-l if R ≡ (P ∨Q)
+Γ ` P,Q,∆
+Γ ` R,∆ ∨-r if R ≡ (P ∨Q)
+Γ ` P,∆
+Γ, R ` ∆¬-l if R ≡ ¬P
+Γ, P ` ∆
+Γ ` R,∆¬-r if R ≡ ¬P
+Γ, P ` ∆⊥-l if P ≡ ⊥
+Γ, {t/x}P ` ∆
+Γ, Q ` ∆ (x, P, t) ∀-l if Q ≡ ∀x P
+Γ ` {y/x}P,∆
+Γ ` Q,∆ (x, P, y) ∀-r if Q ≡ ∀x P
+Γ, {y/x}P ` ∆
+Γ, Q ` ∆ (x, P, y) ∃-l if Q ≡ ∃x P
+Γ ` {t/x}P,∆
+Γ ` Q,∆ (x, P, t) ∃-r if Q ≡ ∃x P
+where the rules ∀-r and ∃-l assume that y 6∈ FV (Γ∆)
+Fig. 1. The sequent calculus modulo
+on propositions defined by rules rewriting terms to terms and atomic propositions to
+arbitrary ones. Rules with non-atomic left-hand sides — that are technically much more
+difficult to handle — are not tackled in this work.
+All congruences in this paper are defined by confluent rewrite systems. As these rewrite
+systems are defined on propositions and propositions contain binders, these rewrite sys-
+tems are in fact Combinatory Reduction Systems (Klop et al., 1993).
+Notice that deduction modulo is not a proper extension of first-order logic. It is proved
+in (Dowek et al., 1998) that for every congruence ≡, we can find a theory T such that
+Γ ` P is provable modulo ≡ if and only if T ,Γ ` P is provable in ordinary first-order
+logic. Of course, the provable propositions are the same, but the proofs are very different,
+indeed much shorter in deduction modulo.
+Proof search in deduction modulo can be handled by a method called Extended Nar-
+rowing and Resolution (ENAR) that extends the usual resolution method and that is
+described below.
+HOL-λσ 5
+2. HOL-λ
+We recall quickly the usual presentation of higher-order logic. Terms are those of a simply
+typed λ-calculus (Girard et al., 1989) with two base types ι and o and the following
+constants:
+— ⇒˙, ∧˙ and ∨˙ of type o→ o→ o,
+— ¬˙ of type o→ o,
+— ⊥˙ of type o,
+— for each type T constants, ∀˙T and ∃˙T of type (T → o)→ o.
+The notation with a dot for the constants let us distinguish them from the connectors
+and quantifiers of first-order logic. Terms of type o are called propositions.
+The unique βη-normal form of a term a is written a ↓. The deduction rules of HOL-λ
+are given in figure 2 where all propositions are supposed to be βη-normal.
+For instance, we can prove the sequent
+(∀˙ λP (⇒˙ (P a) (P b))), (R a a) ` (R b b)
+as follows.
+axiom(R a a) ` (R a a) axiom(R b b) ` (R b b) ⇒˙-l(⇒˙ (R a a) (R b b)), (R a a) ` (R b b) ∀˙-l(∀˙ λP (⇒˙ (P a) (P b))), (R a a) ` (R b b)
+where in the ∀˙-left rule, the term λP (⇒˙ (P a) (P b)) has been applied to the term
+λx (R x x).
+In an alternative presentation of HOL-λ, propositions are not normalized in the quan-
+tifier rules. Instead, such a presentation takes axioms stating that two βη-convertible
+terms are equal, see for instance (Church, 1940; Andrews, 1986). In this case, for the
+example above, applying the term λP (⇒˙ (P a) (P b)) to the term λx (R x x) we get
+(λP (⇒˙ (P a) (P b)) λx (R x x)) and we use the axioms to deduce (⇒˙ (R a a) (R b b)).
+The system HOL-λ is well-known to be consistent and to enjoy cut elimination (Girard,
+1970; Girard, 1972).
+In HOL-λ, equality needs not to be primitive. It can be defined as Leibniz’ equality
+i.e. λx λy ∀˙λp ((p x)⇒˙(p y)). In this case, the propositions
+∀˙ λf ∀˙ λg ∀˙ λx (f = g ⇒˙ (f x) = (g x))
+∀˙ λx ∀˙ λy ∀˙ λf (x = y ⇒˙ (f x) = (f y))
+are provable. But the proposition
+∀˙ λf ∀˙ λg (∀˙ λx ((f x) = (g x)) ⇒˙ λx (f x) = λx (g x))
+is not because substitutions avoid captures. Similarly, the propositions
+∀˙ λf ∀˙ λg ((∀˙ λx ((f x) = (g x))) ⇒˙ f = g)
+and
+∀˙ λx ∀˙ λy ((x⇔˙y) ⇒˙ x = y)
+G. Dowek, Th. Hardin and C. Kirchner 6
+P ` P axiom
+Γ, P ` ∆ Γ ` P,∆
+Γ ` ∆ cut
+Γ, P, P ` ∆
+Γ, P ` ∆ contr-l
+Γ ` P, P,∆
+Γ ` P,∆ contr-r
+Γ ` ∆
+Γ, P ` ∆weak-l
+Γ ` ∆
+Γ ` P,∆weak-r
+Γ ` P,∆ Γ, Q ` ∆
+Γ, (⇒˙ P Q) ` ∆ ⇒˙-l
+P,Γ ` Q,∆
+Γ ` (⇒˙ P Q),∆⇒˙-r
+Γ, P,Q ` ∆
+Γ, (∧˙ P Q) ` ∆ ∧˙-l
+Γ ` P,∆ Γ ` Q,∆
+Γ ` (∧˙ P Q),∆ ∧˙-r
+Γ, P ` ∆ Γ, Q ` ∆
+Γ, (∨˙ P Q) ` ∆ ∨˙-l
+Γ ` P,Q,∆
+Γ ` (∨˙ P Q),∆ ∨˙-r
+Γ ` P,∆
+Γ, (¬˙ P ) ` ∆ ¬˙-l
+Γ, P ` ∆
+Γ ` (¬˙ P ),∆ ¬˙-r
+Γ, ⊥˙ ` ∆ ⊥˙-l
+Γ, (P t) ↓` ∆
+Γ, (∀˙ P ) ` ∆ t ∀˙-l
+Γ ` (P y) ↓,∆
+Γ ` (∀˙ P ),∆ ∀˙-r
+Γ, (P y) ↓` ∆
+Γ, (∃˙ P ) ` ∆ ∃˙-l
+Γ ` (P t) ↓,∆
+Γ ` (∃˙ P ),∆ t ∃˙-r
+where the rules ∀˙-r and ∃˙-l assume that y 6∈ FV (Γ∆)
+Fig. 2. HOL-: The deduction rules of HOL-λ
+are not provable.
+These two last propositions can be added as axioms in the theory. They are called
+extensionality axioms and the theory itself is called extensional higher-order logic. In
+contrast, without these extensionality axioms, the theory is called intentional higher-
+order logic.
+3. HOL-C
+3.1. HOL-C as a first-order theory
+Higher-order logic can be expressed as a many-sorted first-order theory with equality.
+The sorts of this theory are the types of simply typed λ-calculus, i.e. they are inductively
+defined by:
+— ι and o are sorts,
+— if T and U are sorts then T → U is a sort.
+HOL-λσ 7
+A function symbol f is said to have rank (T1, . . . , Tn) U if it takes as arguments n
+terms of sorts T1, . . . , Tn and constructs a term of sort U . A predicate symbol P is said
+to have rank (T1, . . . , Tn) if it takes as arguments n terms of sorts T1, . . . , Tn.
+Besides equality, the language contains the function symbols:
+— αT,U of rank (T → U, T ) U
+These symbols are called applications. As usual, the term αT,U (t, u) is written (t u)
+and (. . . (t u1) . . . un) is written (t u1 . . . un).
+Then, the language contains the unary predicate symbol:
+— ε of rank (o)
+that transforms a term t of sort o into the proposition ε(t).
+To express function terms and predicate terms, instead of using λ-calculus, we intro-
+duce for each n-tuple of variables x1, . . . , xn respectively of sorts T1, . . . , Tn and each
+term t of sort U formed with the variables x1, . . . , xn and the application symbols, a
+constant symbol:
+— x1, . . . , xn 7−→ t of sort T1 → . . .→ Tn → U
+Such constant symbols are called combinators. Finally, the language contains also the
+constant symbols:
+— ⇒˙, ∧˙ and ∨˙ of sort o→ o→ o,
+— ¬˙ of sort o→ o,
+— ⊥˙ of sort o,
+— ∀˙T and ∃˙T of sort (T → o)→ o.
+Besides the well-known axioms of equality, the theory contains the following axioms
+that express the meaning of the combinators:
+((x1, . . . , xn 7−→ t) x1 . . . xn) = t
+and axioms that relate the connectors and quantifiers (e.g. ∧) and their replication as
+constant symbols (e.g. ∧˙):
+ε(⇒˙ x y) ⇔ (ε(x)⇒ ε(y))
+ε(∧˙ x y) ⇔ (ε(x) ∧ ε(y))
+ε(∨˙ x y) ⇔ (ε(x) ∨ ε(y))
+ε(¬˙ x) ⇔ ¬ε(x)
+ε(⊥˙) ⇔ ⊥
+ε(∀˙ x) ⇔ ∀y ε(x y)
+ε(∃˙ x) ⇔ ∃y ε(x y)
+Notice that, with our convention on applications notation, the term (⇒˙ x y) is indeed
+α(α(⇒˙, x), y) and that ε(⇒˙ x y) is an atomic proposition.
+3.2. HOL-C as a first-order theory modulo
+In deduction modulo, these axioms can be built-in. So, we work modulo the congruence
+defined by the rewriting system R containing the following term rewrite rules:
+((x1, . . . , xn 7−→ t) u1 . . . un) −→ t{x1 7→ u1, . . . , xn 7→ un}
+G. Dowek, Th. Hardin and C. Kirchner 8
+and the following proposition rewrite rules:
+ε(⇒˙ x y) −→ ε(x)⇒ ε(y)
+ε(∧˙ x y) −→ ε(x) ∧ ε(y)
+ε(∨˙ x y) −→ ε(x) ∨ ε(y)
+ε(¬˙ x) −→ ¬ε(x)
+ε(⊥˙) −→ ⊥
+ε(∀˙ x) −→ ∀y ε(x y)
+ε(∃˙ x) −→ ∃y ε(x y)
+Notice that the rules of the first group rewrite terms, while the rules of the second
+group rewrite atomic propositions. Hence, we have here a typical example where rules
+rewriting terms are not enough.
+Remark also that in this formulation, equality can be defined as Leibniz’ equality.
+Indeed, if a and b are terms of type T , the notation a = b may be introduced as an
+abbreviation for the proposition ∀p (ε(p a) ⇒ ε(p b)), where p is a variable of type
+T → o. Thus there is no need to take equality as a primitive symbol.
+3.3. The extensionality axioms
+In HOL-C, the extensionality axioms are
+∀f ∀g ((∀x ((f x) = (g x)))⇒ f = g)
+∀x ∀y (ε(x)⇔ ε(y))⇒ x = y)
+Here equality is either a primitive symbol as in section 3.1 or an abbreviation as in
+section 3.2.
+3.4. Embedding HOL-λ into HOL-C
+The translation from λ-terms to combinators is usually called λ-lifting and is denoted
+by ( )C . Applications, variables and constants are translated in an obvious way to their
+correspondents in HOL-C. A term of the form λx t is translated as follows. Let y1, . . . , yn
+be the variables of tC minus x. Then, in tC , all the occurrences of any combinator ci are
+replaced by a fresh variable zi yielding a term (tC)′. Then,
+(λx t)C = ((y1, . . . , yn, z1, . . . , zp, x 7−→ (tC)′) y1 . . . yn c1 . . . cp)
+For instance the term
+((λx λy x) (u v))
+is translated as
+((f, x 7−→ (f x)) (x, y 7−→ x) (u v)).
+This translation can be modified in order to use only the combinators S = x, y, z 7−→
+((x z) (y z)) and K = x, y 7−→ x.
+HOL-λσ 9
+Extensional HOL-C can be shown to be equivalent to extensional HOL-λ, i.e. a propo-
+sition P is provable in extensional HOL-λ if and only if the proposition ε(PC) is provable
+in extensional HOL-C.
+But, if we drop the extensionality axioms, then the two presentations are not equivalent
+anymore. For instance, the proposition
+((λx λy x) (u v)) = λy (u v)
+is provable in HOL-λ while its translation in HOL-C
+ε(((f, x 7−→ (f x)) (x, y 7−→ x) (u v)) = ((u, v, y 7−→ (u v)) u v))
+requires extensionality.
+Even for extensional higher-order logic, the formulations with λ-calculus and combi-
+nators are only weakly equivalent: provable propositions are the same, but the proofs are
+very different, since some proofs requiring only βη-conversion in HOL-λ require the use
+of extensionality in HOL-C.
+4. HOL-λσ
+We present now the definition and first properties of the first-order theory modulo HOL-
+λσ, and we will see in the next section that it provides a new first-order formulation of
+higher-order logic. The theory HOL-λσ is not based on combinators as previously, but
+on de Bruijn indices and explicit substitutions. It allows to avoid the drawbacks of the
+formulation with combinators mentioned just above.
+4.1. HOL-λσ as a first-order theory modulo
+In λ-calculus with de Bruijn indices, bound variables are replaced by an index indicating
+the binding height of this variable, i.e. the number of λ’s between this occurrence and its
+binder. For instance the term λx (x (λy x)) is written λ (1 (λ 2)). So λ-calculus with de
+Bruijn notation is also a first-order language with a binary function symbol α, a unary
+function symbol λ and constant symbols 1, 2, 3 . . . .
+Types of simply typed λ-calculus are not sufficient anymore with de Bruijn indices.
+Indeed, we need to give a sort not only to terms like (λT 1) (that gets the sort T → T ),
+but also to terms of the form 1. Thus, as detailed in (Dowek et al., 1995), we have to
+consider sorts of the form Γ ` T where T is a type of simply typed λ-calculus and Γ a
+context, i.e. a list of such types. For example, the term 1 has the sort A.Γ ` A.
+With de Bruijn indices only, conversion axioms use an external definition for substi-
+tution. Moreover this substitution is not well-defined on open terms of this first-order
+language. This is solved by considering an extension of this calculus: the calculus of ex-
+plicit substitutions (Abadi et al., 1991) also called λσ-calculus. Beside the sorts of the
+form Γ ` T , this calculus introduces also sorts of the form Γ ` ∆ for substitutions that
+are lists of terms. The symbols to build such substitutions are id, ., ↑ and ◦. Then, a
+new term constructor is introduced [ ] that allows to apply an explicit substitution to a
+term. The rewrite rules describing the evaluation of the λσ-calculus are given in figure
+G. Dowek, Th. Hardin and C. Kirchner 10
+β-reduction and η-reduction:
+(λa)b −→ a[b.id]
+λ(a 1) −→ b if a =σ b[↑]
+σ-reduction:
+(a b)[s] −→ (a[s] b[s])
+1[a.s] −→ a
+a[id] −→ a
+(λa)[s] −→ λ(a[1.(s ◦ ↑)])
+(a[s])[t] −→ a[s ◦ t]
+id ◦ s −→ s
+↑ ◦ (a.s) −→ s
+(s1 ◦ s2) ◦ s3 −→ s1 ◦ (s2 ◦ s3)
+(a.s) ◦ t −→ a[t].(s ◦ t)
+s ◦ id −→ s
+1. ↑ −→ id
+1[s].(↑ ◦ s) −→ s
+Fig. 3. The rewrite rules of λσ-calculus
+3. They will be used to define (a part of) the congruence, so they give an example where
+the congruence is defined from a conditional rewrite system.
+Now we introduce HOL-λσ. It is a many-sorted first-order theory modulo with sorts
+of the form Γ ` T and Γ ` ∆ where Γ and ∆ are sequences of types of simply typed
+λ-calculus and T is such a type.
+Definition 4.1. (Language of HOL-λσ) The language contains the following function
+symbols:
+1ΓA constant of sort A.Γ ` A
+αΓA→B,A binary function of rank (Γ ` A→ B,Γ ` A)Γ ` B
+λΓA,B unary function of rank (A.Γ ` B)Γ ` A→ B
+[ ]Γ,Γ
+′
+A binary function of rank (Γ
+′ ` A,Γ ` Γ′)Γ ` A
+idΓ constant of sort Γ ` Γ
+↑ΓA constant of sort A.Γ ` Γ
+.Γ,Γ
+′
+A binary function of rank (Γ ` A,Γ ` Γ′)Γ ` A.Γ′
+◦Γ,Γ′,Γ′′ binary function of rank (Γ ` Γ′′,Γ′′ ` Γ′)Γ ` Γ′
+⇒˙ constant of sort ` o→ o→ o
+∧˙ constant of sort ` o→ o→ o
+∨˙ constant of sort ` o→ o→ o
+¬˙ constant of sort ` o→ o
+⊥˙ constant of sort ` o
+∀˙A constant of sort ` (A→ o)→ o
+∃˙A constant of sort ` (A→ o)→ o
+and a single unary predicate symbol:
+HOL-λσ 11
+ε(⇒˙ x y) −→ ε(x)⇒ ε(y)
+ε(∧˙ x y) −→ ε(x) ∧ ε(y)
+ε(∨˙ x y) −→ ε(x) ∨ ε(y)
+ε(¬˙ x) −→ ¬ε(x)
+ε(⊥˙) −→ ⊥
+ε(∀˙T x) −→ ∀y ε(x y)
+ε(∃˙T x) −→ ∃y ε(x y)
+Fig. 4. The L-rewrite rules
+ε of rank (` o)
+We denote λσL the rewrite rules of λσ-calculus together with the logical rules L given
+in figure 4 and we write A ≡λσL B when A and B are congruent modulo λσL.
+4.2. HOL-λσ as a first-order theory
+We have presented HOL-λσ as a first-order theory modulo and it will be used latter that
+way to represent HOL-λ. We have proved in (Dowek et al., 1998) that any theory modulo
+(Γ,≡) could be also expressed as a (non modulo) theory, i.e. that there exists a set of
+axioms T such that Γ ` P modulo ≡ if and only if T ,Γ ` P in standard first-order logic.
+As any theory modulo, HOL-λσ can be expressed as a first-order theory. The naive
+expression takes as axioms the universal closures of all propositions of the form P ⇔ Q
+where P ≡λσL Q.
+In (Dowek et al., 1998), we have also shown that when the congruence is defined by
+rewrite rules, we can take less axioms: we first take an equality predicate and the axioms
+of equality, then for each rewrite rule l→ r, we take as axiom the universal closure of the
+proposition l = r when l and r are terms or l ⇔ r when l and r are propositions. This
+result does not apply here because the rule η is a conditionnal rewrite rule. However, for
+this rule we can take the axiom
+∀x (λ(x[↑] 1) = x)
+and we get a presentation of HOL-λσ as a (non modulo) first-order theory.
+4.3. Properties of HOL-λσ
+Proposition 4.1. (Termination) The system λσL is weakly terminating.
+Proof. Since the L and λσ rewrite systems share the application operator α, we cannot
+try to apply the existing termination modularity results.
+Typed λσ-calculus may not terminate (Mellie`s, 1995), but it is known that the strategy
+σ-normalizing the term after each application of β or η (Goubault-Larrecq, 1997; Mun˜oz,
+1997a) is normalizing. We reduce termination for λσL to termination for this normalizing
+strategy of λσ. So, we define a translation of the terms and the propositions of HOL-λσ
+G. Dowek, Th. Hardin and C. Kirchner 12
+into the typed system λσ, denoted by || ||, as follows. In each sort Γ ` T , we choose a
+variable zΓ`T .
+— ||x|| = zT , where x is a variable,
+— every symbol is mapped to itself but:
+– ||⇒˙|| = ||∧˙|| = ||∨˙|| = ((λ1) z`o→o→o),
+– ||¬˙|| = (λ1),
+– ||⊥˙|| = ((λ1) z`o),
+– ||∀˙T || = ||∃˙T || = λ(1 z`T [↑]),
+— ||ε(t)|| = ||t||,
+— ||P ⇒ Q|| = ||P ∧Q|| = ||P ∨Q|| = (z`o→o→o ||P || ||Q||),
+— ||¬P || = ||P ||,
+— ||⊥|| = zo,
+— ||∀x P || = ||∃x P || = ||P ||.
+In λσL, we say that t R1-reduces to u if u is obtained by reducing a β-redex, a η-
+redex or a L-redex and σ-normalizing the term obtained this way. In λσ, we say that t
+R2-reduces to u if u is obtained by reducing a β-redex or a η-redex and σ-normalizing
+the term obtained this way. We check that if P R1-rewrites in one step to Q, then ||P ||
+R2-rewrites in at least one step to ||Q||. Let P1, P2, . . . be a R1-reduction sequence in
+the above system, the sequence ||P1||, ||P2||, . . . is a R2-reduction sequence in λσ, thus it
+is finite.
+Proposition 4.2. (Confluence) λσL is confluent on terms containing only term vari-
+ables.
+Proof. Since the L and λσ rewrite systems share the application operator α, we cannot
+apply Toyama’s modularity result.
+The proof is based on Hindley-Rosen lemma (Hindley, 1964; Rosen, 1973): if two rela-
+tions R and S are strongly confluent (i.e. if t R u and t R v then there exists a w such
+that u R w and v R w and if t S u and t S v then there exists a w such that u S w and
+v S w) and strongly commute (i.e. if t R u and t S v then there exists a term w such
+that u S w and v R w) then the relation R ∪ S is confluent.
+For R we take L and for S we take λσ∗. The system L is linear and orthogonal, hence
+it is strongly confluent. Since λσ is confluent (Abadi et al., 1991) the rewrite relation
+λσ∗ is strongly confluent. Finally, L and λσ∗ strongly commute. Indeed, if (t L u) and
+(t λσ∗ v) then the L-redex in t is either disjoint from or above the λσ redex. In both
+cases we can reduce the λσ-redex in u and the L redex in v getting the same term. Hence,
+λσL is confluent.
+Proposition 4.3. (Consistency) The theory HOL-λσ is consistent.
+Proof. We construct a model as follows:
+— Mι = {0},
+— Mo = {0, 1},
+— MT→U =MMTU ,
+— DT1,... ,Tn`U =MUMTn
+...
+MT1
+,
+HOL-λσ 13
+— DT1,... ,Tn`U1,... ,Up = (MU1 × . . .×MUp)MTn ...
+MT1
+.
+If f is a function of the set (MU1 × . . .×MUp)MTn ...
+MT1
+and g a function of the set
+(MV1 × . . .×MVq )MUp
+...
+MU1
+we write g◦f for the function of (MV1 × . . .×MVq )MTn ...
+MT1
+mapping x1, . . . , xn to g(t1) . . . (tp) where (t1, . . . , tp) = f(x1) . . . (xn)
+Then, we interpret the symbols of the language as follows.
+— 1ΓA is the function mapping a1, . . . , an to a1.
+— αΓA→B,A is the function mapping a and b to the function mapping c1, . . . , cn to
+a(c1, . . . , cn)(b(c1, . . . , cn)).
+— λΓA,B is the identity function.
+— [ ]Γ,Γ
+′
+A is the function mapping a and b to b ◦ a.
+— idΓ is the identity function.
+— ↑ΓA is the function mapping a1, . . . , an to (a2, . . . , an).
+— .Γ,Γ
+′
+A is the function mapping a, b to the function mapping c1, . . . , cn to
+(a(c1, . . . , cn), b(c1, . . . , cn)).
+— ◦Γ,Γ′,Γ′′ is the function mapping a and b to b ◦ a.
+— ⇒˙ is the function mapping a and b to 1 if a = 0 or b = 1 and to 0 otherwise.
+— ∧˙ maps a and b to 1 if a = 1 and b = 1 and to 0 otherwise.
+— ∨˙ maps a and b to 1 if a = 1 or b = 1 and to 0 otherwise.
+— ¬˙ maps a to 1 if a = 0 and to 0 otherwise.
+— ⊥˙ = 0.
+— ∀˙T maps a to 1 if a maps every object of MT to 1 and to 0 otherwise.
+— ∃˙T maps a to 1 if a maps some object of MT to 1 and to 0 otherwise.
+— ε is the identity function.
+We check that if A ≡λσL B then A and B have the same denotation. Then we check that
+every provable proposition denotes the truth value 1 and hence that ⊥ is not derivable.
+G. Dowek, Th. Hardin and C. Kirchner 14
+We show now that any proof in HOL-λσ can be transformed into a cut free proof, i.e.
+a proof built without the rule cut. This result will be used twice, to show the equivalence
+between HOL-λ and HOL-λσ and to prove the completeness of the ENAR method for
+HOL-λσ.
+Proposition 4.4. (Cut elimination) The cut rule is redundant in HOL-λσ.
+Proof. Following the method developed in (Dowek and Werner, 1999) we construct a
+pre-model of the above rewrite system. A pre-model is a many-valued model whose truth
+values are reducibility candidates, i.e. sets of proof-terms. Hence we will first define proof-
+terms, then reducibility candidates and pre-models and at last construct a pre-model for
+HOL-λσ.
+Proof-terms are inductively defined as follows.
+pi ::= α
+| λα pi | (pi pi′)
+| (pi, pi′) | fst(pi) | snd(pi)
+| i(pi) | j(pi) | (δ pi1 αpi2 βpi3)
+| (botelim pi)
+| λx pi | (pi t)
+| (t, pi) | (exelim pi xαpi′)
+Each proof-term construction corresponds to a natural deduction rule: terms of the
+form α express proofs built with the axiom rule, terms of the form λα pi and (pi pi′) express
+proofs built with the introduction and elimination rules of the implication, terms of the
+form (pi, pi′) and fst(pi), snd(pi) express proofs built with the introduction and elimination
+rules of the conjunction, terms of the form i(pi), j(pi) and (δ pi1 αpi2 βpi3) express proofs
+built with the introduction and elimination rules of the disjunction, terms of the form
+(botelim pi) express proofs built with the elimination rule of the contradiction, terms
+of the form λx pi and (pi t) express proofs built with the introduction and elimination
+rules of the universal quantifier and terms of the form (t, pi) and (exelim pi xαpi′) express
+proofs built with the introduction and elimination rules of the existential quantifier.
+Reduction on these proof-terms is defined by the following rules that eliminate cuts
+step by step.
+(λα pi1 pi2) {pi2/α}pi1
+fst(pi1, pi2) pi1
+snd(pi1, pi2) pi2
+(δ i(pi1), αpi2, βpi3) {pi1/α}pi2
+(δ j(pi1), αpi2, βpi3) {pi1/β}pi3
+(λx pi t) {t/x}pi
+(exelim (t, pi1) αxpi2) {t/x, pi1/α}pi2
+HOL-λσ 15
+(δ pi1 αpi2 βpi3) pi2
+(δ pi1 αpi2 βpi3) pi3
+(exelim pi1 xαpi2) pi2
+We are now ready to define reducibility candidates. We recall that a proof-term is said
+to be neutral if it is a proof variable or an elimination (i.e. of the form (pi pi′), fst(pi),
+snd(pi), (δ pi1 αpi2 βpi3), (botelim pi), (pi t), (exelim pi xαpi′)), but not an introduction.
+A set R of proof-terms is a reducibility candidate if
+— if pi ∈ R, then pi is strongly normalizable,
+— if pi ∈ R and pi  pi′ then pi′ ∈ R,
+— if pi is neutral and if for every pi′ such that pi 1 pi′, pi′ ∈ R then pi ∈ R.
+We write C for the set of all reducibility candidates.
+A pre-model for a language L is given by:
+— for each sort T a set MT ,
+— for each function symbol f (of rank (T1, . . . , Tn, U)) a function f ofMMT1×...×MTnU ,
+— for each predicate symbol P (of rank (T1, . . . , Tn)) a function P of CMT1×...×MTn .
+LetM be a pre-model, t be a term and ϕ an assignment mapping all the free variables
+of t of sort T to elements ofMT . We define the object |t|ϕ by induction over the structure
+of t.
+— |x|ϕ = ϕ(x),
+— |f(t1, . . . , tn)|ϕ = f(|t1|ϕ, . . . , |tn|ϕ).
+Let A be a proposition and ϕ an assignment mapping all the free variables of A of sort
+T to elements of MT . We define the set |A|ϕ of proofs by induction over the structure
+of A.
+— A proof pi is an element of |P (t1, . . . , tn)|ϕ if it is an element of P (|t1|ϕ, . . . , |tn|ϕ).
+— A proof pi is element of |A⇒ B|ϕ if it is strongly normalizable and if when it reduces
+to a proof of the form λαpi1 then for every pi′ in |A|ϕ, {pi′/α}pi1 is an element of |B|ϕ.
+— A proof pi is an element of |A∧B|ϕ if it is strongly normalizable and if when it reduces
+to a proof of the form (pi1, pi2) then pi1 and pi2 are elements of |A|ϕ and |B|ϕ.
+— A proof pi is an element of |A ∨ B|ϕ if it is strongly normalizable and if when it
+reduces to a proof of the form i(pi1) (resp. j(pi2)) then pi1 (resp. pi2) is an element of
+|A|ϕ (resp. |B|ϕ).
+— A proof pi is an element of |⊥|ϕ if it is strongly normalizable.
+— A proof pi is an element of |∀x A|ϕ if it is strongly normalizable and if when it reduces
+to a proof of the form λx pi1 then for every term t of sort T (where T is the sort of
+x) and every element E of MT {t/x}pi1 is an element of |A|ϕ+(x,E).
+— A proof pi is an element of |∃x A|ϕ if it is strongly normalizable and if when it reduces
+to a proof of the form (t, pi1) then for every element E ofMT (where T is the sort of
+t) then pi1 is an element of |A|ϕ+(x,E).
+A pre-model is said to be a pre-model of a congruence ≡ if when A ≡ B then for every
+assignment ϕ, |A|ϕ = |B|ϕ.
+G. Dowek, Th. Hardin and C. Kirchner 16
+It is proved in (Dowek and Werner, 1999) that if a congruence ≡ has a pre-model, then
+the cut rule is redundant in (intuitionistic) sequent calculus modulo ≡.
+To prove that the cut rule is redundant in sequent calculus modulo HOL-λσ, we con-
+struct a pre-model of this theory. We let
+— Mι = {0},
+— Mo = C, i.e. the set of all reducibility candidates.
+— MT→U =MMTU .
+— DT1,... ,Tn`U =MUMTn
+...
+MT1
+,
+— DT1,... ,Tn`U1,... ,Up = (MU1 × . . .×MUp)MTn ...
+MT1
+.
+Then we interpret the symbols of the language as follows.
+— 1ΓA is the function mapping a1, . . . , an to a1.
+— αΓA→B,A is the function mapping a and b to the function mapping c1, . . . , cn to
+a(c1, . . . , cn)(b(c1, . . . , cn)).
+— λΓA,B is the identity function.
+— []Γ,Γ
+′
+A is the function mapping a and b to b ◦ a.
+— idΓ is the identity function.
+— ↑ΓA is the function mapping a1, . . . , an to (a2, . . . , an)
+— .Γ,Γ
+′
+A is the function mapping a, b to the function mapping c1, . . . , cn to
+(a(c1, . . . , cn), b(c1, . . . , cn)).
+— ◦Γ,Γ′,Γ′′ is the function mapping a and b to b ◦ a.
+— ⇒˙ is the function mapping a and b to the set of proofs pi such that pi is strongly
+normalizable and when pi reduces to a proof of the form λαpi1 then for every pi′ in a,
+{pi′/α}pi1 is an element of b.
+— ∧˙ is the function mapping a and b to the set of proofs pi such that pi is strongly
+normalizable and when pi reduces to a proof of the form (pi1, pi2) then pi1 is an element
+of a and pi2 is an element of b.
+— ∨˙ is the function mapping a and b to the set of proofs pi such that pi is strongly
+normalizable and when pi reduces to a proof of the form i(pi1) then pi1 is an element
+of a and when pi reduces to a proof of the form j(pi2) then pi2 is an element of b.
+— ¬˙ is the function mapping a to the set of proofs pi such that pi is strongly normalizable
+and when pi reduces to a proof of the form λαpi1 then for every pi′ in a, {pi′/α}pi1 is
+strongly normalizable.
+— ⊥˙ if the set of strongly normalizable proofs.
+— ∀˙T is the function mapping a to the set of proofs pi such that pi is strongly normalizable
+and when pi reduces to a proof of the form λx pi1 then for every term t of sort T (where
+T is the sort of x) and every element E of MT {t/x}pi1 is an element of (a E),
+— ∃˙T is the function mapping a to the set of proofs pi such that pi is strongly normalizable
+and when pi reduces to a proof of the form (t, pi1) then for every element E of MT
+(where T is the sort of x) {t/x}pi1 is an element of (a E).
+— ε is the identity function.
+HOL-λσ 17
+We check that the rules of λσL are valid in this pre-model, hence λσL has a pre-model
+and the cut rule is redundant in sequent calculus modulo λσL.
+Following the technique introduced in (Dowek and Werner, 1999) we can lift the cut
+elimination result to the classical sequent calculus modulo λσL.
+5. Embedding HOL-λ into HOL-λσ
+We now want to prove that HOL-λσ is intentionally equivalent to the usual presentation
+of higher-order logic HOL-λ. First, we have to translate a λ-term, say a, onto a λσ-term.
+To motivate the way the translation is done, we recall, following (Dowek et al., 1995), that
+bound variables of a serve for reduction but the free variables serve only to be instantiated
+during a search proof process. In other words, the term a can be seen as a term with
+holes (called a context in (Barendregt, 1984)) filled by its free variables. So, bound
+variables are translated on de Bruijn numbers, letting the λσ-rules doing reduction. But,
+free variables must be translated onto variables to remain instantiable so the translation
+of a is an open term of the first-order theory. However, as explained in (Dowek et al.,
+1995), as capture has to be avoided, first-order substitution alone cannot perform the
+instantiations. We need to use a translation, called pre-cooking, which translates free
+variables on variables of the first-order theory, relocated by an appropriate [↑n] operator
+according to the form of the context. Then, instantiating correctly free variables by a
+simple first-order substitution is recovered. Let us recall how pre-cooking is defined.
+To each variable x of type T in the λ-calculus, we associate the variable x of sort ` T
+in λσ-calculus.
+Definition 5.1. Let a be a λ-term. The pre-cooking of a is the λσ-term defined by
+aF = F (a, [ ]) where F (a, l) is defined using the list of variables l ([ ] being the empty
+list) by:
+— F ((λx.a), l) = λ(F (a, x.l)),
+— F ((a b), l) = F (a, l)F (b, l),
+— F (x, l) = 1[↑k−1], if x is the k-th variable of l
+— F (x, l) = x[↑n] where n is the length of l if x is a variable not occurring in l or a
+constant.
+We can now state our main theorem:
+Theorem 5.1. If p1, . . . , pn, q1, . . . , qm are propositions in HOL-λ then p1, . . . , pn `
+q1, . . . , qm is provable in HOL-λ iff ε(p1F ), . . . , ε(pnF ) ` ε(q1F ), . . . , ε(qnF ) is provable
+in HOL-λσ.
+The proof of this result relies on the next propositions. The first one recalls that pre-
+cooking is an homomorphism compatible with the respective substitution mechanisms
+and equalities:
+Proposition 5.1. (Dowek et al., 1995)
+— If t has the type T then tF has the sort ` T ,
+G. Dowek, Th. Hardin and C. Kirchner 18
+— ({a/x}b)F = {x 7→ aF }bF , where {x 7→ a}b denotes the first-order substitution of the
+(first-order) variable x by the term a in the term b (while {a/x}b denotes the capture
+avoiding substitution of the λ-calculus.)
+— a =βη b in λ-calculus if and only if aF =λσ bF in λσ-calculus.
+The purpose of the following definition and propositions is to characterize the image
+of the pre-cooking mapping.
+Definition 5.2. A F -term is a λσ-term containing only variables whose sort have empty
+contexts. A F -proposition is a proposition of the form ε(P ) where P is a F -term.
+Proposition 5.2. If t is a λσL-normal F -term well-typed in the empty context then
+there is a λ-term u such that t = uF .
+Proof. We prove by induction on the structure of t that if t is a λσL-normal F -term
+well-typed in a context Γ, then there is a term u and a sequence l of variables of the
+same length than Γ such that t = F (u, l).
+The only interesting case is when t = x[s]. This term is well-typed in a context Γ of
+length n thus s has type Γ ` and it is normal, thus s =↑n.
+Proposition 5.3. Let Γ ` ∆ be a sequent containing only F -propositions. Then, if this
+sequent has a proof, it also has a proof where all propositions are F -propositions and all
+the witnesses F -terms.
+Proof. By induction on the size of a cut free proof of Γ ` ∆.
+— If the last rule is an axiom then the result is obvious.
+— If the last rule is a structural one then we apply the induction hypothesis to the
+subproofs.
+— If the last rule is a left rule, we apply the induction hypothesis to the subproofs. The
+only non trivial case is the left rule of the universal quantifier. The proof has the form
+pi
+Γ, R ` ∆ (x, P, t) ∀-l
+Γ, ε(q) ` ∆
+Where ε(q) ≡λσL ∀x P and R ≡λσL {t/x}P . Hence q ≡λσL (∀˙ p), P ≡λσL ε(p x)
+and R ≡λσL ε(p t). Call σ the substitution mapping each variable x of t of sort
+A1, . . . , An ` B to the term x′[↑n] where x′ is a fresh variable of sort ` B. By induction
+on the structure of pi, the proof σpi is a proof of Γ, σR ` ∆, i.e. Γ, ε(p σt) ` ∆. We apply
+the induction hypothesis to the proof σpi. Hence, there is a proof pi′ of Γ, ε(p σt) ` ∆
+where all propositions are F -propositions and all the witnesses F -terms.
+We build the proof
+pi′
+Γ, ε(p σt) ` ∆ (x, ε(p x), σt) ∀-l
+Γ, ε(q) ` ∆
+— If the last rule is a right rule, we apply the induction hypothesis to the subproofs.
+HOL-λσ 19
+The only non trivial case is the right rule of the existential quantifier. We proceed as
+for the left rule of the universal quantifier.
+We can now give the proof of theorem 5.1.
+Proof. The direct sense is an easy induction on the structure of the proof in HOL-λ.
+As an example, we detail the case: the last rule of the proof is the left rule of the universal
+quantifier. The proof has the form
+pi
+Γ, q ` ∆
+(r, t) ∀˙-lΓ, p ` ∆
+where p = (∀˙ r) and q = (r t) ↓. Then ε(pF ) = ε(∀˙ rF ) ≡λσL ∀x ε(rF x). By induction
+hypothesis, there is a proof pi′ of the sequent ΓF , ε(qF ) ` ∆F . We build the proof
+pi′
+ΓF , ε(qF ) ` ∆F (x, ε(rF x), tF ) ∀-lΓF , ε(pF ) ` ∆F
+Conversely, by the proposition 5.3, we can build a proof of ε(p1F ), . . . , ε(pnF ) `
+ε(q1F ), . . . , ε(qmF ) where all the propositions are F -propositions and all the witnesses
+F -terms. By induction on the structure of this proof we can build a proof of p1, . . . , pn `
+q1, . . . , qm in HOL-λ. As an example, we give the case of the left rule of the universal
+quantifier. The proof has the form
+pi
+ΓF , ε(qF ) ` ∆F (x, ε(rF ), tF ) ∀-lΓF , ε(pF ) ` ∆F
+where ε(pF ) = ∀x ε(rF ) and qF ≡λσL {x 7→ tF }rF . Hence pF ≡λσL (∀˙ sF ) and rF ≡
+(sF x) and qF ≡λσL (sF tF ) = (s t)F . By induction hypothesis, there exists a proof pi′
+in HOL-λ of Γ, q ` ∆. We build the proof
+pi′
+Γ, q ` ∆ (s, t) ∀-l
+Γ, p ` ∆
+6. Skolemization in HOL-λσ
+Skolemization in higher-order logic is known to be more complicated than in first-order
+logic. Indeed, the naive skolemization rule in higher-order logic allows to transform some
+unprovable formulations of the axiom of choice into provable propositions. Thus the naive
+skolemization rule has to be restricted in such a way that skolemizing a proposition of
+the form
+∀x1 . . .∀xn∃y (P x1 . . . xn y)
+G. Dowek, Th. Hardin and C. Kirchner 20
+introduces a skolem symbol fn that can only be used in a substitution only if it is applied
+to at least n terms such that their free variables are not bound above in the term. For
+instance the term λy (f1 x y) can be used in a substitution, while the terms f1, (F f1)
+and λx (f1 x y) cannot (Miller’s conditions) (Miller, 1983; Miller, 1987).
+A further motivation for expressing higher-order logic as a first-order theory is to
+avoid this cumbersome rule by reusing the usual first-order skolemization rule. We show
+below that when we apply the first-order skolemization rule to HOL-C we get conditions
+on Skolem symbols that are variants to Miller’s conditions. In HOL-λσ we get exactly
+Miller’s conditions.
+6.1. Miller’s conditions in HOL-λ
+The naive treatment of skolemization in higher-order logic, that skolemizes
+∀x ∃y (P x y)
+as
+∀x (P x (f x))
+introduces a constant f of type T → U (where T is the type of x and U that of y). But
+this skolemization rule is unsound. Indeed, the axiom of choice
+∀x ∃y (P x y)⇒ ∃g ∀x (P x (g x))
+is not provable in type theory (Andrews, 1972). Thus from the proposition
+∀x ∃y (P x y)
+we cannot deduce
+∃g ∀x (P x (g x))
+while naively skolemizing it yields
+∀x (P x (f x))
+from which we can obviously deduce
+∃g ∀x (P x (g x)).
+Miller (Miller, 1983; Miller, 1987) has proposed an alternative skolemization rule that
+skolemizes a proposition of the form
+∀x1 ∀x2 . . . ∀xn ∃y (P x1 x2 . . . xn y)
+into
+∀x1 ∀x2 . . . ∀xn (P x1 x2 . . . xn (fn x1 x2 . . . xn)).
+Two conditions are added to the terms substituted for variables:
+— the symbol fn can be used only when applied to at least n arguments (e.g. (f1 x)
+can be used in a substitution, but f1 alone cannot).
+— the variables free in the necessary arguments cannot be bound by a λ above in the
+term (e.g. λx (f1 y) can be used in a substitution, but λx (f1 x) cannot).
+HOL-λσ 21
+Remark 6.1. As it is usual in higher-order logic, ∀x P is a notation for the term ∀˙ (λx P )
+where ∀˙ is a constant. With such a convention, the skolemized proposition ∀x (P x (f1 x))
+itself does not verify the second condition since x is bound by the external quantifier.
+However this does not rule out this proposition because Miller’s conditions do not apply
+to all terms and propositions, but only to the terms substituted for variables.
+6.2. Combinators
+Skolem theorem applies to the first-order presentation of higher-order logic with combi-
+nators as it applies to any first-order theory. A proposition of the form
+∀x ∃y ε(P x y)
+is skolemized as
+∀x ε(P x f(x))
+but then f is not a constant of type T → U but a function symbol of rank (T )U . Hence
+f alone is not a term (as + is not a term in first-order arithmetic) but f(x) is. We get
+this way Miller’s first condition. As there is no notion of binding, the second condition
+vanishes in this presentation.
+6.3. HOL-λσ
+Skolem theorem also applies to HOL-λσ as it applies to any first-order theory. A propo-
+sition of the form
+∀x ∃y ε(P x y)
+is skolemized as
+∀x ε(P x f(x))
+Again f is a unary function symbol and hence we get back Miller’s first condition, but
+its rank is now (Γ ` T )∆ ` U , i.e. it maps an argument of sort Γ ` T into a term of
+sort ∆ ` U . The sort of the argument expresses exactly Miller’s second condition as it
+restricts the free variables in this term.
+When the context associated to all variables is empty, the proposition
+∀x ∃y ε(P x y)
+is skolemized as
+∀x ε(P x f(x))
+where f has rank (` T ) ` U which requires the argument of f to be well typed in the
+empty context. For instance the λ-term λx (f1 x) which violates Miller’s second condition,
+is expressed by the term λ(f(1)) that is not well typed, while the term λx (f1 y) that
+verifies Miller’s second condition is expressed by the term λ(f(y)) that is well-typed.
+Notice that the restriction is simpler in this case as it applies uniformly to all the terms
+of the language, not only to the terms substituted for variables (see remark 6.1). The
+propositionA = ∀x ε(P x f(x)) is well-formed since the variable x bound by the quantifier
+G. Dowek, Th. Hardin and C. Kirchner 22
+{A1, . . . , An, B1, . . . , Bm}[E1] {¬C1, . . . ,¬Cp, D1, . . . ,Dq}[E2]
+{B1, . . . , Bm, D1, . . . , Dq}[E1 ∪ E2 ∪ {A1 . . . =?E An =?E C1 . . . =?E Cp}]
+Ext. Res.
+C[E]
+c`(C[r]p)[E ∪ {C|p =?E l}]
+Ext. Nar. if l→ r ∈ R and C|p is not a variable
+Fig. 5. Extended narrowing and resolution (ENAR)
+∀ is a variable of first-order logic and not a de Bruijn index. But there exists no term t
+of type o such that A ≡λσL ε(t) since the only candidate would be t = (∀˙ λ(P 1 f(1)))
+that is ill-formed.
+7. Automated theorem proving in HOL-λσ
+We are now able to wrap-up the above ingredients to get a first-order presentation of
+higher-order resolution. To this end, as with any first-order theory modulo, we can use
+the ENAR method developed in (Dowek et al., 1998) to search proofs in HOL-λσ.
+7.1. The ENAR method
+The ENAR method applies to congruences described by class rewrite systems, i.e. pairs
+composed of a rewrite system R rewriting atomic propositions to propositions and a set
+of equational axioms E equating terms with terms and defining a congruence denoted
+=E .
+As compared to first-order resolution, the ENAR method first replaces unification by
+equational unification modulo E . The unification problems are kept as constraints written
+t =?E u and a clause C constrained by a set of equations E is written C[E]. Hence,
+we construct refutations with the Extended Resolution rule presented in figure 5.
+Then, as R rewrites atomic propositions to non atomic ones, we need another rule that
+instantiates, rewrites and puts in clausal form the result using the operator c`. This
+rule is called Extended Narrowing by analogy with the narrowing rule of equational
+unification.
+Theorem 7.1. (Dowek et al., 1998) Let RE be a confluent and weakly terminating class
+rewrite system such that the cut rule is redundant in sequent calculus modulo RE . Then,
+the sequent
+A1, . . . , An ` B1, . . . , Bm
+is provable in sequent calculus modulo if and only if from the constrained clauses
+c`({{A1}, . . . , {An}, {¬B1}, . . . , {¬Bm}})[∅]
+we can derive the empty clause constrained by a E-unifiable set of equations.
+HOL-λσ 23
+7.2. Applying ENAR to HOL-λσ
+In (Dowek et al., 1998), we have applied ENAR to a first-order presentation of higher-
+order logic using combinators. The system E contains the conversion rules of combina-
+tors while the system R contains the rules relating the connectors and quantifiers with
+their replication at the term level. We have shown that the Extended Narrowing rule
+specializes to the Splitting rule of higher-order resolution (Huet, 1972; Huet, 1973). Un-
+fortunately equational unification modulo the conversion axioms of combinators is not
+higher-order unification.
+If we apply this method to HOL-λσ, we obtain another proof search method for higher-
+order logic. As shown in the previous sections, HOL-λσ fulfills the hypotheses of theorem
+7.1, so this method is complete. The Extended Narrowing rule still specializes to the
+Splitting rule of higher-order resolution, but the unification required is the unification
+modulo the system λσ that we have shown to be equivalent to higher-order unification
+in (Dowek et al., 1995). Thus, the method obtained this way simulates higher-order
+resolution step by step.
+Conclusion
+In this paper we have given a first-order presentation of higher-order logic. This presen-
+tation is intentionally equivalent to the presentation of higher-order logic based on λ-
+calculus. Applying the Extended Narrowing and Resolution method to this theory gives
+exactly higher-order resolution. Hence we show this way that expressing higher-order
+logic as a first-order theory and applying a first-order proof search method is at least as
+efficient as a direct implementation, provided we take the right first-order expression of
+higher-order logic and the right proof search method.
+Expressing higher-order resolution in a first-order framework allows to clarify its fea-
+tures: higher-order unification, the splitting rule and higher-order skolemization. Higher-
+order unification is equational unification in an appropriate theory. The splitting rule
+is an instance of the extended narrowing rule introduced in (Dowek et al., 1998), it is
+needed because the rewrite system of higher-order logic transforms atomic propositions
+into non atomic ones. The higher-order skolemization rule is an instance of the first-order
+one. Its scoping particularities are consequences of the sort system of higher-order logic.
+Since we stay in a first-order setting, we can first reuse optimizations of first-order
+theorem proving such as redundancy criteria and subsumption. Second, extending the
+method to equational higher-order resolution requires only to add more reduction rules to
+the rewrite system λσL, then narrowing provides an equational higher-order unification
+algorithm (Kirchner and Ringeissen, 1997) and the proof search method is complete
+provided deduction modulo the extended theory verifies the cut elimination property.
+Acknowledgements
+We want to thank the anonymous referees for their useful comments and suggestions.
+G. Dowek, Th. Hardin and C. Kirchner 24
+References
+Abadi, M., Cardelli, L., Curien, P.-L., and Le´vy, J.-J. (1991). Explicit substitutions. Journal of
+Functional Programming, 1(4):375–416.
+Andrews, P. (1971). Resolution in type theory. Journal of Symbolic Logic, 36:414–432.
+Andrews, P. (1972). General models, descriptions and choice in type theory. The Journal of
+Symbolic Logic, 37(2):385–394.
+Andrews, P. (1986). An Introduction to Mathematical Logic and Type Theory: To Truth through
+Proof. Academic Press inc., New York.
+Barendregt, H. P. (1984). The Lambda-Calculus, its syntax and semantics. Studies in Logic and
+the Foundation of Mathematics. Elsevier Science Publishers B. V. (North-Holland), Amster-
+dam. Second edition.
+Church, A. (1940). A formulation of the simple theory of types. Journal of Symbolic Logic,
+5:56–68.
+Curien, P.-L., Hardin, T., and Le´vy, J.-J. (1996). Confluence properties of weak and strong
+calculi of explicit substitutions. Journal of the ACM, 43(2):362–397.
+Dowek, G., Hardin, T., and Kirchner, C. (1995). Higher-order unification via explicit substitu-
+tions, extended abstract. In Kozen, D., editor, Proceedings of LICS’95, pages 366–374, San
+Diego.
+Dowek, G., Hardin, T., and Kirchner, C. (1998). Theorem proving modulo. Rapport de
+Recherche 3400, Institut National de Recherche en Informatique et en Automatique. To
+appear in Journal of Automated Reasonnig.
+Dowek, G., Hardin, T., and Kirchner, C. (1999). HOL-λσ an intentional first-order expression of
+higher-order logic. In Narendran, P. and Rusinowitch, M., editors, Rewriting Techniques and
+Applications, number 1631 in Lecture Notes in Computer Science, pages 317–331. Springer-
+Verlag.
+Dowek, G., Hardin, T., Kirchner, C., and Pfenning, F. (1996). Unification via explicit substitu-
+tions: The case of higher-order patterns. In Maher, M., editor, Joint International Conference
+and Symposium on Programming Logic, pages 259–273. The MIT press.
+Dowek, G. and Werner, B. (1999). Proof normalization modulo. In Types for proofs and programs
+98, volume 1657 of Lecture Notes in Computer Science, pages 62–77. Springer-Verlag.
+Girard, J.-Y. (1970). Une extension de l’interpre´tation de Go¨del a` l’analyse et son application
+a` l’e´limination des coupures dans l’analyse et la the´orie des types. In J.E. Fenstad (Ed.),
+Second Scandinavian Logic Symposium. North-Holland.
+Girard, J.-Y. (1972). Interpre´tation fonctionnelle et e´limination des coupures dans l’arithme´tique
+d’ordre supe´rieur. PhD thesis, Paris VII.
+Girard, J.-Y., Lafont, Y., and Taylor, P. (1989). Proofs and Types, volume 7 of Cambridge Tracts
+in Theoretical Computer Science. Cambridge University Press.
+Goubault-Larrecq, J. (1997). A proof of weak termination of the simply-typed λσ-calculus.
+Technical Report 3090, INRIA.
+Hindley, J. (1964). The Church-Rosser Property and a Result in Combinatory Logic. PhD thesis,
+University of Newcastle-upon-Tyne.
+Huet, G. (1972). Constrained Resolution: A Complete Method for Type Theory. PhD thesis,
+Case Western Reserve University.
+Huet, G. (1973). A mechanization of type theory. In Proceedings of the Third Interational Joint
+Conference on Articifical Intelligence, pages 139–146.
+Jouannaud, J.-P. and Kirchner, H. (1986). Completion of a set of rules modulo a set of equations.
+SIAM Journal of Computing, 15(4):1155–1194. Preliminary version in Proceedings 11th ACM
+Symposium on Principles of Programming Languages, Salt Lake City (USA), 1984.
+HOL-λσ 25
+Kirchner, C. and Ringeissen, C. (1997). Higher-Order Equational Unification via Explicit Sub-
+stitutions. In Proceedings 6th International Joint Conference ALP’97-HOA’97, Southampton
+(UK), volume 1298 of Lecture Notes in Computer Science, pages 61–75. Springer-Verlag.
+Klop, J., van Oostrom, V., and van Raamsdonk, F. (1993). Combinatory reduction systems:
+introduction and survey. Theoretical Computer Science, 121:279–308.
+Magnusson, L. (1994). The implementation of ALF, a proof editor based on Martin-Lo¨f
+monomorphic type theory with explicit substitution. Doctoral thesis, Chalmers University
+of Technology and University of Go¨teborg.
+Marche´, C. (1994). Normalised rewriting and normalised completion. In Abramsky, S., editor,
+Proceedings 9th IEEE Symposium on Logic in Computer Science, Paris (France), pages 394–
+403.
+Mellie`s, P.-A. (1995). Typed λ-calculi with explicit substitutions may not terminate. In Typed
+Lambda Calculi and Applications, volume 902 of Lecture Notes in Computer Science, pages
+328–334. Springer-Verlag.
+Miller, D. (1983). Proofs in higher order logic. PhD thesis, Carnegie Mellon University.
+Miller, D. (1987). A compact representation of proofs. Studia Logica, XLVI(4):347–370.
+Mun˜oz, C. (1997a). A left linear variant of λσ. In Proceedings 6th International Joint Conference
+ALP’97-HOA’97, Southampton (UK), volume 1298 of Lecture Notes in Computer Science.
+Springer-Verlag.
+Mun˜oz, C. (1997b). Un calcul de substitutions pour la repre´sentation de preuves partielles en
+the´orie de types. The`se de doctorat, Universite´ Paris 7.
+Nadathur, G. and Wilson, D. S. (1990). A representation of lambda terms suitable for operations
+on their intensions. In Wand, M., editor, Proceedings of the 1990 ACM Conference on Lisp
+and Functional Programming, pages 341–348. ACM, ACM Press.
+Nadathur, G. and Wilson, D. S. (1998). A notation for lambda terms: A generalization of
+environments. Theoretical Computer Science, 198(1-2):49–98.
+Peterson, G. and Stickel, M. (1981). Complete sets of reductions for some equational theories.
+Journal of the ACM, 28:233–264.
+Plotkin, G. (1972). Building-in equational theories. Machine Intelligence, 7:73–90.
+Rosen, B. (1973). Tree manipulation systems and church-rosser theorems. J. Assoc. Comput.
+Mach., 20:160–187.
+Stickel, M. (1985). Automated deduction by theory resolution. Journal of Automated Reasoning,
+1(4):285–289.
+Viry, P. (1995). Rewriting modulo a rewrite system. Technical report TR-20/95, Dipartimento
+di informatica, Universita` di Pisa.
+Viry, P. (1998). Adventures in sequent calculus modulo equations. In Kirchner, C. and Kirchner,
+H., editors, Proceedings of the 2nd International Workshop on Rewriting Logic and its Ap-
+plications, WRLA’98, volume 15, Pont-a`-Mousson (France). Electronic Notes in Theoretical
+Computer Science.
+G. Dowek, Th. Hardin and C. Kirchner 26
+Contents
+1 Deduction modulo 2
+2 HOL-λ 5
+3 HOL-C 6
+3.1 HOL-C as a first-order theory 6
+3.2 HOL-C as a first-order theory modulo 7
+3.3 The extensionality axioms 8
+3.4 Embedding HOL-λ into HOL-C 8
+4 HOL-λσ 9
+4.1 HOL-λσ as a first-order theory modulo 9
+4.2 HOL-λσ as a first-order theory 11
+4.3 Properties of HOL-λσ 11
+5 Embedding HOL-λ into HOL-λσ 17
+6 Skolemization in HOL-λσ 19
+6.1 Miller’s conditions in HOL-λ 20
+6.2 Combinators 21
+6.3 HOL-λσ 21
+7 Automated theorem proving in HOL-λσ 22
+7.1 The ENAR method 22
+7.2 Applying ENAR to HOL-λσ 23
+References 24

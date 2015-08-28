@@ -1,0 +1,521 @@
+Under consideration for publication in J. Functional Programming 1
+THEORETICAL PEARL
+Church numerals, twice!
+RALF HINZE
+Institut fu¨r Informatik III, Universita¨t Bonn
+Ro¨merstraße 164, 53117 Bonn, Germany
+(e-mail: ralf@informatik.uni-bonn.de)
+Abstract
+This pearl explains Church numerals, twice. The first explanation links Church numer-
+als to Peano numerals via the well-known encoding of data types in the polymorphic
+λ-calculus. This view suggests that Church numerals are folds in disguise. The second
+explanation, which is more elaborate, but also more insightful, derives Church numerals
+from first principles, that is, from an algebraic specification of addition and multiplication.
+Additionally, we illustrate the use of the parametricity theorem by proving exponentiation
+as reverse application correct.
+1 Introduction
+Church (1941) devised the following scheme for representing natural numbers in
+the untyped λ-calculus: the natural number n is encoded by a function that applies
+its first argument n times to its second argument. Using a compositional style the
+first three natural numbers are defined
+p0q = λϕ . id
+p1q = λϕ . ϕ
+p2q = λϕ . ϕ · ϕ .
+In general, we have pnq = λϕ . ϕn where ϕn is given by ϕ0 = id and ϕn+1 = ϕ · ϕn .
+Building upon this representation the successor function reads
+succ n = λϕ . ϕ · n ϕ .
+The following definitions of addition, multiplication, and exponentiation are due to
+Rosser.
+m + n = λϕ .m ϕ · n ϕ
+m × n = m · n
+m ↑ n = n m
+Interestingly, multiplication is implemented by function composition and exponen-
+tiation by reverse function application. It is relatively straightforward to prove the
+definitions correct: succ pnq = pn+1q, pmq+pnq = pm+nq, pmq×pnq = pmnq,
+and pmq ↑ pnq = pmnq, see Barendregt (1992) for an inductive proof.
+2 R. Hinze
+The purpose of this pearl is to provide additional background and hopefully addi-
+tional insights by deriving the Church numeral system in two different ways. Though
+Church numerals were devised for the untyped λ-calculus, we will work in a typed
+setting: we use Girard’s System F (Girard, 1972), also known as the polymorphic or
+second-order λ-calculus (Reynolds, 1974), augmented by inductive types (Mendler,
+1991; Parigot, 1992). To avoid clutter, however, we usually omit type abstractions
+(written explicitly as ΛA.e) and type applications (written explicitly as e [T ]).
+2 Church numerals, first approach
+The first derivation takes as a starting point the unary representation of the natural
+numbers, also known as the Peano numeral system.
+data Nat = Zero | Succ Nat
+Here n is represented by pnq = Succn Zero, that is, the successor function is applied
+n times to the constant zero. Arithmetic operations can be conveniently expressed
+in terms of the fold operator for Nat .
+fold : ∀N .(N → N )→ N → Nat → N
+fold succ zero Zero = zero
+fold succ zero (Succ n) = succ (fold succ zero n)
+In essence, fold succ zero replaces Zero by zero, Succ by succ and evaluates the
+resulting term. The recursion scheme captured by fold is known as structural re-
+cursion over the natural numbers, which is an instance of a more general scheme
+called primitive recursion. The fold operator satisfies the following so-called uni-
+versal property, which provides the central key for reasoning about fold (Bird & de
+Moor, 1997; Hutton, 1999).
+h = fold ϕ a ⇐⇒
+{
+h Zero = a
+h (Succ n) = ϕ (h n)
+The universal property states that fold ϕ a is the unique solution of the recursion
+equations on the right. A simple consequence of the property is the reflection law
+fold Succ Zero = id (simply put h = id , a = Zero, and ϕ = Succ).
+Addition, multiplication, and exponentiation are given by
+(+), (×), (↑) : Nat → Nat → Nat
+m + n = fold Succ n m
+m × n = fold (add n) p0q m
+m ↑ n = fold (mult m) p1q n .
+Now, let us reinvent Church numerals using the Peano numerals as a starting
+point. For the sake of argument, assume that there are no data declarations so
+that we cannot introduce new constants. In this case, we can only treat Zero and
+Succ as variables and λ-abstract over them. Thus, Succn Zero becomes
+λsucc . λzero . succn zero.
+Theoretical pearl 3
+What is the type of this term? A possible choice is (Nat → Nat) → Nat → Nat ,
+but (Bool → Bool)→ Bool → Bool works, as well. In fact, (N → N )→ N → N is
+a sensible type, for all N . This motivates the following type definition.
+type Church = ∀N .(N → N )→ N → N
+How are the types Nat and Church related? Ideally, they should be isomorphic
+since both represent the same set, the set of natural numbers. And, in fact, they
+are. The conversion maps are given by
+nat : Church → Nat
+nat c = c Succ Zero
+church : Nat → Church
+church n = λsucc zero . fold succ zero n .
+The proof of nat · church = id makes use of the universal property of fold .
+(nat · church) n
+= { definition of nat and church }
+(λsucc zero . fold succ zero n) Succ Zero
+= { β-conversion }
+fold Succ Zero n
+= { reflection law }
+n
+The reverse direction, church · nat = id , is more involving.
+(church · nat) c
+= { definition of church and nat }
+λsucc zero . fold succ zero (c Succ Zero)
+Now we are stuck. The universal property is not applicable since the arguments
+of fold , namely succ and zero, are unknowns. Instead we must apply the so-called
+parametricity condition of the type Church. Briefly, each polymorphic type gives
+rise to a general property that each element of the type satisfies (Wadler, 1989).
+For Church we obtain the following ‘theorem for free’. Let xtimes:Church and let
+A and A′ be arbitrary types; then for all ϕ:A→ A, ϕ′:A′ → A′, and h:A→ A′
+h · xtimes [A] ϕ = xtimes [A′ ] ϕ′ · h ⇐= h · ϕ = ϕ′ · h.
+Intuitively, the type ensures that xtimes only composes its argument with itself:
+xtimes ϕ = ϕ · . . . · ϕ. Thus, h · ϕ = ϕ′ · h implies h · (ϕ · . . . · ϕ) = (ϕ′ · . . . · ϕ′) ·
+h. Setting xtimes = c, ϕ = Succ, ϕ′ = succ, and h = fold succ zero, we have
+fold succ zero · c Succ = c succ · fold succ zero, (1)
+provided fold succ zero · Succ = succ · fold succ zero. This equation, however,
+follows directly from the definition of fold . Using (1) we can complete the proof.
+= { (1) }
+4 R. Hinze
+λsucc zero . c succ (fold succ zero Zero)
+= { definition of fold }
+λsucc zero . c succ zero
+= { η-conversion }
+c
+The isomorphism suggests that a Church numeral is a fold in disguise as each
+numeral can be rewritten into the form λsucc zero . fold succ zero n for some n.
+Functions on Nat are programmed using Zero, Succ, and fold . What are the
+corresponding operations on Church? For fold we calculate
+fold ϕ a n
+= { β-conversion }
+(λs z . fold s z n) ϕ a
+= { definition of church }
+church n ϕ a.
+The encodings of the constructor functions Zero and Succ can be specified as follows.
+zero = church Zero
+succ (church m) = church (Succ m)
+Given this specification it is straightforward to derive zero = λs z . z and succ c =
+λs z . s (c s z ). To summarize, define the relation ‘∼’ by n ∼ c ⇐⇒ church n =
+c ⇐⇒ n = nat c, then
+Zero ∼ zero = p0q
+Succ n ∼ succ c
+fold ϕ a n = c ϕ a
+ ⇐= n ∼ c.
+Using this correspondence we can mechanically transform functions on Nat into op-
+erations on Church. For instance, the structurally recursive definitions of addition,
+multiplication, and exponentiation give rise to the following operations on Church.
+(+), (×), (↑) : Church → Church → Church
+m + n = m succ n
+m × n = m (n+) p0q
+m ↑ n = n (m×) p1q
+Comparing these definitions to the ones given in Sec. 1 we see that we have found
+alternative implementations of ‘+’, ‘×’, and ‘↑’. Or, to put it negatively, the cor-
+respondence of Church to Nat does not explain Rosser’s implementation of the
+arithmetic operations.
+3 Church numerals, second approach
+Ready for a second go? This time we start from an algebraic specification of addition
+and multiplication, where a specification consists of a signature and properties that
+Theoretical pearl 5
+the operations of the signature are required to satisfy. We consider the following
+five constants and operations.
+0, 1 : N
+(+), (×) : N→ N→ N
+nat : N→ Nat
+Two points are worth noting. First, exponentiation is deliberately omitted from
+the signature—this design decision is clearly unmotivated and will be justified only
+later (see Remark 1). Second, we include a so-called observer function, which maps
+elements of the new type N to elements of Nat . Observer functions allow us to
+distinguish elements of the new type. If there were none, then the equational spec-
+ification below could be trivially satisfied by setting N = (); see Hughes (1995) for
+a more comprehensive discussion.
+The set of natural numbers with addition and multiplication forms a commutative
+semiring, that is, (N; +; 0) and (N;×; 1) are commutative monoids, 0 is the zero of
+‘×’, and ‘×’ distributes over ‘+’. Interestingly, we will not require all of the laws.
+The following subset is sufficient for our purposes.
+0 + x = x = x + 0
+(x + y) + z = x + (y + z )
+0× x = 0
+1× x = x = x × 1
+(x × y)× z = x × (y × z )
+(x + y)× z = (x × z ) + (y × z )
+In addition, we must determine nat .
+nat 0 = Zero (2)
+nat (1 + x ) = Succ (nat x ) (3)
+The most straightforward way to represent values of type N is by terms of the
+algebra. The data type Expr implements the term algebra of N.
+data Expr = Null | One | Expr :+ Expr | Expr :× Expr
+Each of the operations 0, 1, ‘+’, and ‘×’ is simply implemented by the corresponding
+constructor: 0 = Null , 1 = One, (+) = (:+), and (×) = (:×). In other words, the
+operations do nothing. All the work is performed by the observer function nat ,
+which can be seen as an interpreter for the arithmetic language. Let us derive its
+definition using the laws above. The first two cases are straightforward.
+nat Null = Zero
+nat One = Succ Zero
+It is tempting to set nat (m :+ n) = nat m + nat n with (+) = fold Succ, but
+this equation does not follow immediately from the laws. Instead, we proceed by
+6 R. Hinze
+making a further case distinction on m.
+nat (Null :+ a1) = nat a1
+nat (One :+ a1) = Succ (nat a1)
+nat ((m :+ n) :+ a1) = nat (m :+ (n :+ a1))
+Now we are stuck. There is no obvious way to simplify nat ((m :× n) :+ a1). Again,
+we help ourselves by making a further case distinction on m.
+nat ((Null :× a2) :+ a1) = nat a1
+nat ((One :× a2) :+ a1) = nat (a2 :+ a1)
+nat (((m :+ n) :× a2) :+ a1) = nat ((m :× a2) :+ ((n :× a2) :+ a1))
+nat (((m :× n) :× a2) :+ a1) = nat ((m :× (n :× a2)) :+ a1)
+The last case, nat (m :× n), is an instance of the previous one (with a1 = Null).
+nat (Null :× a2) = Zero
+nat (One :× a2) = nat a2
+nat ((m :+ n) :× a2) = nat ((m :× a2) :+ (n :× a2))
+nat ((m :× n) :× a2) = nat (m :× (n :× a2)) .
+At this point the reader may wonder whether nat is really well-defined. Now, the
+case analysis is clearly exhaustive; termination can be established using a so-called
+polynomial interpretation of operations (Dershowitz & Jouannaud, 1990).
+Nullτ = 2
+Oneτ = 2
+m :+τ n = 2m + n
+m :×τ n = m2n
+Amultivariate polynomial opτ of n variables is associated with each n-ary operation
+op. For each equation nat l = . . . nat r . . . we must then show that τ l > τ r for
+all variables (ranging over positive integers) where τ is given by τ(op e1 . . . en) =
+opτ (τ e1) . . . (τ en).
+Furthermore, it is worth noting that the implementation does not satisfy the
+specification. The laws only hold under observation, that is, 0+x = x , for instance,
+is weakened to nat (0 + x ) = nat x . As a consequence, Nat and Expr are not
+isomorphic. This is, however, typical of abstract types.
+Remark 1
+Why didn’t we include exponentiation in the specification? The answer is simply
+that in this case the derivation no longer works: there is no way to simplify the call
+nat ((((a3 :↑(n :↑m)):×a2):+a1)). Exponentiation lacks the property of associativity,
+which we used for rewriting nested additions and multiplications.
+Let us now try to improve the efficiency of nat . For a start, we can avoid the
+construction and deconstruction of many terms if we specialize nat for e :+ a1 and
+(e :× a2) :+ a1. We specify
+nat1 e a1 = nat (e :+ a1)
+nat2 e a2 a1 = nat ((e :× a2) :+ a1).
+Theoretical pearl 7
+Given this specification we can easily derive the following implementation.
+nat1 Null = λa1 . nat a1
+nat1 One = λa1 .Succ ( nat a1 )
+nat1 (m :+ n) = λa1 .nat1 m (n :+ a1)
+nat1 (m :× n) = λa1 .nat2 m n a1
+nat2 Null = λa2 a1 . nat a1
+nat2 One = λa2 a1 . nat1 a2 a1
+nat2 (m :+ n) = λa2 a1 .nat2 m a2 ((n :× a2) :+ a1)
+nat2 (m :× n) = λa2 a1 .nat2 m (n :× a2) a1
+The rewriting opens up further opportunities for improvement. Note that the
+parameter a1 is eventually passed to nat in each case. Likewise, a2 is eventually
+passed to nat1. These observations suggest that we could try to advance the function
+calls and pass nat a1 instead of a1 and similarly nat1 a2 instead of a2. The idea
+can be formalized as follows (the new observer functions are called nat1 and nat2).
+nat1 e a1 = nat (e :+ a1) ⇐= a1 = nat a1 (4)
+nat2 e a2 a1 = nat (e :× a2 :+ a1) ⇐= a1 = nat a1 ∧ a2 = nat1 a2 (5)
+Note that the parameter a2 equals nat1 a2 rather than nat1 a2 since we want to
+avoid dependencies on the ‘old’ code. Given this specification it is straightforward
+to derive the following implementation of nat1.
+nat1 Null = λa1 . a1
+nat1 One = λa1 .Succ a1
+nat1 (m :+ n) = λa1 .nat1 m (nat1 n a1)
+nat1 (m :× n) = λa1 .nat2 m (nat1 n) a1
+Let us calculate the definition of nat2. We assume a1 = nat a1 and a2 = nat1 a2
+and consider each of the four cases. Cases e = Null and e = One:
+nat2 Null a2 a1
+= { assumptions and (5) }
+nat (Null :× a2 :+ a1)
+= { 0× x = 0 and 0 + x = x }
+nat a1
+= { a1 = nat a1 }
+a1
+nat2 One a2 a1
+= { assumptions and (5) }
+nat (One :× a2 :+ a1)
+= { 1× x = x }
+nat (a2 :+ a1)
+= { a1 = nat a1 and (4) }
+nat1 a2 a1
+= { a2 = nat1 a2 }
+a2 a1.
+8 R. Hinze
+Cases e = m :+ n and e = m :× n:
+nat2 (m :+ n) a2 a1
+= { assumptions and (5) }
+nat ((m :+ n) :× a2 :+ a1)
+= { (x + y)× z = (x × z ) + (y × z )
+and (x + y) + z = x + (y + z ) }
+nat ((m :× a2) :+ ((n :× a2) :+ a1))
+= { a2 = nat1 a2 and (5) }
+nat2 m a2 (nat ((n :× a2) :+ a1))
+= { assumptions and (5) }
+nat2 m a2 (nat2 n a2 a1)
+nat2 (m :× n) a2 a1
+= { assumptions and (5) }
+nat ((m :× n) :× a2 :+ a1)
+= { (x × y)× z = x × (y × z ) }
+nat (m :× (n :× a2) :+ a1)
+= { a1 = nat a1 and (5) }
+nat2 m (nat1 (n :× a2)) a1
+= { definition of nat1 }
+nat2 m (nat2 n (nat1 a2)) a1
+= { a2 = nat1 a2 }
+nat2 m (nat2 n a2) a1.
+A final generalization step1 yields:
+nat2 Null = λa2 a1 . a1
+nat2 One = λa2 a1 . a2 a1
+nat2 (m :+ n) = λa2 a1 .nat2 m a2 (nat2 n a2 a1)
+nat2 (m :× n) = λa2 a1 .nat2 m (nat2 n a2) a1 .
+The code looks familiar. We are pretty close to Rosser’s implementation of addi-
+tion and multiplication. As a last step we simply remove the interpretative layer.
+Specifying 0, 1, ‘+’, and ‘×’ by
+0 = nat2 Null
+1 = nat2 One
+nat2 m + nat2 n = nat2 (m :+ n)
+nat2 m × nat2 n = nat2 (m :× n),
+we obtain the definitions given in Sec. 1. We have even derived the type of Church
+numerals: nat2 has type ∀N .Expr → (N → N ) → N → N (= Expr → Church).
+Interestingly, the type of nat2 is more general than one would expect. By contrast,
+nat1 has type Expr → Nat → Nat because of the occurrence of Succ in the equation
+for nat1 One.
+If we look at the derivation of nat2, we notice that we have only used the algebraic
+properties of 0, 1, ‘+’, and ‘×’ but not the specification of nat . This observation
+motivates the following generalization of (4) and (5): Let A be an arbitrary type and
+let h:Church → A be an arbitrary function; then c:Church satisfies R2(c [A ], c),
+where
+R0(e, e) ⇐⇒ e = h e
+R1(e, e) ⇐⇒ e a1 = h (e + a1) ⇐= R0(a1, a1)
+R2(e, e) ⇐⇒ e a2 a1 = h (e × a2 + a1) ⇐= R0(a1, a1) ∧ R1(a2, a2).
+1 We have derived nat2 Null (nat1 a2) (nat a1) = nat a1 etc. Now, we generalize nat1 a2 and
+nat a1 to fresh variables, say, a2 and a1.
+Theoretical pearl 9
+This can be seen as the specification of Church numerals, from which we can derive
+the definitions of 0, 1, ‘+’, and ‘×’. An important special case is obtained for a2 = 1
+and a1 = 0:
+h c = c [A ] a2 a1 ⇐⇒
+{
+h 0 = a1
+h (1 + a′1) = a2 (h a
+′
+1).
+(6)
+Note that the implication has been strengthened to an equivalence. Furthermore,
+note that (6) corresponds to the universal property of fold ! Thus, using (6) we can
+derive the alternative definitions of ‘+’, ‘×’, and ‘↑’ given in Sec. 2. Additionally,
+from the specification of nat , equations (2) and (3), we can immediately conclude
+that nat c = c Succ Zero.
+4 Exponentiation as reverse application
+Rosser’s definition of exponentiation seems to be peculiar. One property that sets
+it apart from the other operations is that it makes non-trivial use of polymorphism.
+Compare the definitions of ‘+’, ‘×’, and ‘↑’ (in this section we will be explicit
+about type abstractions and type applications—with the exception of id and ‘·’).
+Let T¯ = T → T ; then
+m + n = ΛN . λϕ: N¯ .m [N ] ϕ · n [N ] ϕ
+m × n = ΛN .m [N ] · n [N ]
+m ↑ n = ΛN . (n [N¯ ]) (m [N ]) .
+Exponentiation is the only operation whose arguments are instantiated to two dif-
+ferent types. This observation suggests that we cannot reasonably expect to derive
+exponentiation in an algebraic manner. Hence, we make do with proving its cor-
+rectness. Now, it is straightforward to show that (omitting type arguments)
+pmq ↑ pnq = pnq pmq = pmq · . . . · pmq︸ ︷︷ ︸
+n times
+= pmq× · · · × pmq︸ ︷︷ ︸
+n times
+= pmnq.
+But, can we also verify the correctness of ‘↑’ without making assumptions about
+the arguments? The answer is in the affirmative. In the sequel we show that the
+two definitions of exponentiation are equal using type-theoretic arguments only.
+The proof of (n [N¯ ]) (m [N ]) = n [Church] (m×) p1q [N ] proceeds in three major
+steps, each of which appeals to parametricity. Thus, the following can be seen as
+an instructive exercise in the use of the parametricity theorem.
+n [Church] (m×) p1q [N ] f
+= { Lemma 1 }
+n [N¯ ] (m [N ] ·) id f
+= { define const a b = a }
+n [N¯ ] (m [N ] ·) id (const f g)
+= { Lemma 2 }
+n [N¯ ] (m [N ] ·) (const f) g
+10 R. Hinze
+= { Lemma 3 }
+n [N¯ ] (m [N ]) f
+Lemma 1 shows that applying a Church numeral to polymorphic arguments and
+instantiating the result is the same as first instantiating the arguments and then
+applying the numeral.
+Lemma 1
+Let xtimes:Church be a Church numeral, let T be a type, and let ϕ:Church →
+Church, ϕ′: T¯ → T¯ . Then
+xtimes [Church] ϕ a [T ] = xtimes [T¯ ] ϕ′ (a [T ]) ⇐= ϕ b [T ] = ϕ′ (b [T ]).
+Proof
+The proposition is implied by the free theorem for Church with A = Church and
+A′ = T¯ . The types A and A′ suggest that h:Church → T¯ is type instantiation:
+h = λc . c [T ]. The premise of the free theorem is easily checked:
+h · ϕ = ϕ′ · h
+⇐⇒ { definition of h }
+ϕ b [T ] = ϕ′ (b [T ])
+Lemma 2 expresses that postcomposition commutes with precomposition.
+Lemma 2
+Let xtimes:Church be a Church numeral, let T be a type, and let ϕ, f, g : T¯ . Then
+xtimes [T¯ ] (ϕ ·) f · g = xtimes [T¯ ] (ϕ ·) (f · g).
+Proof
+Again, the proposition follows from the free theorem for Church with A = A′ = T¯
+and h = (· g). The premise of the free theorem holds unconditionally.
+h · (ϕ ·) = (ϕ ·) · h
+⇐⇒ { definition of h }
+(ϕ · f) · g = ϕ · (f · g)
+⇐⇒ { associativity of ‘·’ }
+true
+Setting f = id , we obtain as a simple consequence xtimes [T¯ ] (ϕ ·) id (g a) =
+xtimes [T¯ ] (ϕ ·) g a.
+Lemma 3 relates function composition and composition of postcompositions.
+Lemma 3
+Let xtimes:Church be a Church numeral, let T be a type, and let ϕ: T¯ . Then
+const (xtimes [T ] ϕ a) = xtimes [T¯ ] (ϕ ·) (const a).
+Proof
+Theoretical pearl 11
+We apply the free theorem for Church with A = T and A′ = T¯ . The types more
+or less dictate that h:T → T¯ is const . It remains to verify the premise:
+const · ϕ = (ϕ ·) · const
+⇐⇒ { operator sections: (a×) b = a × b }
+const (ϕ a) b = (ϕ · const a) b
+⇐⇒ { definition of ‘·’ }
+const (ϕ a) b = ϕ (const a b)
+⇐⇒ { definition of const }
+ϕ a = ϕ a
+Using parametricity, we can also show that the two definitions of addition (and
+the two definitions of multiplication) are equivalent. The proofs are left as instruc-
+tive exercises to the reader.
+5 Final remarks
+Church numerals are not just an intellectual curiosity. They gain practical impor-
+tance through their relationship to lists, the functional programmer’s favourite data
+structure. It is well-known that representations of the natural numbers serve ad-
+mirably as templates for list implementations (Okasaki, 1998). The vanilla list type,
+for instance, is based on the unary representation of the natural numbers.
+data Nat = Zero | Succ Nat
+data List a = Nil | Cons a (List a)
+The encoding of Nat using a polymorphic type is an instance of a general scheme
+for representing data types in System F discovered independently by Leivant (1983)
+and Bo¨hm and Berarducci (1985). If we apply the encoding to List , we obtain the
+continuation- or context-passing implementation of lists also known as the back-
+tracking monad (Hughes, 1995; Hinze, 2001).
+type Church = ∀X .(X → X )→ X → X
+type Backtr A = ∀X .(A→ X → X )→ X → X
+The type Backtr has been reinvented quite a few times. It appears, for instance, in
+a paper about deforestation (Gill et al., 1993). The central theorem of the paper,
+foldr -build fusion, states that
+foldr cons nil (build g) = g cons nil , (7)
+where foldr is the fold operator for lists and build is given by
+build : (∀X .(A→ X → X )→ X → X )→ List A
+build g = g Cons Nil .
+Setting backtr x = λcons nil .foldr cons nil x we can rewrite (7) as backtr · build =
+id . In other words, the fusion theorem is a direct consequence of the fact that List A
+12 R. Hinze
+and Backtr A are isomorphic. Unsurprisingly, the fusion theorem can be generalized
+to arbitrary data types, as well (Takano & Meijer, 1995).
+The second derivation of the Church numerals started from an algebraic specifi-
+cation of the natural numbers. Does this transfer to lists, as well? The answer is an
+emphatic “Yes!”. The algebraic structure of the list type is that of a monad with
+zero and plus (Moggi, 1991; Wadler, 1990). Using the monad laws as a starting
+point the derivation goes through equally well, see (Hughes, 1995; Hinze, 2000).
+Interestingly, if we confine ourselves to the additive fragment (0 and ‘+’), then
+we obtain Hughes’s efficient sequence type (Hughes, 1986)—compare Hughes’s im-
+plementation to the definition of nat1 in Sec. 3. As an aside, exponentiation, in
+particular, Rosser’s definition of ‘↑’ has no counterpart in the world of lists (the
+reverse application of two lists is not even typeable).
+Apropos efficiency. Though inductive types and their encodings are isomorphic,
+they are not equivalent in terms of efficiency. Rosser’s addition and multiplication,
+for instance, are constant time operations while the implementations based on folds
+take time linear in the size of their first argument (the same holds for the list
+operations). Conversely, projection functions such as predecessor (or head and tail
+in the case of lists) are constant time operations for inductive types while they take
+linear time for the polymorphic encodings.
+Acknowledgements
+I am grateful to Patricia Johann and to the anonymous referees for pointing out
+several typos and for valuable suggestions regarding presentation.
+References
+Barendregt, H. (1992) Lambda calculi with types. Abramsky, S., Gabbay, D. M. and
+Maibaum, T. (eds), Handbook of Logic in Computer Science, Volume 2, Background:
+Computational Structures, pp. 118–309. Clarendon Press, Oxford.
+Bird, R. and de Moor, O. (1997) Algebra of Programming. Prentice Hall Europe.
+Bo¨hm, C. and Berarducci, A. (1985) Automatic synthesis of typed λ-programs on term
+algebras. Theoretical Computer Science 39(2-3):135–154.
+Church, A. (1941) The Calculi of Lambda-Conversion. Annals of Mathematics Studies
+No. 6, Princeton University Press.
+Dershowitz, N. and Jouannaud, J.-P. (1990) Rewrite systems. Chap. 6 of: van Leeuwen,
+J. (ed), Handbook of Theoretical Computer Science, Volume B: Formal Models and
+Semantics, pp. 243–320. Elsevier Science Publishers B.V. (North Holland).
+Gill, A., Launchbury, J. and Peyton Jones, S. L. (1993) A short cut to deforestation.
+FPCA ’93: The Sixth International Conference on Functional Programming Languages
+and Computer Architecture pp. 223–232. ACM Press.
+Girard, J.-Y. (1972) Interpre´tation fonctionelle et e´limination des coupures dans
+l’arithme´tique d’ordre supe´rieur. PhD thesis, Universite´ Paris VII.
+Hinze, R. (2000) Deriving backtracking monad transformers. Wadler, P. (ed), Proceedings
+of the 2000 International Conference on Functional Programming, Montreal, Canada,
+September 18-20, 2000 pp. 186–197.
+Theoretical pearl 13
+Hinze, R. (2001) Prolog’s control constructs in a functional setting — Axioms and imple-
+mentation. International Journal of Foundations of Computer Science 12(2):125–170.
+Hughes, J. (1995) The design of a pretty-printing library. Jeuring, J. and Meijer, E.
+(eds), Advanced Functional Programming, First International Spring School on Ad-
+vanced Functional Programming Techniques, B˚astad, Sweden. Lecture Notes in Com-
+puter Science 925, pp. 53–96. Springer-Verlag.
+Hughes, R. J. M. (1986) A novel representation of lists and its application to the function
+“reverse”. Information Processing Letters 22(3):141–144.
+Hutton, G. (1999) A tutorial on the universality and expressiveness of fold. Journal of
+Functional Programming 9(4):355–372.
+Leivant, D. (1983) Reasoning about functional programs and complexity classes associated
+with type disciplines. Proceedings 24th Annual IEEE Symposium on Foundations of
+Computer Science, FOCS’83, Tucson, AZ, USA pp. 460–469. IEEE Computer Society
+Press.
+Mendler, N. P. (1991) Inductive types and type constraints in the second-order lambda
+calculus. Annals of Pure and Applied Logic 51(1–2):159–172.
+Moggi, E. (1991) Notions of computation and monads. Information and Computation
+93(1):55–92.
+Okasaki, C. (1998) Purely Functional Data Structures. Cambridge University Press.
+Parigot, M. (1992) Recursive programming with proofs. Theoretical Computer Science
+94(2):335–356.
+Reynolds, J. (1974) Towards a theory of type structure. Proceedings, Colloque sur la
+Programmation, Paris. Lecture Notes in Computer Science 19, pp. 408–425. Springer-
+Verlag.
+Takano, A. and Meijer, E. (1995) Shortcut deforestation in calculational form. Proceedings
+of the Seventh International Conference on Functional Programming Languages and
+Computer Architecture (FPCA’95), La Jolla, San Diego, California, USA pp. 306–313.
+ACM Press.
+Wadler, P. (1989) Theorems for free! The Fourth International Conference on Functional
+Programming Languages and Computer Architecture (FPCA’89), London, UK pp. 347–
+359. Addison-Wesley Publishing Company.
+Wadler, P. (1990) Comprehending monads. Proceedings of the 1990 ACM Conference on
+LISP and Functional Programming, Nice pp. 61–78. ACM Press.

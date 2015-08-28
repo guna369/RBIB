@@ -1,0 +1,789 @@
+A Calculus for Rippling
+
+David A. Basin
+Max-Planck-Institut fur Informatik
+Saarbrucken, Germany
+Email: basin@mpi-sb.mpg.de
+Toby Walsh
+INRIA-Lorraine, 615, rue du Jardin Botanique,
+54602 Villers-les-Nancy, France
+Email: walsh@loria.fr
+Abstract
+Rippling is a special type of rewriting which uses annotations to guide the derivation towards a
+particular goal. It has many desirable properties. For example, it terminates yet allows rules like
+associativity to be used in both directions; it is also highly goal-directed applying only those rewrite
+rules needed to remove the dierences between the goal and some hypothesis. Although it has been
+suggested that rippling can be directly implemented via rst-order term rewriting on annotated terms,
+we show that this is not possible. We describe a simple calculus we have implemented for rippling and
+prove that it has the desired properties. This calculus allows us to combine rippling with conventional
+term rewriting. Such a combination oers the exibility and uniformity of conventional rewriting with
+the highly goal-directed nature of rippling.
+1 Introduction
+Rippling is a type of rewriting developed at Edinburgh [5, 3] and independently by [8]. Although rippling
+was originally designed for inductive theorem proving, it has recently been applied with success to domains
+outwith inductive theorem proving [1, 9]. Rippling is rewriting tightly restricted by special kinds of
+annotation. Consider, for example, a proof of the associativity of multiplication using structural induction.
+In the step-case, the induction hypothesis is, (x y) z = x (y  z) and the induction conclusion is,
+( s(x)  y) z = s(x)  (y  z):
+The annotations in the induction conclusion mark the dierences with the induction hypothesis. Deleting
+everything in the box that is not underlined gives the skeleton; this is preserved during rewriting. By
+comparison, simply removing annotations from terms gives the erasure. The boxed but not underlined
+terms are wave-fronts; these are removed by rippling. The underlined parts are wave-holes; they represent
+terms in the wave-front we would like to leave unchanged. To remove the wave-fronts, we use annotated
+
+We thank Leo Bachmair, Alan Bundy, and Michael Rusinowitch. The rst author was funded by the German Ministry
+for Research and Technology (BMFT) under grant ITS 9102. The second author was supported by a Human Capital and
+Mobility Postdoctoral Fellowship from the European Union. The current address for the second author is IRST, Location
+Pante di Povo, I38100 Trento, Italy.
+1
+rewrite rules called wave-rules which move wave-fronts in some well founded manner (usually towards
+the top of the term where cancellation can occur). In this example, we need the wave-rules,
+s(U)  V ) (U  V ) + V (1)
+U + V W ) U W + V W (2)
+Rippling using (1) yields (3) and then with (2) gives (4).
+( x y + y ) z = (x (y  z)) + y  z (3)
+((x  y) z) + y  z = (x (y  z)) + y  z (4)
+As the wavefronts are now at the top of each term, we have successfully rippled-out both sides of the
+equality. We can complete the proof by simplifying with the induction hypothesis.
+While the ideas behind rippling are intuitive, implementation is more complex than one might expect.
+In this paper we show where some of the diculties lie and why rst-order rewriting alone cannot directly
+implement rippling. We propose a new calculus that redenes the normal notions of substitution and
+matching and prove that it has the desired properties. To save space we restrict ourselves in several ways.
+First, we only consider so called \outward oriented" wave-rules (see [3]) and second we restrict ourselves
+to rippling in equational theories. Both restrictions are easily lifted.
+2 Properties
+Rippling may be viewed as rst-order rewriting with the addition of annotation to restrict applicability
+of rewrite rules. In the CLAM system [4], rippling is implemented as rst-order rewriting in a meta-level
+theory in which the signature of the original theory is extended with two new unary function symbols
+wf and wh (representing wave-fronts and wave-holes). In a well annotated term, every wave-front has at
+least one proper subterm that is a wave-hole. Terms in wave-holes may be further annotated.
+Denition 1 (wats) well annotated terms (or wats) are the smallest set such that,
+1. t is a wat for all unannotated terms;
+2. wf (f(t
+1
+; :::; t
+n
+)) is a wat i 9i:t
+i
+= wh(s
+i
+) and 8i:t
+i
+= wh(s
+i
+), s
+i
+is a wat and 8i:t
+i
+6= wh(s
+i
+), t
+i
+is
+an unannotated term (unat);
+3. f(t
+1
+; :::t
+n
+) is a wat where f 6= wf and f 6= wh i 8i:t
+i
+is a wat.
+To aid the reader, we will always write annotated terms using boxes and holes, though this is just meant
+to be syntactic sugar for wf and wh .
+We also introduce two functions which return the skeleton and the erasure of a well annotated term.
+Denition 2 (skeleton) the function skel :wats! P(wats) is dened by,
+1. skel(x) = fxg for all variables x;
+2. skel(f(t
+1
+; :::; t
+n
+)) = ff(s
+1
+; :::; s
+n
+)j8i:s
+i
+2 skel(t
+i
+)g where f 6= wf ;
+3. skel(wf (f(t
+1
+; :::; t
+n
+))) = fsj9i:t
+i
+= wh(t
+0
+i
+) ^ s 2 skel(t
+0
+i
+)g.
+Denition 3 (erasure) the function erase :wats! unats is dened by,
+1. erase(x) = x for all variables x;
+2. erase(f(t
+1
+; :::; t
+n
+)) = f(s
+1
+; :::; s
+n
+) where f 6= wf and s
+i
+= erase(t
+i
+);
+2
+3. erase(wf (f(t
+1
+; :::; t
+n
+))) = f(s
+1
+; :::; s
+n
+) where if t
+i
+= wh(t
+0
+i
+) then s
+i
+= erase(t
+0
+i
+) else s
+i
+= erase(t
+i
+).
+Proofs constructed in this annotated meta-theory are translated into proofs in the original theory by
+erasing annotations using erase. Unfortunately this simple idea of rippling as rst-order rewriting is not
+adequate. To show why, we dene four properties desired of rippling.
+well-formedness: rippling produces only well annotated terms (wats);
+skeleton preservation: rippling preserves the skeleton of the term being rewritten;
+correctness: rippling produces terms whose erasures are equal in the underlying equational theory;
+termination: rippling terminates.
+Unfortunately, it is not possible to achieve these aims by direct rst-order rewriting. Consider a
+wave-rule formed for the recursive denition of multiplication,
+s(x)  y ) y + x y :
+If we implement rippling with rst-order rewriting this rule generates terms which are not well annotated.
+For example, s(a)  s(b) is a wat but rewrites to s(b) + a s(b) which is not a wat since the rst
+argument of plus contains a wave-front (a box) directly inside another without an intermediate wave-hole.
+Termination also fails using rst-order rewriting. Consider, for example, the equation, h(f(x; s(y))) =
+s(h(f(s(x); y))). This is a wave-rule in the forward direction (see [2]) annotated as
+h( f(x; s(y)) ) ) s(h( f(s(x); y) )) :
+This rule should not lead to non-termination; the rough intuition is that the skeleton of both terms is
+h(y) and the wave-rule transforms a wave-front on the left-hand side that is two nested function symbols
+deep to one on the right-hand side at the same position that is only one function symbol deep and another
+wave-front at a higher position in the skeleton. This equation also constitutes a wave-rule in the reverse
+direction with dierent annotation.
+s(h( f(s(x); y) )) ) h( f(x; s(y)) )
+Again this rule should not lead to non-termination; the intuition here is that the outermost wave-front is
+rippled \o the top" and disappears. However, these wave-rules together lead to cycling, as the following
+derivation illustrates:
+h( f(a; s(a)) ) 7! s(h( f(s(a); a) )) 7! h( f(a; s(a)) ) 7! : : : :
+Note that unlike the multiplication example, all the terms involved in this derivation are well annotated
+and share the same skeleton. With two equations, we can also construct looping derivations.
+The problems of improperly annotated terms and non-termination arise when an annotated term t
+replaces an unannotated term in a wave-front. We therefore dene a calculus for rippling based on a
+new notion of term replacement for annotated terms that erases annotation where appropriate; in this
+case, it erases the annotations on t. This new notion of term replacement naturally gives a new notion of
+substitution, and thus matching. By means of these simple modications, we get a calculus for rewriting
+annotated terms which is guaranteed to preserve well-formedness of annotation, skeletons, and correctness
+wrt the underlying theory. Moreover, for unannotated terms and rewrite rules, this calculus performs
+conventional rewriting.
+3
+3 A Calculus for Rippling
+We begin with ground rewriting and extend to rst-order rewriting in a straightforward way. We distin-
+guish between two kinds of variables: those in rewrite rules and those in terms. The later kind, \term
+variables" will be treated as constants here.
+1
+Hence we shall always consider the rewritten term as ground
+and by non-ground rewriting we mean equations between terms that may contain (non-term) variables.
+We dene a new function for subterm replacement s[l] 7! s[r] which is identical to usual subterm
+replacement except if l occurs solely within a wave-front, the annotations on r are erased. For example,
+replacing a in f(a; b) by g(a) gives f(g(a); b) , but replacing b by g(b) gives f(a; g(b) ) . We will
+perform all term replacement in substitution, and rewriting using this function. We will also restrict
+rewriting by only using proper equations which preserve skeletons.
+Denition 4 (proper equation) l =
+T
+r is a proper equation i l and r are wats, skel(l) = skel(r)
+and erase(l) =
+T
+erase(r).
+All the results given in this paper go through if we weaken the denition of proper equation to skel(l) 
+skel(r) except rippling preserves now only a subset of the skeletons. We dene ground annotated rewriting
+as rewriting using proper equations between ground terms. If s is a wat and l =
+T
+r a proper equation
+between ground wats then s[l] 7!
+G
+s[r] denotes the ground annotated rewriting of a subterm l of s.
+We now show that ground annotated rewriting preserves the well-formedness of annotated terms,
+skeletons and erasure wrt the theory.
+Theorem 1 if s is a wat, l =
+T
+r a proper equation and s[l] 7!
+G
+s[r], then
+1. s[r] is a wat,
+2. skel(s[l]) = skel(s[r]),
+3. erase(s[l]) =
+T
+erase(s[r]).
+Proof: By structural induction on the wat s.
+Case 1. s is a (term) variable. The three properties hold trivially.
+Case 2. s = wf (f(s
+1
+; :::s
+n
+)). Now l is a subterm of s. If it is s itself then the three properties hold
+trivially. On the other hand, suppose l is a subterm of some s
+i
+. Either s
+i
+= wh(t
+i
+) or s
+i
+6= wh(t
+i
+).
+In the rst case, l is a subterm of the wat t
+i
+as l is a wat and cannot itself be headed by wh . By the
+induction hypothesis, t
+i
+[r] is a wat . Thus, s[r] is a wat . Also, by the induction hypothesis skel(t
+i
+[l]) =
+skel(t
+i
+[r]). As all other subterms wh(s
+j
+) are unchanged, the union of these skeletons is unchanged. Hence
+skel(s[l]) = skel(s[r]). Finally, by the induction hypothesis, erase(t
+i
+[l]) =
+T
+erase(t
+i
+[r]). Again, as all
+the other subterms are unchanged, their erasures stay the same. Thus, erase(s[l]) =
+T
+erase(s[r]). In the
+second case, s
+i
+6= wh(t
+i
+). From the deniton of wat , s
+i
+must be an unannotated term. Thus, when we
+substitute r for l we will erase annotations on r. Hence, s
+i
+[r] is unannotated, and s[r] is a wat . By the
+denition of skeleton, skel(s[l]) = skel(s) = skel(s[r]). Since s
+i
+is unannotated and l =
+T
+r is a proper
+equation, erase(s
+i
+[l]) =
+T
+erase(s
+i
+[r]). Hence, erase(s[l]) = erase(s[r]).
+Case 3. Suppose s = f(s
+1
+; :::s
+n
+) and f is not wh or wf . Now l is a subterm of s. If it is s itself
+then the three properties trivially hold. On the other hand, suppose l is a subterm of some s
+i
+, i.e.,
+s
+i
+[l]. By the induction hypothesis, s
+i
+[r] is a wat . Hence s[r] is a wat . By the induction hypothesis,
+skel(s
+i
+[l]) = skel(s
+i
+[r]). As skel(s
+j
+) = skel(s
+j
+), we have by the denition of the skeleton function that
+skel(s[l]) = skel(s[r]). By the induction hypothesis, erase(s
+i
+[l]) =
+T
+erase(s
+i
+[r]). As the other s
+j
+have
+the same erasures, by the denition of erase, erase(s[l]) =
+T
+erase(s[j]). 2
+By induction on number of rewrite steps, the reexive transitive closure of 7!
+G
+also preserves well-
+formedness, skeletons and erasure wrt the theory.
+1
+E.g., See [6] Section II.
+4
+4 Annotated Matching
+We now consider rewriting with variables. Since substitution depends on subterm replacement, our
+new denition of subterm replacement gives rise to a new kind of substitution; in particular, during
+substitution terms replacing variables in wave-fronts are erased of annotation. For example, applying
+ = fx= s(a) g to t = f(x; x) gives f(s(a); s(a) ) : We say that  is a well-annotated substitution
+(was) i for every x
+i
+=t
+i
+2 , t
+i
+is a wat . Unlike regular substitution, this new substitution function
+preserves well-formedness, skeletons and erasure.
+Theorem 2 if t is a wat and  a was then
+1. (t) is a wat,
+2. skel((t)) = (skel())(skel(t)),
+3. erase((t)) = (erase())(erase(t)).
+Proof: By structural induction on the wat t.
+Case 1. t is a (term) variable x. The three properties trivially hold.
+Case 2. Suppose t = wf (f(t
+1
+; :::t
+n
+)). Either t
+i
+= wh(s
+i
+) or t
+i
+6= wh(s
+i
+). In the rst case, us-
+ing the induction hypothesis and the fact that s
+i
+is a wat , (s
+i
+) must also be a wat . In the second
+case, t
+i
+must be unannotated. As unannotated terms are a subset of wats , calling upon the induction
+hypothesis, (t
+i
+) is a wat . Thus, erase((t
+i
+)) is unannotated. Hence, by the denition of annotated
+substitution, (t) is a wat . By the dention of skeleton, skel((t)) = fsjs 2 skel((s
+i
+))g. By the in-
+duction hypothesis this is fsjs 2 (skel())(skel(s
+i
+))g: But this is equal to (skel())(fsjs 2 skel(s
+i
+)g)
+which itself equals (skel())(skel(t)). Hence, skel((t)) = (skel())(skel(t)). To prove the third prop-
+erty, we perform a case split on whether t
+i
+= wh(s
+i
+) or t
+i
+6= wh(s
+i
+). In the rst case, by the induc-
+tion hypothesis, erase((s
+i
+)) = (erase())(erase(s
+i
+)). In the second case, t
+i
+is unannotated and, by
+the induction hypothesis, erase((t
+i
+)) = (erase())(erase(t
+i
+)). By structural induction over unats,
+erase(erase((t
+i
+))) = erase((t
+i
+)). Thus, by the denition of erasure and annotated substitution,
+erase((t)) = (erase())(erase(t)).
+Case 3. Suppose t = f(t
+1
+; :::t
+n
+) and f is not wh or wf . Now (t) = f((t
+1
+); :::(t
+n
+)). By the induction
+hypothesis, (t
+i
+) are wats . Thus (t) is also a wat . By the denition of skeleton, skel(f((t
+1
+); :::(t
+n
+)))=
+f(skel((t
+1
+)); :::skel((t
+n
+))). This equals f((skel())(skel(t
+1
+)); :::(skel())(skel(t
+n
+))) by the induction
+hypothesis. By the denition of substitution, this is (skel())(f(skel(t
+1
+); :::skel(t
+n
+))). Hence, skel((t))
+= (skel())(skel(t)). By the denition of erasure, erase(f((t
+1
+); :::(t
+n
+)))= f(erase((t
+1
+)); :::erase((t
+n
+))).
+By the induction hypothesis this equals f((erase())(erase(t
+1
+)); :::(erase())(erase(t
+n
+))). By the deni-
+tion of substitution, this is (erase())(f(erase(t
+1
+); :::erase(t
+n
+))). Hence, erase((t)) = (erase())(erase(t)).
+2
+To perform rewriting, we need a notion of annotated matching corresponding to this new notion of
+annotated substitution.
+Denition 5 (annotated match) if s and t are wats, then  is an annotated match of s with t i 
+is a was and (s) = t.
+Observe that even if we restrict  to variables in s annotated matching is not unitary. For example,
+fx=s(0)g and fx= s(0) g are both annotated matches of f(x; 0) with f(s(0); 0) . Matches dier only in
+the amount of annotation which appear on substitutions for variables the occur in wave-fronts but not
+in skeletons. We can, however, dene a notion of minimality of annotation so that annotated matching
+is unique. In the following, annotations(s) is the set of addresses of waveholes in the wat s.
+Denition 6 (minimality) if 
+1
+and 
+2
+are was then 
+1
+ 
+2
+i for all x=t 2 
+1
+there exists x=s 2 
+2
+with erase(t) = erase(s) and annotations(t)  annotations(s).
+5
+Denition 7 (minimal match) if s and t are wats, then  is a minimal match of s with t i Dom() =
+vars(s),  is an annotated match of s with t and there does not exists any annotated match 
+0
+6=  with
+
+0
+ .
+Theorem 3 (uniqueness) if  is a minimal match of s with t then  is unique.
+Proof: By contradiction. Let 
+1
+and 
+2
+be dierent minimal matches of s with t. Since Dom(
+1
+) =
+vars(s) = Dom(
+2
+) and 
+1
+6= 
+2
+there must be at least one variable x in vars(s) on which 
+1
+and
+
+2
+disagree. Let x=s
+1
+2 
+1
+and x=s
+2
+2 
+2
+where s
+1
+6= s
+2
+. By the well formedness of annotated
+substitution, erase(s
+1
+) = erase(s
+2
+). Assume x occurs in the skeleton of s. By well formedness again,
+skel(s
+1
+) = skel(s
+2
+). But this means that s
+1
+= s
+2
+. Hence x can only occur in the wavefront but not
+in the skeleton. As 
+1
+is minimally annotated, s
+1
+must therefore be an unat . Similarly, s
+2
+must be an
+unat . Thus s
+1
+= s
+2
+. 2We now give a complete and correct annotated matching procedure. The idea
+is to rename apart variables in the wavefront from their occurrences in the skeleton and to combine the
+substitutions at the end of regular matching provided the renamed vars have the appropriate erasure. To
+do this, we dene two new functions, convert and combine.
+Denition 8 (convert)
+1. convert(x) = x for all variables x;
+2. convert(f(t
+1
+; :::; t
+n
+)) = f(convert(t
+1
+); :::convert(t
+n
+)) where f 6= wf ;
+3. convert(wf (f(t
+1
+; :::; t
+i
+))) = wf (f(s
+1
+; :::s
+n
+)) where if t
+i
+= wh(t
+0
+i
+) then s
+i
+= wh(convert(t
+0
+i
+)) otherwise
+s
+i
+= new-vars(t
+i
+).
+The function new-vars takes a term and replaces all variables in it by fresh ones which are guaranteed to
+be unique from all other variables. Dierent occurrences of the same variable are replaced by the same
+variable. If the set of variable renamings performed is given by  and we have a substitution  returned
+from ordinary matching (using the renamed term) then we can combine these into a single substitution
+composed of two parts: 
+skel
+contains the substitutions for variables in the skeleton for the annotated
+match, whilst 
+wf
+contains the (unannotated) substitutions for the variables that occur just in wavefront.
+Denition 9 (combine) combine(; ) = 
+skel
+[ 
+wf
+where,
+ 
+skel
+= fx=s j x=s 2  ^ (y=x 2  ! y=erase(s) 2 )g
+ 
+wf
+= fx=s j s is an unat ^ x 62 Dom() ^ y=x 2  ^ y=s 2 g
+To perform annotated matching, we rename variables in the wavefront using convert, perform regular
+matching and then combine the resulting substitution with the renamings using the function combine.
+We dene this process with the (partial) function amatch.
+Denition 10 (amatch) amatch(s; t) =  if r = convert(s), (r) = s, (r) = t,  = combine(; ),
+and Dom() = vars(s).
+Note that the annotated match can fail because Dom()  vars(s) indicating that the substitutions for
+renamed variables were incompatible. In such a situation, annotated matching fails.
+Theorem 4 (correctness and completeness) if s and t are wats then amatch(s; t) =  i (s) = t
+and  is a minimal match.
+Proof: ()) Since amatch(s; t) = , we have r = convert(s), (r) = s, (r) = t,  = combine(; ),
+and Dom() = vars(s). Now  is a was by construction. Consider (s) and (r). By construction,
+these terms are identical except where variables occur in s. Consider an occurrence of a variable in the
+6
+skeleton of s. By the construction of , the same annotated substitution from 
+skel
+is applied to both.
+Consider an occurrence of a variable in the wavefront of s that does not appear in the skeleton. By the
+construction of , the same unannotated substitution from 
+wf
+is also applied to both. Finally, consider
+an occurrence of a variable in the wavefront of s that also appears in the skeleton. By the construction of
+, the same unannotated substitution from 
+skel
+is also applied to both. Thus (s) is identical to (r).
+But (r) = t. Hence (s) = t. In addition, by construction,  is a minimal match for variables which
+appear just in the wavefront.
+(() Let (s) = t. Let r = convert(s), (r) = s, and  =  [ 
+wf
+where 
+wf
+= fx=erase(s) j x=y 2
+ ^ y=s 2 g. Consider, (r) and (s). By construction, these terms are identical except where variables
+occur in s. Consider an occurrence of a variable in the skeleton of s. By the construction of  , the same
+annotated substitution from  is applied to both. Consider an occurrence of a variable in the wavefront
+of s. By the construction of 
+wf
+, the same unannotated substitution from is also applied to both. Thus
+(r) and (s) are identical. Also, by construction, since  is a minimal match then  = combine(; ).
+Trivially, Dom() = vars(s). Hence amatch(s; t) = . 2
+Annotated matching can be performed, like regular matching, in linear time.
+Theorem 5 (complexity) annotated matching can be performed in O(jtj) time where jtj is the size of
+the term being matched against.
+Proof: Consider the annotated match of s with t. We will assume that annotated terms are represented
+by dags. First we rename the variables in the wavefront of s. This takes O(jsj) time. At the position
+of each renaming, we add a new type of arc (called erase) linking the renamed variable with its original
+name. This arc represents the constraint on the erasure of substitution. In addition, it also ags that
+this is a renamed variables. (If a variable occurs only in the wavefront and not in the skeleton then we
+do not need to rename it). Next, we compare s with t from the root of both dags to the leaves of the
+pattern. This takes O(jsj) time. Finally, we check that the substitutions which must be performed at
+the leaves for variables in wavefronts have unannotated substitutions and have an appropriate erasure.
+These tests can be performed together. We explore down t from the position where a renamed variable
+occurred in the pattern checking that no annotations occur. At the same time, by following the erase
+arc, we can explore down the skeleton of t skipping over wavefronts to ensure that we have the same
+erasure. At worst, this exploration will take O(jtj) time since we are bounded by the size of t. Combining
+the three steps, we see that annotated matching can be performed in O(jsj)+O(jtj) time. However, since
+there cannot be an annotated match for s with t unless jsj  jtj, this can be simplied to O(jtj). 2
+5 First-Order Rippling
+We can now show that rippling with proper equations is correct and specify sucient conditions for
+termination. We do this by lifting the results of ground annotated rewriting to the rst-order case.
+The previous denition of proper equation carries over without change. We use it to dene non-ground
+rewriting. If s is a wat and l =
+T
+r a proper equation with V ars(r)  V ars(l), then we write s[(l)] 7!
+s[(r)] to indicate the annotated rewriting of a subterm of s with which l annotated matches giving .
+Correctness parallels the ground case. The proof relies on the fact that  is a was and we can thus reduce
+the problem to the correctness of ground-rewriting.
+Theorem 6 if s is a wat, l =
+T
+r a proper equation, and s[(l)] 7! s[(r)], then
+1. s[(r)] is a wat,
+2. skel(s[(l)]) = skel(s[(r)]),
+3. erase(s[(l)]) =
+T
+erase(s[(r)]).
+7
+Proof: Annotated matching guarantees that  is a was . By Theorem 2, (l) and (r) are wats with
+the same skeleton and erasures. Now, as (l) is syntactical identical to a subterm of s it is ground (recall
+discussion about treating \term variables" as constants). Furthermore (r) is also ground as to be a
+rewrite rule we require V ars(r)  V ars(l). Hence the rewriting of s[(l)] 7! s[(r)] is equivalent to that
+performed by the ground rewrite rule (l)! (r) which is proper as l =
+T
+r and Theorem 2 tells us the
+three properties are maintained for any . Thus, by Theorem 1, the three properties hold. 2
+Let
+
+7! be the reexive transitive closure of 7!. By induction on number of rewrite steps, it follows
+from Theorem 6 that annotated rewriting is correct. That is, if we erase all annotations, we can perform
+the same (object-level) rewriting. Annotations merely guide rewriting in a skeleton preserving way.
+Theorem 7 (correctness) if s is a wat and s
+
+7! t then
+1. t is a wat,
+2. skel(s) = skel(t),
+3. erase(s) =
+T
+erase(t).
+6 Termination
+We can now turn towards questions of termination. A simple way to ensure termination of ground
+annotated rewriting is to rewrite only with wave rules which are measure decreasing under some well
+founded order which is monotonic with respect to wats .
+Denition 11 (monotonicity wrt wats) an order > is monotonic wrt wats i for all wats l and r
+such that l > r, s[l] 7!
+G
+s[r] implies s[l] > s[r].
+Note that this is weaker than the usual denition of monotonicity since we do not consider all possible
+subterms of s, only those that are wats . The orders in [2, 3], for example, are monotonic wrt wats .
+Theorem 8 (ground termination) for a well founded order > monotonic wrt wats, ground annotated
+rewriting using rewrite rules l ) r for which l > r is terminating.
+Proof: An innite rewrite sequence t
+1
+) t
+2
+) : : : gives rise to an innite sequence of terms t
+1
+> t
+2
+>
+which contradicts the well foundedness of >. 2
+Note that the preservation of skeletons is important for termination since proposed termination orders
+for rippling (eg. those in [2, 3]) depend upon the skeleton remaining constant (or bounded in size).
+Finally we lift our requirements on termination to non-ground rewriting. To do this, we need a
+restricted form of stability.
+Denition 12 (stable wrt wats) an order > is stable wrt wats i for all wats s, t and any was ,
+s > t implies (s) > (t).
+The orders in [2, 3] based on the width (but not size) of the wavefronts are stable wrt wats . It follows
+from our nal theorem that rippling with the wave-rules given there is terminating.
+Theorem 9 (termination) for a well founded-order > monotonic and stable wrt wats, annotated re-
+writing using proper rewrite rules l =
+T
+r for which l > r is terminating.
+Proof: We again reduce the problem to the ground case. If s 7! t using l =
+T
+r then there is a ground
+instance (l) =
+T
+(r) and as > is stable wrt wats , (l) > (r). By the termination of ground annotated
+rewriting, we have termination in the general case. 2
+8
+7 Conclusions and Related Work
+The implementation of rippling in CLAM uses rst-order rewriting restricted by some precondition check-
+ing. It is considerably more restricted than what we propose here, yet leads to ill-formed annotation and
+potentially non-terminating deduction. The INKA system [8] uses a formalized calculus for rippling but
+it is considerably more complex and specialized. In addition, the termination of rippling has not been
+considered within this framework.
+Our results show that conventional term rewriting systems can be used to perform rippling via a simple
+modication to the routines for subterm replacement and matching. Moreover, the same routines can
+be used for annotated and conventional unannotated term rewriting. We have implemented this calculus
+and we will describe some applications. Many possible directions can now be explored: for example,
+rippling in an implicit induction setting, Knuth-Bendix completion of annotated terms, simplication of
+skeletons and wave-fronts using term rewriting. We speculate that such combinations will oer the best
+of both worlds, the exibility and uniformity of conventional rewriting procedures combined with the
+highly goal-directed nature of rippling.
+References
+[1] D. Basin and T. Walsh. Dierence unication. In Proceedings of the 13th IJCAI, pages 116{122, 1993.
+[2] D. Basin and T. Walsh. Termination Orderings for Rippling. To appear in A. Bundy, editor, Pro-
+ceedings of CADE-12, 1994.
+[3] A. Bundy, A. Stevens, F. van Harmelen, A. Ireland, and A. Smaill. Rippling: A heuristic for guiding
+inductive proofs. Articial Intelligence, 62:185{253, 1993.
+[4] A. Bundy, F. van Harmelen, C. Horn, and A. Smaill. The Oyster-Clam system. In M.E. Stickel,
+editor, Proceedings of CADE-10, Springer-Verlag, 1990.
+[5] A. Bundy, F. van Harmelen, A. Smaill, and A. Ireland. Extensions to the rippling-out tactic for guiding
+inductive proofs. In M.E. Stickel, editor, Proceedings of CADE-10, pages 132{146. Springer-Verlag,
+1990.
+[6] N. Dershowitz. Termination of rewriting. In J.-P. Jouannaud, editor, Rewriting Techniques and
+Applications, pages 69{116. Academic Press, 1987.
+[7] N. Dershowitz and J.-P. Jouannaud. Rewrite systems. In J. van Leeuwen, editor, Handbook of
+Theoretical Computer Science, volume B. North-Holland, 1990.
+[8] D. Hutter. Guiding inductive proofs. In M.E. Stickel, editor, Proceedings of CADE-10, pages 147{161.
+Springer-Verlag, 1990.
+[9] T. Walsh, A. Nunes, and A. Bundy. The use of proof plans to sum series. In D. Kapur, editor,
+Proceedings of CADE-11, pages 325{339. Springer Verlag, 1992.
+9

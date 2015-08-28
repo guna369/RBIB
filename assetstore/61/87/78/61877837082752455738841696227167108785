@@ -1,0 +1,641 @@
+The theory of calculi with explicit substitutions revisited
+Delia Kesner
+PPS, Universite´ Paris 7 and CNRS (UMR 7126), France
+Abstract. Calculi with explicit substitutions (ES) are widely used in different
+areas of computer science. Complex systems with ES were developed these last
+15 years to capture the good computational behaviour of the original systems
+(with meta-level substitutions) they were implementing.
+In this paper we first survey previous work in the domain by pointing out the
+motivations and challenges that guided the development of such calculi. Then we
+use very simple technology to establish a general theory of explicit substitutions
+for the lambda-calculus which enjoys fundamental properties such as simulation
+of one-step beta-reduction, confluence on metaterms, preservation of beta-strong
+normalisation, strong normalisation of typed terms and full composition. The cal-
+culus also admits a natural translation into Linear Logic’s proof-nets.
+1 Introduction
+This paper is about explicit substitutions (ES), an intermediate formalism that - by de-
+composing the higher-order substitution operation into more atomic steps - allows a
+better understanding of the execution models of complex languages.
+Indeed, higher-order substitution is a meta-level operation used in higher-order lan-
+guages (such as functional, logic, concurrent and object-oriented programming), while
+ES is an object-level notion internalised and handled by symbols and reduction rules
+belonging to their own worlds. However, the two formalisms are still very close, this
+can be easily seen for example in the case of the λ-calculus whose reduction rule is
+given by (λx.t) u →β t{x/u}, where the operation t{x/v} denotes the result of sub-
+stituting all the free occurrences of x in t by u, a notion that can be formally defined
+modulo α-conversion 1 as follows:
+x{x/u} := u (t1 t2){x/u} := (t1{x/u}t2{x/u})
+y{x/u} := y (x 6= y) (λy.v){x/u} := λy.v{x/u}
+Then, the simplest way to specify a λ-calculus with ES is to incorporate substitu-
+tions into the language, then to transform the equalities of the previous specification
+into reduction rules (so that one still works modulo α-conversion), thus yielding the
+following reduction system known as λx [36, 37, 44, 10].
+(λx.t) u → t[x/u]
+x[x/u] → u
+y[x/u] → y (x 6= y)
+(t1 t2)[x/u] → (t1[x/u] t2[x/u])
+(λy.v)[x/u] → λy.v[x/u]
+1 Definition of substitution modulo α-conversion avoids to explicitly deal with the variable cap-
+ture case. Thus, for example (λx.y){y/x} =α (λz.y){y/x} =def λz.y{y/x} = λz.x.
+The λx-calculus corresponds to the minimal behaviour 2 that can be found in most of
+the calculi with ES appearing in the literature. More sophisticated treatments of substi-
+tutions also consider a composition operator allowing much more interactions between
+them. This is exactly the source of the problems that we discuss below.
+Related Work In these last years there has been a growing interest in λ-calculi with
+ES. They can be defined either with unary [44, 35] or n-ary [2, 23] substitutions, by
+using de Bruijn notation [11, 12, 32, 27], or levels [39], or combinators [20], or director
+strings [46], or ... simply by named variables as in λx. Also, a calculus with ES can be
+seen as a term notation for a logical system where the reduction rules behave like cut
+elimination transformations [22, 29, 16].
+In any case, all these calculi were introduced as a bridge between formal higher-
+order calculi and their concrete implementations. However, implementing an atomic
+substitution operation by several elementary explicit steps comes at a price. Indeed,
+while λ-calculus is perfectly orthogonal (does not have critical pairs), calculi with ES
+such as λx suffer at least from the following well-known diverging example:
+t[y/v][x/u[y/v]] ∗← ((λx.t) u)[y/v] →∗ t[x/u][y/v]
+Different solutions were adopted in the literature to close this diagram. If no new
+rewriting rule is added to those of λx, then reduction turns out to be confluent on terms
+but not on metaterms (terms with metavariables used to represent incomplete programs
+and proofs). If naive rules for composition are considered, then one recovers confluence
+on metaterms but loses normalisation: there exist terms which are strongly normalisable
+in λ-calculus but not in the corresponding ES version. This phenomenon, known as
+Mellie`s’ counter-example [40], shows a flaw in the design of ES calculi in that they are
+supposed to implement their underlying calculus (in our case the λ-calculus) without
+losing its good properties. More precisely, let us call λZ-calculus an arbitrary set of (λZ-
+)terms together with a set of (λZ-)reduction rules. Also, let us consider a mapping toZ
+from λ-terms to λZ-terms. The following list of properties can be identified:
+(C) The λZ-reduction relation is confluent on λZ-terms: If u ∗λZ← t →∗λZ v, then there
+is t′ such that u→∗λZ t
+′ ∗
+λZ
+← v.
+(MC) The λZ-reduction relation is confluent on λZ-metaterms.
+(PSN) The λZ-reduction relation preserves β-strong normalisation: If the λ-term t is in
+SN β , then toZ(t) is in SN λZ .
+(SN) Strong normalisation holds for λZ-typed terms: If the λZ-term t is typed, then t is
+in SN λZ .
+(SIM) Any evaluation step in λ-calculus can be implemented by λZ: If t →β t′, then
+toZ(t) →∗λZ toZ(t
+′).
+(FC) Full composition can be implemented by λZ: The λZ-term t[x/u] λZ-reduces to
+t{x/u} for an appropriate notion of (meta)substitution on λZ-terms.
+In particular, (MC) implies (C) and (PSN) usually implies (SN).
+2 Some presentations replace the rule y[x/u] → y by the more general one t[x/u] → t (x /∈ t).
+The result of Mellie`s appeared as a challenge to find a calculus having all the prop-
+erties mentioned above. There are already several propositions in the literature giving
+(partial) answers to this challenge; they are summarised in the following table, where
+we just write one representative calculus for each line, even if there are currently many
+more references available in the literature (by lack of space we cannot cite all of them).
+Calculus C MC PSN SN SIM FC
+λx [44] Yes No Yes Yes Yes No
+λσ [2] Yes No No No Yes Yes
+λσ⇑ [23] Yes Yes No No Yes Yes
+λζ [41] Yes Yes Yes Yes No No
+λws [14] Yes Yes Yes Yes Yes No
+λlxr [29] Yes ? Yes Yes Yes Yes
+In other words, there are many ways to avoid Mellie`s’ counter-example in order to
+recover the PSN property. More precisely, one can forbid the substitution operators to
+cross lambda-abstractions [38, 18] or avoid composition of substitutions [6]. One can
+also impose a simple strategy on the calculus with ES to mimic exactly the calculus
+without ES. The first solution leads to weak lambda calculi, not able to express strong
+beta-equality (used for example in implementations of proof-assistants). The second
+solution is drastic when composition of substitutions is needed for implementations of
+HO unification [15] or functional abstract machines [24]. The last one does not take
+advantage of the notion of ES because they can be neither composed nor even delayed.
+In order to cope with this problem David and Guillaume [14] defined a calculus
+with labels called λws, which allows controlled composition of ES without losing PSN
+and SN. But the λws-calculus has a complicated syntax and its named version [13] is
+even less intelligible. However, the strong normalisation proof for λws given in [13]
+reveals a natural semantics for composition of ES via Linear Logic’s proof-nets [19],
+suggesting that weakening (explicit erasure) and contraction (explicit duplication) can
+be added to the calculus without losing strong normalisation.
+Explicit weakening and contraction are the starting points of the λlxr-calculus [29],
+which is in some sense a (complex) precursor of the λes-calculus that we present in
+this paper. However, while λ-syntax could be seen as a particular case of λes-syntax,
+a special encoding is needed to incorporate weakening and contraction operators to
+λ-terms in order to verify the so-called linearity constraints of λlxr. Moreover, the
+reduction system of λlxr contains 6 equations and 19 rewriting rules, thus requiring
+an important amount of combinatorial reasoning. This is notably discouraging when
+one needs to check properties by cases on the reduction step; a reason why confluence
+on metaterms for λlxr is just conjectured but not still proved.... Also, whereas λlxr
+gives the evidence that explicit weakening and contraction are sufficient to verify all the
+properties one expects from a calculus with ES, there is no justified reason to think that
+they are also necessary.
+We choose here to introduce the λes-calculus by using concise and simple syntax
+in named variable notation style (as in λx) in order to dissociate all the renaming de-
+tails which are necessary to specify higher-order substitution on first-order terms (such
+as for example terms in de Bruijn notation). Even if this choice implies the use of
+α-equivalence, we think that this presentation is more appropriate to focus on the fun-
+damental computational properties of the calculus. Moreover, this can also be justified
+by the fact that it is now perfectly well-understood in the literature how to translate
+terms with named variables into equivalent terms in first-order notation. Another im-
+portant choice made in this paper is the use of minimal equational reasoning (just one
+equation) to specify commutation of independent substitutions. This will turn out to be
+essential to obtain a safe notion of (full)composition which does not need the complex
+use of explicit operators for contraction and weakening. Also, simultaneous substitution
+(also called n-ary substitution), can be simply expressed within our framework.
+We thus achieve the definition of a simple language being easy to understand, and
+enjoying a useful set of properties: confluence on metaterms (and thus on terms), sim-
+ulation of one-step β-reduction, strong normalisation of typed terms, preservation of
+β-strong normalisation, simulation of one-step β-reduction and full composition. More-
+over, these properties can be proved using very simple proof techniques while this is not
+the case for other calculi axiomatising commutation of substitutions. Thus for example,
+the calculus proposed in [45] specifies commutation of independent substitutions by a
+non-terminating rewriting system (instead of an equation), thus leading to complicated
+notions and proofs of its underlying normalisation properties.
+The λes-calculus admits a natural translation into Linear Logic’s proof-nets, thus
+providing an alternative proof of strong normalisation. Also, a more implementation
+oriented calculus based on λes could be specified by means of de Bruijn notation and
+n-ary substitutions. These two last topics are however omitted in this paper because of
+lack of space, we refer the interested reader to [28].
+The rest of the paper is organised as follows. Section 2 introduces syntax for Λes-
+terms and appropriate notions of equivalence and reduction. In Section 3 we develop
+a proof of confluence for metaterms. Preservation of β-strong normalisation is studied
+and proved in Section 4. The typing system for λes is presented in Section 5 as well as
+the subject reduction property and the relation between typing derivations in λes and
+λ-calculus. Finally, strong normalisation based on PSN is proved in this same section.
+We refer the reader to [28] for detailed proofs and to [9, 47] for standard notions
+from rewriting that we will use throughout the paper.
+2 Syntax
+A Λes-term is inductively defined by a variable x, an application t u, an abstraction
+λx.t or a substituted term t[x/u], when t and u are Λes-terms. The syntactic object
+[x/u], which is not a term itself, is called an explicit substitution.
+The terms λx.t and t[x/u] bind x in t. The sets of free and bound variables of a term
+t, denoted t and t respectively, can be defined as usual. Thus, the standard notion of α-
+conversion on higher-order terms is obtained so that one may assume, when necessary,
+that two bound variables have different names, and no variable is free and bound at the
+same time. Indeed, when using different symbols x and y to talk about two nested bound
+variables, as for example in the terms (λy.t)[x/u] and t[x/u][y/v], we implicitly mean
+x 6= y. The use of the same name for bound variables appearing in parallel/disjoint
+positions, as for example in t[x/u] v[x/u] or (λx.x) (λx.x) is not problematic.
+Besides α-conversion the following equations and reduction rules are considered.
+Equations Reduction Rules
+t[x/u][y/v] =C t[y/v][x/u] (λx.t) u →B t[x/u]
+(y /∈ u & x /∈ v) The (sub)set of rules s:
+x[x/u] →Var u
+t[x/u] →Gc t (x /∈ t)
+(t u)[x/v] →App
+1
+t[x/v] u[x/v] (x ∈ t & x ∈ u)
+(t u)[x/v] →App
+2
+t u[x/v] (x /∈ t & x ∈ u)
+(t u)[x/v] →App
+3
+t[x/v] u (x ∈ t & x /∈ u)
+(λy.t)[x/v] →Lamb λy.t[x/v]
+t[x/u][y/v] →Comp
+1
+t[y/v][x/u[y/v]] (y ∈ u & y ∈ t)
+t[x/u][y/v] →Comp
+2
+t[x/u[y/v]] (y ∈ u & y /∈ t)
+It is appropriate to point out here that α-conversion is necessary in order to avoid
+capture of variables. Thus for example the left-hand side of the Lamb-rule (λy.t)[x/v]
+implicitly assumes y 6= x and y /∈ v. See also Sections 4.2 and 6 for a a discussion
+about the minimality of the subset s w.r.t its number of rules.
+The higher-order rewriting system containing the rules {B} ∪ s is called Bs. The
+equivalence relation generated by the conversions Es = {α, C} is denoted by =Es . The
+reduction relation generated by the rewriting rules s (resp. Bs) modulo the equivalence
+relation =Es is denoted by →es (resp. →λes), the e means equational and the s sub-
+stitution. More precisely,
+t→es t
+′ iff there are u, u′ s.t. t =Es u→s u′ =Es t′
+t→λes t′ iff there are u, u′ s.t. t =Es u→Bs u′ =Es t′
+The notation →∗λes (resp. →+λes) is used for the reflexive and transitive (resp. tran-
+sitive) closure of →λes.
+Remark that any simultaneous (n-ary) substitution can now be thought as a sequence
+of consecutive independent unary substitutions representing the same mapping. Thus
+for example [x/u, y/v] can be expressed as [x/u][y/v] (or [y/v][x/u]) where y /∈ u and
+x /∈ v. The use of the equation C to make a list of independent substitutions behave like
+a simultaneous one is essential. We leave to the reader the verification that composition
+of simultaneous substitution can be expressed within our λes-reduction relation.
+The equivalence relation preserves free variables and the reduction relation either
+preserves or decreases them. Thus, t→λes u implies u ⊆ t.
+Also, the (sub)calculus es, which is intended to implement (meta-level) substitu-
+tion, can be shown to be terminating by associating to eachΛes-term t a measure which
+does not change by Es but strictly decreases by →s (details can be found in [28]).
+We now address the property of full composition. For that, we extend the standard
+notion of (meta-level)substitution on λ-terms given in the introduction to all the Λes-
+terms by adding the new case t[y/u]{x/v} := t{x/v}[y/u{x/v}], where we implicitly
+mean x 6= y & y 6∈ v. Remark that t{x/u} = t if x /∈ t, thus we can prove:
+Lemma 1 (Full Composition). Let t and u be Λes-terms. Then t[x/u] →∗λes t{x/u}.
+We now establish basic connections between λ and λes-reduction. As expected, β-
+reduction can be implemented by the more atomic notion of λes-reduction while this
+one can be projected into β.
+Lemma 2 (Simulating β-reduction). Let t be a λ-term s.t. t→β t′. Then t→+λes t′.
+Proof. By induction on β-reduction using Lemma 1.
+Λes-terms are encoded into λ-terms as follows: L(x) := x, L(λx.t) := λx.L(t),
+L(t u) := L(t) L(u) and L(t[x/u]) := L(t){x/L(u)}. Thus, projection is obtained:
+Lemma 3 (Projecting into β-reduction). If t→λes u, then L(t) →∗β L(u).
+Proof. First prove that t =Es u implies L(t) = L(u) by the well-known substitution
+lemma [4] of λ-calculus. Remark that t →s u trivially implies L(t) = L(u). Finally,
+prove that t→B u implies L(t) →∗β L(u) by induction on the reduction step t→B u.
+3 Confluence on metaterms
+Metaterms are terms containing metavariables denoting incomplete programs/proofs
+in a higher-order unification framework [25]. Metavariables should come with a min-
+imal amount of information to guarantee that some basic operations such as instantia-
+tion (replacement of metavariables by metaterms) are sound in a typing context. How-
+ever, known formalisms in the literature for the specification of higher-order metaterms,
+such as Combinatory Reduction Systems (CRS) [30] or Expression Reduction Systems
+(ERS) [26], do not allow, at least in a simpler way, to specify the precise set of free vari-
+ables which is expected from a (sound)instantiation. Thus for example, a CRS metaterm
+like M(x, y) specifies that x and y may occur in the instantiation of M , but M can also
+be further instantiated by any other term not containing x and y at all. Another example
+is given by the (raw) ERS metaterm t = λy.y X (λz.X) because the instantiation of
+X by a term containing a free occurrence of z would be unsound (see [41, 15, 17] for
+details).
+We thus propose to specify incomplete proofs as follows. We consider a countable
+set of raw metavariables X,Y, . . . associated to sets of variables Γ,∆, . . ., thus yielding
+decorated metavariables denoted by XΓ ,Y∆, etc. This decoration says nothing about
+the structure of the incomplete proof itself but is sufficient to guarantee that different
+occurrences of the same metavariable inside a metaterm are never instantiated by dif-
+ferent metaterms.
+The grammar for Λes-terms is extended to generate Λes-metaterms as follows:
+t ::= x | X∆ | t t | λx.t | t[x/t]
+We extend the notion of free variables to metaterms by X∆ = ∆.
+Reduction on metaterms must be understood in the same way reduction on terms:
+the λes-relation is generated by the Bs-relation on Es-equivalence classes of metaterms.
+In contrast to the ERS notion of metaterm, α-conversion turns out to be perfectly
+well-defined on λes-metaterms by extending the renaming of bound variables to the
+decoration sets. Thus for example λx.Yx =α λz.Yz .
+It is well-known that confluence on metaterms fails for calculi without composition
+for ES as for example the following critical pair in λx shows
+s = t[x/u][y/v] ∗← ((λx.t) u)[y/v] →∗ t[y/v][x/u[y/v]] = s′
+Indeed, while this diagram can be closed in λx for terms without metavariables [10],
+there is no way to find a common reduct between s and s′ whenever t is (or contains)
+metavariables: no λx-reduction rule is able to mimic composition on raw or decorated
+metavariables. This can be fortunately recovered in the case of the λes-calculus.
+3.1 The confluence proof
+This section develops a confluence proof for reduction on λes-metaterms based on
+Tait and Martin-Lo¨f’s technique: define a simultaneous reduction relation denoted⇛es;
+prove that⇛∗es and →∗es are the same relation; show that⇛∗es is confluent; and finally
+conclude. While many steps in this proof are similar to those appearing in other proofs
+of confluence for the λ-calculus, some special considerations are to be used here in
+order to accommodate correctly the substitution calculus as well as the equational part
+of our notion of reduction (see in particular Lemma 6).
+A first interesting property of the system es is that it can be used as a function on
+Es-equivalence classes:
+Lemma 4. The es-normal forms of metaterms are unique modulo Es so that t =Es u
+implies es(t) =Es es(u).
+The simultaneous reduction relation ⇛es on es-normal forms is now defined in
+terms of a simpler relation⇛ working on Es-equivalence classes.
+Definition 1 (The relations⇛ and⇛es). Simultaneous reduction is defined on metaterms
+in es-normal form as follows: t⇛es t′ iff ∃ u, u′ s.t. t =Es u⇛ u′ =Es t′, where
+– x⇛ x
+– If t⇛ t′, then λx.t⇛ λx.t′
+– If t⇛ t′ and u⇛ u′, then t u⇛ t′ u′
+– If t⇛ t′ and u⇛ u′, then (λx.t) u⇛ es(t′[x/u′])
+– If ui ⇛ u′i and xi /∈ uj for all i, j ∈ [1, n], then X∆[x1/u1] . . . [xn/un] ⇛
+X∆[x1/u
+′
+1] . . . [xn/u
+′
+n]
+The simultaneous relation is stable in the following sense.
+Lemma 5. If t⇛es t′ and u⇛es u′, then es(t[x/u])⇛es es(t′[x/u′]).
+It can be now shown that the relation⇛es has the diamond property.
+Lemma 6. If t1 es⇚ t⇛es t2, then ∃t3 s.t. t1 ⇛es t3 es⇚ t2.
+Proof. 1. First prove that t ⇚ u =Es u′ implies t =Es t′ ⇚ u′ for some t′ by induction
+on t ⇚ u. Thus conclude that v es⇚ v′ =Es u′ implies v =Es t′ ⇚ u′ for some t′.
+2. Prove that t1 ⇚ t ⇛ t2 implies t1 ⇛es t3 es⇚ t2 for some t3 by induction on⇛
+using Lemma 5.
+3. Finally prove the diamond property as follows. Let t1 es⇚ t =Es u ⇛ u′ =Es t2.
+By point (1) there is u1 such that t1 =Es u1 ⇚ u and by point (2) there is t3 such
+that u1 ⇛es t3 es⇚ u′. Conclude t1 ⇛es t3 es⇚ t2.
+We thus obtain the main result of this section:
+Corollary 1. The reduction relation →∗es is confluent.
+Proof. The relation⇛∗es enjoys the diamond property (Lemma 6) so that it turns out to
+be confluent [9]. Since⇛∗es and →∗λes can be shown (using Lemmas 4 and 5) to be the
+same relation, then conclude that →∗λes is also confluent.
+Although this confluence result guarantees that all the critical pairs in λes can be
+closed, let us analyse a concrete example being the source of interesting diverging dia-
+grams in calculi with ES (c.f. Section 1), giving by the following case:
+s3
+∗
+λes← s1 →B s2
+? ((λx.t) u)[y/v] t[x/u][y/v]
+The metaterm s3 as well as the one used to close the diagram can be determined by
+the following four different cases:
+y ∈ t y ∈ u s3 Close the diagram by
+Yes Yes t[y/v][x/u[y/v]] s3 Comp
+1
+← s2
+Yes No t[y/v][x/u] s3 =Es s2
+No Yes t[x/u[y/v]] s3 Comp
+2
+← s2
+No No (λx.t) u s3 →B t[x/u] Gc← s2
+4 Preservation of β-strong normalisation
+Preservation of β-strong normalisation (PSN) in calculi with ES received a lot of at-
+tention (see for example [2, 6, 10, 32]), starting from an unexpected result given by
+Mellie`s [40] who has shown that there are β-strongly normalisable terms in λ-calculus
+that are not strongly normalisable when evaluated by the reduction rules of an explicit
+version of the λ-calculus. This is for example the case for λσ [2] and λσ⇑ [23].
+Since then, different notions of safe composition where introduced, even if PSN
+becomes more difficult to prove ([8, 14, 1, 29, 31]). This is mainly because the so-called
+decent terms are not stable by reduction : a term t is said to be decent in the calcu-
+lus λZ if every subterm v appearing in some substituted subterm u[x/v] of t is λZ-
+strongly normalising. As an example, the term x[x/(y y)][y/λw.w w] is decent in
+λes since y y and λw.w w are both λes-strongly normalising, but its Comp2-reduct
+x[x/(y y)[y/λw.w w]] is not.
+This section proves that λes preserves β-strong normalisation. For that, we use a
+simulation proof technique based on the following steps. We first define a calculus λesw
+(Section 4.1). We then give a translation K fromΛes-terms (and thus also from λ-terms)
+into λesw s.t. t ∈ SN β implies K(t) ∈ SN λesw (Corollary 4) and K(t) ∈ SN λesw
+implies t ∈ SN λes (Corollary 2).
+4.1 The λesw-calculus
+A Λesw-term is inductively defined by x, t u, λx.t, t[x/u] or Wx(t) (an explicit weak-
+ening). We extend the notion of free variables to explicit weakenings by adding the case
+Wx(t) = {x} ∪ t. The notion of strict term will be essential: every subterm λx.t and
+t[x/u] is such that x ∈ t and every subterm Wx(t) is such that x /∈ t.
+Besides equations and rules in λes, those in the following table are also considered.
+Additional Equations Additional Reduction Rules
+Wx(Wy(t)) =WC Wy(Wx(t)) Wx(t)[x/u] → Wu\t(t)
+Wy(t)[x/u] =Weak1 Wy(t[x/u]) (x 6= y & y /∈ u) Wy(t) u → t u (y ∈ u)
+Wy(λx.t) =WAbs λx.Wy(t) (x 6= y) Wy(t) u → Wy(t u) (y /∈ u)
+tWy(u) → t u (y ∈ t)
+tWy(u) → Wy(t u) (y /∈ t)
+Wy(t)[x/u] → t[x/u] (y ∈ u)
+t[x/Wy(u)] → Wy(t[x/u]) (y /∈ t)
+t[x/Wy(u)] → t[x/u] (y ∈ t)
+Given a set of variables Γ = {x1, . . . , xn}, the use of the abbreviation WΓ (t)
+for Wx1(. . .Wxn(t)) in the first reduction rule is justified by the equation WC. In the
+particular case Γ = ∅, we define W∅(t) = t. It is suitable again to recall that we work
+modulo α-conversion. Thus for example the terms Wy(λx.t) and t[x/Wy(u)] have to
+be always understood as x 6= y. However, this is not the case for example for λx.Wy(t)
+or Wy(t)[x/u] where the variables x and y may be equal or different, that’s the reason
+to explicitly add the side-condition x 6= y in some of the previous equations and rules.
+The rewriting system containing all the reduction rules in the previous table plus
+those in system s is called sw. The notation Bsw is used for the system {B} ∪ sw. The
+equivalence relation generated by all the equations in the previous table plus those in Es
+is denoted by =Esw . The relation generated by the reduction rules sw (resp. Bsw) modulo
+the equivalence relation =Esw is denoted by →esw (resp. →λesw). More precisely,
+t→esw t′ iff there are u, u′ s.t. t =Esw u→sw u′ =Esw t′
+t→λesw t′ iff there are u, u′ s.t. t =Esw u→Bsw u′ =Esw t′
+From now on, we only work with strict terms, a choice that is justified by the fact
+that λesw-reduction relation preserves strict terms.
+In order to infer normalisation of λes from that of λesw, a relation between both
+notions of reduction is needed. For that, a translation K from Λes-terms (and thus also
+from λ-terms) to (strict) Λesw-terms is defined as follows:
+K(x) := x K(u v) := K(u) K(v)
+K(λx.t) := λx.K(t) If x ∈ t K(λx.t) := λx.Wx(K(t)) If x /∈ t
+K(u[x/v]) := K(u)[x/K(v)] If x ∈ t K(u[x/v]) := Wx(K(u))[x/K(v)] If x /∈ t
+Remark that K(t) = t. Also, λesw-reduction can be used to push out useless weak-
+ening constructors as follows:
+Lemma 7. If u→λes v, then K(u) →+λesw Wu\v(K(v)).
+Proof. The proof is by induction on →λes and it accurately puts in evidence the fact
+that Weak1 and WAbs are needed as equations and not as rewriting rules.
+The previous lemma allows us to conclude with the following preservation result:
+Corollary 2. If K(t) ∈ SN λesw, then t ∈ SN λes.
+4.2 The ΛI -calculus
+The ΛI -calculus is another intermediate language used as technical tool to prove PSN.
+The set of ΛI -terms [30] is defined by the grammar:
+M ::= x |M M | λx.M | [M,M ]
+We consider the extended notions of free variables and (meta)level substitution on
+ΛI -terms. We restrict again the syntax to strict terms (every subterm λx.M satisfies
+x ∈M ). The following two reduction rules will be used:
+(λx.M) N →β M{x/N}
+[M,N ] L →pi [M L,N ]
+Strict ΛI-terms turn out to be stable by reduction since they do not lose free vari-
+ables during reduction.
+A binary relation (and not a function) I is used to relate λesw and ΛI -terms, this
+becauseΛesw-terms are translated into ΛI-syntax by adding some garbage information
+which is not uniquely determined. Thus, each Λesw-term can be projected into different
+ΛI -terms, and this will be essential in the simulation property (Theorem 1).
+Definition 2. The relation I between strict Λesw-terms and strict ΛI-terms is induc-
+tively given by the following rules:
+x I x
+t I T
+λx.t I λx.T
+t I T u I U
+t u I T U
+t I T u I U
+t[x/u] I T {x/U}
+t I T & M strict
+t I [T,M ]
+t I T & x ∈ T
+Wx(t) I T
+The relation I enjoys the following properties.
+Lemma 8. Let t I M . Then t ⊆ M , M ∈ ΛI and x /∈ t & N ∈ ΛI implies
+t I M{x/N}.
+Remark however that t I M implies t ⊆M only on strict terms. This can be seen as
+a proof technical argument to exclude from our calculus rewriting rules not preserving
+strict terms like
+(App) (t u)[x/v] → t[x/v] u[x/v]
+(Comp) t[x/u][y/v] → t[y/v][x/u[y/v]] (y ∈ u)
+Reduction in λesw can be related to reduction in ΛI by means of the following
+simulation property (proved by induction on the reduction/equivalence step).
+Theorem 1. Let s ∈ Λesw and S ∈ ΛI .
+1. If s I S and s =Esw t, then t I S.
+2. If s I S and s→sw t, then t I S.
+3. If s I S and s→B t, then there is T ∈ ΛI s.t. t I T and S →+βpi T .
+The second preservation result can be now stated as follows:
+Corollary 3. If s I S and S ∈ SN βpi, then s ∈ SN λesw.
+Proof. Suppose s /∈ SN λesw. As →esw can easily be show to be well-founded (see [28]
+for details), then an infinite λesw-reduction sequence starting at s is necessarily pro-
+jected by the previous Theorem into an infinite βpi-reduction sequence starting at S.
+This leads to a contradiction with the hypothesis.
+4.3 Solving the puzzle
+All the parts of the puzzle together give a PSN argument for λes. The starting point is
+the following encoding from λ to ΛI-terms:
+I(x) := x I(λx.t) := λx.I(t) x ∈ t
+I(t u) := I(t) I(u) I(λx.t) := λx.[I(t), x] x /∈ t
+Now, starting from a λ-term u, which is also a Λes-term, one computes its K-image
+- a λesw-term - so that some ΛI -term will be in I-relation with it. More precisely, a
+straightforward induction on u gives:
+Theorem 2. For any λ-term u, K(u) I I(u).
+Preservation of β-strong-normalisation, which is one of the main results of the pa-
+per, can be finally stated:
+Corollary 4 (PSN). If t ∈ SN β , then t ∈ SN λes.
+Proof. If t ∈ SN β , then I(t) ∈WNβpi [34] and thus I(t) ∈ SNβpi [42]. As K(t) I I(t)
+by Theorem 2, then K(t) ∈ SN λesw by Corollary 3 so that t ∈ SN λes by Corollary 2.
+5 The typed λes-calculus
+Simply types are built over a countable set of atomic symbols (base types) and the type
+constructor → (functional types). An environment is a finite set of pairs of the form
+x : A. Two environments Γ and ∆ are said to be compatible iff for all x : A ∈ Γ and
+y : B ∈ ∆, x = y implies A = B. The union of compatible contexts is written Γ ⊎∆.
+Thus for example (x : A, y : B)⊎(x : A, z : C) = (x : A, y : B, z : C). The following
+properties on compatible environments will be used:
+Lemma 9.
+1. If Γ ⊆ Γ ′ and ∆ ⊆ ∆′, then Γ ⊎∆ ⊆ Γ ′ ⊎∆′.
+2. Γ ⊎ (∆ ⊎Π) = (Γ ⊎∆) ⊎Π .
+Typing judgements have the form Γ ⊢ t : A where t is a term, A is a type and
+Γ is an environment. Derivations of typing judgements, written Γ ⊢λes t : A, can be
+obtained by application of the (multiplicative) rules in the following table.
+x : A ⊢ x : A
+(axiom)
+Γ ⊢ t : A→ B ∆ ⊢ u : A
+Γ ⊎∆ ⊢ (t u) : B
+(app)
+Γ ⊢ t : B
+Γ \ {x : A} ⊢ λx.t : A→ B
+(abs)
+Γ ⊢ u : B ∆ ⊢ t : A
+Γ ⊎ (∆ \ {x : B}) ⊢ t[x/u] : A
+(subs)
+The axiom rule types a variable in a minimal environment but variables not ap-
+pearing free may be introduced by binder symbols by means of the rules abs and subs.
+Thus for example starting from the derivable typing judgement x : B ⊢ x : B one can
+derive judgements like ⊢ λx.x : B → B or x : B ⊢ λz.x : A → B. Remark that
+when Γ ⊎ ∆ appears in the conclusion of some rule, then by definition, Γ and ∆ are
+compatible.
+The typing rules for λes ensure that every environment Γ contains exactly the set
+of free variables of the term t. Thus, Γ ⊢λes t : A implies Γ = t.
+The typed calculus enjoys local subject reduction in the sense that no meta-theorem
+stating weakening or thinning is needed to show preservation of types.
+Lemma 10 (Subject Reduction). Let Γ ⊢λes s : A. Then s =Es s′ implies Γ ⊢λes s′ :
+A and s→λes s′ implies Π ′ ⊢λes s′ : A for some Π ′ ⊆ Π .
+The connexion between typed derivations in λ-calculus (written ⊢λ) and typed
+derivations in λes-calculus is stated as follows, where Γ |S denotes the environment
+Γ restricted to the set of variables S.
+Lemma 11. If Γ ⊢λ t : A, then Γ |t ⊢λes t : A and if Γ ⊢λes t : A, then Γ ⊢λ L(t) : A.
+We now prove strong-normalisation for λes-typed terms by using PSN. Another
+proof of strong-normalisation based on a translation of typed λes-terms into Linear
+Logic’s proof-nets is also developed in [28].
+Theorem 3 (Strong Normalisation). Every typable Λes-term M is in SNλes.
+Proof. First define a translation C from λes to λ as follows: C(x) := x, C(t u) :=
+C(t) C(u), C(λx.t) := λx.C(t) and C(t[x/u]) := (λx.C(t)) C(u). Thus for example,
+C((x[x/y] z)[w/(w1 w2)]) = (λw.((λx.x) y) z)(w1 w2).
+We remark that for every Λes-term one has C(t) →∗λes t. Also, when t is typable in
+λes, then also C(t) is typable in λes (just change the use of subs by abs followed by
+app). By Lemma 11 the term L(C(t)) = C(t) is also typable in simply typed λ-calculus
+and thus C(t) ∈ SNβ [5]. We get C(t) ∈ SNλes by Corollary 4 so that t ∈ SNλes.
+This proof technique, which is very simple in the case of the λes-calculus, needs
+some additional work to be applied to other (de Bruijn) calculi [43, 3].
+6 Conclusion
+In this paper we survey some properties concerning ES calculi and we describe work
+done in the domain during these last 15 years. We propose simple syntax and simple
+equations and rewriting rules to model a formalism enjoying good properties, specially
+confluence on metaterms, preservation of β-strong normalisation, strong normalisation
+of typed terms and implementation of full composition.
+We believe however that some of our proofs can be simplified. In particular, PSN
+might be proved directly without using translations of λes to other formalisms. We
+leave this for future work.
+Another interesting issue is the extension of Pure Type Systems (PTS) with ES in
+order to improve the understanding of logical systems used in theorem-provers. Work
+done in this direction is based on sequent calculi [33] or natural deduction [41]. The
+main contribution of λes w.r.t the formalisms previously mentioned would be our safe
+notion of composition.
+It is also legitimate to ask whether λes is minimal w.r.t. the number of rewrit-
+ing rules. Indeed, it is really tempted to gather the rules {App
+1
+, App
+2
+, App
+3
+} (resp.
+{Comp1, Comp2}) into the single rule App for application (resp. Comp for composition)
+given just after Lemma 8. While this change seems to be sound w.r.t. the properties of
+the calculus 3, the translation ofΛes-terms intoΛI -terms (c.f. Section 4.2), respectively
+into proof-nets (c.f. [28]), does not work anymore. We thus leave this question as an
+open problem. Note however that λes-reduction can be translated to the correspondent
+notion of reduction in this calculus : thus for example App1 can be obtained by App
+followed by Gc.
+As far as implementation is concerned, it would be preferable from a practical point
+of view to avoid the systematic use of the equivalence classes generated by the axioms
+α and C. In other words, it would be more efficient to work with a pure rewriting system
+(without equations) verifying the same properties than λes. We believe that simulta-
+neous substitutions will be needed to avoid axiom C while some technology like de
+Bruijn notation will be needed to avoid axiom α (as in the λσ⇑ -calculus). We leave this
+topic for future investigations, but we refer the interested reader to [28] for a concrete
+proposition of such a calculus.
+Acknowledgements
+This work has benefited from fruitful discussions with E. Bonelli, R. David, R. Di
+Cosmo, J-P. Jouannaud, S. Lengrand, C. Mun˜oz and V. van Oostrom.
+References
+[1] A. Arbiser, E. Bonelli, and A. Rı´os. Perpetuality in a lambda calculus with explicit substitu-
+tions and composition. WAIT 2000.
+3 While the weaker rule for composition given by t[x/u][y/v] → t[x/u[y/v]] (y /∈ t), is well-
+known [7] to affect strong normalisation and preservation of β-strong normalisation.
+[2] M. Abadi, L. Cardelli, P. L. Curien, and J.-J. Le´vy. Explicit substitutions. JFP, 4(1):375–416,
+1991.
+[3] A. Arbiser. Explicit Substitution Systems and Subsystems. PhD thesis, Universidad Buenos
+Aires, 2006.
+[4] H. Barendregt. The Lambda Calculus: Its Syntax and Semantics. North-Holland, 1984.
+[5] H. Barendregt. Lambda calculus with types. In Handbook of Logic in Computer Science,
+volume 2, 1992.
+[6] Z.-E.-A. Benaissa, D. Briaud, P. Lescanne, and J. Rouyer-Degli. λυ, a calculus of explicit
+substitutions which preserves strong normalisation. JFP, 1996.
+[7] R. Bloo and H. Geuvers. Explicit substitution: on the edge of strong normalization. TCS,
+6(5):699–722, 1999.
+[8] R. Bloo. Preservation of Termination for Explicit Substitution. PhD thesis, Eindhoven Uni-
+versity of Technology, 1997.
+[9] F. Baader and T. Nipkow. Term Rewriting and All That. Cambridge University Press, 1998.
+[10] R. Bloo and K. Rose. Preservation of strong normalization in named lambda calculi with
+explicit substitution and garbage collection. In Computer Science in the Netherlands 1995.
+[11] N. de Bruijn. Lambda-calculus notation with nameless dummies, a tool for automatic for-
+mula manipulation, with application to the church-rosser theorem. Indag. Mat., 5(35):381–
+392, 1972.
+[12] N. de Bruijn. Lambda-calculus notation with namefree formulas involving symbols that
+represent reference transforming mappings. Indag. Mat., 40:384–356, 1978.
+[13] R. Di Cosmo, D. Kesner, and E. Polonovski. Proof nets and explicit substitutions. In LNCS
+1784, FOSSACS 2000.
+[14] R. David and B. Guillaume. A λ-calculus with explicit weakening and explicit substitution.
+MSCS, 11:169–206, 2001.
+[15] G. Dowek, T. Hardin, and C. Kirchner. Higher-order unification via explicit substitutions.
+I&C, 157:183–235, 2000.
+[16] R. Dyckhoff and C. Urban. Strong normalisation of Herbelin’s explicit substitution calculus
+with substitution propagation. WESTAPP 2001.
+[17] F. L. C. de Moura and M. Ayala-Rinco´n and F. Kamareddine. Higher-Order Unification:
+A structural relation between Huet’s method and the one based on explicit substitutions.
+Journal of Applied Logic, 6(1):72-108, 2008.
+[18] J. Forest. A weak calculus with explicit operators for pattern matching and substitution. In
+LNCS 2378, RTA 2002.
+[19] J.-Y. Girard. Linear logic. TCS, 50(1):1–101, 1987.
+[20] J. Goubault-Larrecq. Conjunctive types and SKInT. In LNCS 1657, Types for Proofs and
+Programs, 1999.
+[21] T. Hardin. Re´sultats de confluence pour les re`gles fortes de la logique combinatoire
+cate´gorique et liens avec les lambda-calculs. The`se de doctorat, Universite´ de Paris VII,
+1987.
+[22] H. Herbelin. A λ-calculus structure isomorphic to sequent calculus structure. In LNCS 933,
+CSL 1994.
+[23] T. Hardin and J.-J. Le´vy. A confluent calculus of substitutions. In France-Japan Artificial
+Intelligence and Computer Science Symposium, 1989.
+[24] T. Hardin, L. Maranget, and B. Pagano. Functional back-ends within the lambda-sigma
+calculus. In ICFP 1996.
+[25] G. Huet. Re´solution d’e´quations dans les langages d’ordre 1, 2, . . . , ω. The`se de doctorat
+d’e´tat, Universite´ Paris VII, 1976.
+[26] Zurab Khasidashvili. Expression reduction systems. In Proceedings of IN Vekua Institute
+of Applied Mathematics, volume 36, Tbilisi, 1990.
+[27] D. Kesner. Confluence properties of extensional and non-extensional λ-calculi with explicit
+substitutions. In LNCS 1103, RTA 1996.
+[28] D. Kesner. The theory of calculi with explicit substitutions revisited, 2006. Available as
+http://hal.archives-ouvertes.fr/hal-00111285/.
+[29] D. Kesner and S. Lengrand. Extending the explicit substitution paradigm. In LNCS 3467,
+RTA 2005.
+[30] J.-W. Klop. Combinatory Reduction Systems. PhD thesis, Mathematical Centre Tracts 127,
+CWI, Amsterdam, 1980.
+[31] Z. Khasidashvili, M. Ogawa, and V. van Oostrom. Uniform Normalization Beyond Orthog-
+onality. In LNCS 2051, RTA 2001.
+[32] F. Kamareddine and A. Rı´os. A λ-calculus a` la de Bruijn with explicit substitutions. In
+LNCS 982, PLILP 1995.
+[33] S. Lengrand, R. Dyckhoff, and J. McKinna. A sequent calculus for type theory. In LNCS
+4207, CSL 2006.
+[34] S. Lengrand. Normalisation and Equivalence in Proof Theory and Type Theory. PhD thesis,
+University Paris 7 and University of St Andrews, 2006.
+[35] P. Lescanne. From λσ to λυ , a journey through calculi of explicit substitutions. In POPL
+1994.
+[36] R. Lins. A new formula for the execution of categorical combinators. In LNCS 230, CADE
+1986.
+[37] R. Lins. Partial categorical multi-combinators and Church Rosser theorems. Technical
+Report 7/92, Computing Laboratory, University of Kent at Canterbury, 1992.
+[38] J.-J. Le´vy and L. Maranget. Explicit substitutions and programming languages. In LNCS
+1738, FSTTCS 1999.
+[39] P. Lescanne and J. Rouyer-Degli. Explicit substitutions with de Bruijn levels. In LNCS 914,
+RTA 1995.
+[40] P.-A. Mellie`s. Typed λ-calculi with explicit substitutions may not terminate. In LNCS 902,
+TLCA 1995.
+[41] C. Mun˜oz. Un calcul de substitutions pour la repre´sentation de preuves partielles en the´orie
+de types. PhD thesis, Universite´ Paris 7, 1997.
+[42] R. Nederpelt. Strong Normalization in a Typed Lambda Calculus with Lambda Structured
+Types. PhD thesis, Eindhoven University of Technology, 1973.
+[43] E. Polonovski. Substitutions explicites, logique et normalisation. The`se de doctorat, Uni-
+versite´ Paris 7, 2004.
+[44] K. Rose. Explicit cyclic substitutions. In LNCS 656, RTA 1992.
+[45] T. Sakurai. Strong normalizability of calculus of explicit substitutions with composition.
+Available on http://www.math.s.chiba-u.ac.jp/∼sakurai/papers.html.
+[46] F.-R. Sinot, M. Ferna´ndez, and I. Mackie. Efficient reductions with director strings. In
+LNCS 2706 , RTA 2003.
+[47] Terese. Term Rewriting Systems, volume 55 of Cambridge Tracts in Theoretical Computer
+Science. Cambridge University Press, 2003.

@@ -1,0 +1,3181 @@
+A Rewriting-Based Inference System for the
+NRL Protocol Analyzer and its Meta-Logical
+Properties
+Santiago Escobar a,c,∗, Catherine Meadows b, Jose´ Meseguer c
+a Universidad Polite´cnica de Valencia, Valencia, Spain
+b Naval Research Laboratory, Washington, DC, USA
+c University of Illinois at Urbana-Champaign, Urbana, IL, USA
+Abstract
+The NRL Protocol Analyzer (NPA) is a tool for the formal specification and analysis
+of cryptographic protocols that has been used with great effect on a number of
+complex real-life protocols. One of the most interesting of its features is that it can
+be used to reason about security in face of attempted attacks on low-level algebraic
+properties of the functions used in a protocol. Indeed, it has been used successfully
+to either reproduce or discover a number of such attacks. In this paper we give
+for the first time a precise formal specification of the main features of the NPA
+inference system: its grammar-based techniques for invariant generation and its
+backwards reachability analysis method. This formal specification is given within
+the well-known rewriting framework so that the inference system is specified as
+a set of rewrite rules modulo an equational theory describing the behavior of the
+cryptographic algorithms involved. We then use this formalization to prove some
+important meta-logical properties about the NPA inference system, including the
+soundness and completeness of the search algorithm and soundness of the grammar
+generation algorithm. The formalization and soundness and completeness theorems
+not only provide also a better understanding of the NPA as it currently operates,
+but provide a modular basis which can be used as a starting point for increasing
+the types of equational theories it can handle.
+∗ Corresponding author.
+Email addresses: sescobar@dsic.upv.es (Santiago Escobar),
+meadows@itd.nrl.navy.mil (Catherine Meadows), meseguer@cs.uiuc.edu (Jose´
+Meseguer).
+Preprint submitted to Theoretical Computer Science
+1 Introduction
+The NRL Protocol Analyzer (NPA) (Meadows, 1996c) is a tool for the formal
+specification and analysis of cryptographic protocols that has been used with
+great effect on a number of complex real-life protocols. One of the most in-
+teresting of its features is that it can be used, not only to prove or disprove
+authentication and secrecy properties using the standard Dolev-Yao model
+(Dolev and Yao, 1983), but also to reason about security in face of attempted
+attacks on low-level algebraic properties of the functions used in a protocol.
+Indeed, it has been used successfully to either reproduce or discover a number
+of such attacks, ranging from the discovery of an authentication attack based
+on the cancellation properties of encryption and decryption (Meadows, 1992),
+to the reproduction of Bellovin’s attack on a version of the Encapsulating
+Security Protocol that used cipher block chaining to the discovery of a so-
+phisticated type confusion attack (Stubblebine and Meadows, 2000; Meadows
+et al., 2004) that resulted in the redesign of a draft for a protocol standard.
+NPA’s ability to reason well about these low-level functionalities is its com-
+bination of symbolic reachability analysis using narrowing, together with its
+techniques for reducing the size of the search space. On one hand, unification
+modulo algebraic properties (e.g., encryption and decryption, concatenation
+and deconcatenation) as narrowing using a finite convergent set of rewrite
+rules (Baader and Snyder, 2001) allows the tool to represent behavior which is
+not captured by the usual Dolev-Yao free algebra model. On the other hand,
+techniques for reducing the size of the search space by using inductively de-
+fined co-invariants 1 describing states unreachable to an intruder allows us to
+start with an infinite search space, and reduce it in many cases to a finite one,
+thus freeing us from the requirement to put any a priori limits on the number
+of sessions.
+The NPA’s use of inductive co-invariants which are defined using grammars
+similar to tree grammars, has been shown (Meadows, 2000) to be related
+to structures used in other formalisms, such as strand space ideals (Fabrega
+et al., 1999) and rank functions (Heather and Schneider, 2005). Indeed, we
+believe that many of the techniques that have been developed for grammar
+generation for the NPA could be applied with profit to other systems and
+some other NPA search space reduction techniques, such as its use of a form
+of partial order reduction (Peled, 1998), might also prove useful for other
+systems. Moreover, the NPA’s reliance on rewriting and narrowing (TeReSe,
+2003; Meseguer, 1992) suggests that it could by profitably compared with
+other protocol analysis systems that rely on rewriting. However, the adoption
+1 We call here inductively defined sets of unreachable states co-invariants, since
+they are in a sense dual to invariants, which are reachability-closed sets of states.
+2
+of NPA language generation techniques has been hampered by the fact that
+up to now the techniques have lacked an independent formal specification and
+model, and instead were closely intertwined with other NPA features.
+One key contribution of this paper is to rectify this problem by giving for
+the first time a precise formal specification of the main features of the NPA
+inference system: its backwards reachability analysis method and its grammar-
+based techniques for co-invariant generation; both implemented in Maude. We
+will use the word Maude-NPA to refer to both this formal specification of the
+original NPA and its Maude implementation. Maude-NPA is given within the
+well-known rewriting framework so that the inference system is specified as a
+set of rewrite rules modulo an equational theory describing the behavior of the
+cryptographic functions involved. A second key contribution of this work is to
+use the rewriting formalism of the Maude-NPA inference system as a model
+to prove meta-logical properties about such an inference system. Specifically,
+we prove the soundness and completeness of its search algorithm, so that the
+tool will discover an attack of the type specified by the user if and only if
+such an attack exists at the level of abstraction supported by the model. We
+also prove the unreachability of the states characterized by grammars, thus
+showing that the drastic state space reductions afforded by such grammars
+do not compromise the completeness of the search algorithm. Finally, we have
+implemented the reachability analysis and language generation techniques in
+the Maude rewriting logic language, and have used it to generate the formal
+tree languages used in this paper.
+Besides the above-mentioned related work on inductive invariants (Fabrega
+et al., 1999; Heather and Schneider, 2005), our Maude-NPA rewriting-based
+formalization facilitates the comparison of NPA with other narrowing-based
+protocol analysis methods and tools. We do not give here precise comparisons,
+nor do we try to be exhaustive, but mention some representative approaches.
+Some of the narrowing-based mechanisms that we discuss have similarities
+with those used in the OFMC symbolic model checker tool for protocol analysis
+(Basin et al., 2005). Our work is also related to recent studies and decision
+procedures to find attacks that may use knowledge of algebraic properties of
+the underlying cryptographic functions (Comon-Lundh and Shmatikov, 2003;
+Millen and Shmatikov, 2001; Chevalier et al., 2003a,b). Indeed, as pointed out
+in (Meseguer and Thati, 2004), narrowing can be viewed as a general inference
+mechanism unifying many of those analyses. Our rewriting semantics makes
+clear that the Maude-NPA tool —and its planned extension to support many
+other analysis of attacks that use knowledge of the algebraic properties of
+the underlying cryptographic functions— occupies a middle ground between
+unrestricted (but semi-decidable) narrowing analysis and the decidable, but
+necessarily restricted, cases for which decision procedures such as those cited
+above exist.
+3
+This work should also be viewed as a first step towards reaching a number of
+longer-term goals. We are currently working on extending the Maude-NPA’s
+inference system to support the analysis of cryptographic protocols under a
+wider range of algebraic properties than it currently is capable of, with the
+ultimate plan of building a next-generation rewriting-based analysis tool that
+takes into account the algebraic properties of the underlying cryptographic
+functions. A precise specification of the semantics of the Maude-NPA’s infer-
+ence system in terms of rewrite rules will allow us to cleanly separate out
+reasoning modulo algebraic properties of the cryptographic algorithms used
+by the system from the rest of the inference mechanism, paving the way for
+the insertion of new algebraic properties in a modular fashion. Moreover, we
+expect that the current formal specification and the proofs of the meta-logical
+properties will also provide a good basis for specifying the inference system of,
+and prove meta-logical properties for, this more general next-generation tool.
+We start with an overview of the NPA in Section 2 and some preliminaries
+in Section 3. We introduce the notation used for describing protocols in Sec-
+tion 4. In Section 5, we show how the reachability analysis is performed using
+grammars to cut down the search space. Then, in Section 6, we first infor-
+mally explain how the Maude-NPA tool finds grammars defining co-invariants
+and then formally describe how these grammars are generated. We use the
+Needham-Schroeder Protocol (Needham and Schroeder, 1978) as the guiding
+example along the paper. We conclude in Section 7.
+2 NRL Protocol Analyzer Overview
+In the NPA, protocols are represented in terms of communicating state ma-
+chines. The state machines communicate by sending messages to an intruder,
+who has the usual ability to read and redirect traffic, and can also perform
+operations, e.g., encryption, decryption, concatenation, etc. on messages that
+it has received. Intruder operations are described in terms of the intruder
+sending messages to itself. All states and protocol rules are described symbol-
+ically, using a mixture of variables and constants, so a single specification can
+stand for multiple instances. There is no restriction in the number of prin-
+cipals, number of sessions, nonces, time, or local state values, i.e., no data
+abstraction or approximation is performed. It is also possible to include alge-
+braic properties of the operators (cryptographic and otherwise) that can be
+expressed in terms of a finite set of rewrite rules and it also allows limited
+support for commutativity.
+Analysis is done in NPA via backwards narrowing search from an (insecure)
+goal state. Output states of the protocol rules are (E-)unified with subterms
+of goal states via narrowing using an equational theory E. Specifically, NPA
+4
+s0 ≡ {m}
+tthhhhh
+hhh
+&&MM
+MMM
+M
+s0.0 ≡ {K, e(K,m)}
+ssggggg
+gggg
+**VVV
+VVVV
+VVVV
+· · ·
+s0.0.0 ≡ {K,m}
+
+· · ·
+×
+Fig. 1. Backwards protocol state exploration for Example 1
+allows only equational theories that can be oriented into a finite convergent
+set of rewrite rules where the right-hand side of each rule is either a subterm of
+the left-hand side or a ground term (Kapur and Narendran, 1987; Dershowitz
+et al., 1992). NPA can either: (i) find an attack, i.e., a protocol run from the
+insecure state to an initial state, (ii) prove the protocol secure, i.e., the search
+space is finite and no protocol run was found, or (iii) fail to terminate.
+The NPA includes a number of ways for recognizing that a state is unreachable
+by an intruder, thus reducing the size of the search space. We describe the two
+most important ones as follows. The first, upon which much of the other NPA
+state-space reduction functionality is built, is the notion of an intruder learning
+a term at a concrete moment in a protocol run. The NPA sets a condition
+that an intruder learns each term only once, and a history of all terms that an
+intruder will learn in the future is kept by the NPA in its backwards search.
+Note that this history is just the set of messages found by backwards search
+from the goal state till the present state. If, as the search proceeds, the NPA
+encounters a state in which the intruder knows a term which we positively
+know that the intruder will only learn at some moment in the future (i.e., it
+is actually in the current history) and thus it cannot be known at the present
+moment, then the NPA discards that state as unreachable.
+Example 1 Consider a protocol with only two operations, encryption, repre-
+sented by e(K,X), and decryption, represented by d(K,X), where K is the
+key and X is the message. These operations satisfy the cancellation properties
+d(K, e(K,X)) = X and e(K, d(K,X)) = X. Suppose also that the intruder
+has the capability of performing both encryption and decryption. Suppose that
+a goal state s0 is given in which the intruder knows a term m, and the NPA
+tells us that one of the states that can immediately precede it (obtained by back-
+wards narrowing) is one, s0.0, in which the intruder knows K and e(K,m).
+Since the intruder uses K and e(K,m) at the present state s0.0 to produce
+m in the following state s0, we say that it actually learns m in this concrete
+protocol transition from state s0.0 to state s0, which implies that he cannot
+know m in s0.0 or any state preceding it (recall that each term is learned only
+once). Suppose that the NPA finds another state, s0.0.0, immediately preceding
+s0.0 in which the intruder knows K and m. This state is therefore unreachable,
+since the intruder will not learn m until state s0, and, as we said, cannot know
+it in the present state s0.0.0. Thus s0.0.0 can be dropped. Figure 1 depicts the
+5
+{m}
+wwnnn
+nnn
+""E
+EEE
+E
+{k, e(k,m)}
+ttiiiii
+iii
+''PP
+PPP
+PP
+· · ·
+{k, e(k, e(k,m))}
+uujjjj
+jjj
+++WWWW
+WWWWW
+W
+· · ·
+· · · · · ·
+Fig. 2. Backwards protocol state exploration for Example 2
+three generated states.
+The other technique, one of the most powerful that the NPA uses for state
+space reduction, is the inductive generation of co-invariants. The idea, de-
+scribed in detail in (Meadows, 1996b), is to inductively generate grammars
+describing formal tree languages. A user starts by giving the NPA a term
+(with variables) that he/she believes that the intruder can’t learn. This term
+is called a seed term (or seed grammar). The NPA then generates a language
+containing the seed term such that, if the intruder learns a member of the
+language, then it must know a member of the language in a preceding state of
+the protocol execution, thus inductively proving the entire language unreach-
+able. The NPA does this by starting out with a language containing a single
+grammar production, which describes the seed term. It then generates a set
+of terms that the intruder must know in preceding states in order to be able
+to produce the seed term in the present state, and uses such a set of terms
+to construct new grammar productions. Every time the grammar changes, it
+tests all production rules to see if the co-invariant is still valid, i.e., to see that
+the knowledge of the terms described by such productions requires previous
+knowledge of a term described by the same productions. Wherever it fails to do
+so it generates new productions such that this is therefore the case, and retests
+again all productions in the same fashion. It continues in this way, generating
+new production rules and testing them, until it reaches a fixpoint 2 .
+Example 2 Consider a protocol that uses the same operators as Example
+1, with the same properties. Suppose that each time an honest principal A
+receives a message X, it outputs d(k,X), where k is a constant standing for a
+key shared by all honest principals. We can denote this by a protocol rule X →
+d(k,X). In order to keep the example simple, we assume in this case that the
+intruder does not perform operations itself, but can only intercept and redirect
+messages that are sent. Suppose now that we want to find out how an intruder
+can learn a term m that it does not know initially. The NPA uses backwards
+2 For some seed terms this grammar generation process may fail (that is, might
+never terminate adding always new productions, or fails to add a new production,
+in which case it terminates but with failure). In such cases no grammar generation
+fixpoint is reached for the chosen seed term, and no grammar is generated. This
+means that the chosen seed term cannot be used to cut down the search space, but
+it does not necessarily mean that the intruder is able to find the seed term.
+6
+search, so we ask what rules could produce m, and how. According to the honest
+principal rule X → d(k,X) and the property d(K, e(K,X)) = X, we have
+that the intruder can learn m only if it previously knows e(k,m). That is, we
+consider the rule application e(k,m) → d(k, e(k,m)), where d(k, e(k,m)) =E
+m. We then ask the NPA how the intruder can learn e(k,m), and we find
+that it can only happen if the intruder previously knows e(k, e(k,m)). Figure 2
+depicts the three generated states. We see a pattern emerging, which suggests
+the set of terms belonging to the following formal tree language L:
+L 7→ m
+L 7→ e(k, L)
+We now want to verify the co-invariant stating that intruder knowledge of any
+member of L implies previous knowledge of some member of L. We do this by
+running the NPA on the term t of each grammar production rule L 7→ t. First
+we run the NPA on the term m, and verify that it requires intruder knowledge
+of e(k,m) in a preceding state of the protocol, which is a member of L. We
+then run the NPA on the term e(k, L), and verify that it requires previous
+intruder knowledge of e(k, e(k, L)), which is also a member of L provided the
+fact that L is a member of L.
+It is also possible to combine language generation with the learn-only-once re-
+striction. For example, suppose that in our search for a term X, we encounter
+a previous state in which the intruder knows e(K,X). If we try to generate a
+language using the seed term e(K,X), the results will not be very interesting,
+since the intruder can always learn e(K,X) if it knows K and X. However,
+suppose that instead of specifying what the intruder knows we add the re-
+striction that the intruder does not yet know X; which will be denoted in the
+paper by the expression X/∈I. Then we can use the seed term to characterize
+the terms of the form e(K,X) that the intruder can observe and use to learn
+X.
+The NPA has a number of other features that it uses to limit the search space,
+including restrictions on the times at which the intruder can learn nonces
+(not before they are generated), and also a form of partial order reduction
+(Peled, 1998). However, in this paper we concentrate on the learns-only-once
+restriction and language generation, since these are the main tools used in
+reducing from an infinite to a finite search space.
+3 Preliminaries
+This section defines the terms and concepts from rewriting theory that are
+used in this paper. Readers already well-versed in these topics might want to
+7
+skip this section.
+We assume some familiarity with term rewriting and narrowing, see (TeReSe,
+2003; Meseguer, 1992) for missing definitions. In this paper, syntactical equal-
+ity between elements, resp. inequality, is denoted by e ≡ e′, resp. e 6≡ e′.
+Given a binary relation⇒⊆ T ×T on a set T of elements (e.g.,→R⊆ TΣ(X )×
+TΣ(X )), we say that an element a ∈ T is ⇒-irreducible (or is a normal form
+w.r.t. ⇒ or is a fixpoint of ⇒) if there is no element b ∈ T such that a ⇒ b.
+We denote the transitive closure of⇒ by⇒+, and the transitive and reflexive
+closure by ⇒∗. Also, a⇒! b denotes that a⇒∗ b and that b is ⇒-irreducible.
+We say that the relation ⇒ is terminating if there is no infinite sequence
+a1 ⇒ a2 ⇒ · · · ⇒ · · · . We say that ⇒ is confluent if whenever a ⇒∗ b and
+a⇒∗ c, there exists an element d such that b⇒∗ d and c⇒∗ d.
+An order-sorted signature Σ is defined by a set of sorts S, a partial or-
+der relation of subsort inclusion ≤ on S, and an (S∗ × S)-indexed family of
+{Σw,s}(w,s)∈S∗×S operations. We denote f ∈ Σw,s by f : w → s. In this pa-
+per, we use letters in sans-serif font s, s′, . . . to denote sorts, and lowercase
+letters f, g, h, . . . to denote symbols in Σ. We define a relation ' on S as the
+smallest equivalence relation generated by the subsort inclusion relation ≤.
+We assume that each equivalence class of sorts contains a top sort that is a
+supersort of every other sort in the class. Formally, for each sort s we assume
+that there is a sort 3 [s] such that s ' s′ implies s′ ≤ [s]. Furthermore, for each
+f : s1 × . . .× sn → s we assume that there is also an f : [s1]× . . .× [sn]→ [s].
+We require the signature Σ to be sensible, i.e., whenever we have f : w → s
+and f : w′ → s′ with w,w′ of equal length, then w ' w′ implies s ' s′.
+A Σ-algebra is defined by an S-indexed family of sets A = {As}s∈S such that
+s ≤ s′ implies As ⊆ As′ , and for each function f : w → s with w = s1 × . . .× sn
+a function fAw,s : As1 × . . . × Asn → As. Further, we require that subsort
+overloaded operations agree, i.e., for each f : w → s and (a1, . . . , an) ∈ Aw we
+require fAw,s(a1, . . . , an) = fA[w],[s](a1, . . . , an), where if w = s1 × . . . × sn, then
+[w] = [s1] × . . . × [sn]. We assume a family X = {Xs}s∈S of infinite sets of
+variables such that s 6≡ s′ implies Xs ∩ Xs′ = ∅, and the variables in X are
+different from constant symbols in Σ. We use uppercase letters X, Y,W, . . . to
+denote variables in X . We denote the set of ground Σ-terms and Σ-terms of
+sort s by TΣs and TΣ(X )s, respectively. More generally, we write TΣ for the
+Σ-algebra of ground terms over Σ, and TΣ(X ) for the Σ-algebra of terms with
+variables from the set X . In this paper, we use lowercase letters t, s, u, v, w, . . .
+to denote terms in TΣ(X ). Var(t) denotes the set of variables in t ∈ TΣ(X ) and
+Vars(t) denotes the set of variables of sort s. A non-variable term is simply a
+3 In the order-sorted specifications discussed in this paper we will sometimes leave
+this top sort and its associated operators implicit, in the sense that an order-sorted
+signature can always be conservatively completed to one satisfying our requirements.
+8
+term that is not a variable.
+We use a finite sequence of positive integers, called a position, to denote an
+access path in a term. For t ∈ TΣ(X ), Pos(t) denotes the set of positions in t,
+and PosΣ(t) denotes the set of non-variable positions in t. Given a position p
+and a set P of positions, we define p.P = {p.q | q ∈ P}. Given two positions
+p, q, we denote p.{q} also as p.q. The root of a term is at the empty position
+Λ. The subterm of t at position p is denoted by t|p and t[s]p is the term t with
+the subterm at position p replaced by s.
+A substitution is a mapping σ : X → TΣ(X ) which maps a variable of sort s to a
+term of sort s′ such that s′ ≤ s, and which is different from the identity only for
+a finite subset Dom(σ) of X . A substitution σ with Dom(σ) = {X1, . . . , Xn}
+is usually denoted as σ = [X1/t1, . . . , Xn/tn]. The identity substitution is
+denoted by id, i.e., Dom(id) = ∅. We denote the homomorphic extension of
+σ to TΣ(X ) also by σ. The set of variables introduced by σ is Ran(σ) =
+∪X∈Dom(σ)Var(σ(X)). The restriction of a substitution σ to a set of variables
+V is defined as σ↓V (X) = σ(X) if X ∈ V ; and σ↓V (X) = X otherwise. We say
+that a substitution σ is away from a set of variables V if Ran(σ)∩V = ∅. For
+substitutions σ, ρ such that Dom(σ)∩Dom(ρ) = ∅ we define their composition
+as (σ ◦ ρ)(X) = ρ(σ(X)) for each variable X ∈ X .
+Given a binary relation ⇒⊆ TΣ(X )× TΣ(X ), we say that a term t is strongly
+⇒-irreducible if for any substitution σ such that for each x ∈ Dom(σ), σ(x)
+is ⇒-irreducible, then σ(t) is ⇒-irreducible.
+A Σ-equation is an expression of the form t = t′, where t, t′ ∈ TΣ(X )s for an
+appropriate sort s. Order-sorted equational logic has a sound and complete
+inference system E `Σ (Meseguer, 1998) inducing a congruence relation =E
+on terms t, t′ ∈ TΣ(X ): t =E t′ if and only if E `Σ t = t′; where under the
+assumption that all sorts S in Σ are non-empty, i.e., ∀s ∈ S : TΣs 6= ∅, the
+inference system E `Σ can treat universal quantification in an implicit way.
+The E-subsumption preorder E holds between t, t′ ∈ TΣ(X ), denoted t E t′
+(meaning that t′ is more general than t), if there is a substitution σ such that
+t =E σ(t
+′); such a substitution σ is said to be an E-match from t to t′. We
+write t  t′ when E is empty, i.e., t ∅ t′. We extend this to substitutions as
+follows: σ E σ′ iff there is a substitution θ such that σ =E σ′ ◦ θ.
+An E-unifier for a Σ-equation t = t′ is a substitution σ such that σ(t) =E σ(t′).
+For Var(t) ∪ Var(t′) ⊆ W , a set of substitutions CSUE(t = t′,W ) is said to
+be a complete set of unifiers of the equation t =E t
+′ away from W if: (i)
+each σ ∈ CSUE(t = t′,W ) is an E-unifier of t =E t′; (ii) for any E-unifier
+ρ of t =E t
+′ there is a σ ∈ CSUE(t = t′,W ) such that ρ↓V E σ↓V and
+V = Var(t) ∪ Var(t′); (iii) for all σ ∈ CSUE(t = t′,W ), Dom(σ) ⊆ Var(t) ∪
+Var(t′) and Ran(σ) ∩W = ∅. An E-unification algorithm is complete if for
+9
+any equation t = t′ it generates a complete set of E-unifiers. Note that this
+set needs not be finite. A unification algorithm is said to be finitary and
+complete if it always terminates after generating a finite and complete set of
+solutions. We denote the unification problem CSU∅(t = t′,W ), which has a
+unique unifier, simply as the substitution mgu(t, t′).
+A rewrite rule is an expression of the form l → r, where l, r ∈ TΣ(X )s for
+an appropriate sort s. In this paper, we do not impose the usual condition
+Var(r) ⊆ Var(l). An (unconditional) order-sorted rewrite theory is a triple
+R = (Σ, φ, E,R) with Σ an order-sorted signature, E a set of Σ-equations, R
+a set of rewrite rules, and where φ : Σ→ P(N) specifies the frozen arguments
+φ(f) ⊆ {1, . . . , ar(f)} of each f ∈ Σ. We say that a position p in t is φ-frozen
+(or frozen if φ is obvious) if ∃q < p such that p = q.i.q′ and i ∈ φ(root(t|q)).
+Note that completeness of the different rewriting and narrowing relations in-
+troduced in what follows is always subject to the frozenness requirements
+imposed by φ. A topmost rewrite theory is a rewrite theory where rewriting
+and narrowing steps can only occur at the top of terms. This can occur, for
+instance, because the sort information and the rules force such rewrites to
+happen only at the top of terms, or because the frozenness specification φ
+always blocks rewrites at any proper subterm positions.
+We define the one-step rewrite relation →φ,R on TΣ(X ) as follows: t p→φ,R t′
+(or
+p→R if φ is not relevant, or →R if p is not relevant) if there is a non-φ-
+frozen position p ∈ PosΣ(t), a (possibly renamed) rule l → r in R such that
+Var(t) ∩ (Var(r) \ Var(l)) = ∅, and a substitution σ such that t|p = σ(l) and
+t′ = t[σ(r)]p. We say that R is terminating (confluent) if the relation →R is
+terminating (confluent). And we say R is convergent if it is terminating and
+confluent. The one-step R,E-rewrite relation 4 on TΣ(X ) is defined as follows:
+t
+p→φ,R,E t′ (or p→R,E if φ is not relevant, or →R,E if p is not relevant) if there
+is a non-φ-frozen position p ∈ PosΣ(t), a (possibly renamed) rule l → r in
+R such that Var(t) ∩ (Var(r) \ Var(l)) = ∅, and a substitution σ such that
+t|p =E σ(l) and t′ = t[σ(r)]p.
+We define the one-step narrowing relation on TΣ(X ) as follows: t p;σ,φ,R t′ (or
+p
+;σ,R if φ is not relevant, or;σ,R if p is not relevant, or;R if σ is not relevant)
+if there is a non-φ-frozen position p ∈ PosΣ(t), a (possibly renamed) rule l→ r
+in R such that Var(t) ∩ (Var(l) ∪ Var(r)) = ∅, and a unifier σ ≡ mgu(t|p, l)
+such that t′ = σ(t[r]p). The R,E-narrowing relation on TΣ(X ) is defined as
+follows, where we assume that there is a complete unification algorithm for E:
+4 A stronger alternative is the →R/E relation. However, we can safely restrict our-
+selves to the weaker →R,E when we have the following properties, satisfied by our
+inference system: (i) R is a topmost rewrite theory, (ii) the equations in E do not
+have variables of the top sort of R, and (iii) E has a complete unification algorithm,
+see (Meseguer and Thati, 2004) for details.
+10
+t
+p
+;σ,φ,R,E t
+′ (or
+p
+;σ,R,E if φ is not relevant, or ;σ,R,E if p is not relevant, or
+;R,E if σ is not relevant) if there is a non-φ-frozen position p ∈ PosΣ(t), a
+(possibly renamed) rule l→ r in R such that Var(t)∩ (Var(l)∪ Var(r)) = ∅,
+and a E-unifier σ ∈ CSUE(t|p = l, V ) for Var(t) ∪ Var(l) ∪ Var(r) ⊆ V such
+that t′ = σ(t[r]p).
+An important restriction in narrowing is the basic narrowing strategy (Hullot,
+1980), which performs narrowing steps only at subterms which have not been
+introduced by a previous computed substitution, i.e., a subterm that belongs to
+the original term. Given a narrowing sequence t0
+p1
+;θ1,φ,R t1
+p2
+;θ2,φ,R · · · pn;θn,φ,R
+tn, we inductively define the basic positions as B0 = PosΣ(t0) and Bi = (Bi−1\
+pi.Pos(ti−1|pi)) ∪ pi.PosΣ(ri) where li→ri ∈ R is used at step i. We define a
+basic narrowing sequence s;∗B,θ,φ,R t as s0
+p1
+;θ1,φ,R s1 · · · sn−1 pn;θn,φ,R sn such
+that s ≡ s0, t ≡ sn, θ ≡ θ1 ◦ · · · ◦ θn, and pi ∈ Bi−1 for 1 ≤ i ≤ n.
+When the equations in the equational theory E can be viewed as a finite
+convergent set of rewrite rules ~E, then basic narrowing with Eˆ = ~E∪{x ' x→
+True} provides a sound and complete E-unification algorithm (Baader and
+Snyder, 2001), i.e., σ↓V ∈ CSUE(t = t′,W ) for V = Var(t)∪Var(t′) and V ⊆
+W iff t ' t′ ;!B,σ,Eˆ True. Note that in general this doesn’t provide a finitary
+E-unification algorithm. However, when the equations in the equational theory
+E can be viewed as a finite convergent set of rewrite rules ~E where the right-
+hand side of each rule is either a subterm of the left-hand side or a ground
+term, then the basic narrowing relation ;B,R provides a sound, complete,
+and finitary E-unification algorithm (Kapur and Narendran, 1987; Dershowitz
+et al., 1992), i.e., σ↓V ∈ CSUE(t = t′,W ) for V = Var(t)∪Var(t′) and V ⊆ W
+iff t ' t′ ;!B,σ,Eˆ True.
+In this paper, we only consider equational theories E for protocols that can be
+converted into a finite convergent set of rewrite rules ~E where the right-hand
+side of each rule is either a subterm of the left-hand side or a ground term. We
+will require some protocol messages (i.e., terms) to be strongly→ ~E-irreducible
+and therefore we will make that explicit in the presentation.
+4 Protocol Notation
+The Maude-NPA’s search is based on two parameters: a protocol P , and a
+grammar sequence G = 〈G1, . . . , Gn〉. The protocol P is the one whose security
+properties we want to check. A grammarG in the sequence G is used by Maude-
+NPA to reduce the search space explored by backwards narrowing. In this
+section we introduce the notation, i.e., the signature ΣP , that we use to specify
+protocols, and in Section 6.3 we introduce the notation, i.e., the signature ΣG,
+that we use to specify grammars. The concrete grammar notation will not
+11
+be relevant until Section 6, although we will introduce brief comments when
+necessary.
+The operators in ΣP and ΣG are generic and apply to many different protocols.
+They include a special sort Msg of messages. A concrete protocol will add
+extra symbols involving the sort Msg in a protocol-specific signature Σ, such
+that Σ ⊆ ΣG and Σ ⊆ ΣP . Special algebraic properties of a protocol may be
+specified with symbols in Σ and equations in E such that the sort of the terms
+of the equations must be Msg or smaller, i.e., t, t′ ∈ TΣ(X )s and s ≤ Msg for
+each t = t′ ∈ E. The protocol is specified by means of a set P of strands
+(Fabrega et al., 1999), which are terms of a specific form in the signature
+ΣP . Our inference system will therefore be parametric on the protocol-specific
+syntax, equations, and strands, i.e., on the triple (Σ, E,P).
+Definition 1 (Protocol Signature) Given a protocol P, we use its protocol-
+specific signature Σ to build the general signature ΣP = Σ∪ΣStrand∪ΣI∪ΣState,
+where signature ΣStrand defines strands, signature ΣI defines the intruder
+knowledge, and signature ΣState defines a protocol state; both ΣI and ΣState
+will not be relevant until Section 5.1 below.
+We adopt a notation for specifying a protocol quite close to that of strand
+spaces (Fabrega et al., 1999). In a strand, a local execution of a protocol by
+a principal is indicated by a sequence of messages as shown below, where
+nodes representing input messages are assigned a negative sign, and nodes
+representing output messages are assigned a positive sign
+[msg−1 ,msg
++
+2 ,msg
+−
+3 , . . . ,msg
+−
+k−1,msg
++
+k ]
+We write msg± to denote msg+ or msg−. We use strands for backwards reach-
+ability analysis by narrowing. For this we need a mark, the symbol |, to divide
+past and future, i.e., we consider strands of the form
+[msg±1 , . . . ,msg
+±
+j−1 | msg±j ,msg±j+1, . . . ,msg±k ]
+where msg±1 , . . . ,msg
+±
+j−1 are the past messages, and msg
+±
+j ,msg
+±
+j+1, . . . ,msg
+±
+k
+are the future messages (msg±j is the immediate future message). Note that
+the mark | can appear in any position in the strand. So, [nil |msg±1 , . . . ,msg±k ]
+denotes a strand in its initial state, whereas [msg±1 , . . . ,msg
+±
+k | nil] denotes
+a strand in its final state. For simplicity, [msg±1 , . . . ,msg
+±
+k ] will denote the
+strand [nil | msg±1 , . . . ,msg±k ].
+Definition 2 (Strand Signature) Given a protocol P, we use its protocol-
+specific signature Σ to build the strand signature 5
+5 In the Maude language (Clavel et al., 2002), operators can be defined using a
+mix-fix syntax where the symbol ‘ ’ denotes each argument position, i.e., ‘ op ’
+denotes the infix representation of a binary symbol op. We use this flexible notation.
+12
+ΣStrand = Σ∪ { [ | ], +, −, , , & }. We define sorts SMsg, SMsgList,
+Strand, and StrandSet built on top of sort Msg where the operators are typed
+as follows:
+[ | ] : SMsgList× SMsgList→ Strand
++ : Msg→ SMsg
+− : Msg→ SMsg
+and where the operator
+, : SMsgList× SMsgList→ SMsgList
+is a list concatenation operator that is associative and has identity 6 nil, and
+we assume that there is a subsort relation SMsg < SMsgList. Moreover, the
+operator
+& : StrandSet× StrandSet→ StrandSet
+is a set union operator that is associative, commutative (AC) and has identity
+∅, and we assume that there is a subsort relation Strand < StrandSet.
+In this paper, we abuse the notation and write t ∈ w to actually denote that
+t is a proper subterm of w such that there exist u, v such that w ≡ u, t, v and
+, is an appropriate associative (and possibly commutative) operator, i.e., w
+is a term denoting either a set or a list, such as a term of sort StrandSet or
+SMsgList. Note that, although we use AC symbols in the protocol signature
+ΣP , these are not allowed in the protocol-specific signature Σ.
+In security analyses it is often necessary to use fresh unguessable values. For
+this we use a special sort, called Fresh, that can be used in the protocol-
+specific signature Σ. The meaning of a variable of sort Fresh is that it will
+never be instantiated by a computed E-unifier, i.e., for t
+p
+;σ,R,E t
+′ with
+l → r ∈ R, we have that VarFresh(t) ∪ VarFresh(l) ∪ VarFresh(r) 6⊆ Dom(σ);
+see Appendix A for details. For instance, one can use variables of sort Fresh
+for nonces in the strands. This restriction ensures that if nonces are rep-
+resented using variables of sort Fresh, they will never be merged and no
+approximation for nonces is performed. Note that the introduction of new
+nonces during protocol execution is ensured by the renaming of rules per-
+formed by narrowing, and therefore two strands running different sessions of
+the same protocol will have different nonces. For instance, a strand of the
+form [ e(k,N)+ ] where k is a key shared by all honest principals and N is
+a variable of sort Fresh will produce different messages e(k,N1), . . . , e(k,Nk).
+Moreover, since variables of sort Fresh can never be bound, a principal can
+6 In this paper, when we say that operator op : s× s → s has an identity operator
+op′, we implicitly assume an operator declaration op′ : → s, declaring op′ as a
+nullary operator of sort s appearing in each signature where the operator declaration
+op : s× s → s appears.
+13
+never detect that he/she received data of sort Fresh that he/she never cre-
+ated. For instance, in the strand [ e(k,N)−, e(k,N)− ], the variable N cannot
+be of sort Fresh and it has to be of sort Msg. Note that the framework is
+very flexible and the user can specify some constant symbols of sort Fresh to
+play with nonces that can indeed be merged. Since variables of sort Fresh are
+treated in a special way, we will make them explicit in the strands by writing
+(r1, . . . , rk : Fresh) [msg
+±
+1 , . . . ,msg
+±
+n ], where r1, . . . , rk are all the variables of
+sort Fresh appearing in msg±1 , . . . ,msg
+±
+n .
+Another important aspect of our inference system is that everything the in-
+truder can learn must be learned through strands, i.e., the intruder knows
+nothing in an initial state. However, this is not a limitation, since we can
+write strands [ m+ ] for any message m the intruder is able to know at an
+initial state.
+Example 3 The Needham-Schroeder protocol (Needham and Schroeder, 1978)
+uses public keys to achieve authentication between two parties, A and B. The
+protocol involves an initiator A, a responder B, and a key server S. We use
+the common notation A ↪→ B : M to stand for “A sends message M to B”.
+Encryption/decryption keys are represented by KM , denoting the key of M .
+Nonces, i.e., random numbers used as fresh unguessable values in messages,
+are represented by NX , denoting a nonce created by X. The informal protocol
+description proceeds as follows.
+(1) A ↪→ S : B
+A requests B’s public key from S.
+(2) S ↪→ A : {KB, B}KS
+S sends B’s public key and name to A, signed with its key.
+(3) A ↪→ B : {A,NA}KB
+A sends a nonce NA, together with its name to B, encrypted with B’s
+key. B decrypts the message to get A’s name and nonce.
+(4) B ↪→ S : A
+B requests A’s public key from S.
+(5) S ↪→ B : {KA, A}KS
+S sends A’s public key and name to B, signed with its key.
+(6) B ↪→ A : {NA, NB}KA
+B sends a nonce NB and A’s previous nonce NA to A, encrypted with
+A’s key. A decrypts the message and checks whether its previous nonce
+NA is present or not. If it finds NA, it assumes that a connection with B
+has been established.
+(7) A ↪→ B : {NB}KB
+A sends NB to B encrypted with B’s key. B decrypts the message and
+checks whether the decrypted result is NB. If it is indeed NB, it assumes
+that a connection with A has been established.
+14
+For the formal description of the protocol, we first discard all the steps inter-
+acting with the server, since the intruder can ask the server for any public key,
+and we just assume that the intruder knows all the public keys. That is, we
+consider the simpler version of the protocol 7 :
+(1) A ↪→ B : {A,NA}KB
+(2) B ↪→ A : {NA, NB}KA
+(3) A ↪→ B : {NB}KB
+Then, we make explicit the signature Σ describing messages, nonces, etc. A
+nonce NA is denoted by n(A, r), where r is a variable of sort Fresh. Concate-
+nation of two messages, e.g., NA and NB, is denoted by the operator ; , e.g.,
+n(A, r) ; n(B, r′). Encryption of a message M with the public key KA of prin-
+cipal A is denoted by pk(A,M), e.g., {NB}KB is denoted by pk(B, n(B, r′)).
+We assume that all public keys are known by the intruder, so that the intruder
+can perform pk(A,m) for any A and a known message m. Encryption with a
+secret key is denoted by sk(A,M). The secret key of the intruder is fixed and
+is denoted by the constant c, so that the only secret key operation the intruder
+can perform is sk(c,m) for a known message m. Note that this corresponds
+to a na¨ıve implementation of RSA; other encryption systems can be encoded
+with a different signature, rewrite rules, and equations. The protocol-specific
+signature Σ is as follows:
+pk : Name×Msg→ Enc sk : Name×Msg→ Enc
+c : → Name
+n : Name× Fresh→ Nonce
+; : Msg ×Msg→ Msg
+together with the following subsort relations
+Name Nonce Enc < Msg.
+In the following we will use letters A,B for variables of sort Name, letters
+r, r′ for variables of sort Fresh, letters M,M1,M2, Z for variables of sort Msg,
+letters L,L1, L2 for variables of sort SMsgList, and letters SS, SS
+′ for variables
+of sort StrandSet; whereas letters X, Y will also represent variables, but their
+sort will depend on the concrete position in a term. The encryption/decryption
+cancellation properties are described using the following equations E:
+pk(X, sk(X,Z)) = Z
+sk(X, pk(X,Z)) = Z
+7 The entire Needham-Schroeder protocol has been analyzed in the NPA tool
+(Meadows, 1996a).
+15
+The two strands P associated to the three protocol steps shown above are:
+(s1) (r : Fresh) [pk(B,A;n(A, r))+, pk(A, n(A, r);Z)−, pk(B,Z)+]
+This strand represents principal A initiating the protocol by sending his/her
+name and a nonce, both encrypted with B’s public key, to B in the first
+message. Then, A receives B’s response and sends a final message con-
+sisting of the rest of the message received from B.
+(s2) (r′ : Fresh) [pk(B,A;W )−, pk(A,W ;n(B, r′))+, pk(B, n(B, r′))−]
+This strand represents principal B receiving A’s first message, checking
+that it is the public key encryption of A’s name concatenated with some
+value W , and then sending to A the concatenation of that value W with
+B’s own nonce, encrypted with A’s public key. Then, B receives the final
+message from A and verifies that the final message that it receives has
+B’s nonce encrypted with B’s public key.
+The following strands describe the intruder ability to concatenate, deconcate-
+nate, encrypt and decrypt messages according to the Dolev-Yao attacker’s ca-
+pabilities (Dolev and Yao, 1983):
+• Concatenation of two messages into a message.
+(s3) [M−1 ,M
+−
+2 , (M1;M2)
++]
+• Extraction of two concatenated messages.
+(s4) [(M1;M2)
+−,M+1 ,M
++
+2 ]
+• Encryption of a message with a public key.
+(s5) [M−, pk(Y,M)+]
+• Encryption of a message with the intruder secret key.
+(s6) [M−, sk(c,M)+]
+Note that we have simplified the intruder rules w.r.t. (Dolev and Yao, 1983).
+For strand s3, we do not need the extra strand [M−2 ,M
+−
+1 , (M1;M2)
++], since our
+asynchronous model 8 allows M1 to be generated independently of M2. Simi-
+larly, we do not need [(M1;M2)
+−,M+2 ,M
++
+1 ] for strand s4. For strands s5 and
+s6, we could use the standard Dolev-Yao rules and write [Y −,M−, pk(Y,M)+]
+and [Y −,M−, sk(Y,M)+] instead. However, since the intruder knows all public
+keys but only his secret key, we must then add two new sorts PKey and SKey,
+add two new strands [PA+] and [c+] where PA is a variable of sort PKey,
+8 According to the model of Section 5.3 below, the acceptance of message M−1 will
+add a constraint M1∈I to the intruder knowledge and the acceptance of message
+M−2 will add another constraint M2∈I to the intruder knowledge, and both will be
+synchronized with different messagesM+ and thus converted into constraintsM1 /∈I
+and M2 /∈I independently of the order in which M1∈I and M2∈I were introduced
+into the intruder knowledge.
+16
+and update the operators pk, sk and c as follows: pk : PKey × Msg → Enc,
+sk : SKey × Msg → Enc, and c : → SKey. But this is equivalent to writing
+strand s5, which says that the intruder only has to know M , since the key
+Y is already known, and strand s6, which propagates symbol c into the first
+argument of sk.
+5 Reachability Analysis
+The reachability analysis is based on the notion of a protocol state. In Section
+5.1, we introduce the notation for specifying a protocol state and the intruder
+knowledge associated to each protocol state. In Section 5.2, we present the
+reachability analysis from a general point of view and explain which are the
+possible results of analyzing a protocol. In Section 5.3, we describe (and jus-
+tify) the concrete rewrite rules used in the backwards reachability analysis;
+these rules are automatically obtained from the strands P . In Section 5.4,
+we formally define the reachability analysis as a backwards narrowing search
+integrating the grammars as a test to cut-down the search space. We prove
+soundness and completeness of the reachability analysis in Section 5.5.
+As explained in the Introduction, the reachability analysis makes use of gram-
+mars to cut down many undesirable and useless search paths. We postpone
+until Section 6 the discussion of how grammars are generated and focus, in-
+stead, on how they are used for reachability purposes in this section. For this
+section, we only need to know that grammars are produced from a set of
+seed terms {sd1, . . . , sdn}. For each given seed term sdi, we either succeed in
+generating a grammar G!sdi or fail to do so; G
+! denotes the fixpoint of the
+grammar generation process when applied to the grammar G, and Gsdi de-
+notes the grammar associated to the seed term sdi. The fixpoint of all the seed
+terms for which we have obtained a fixpoint are kept in a grammar sequence
+G = 〈G!sdi1 , . . . , G!sdim 〉, where {i1, . . . , im} ⊆ {1, . . . , n}. We also assume that
+we can check whether a term t of sort Msg is in the language associated with
+some grammar G in the sequence G under the assumption that some con-
+straints C hold. This check is denoted by 〈G, C〉 ` (t∈L).
+5.1 State Notation
+An important aspect of the reachability analysis is the notion of the intruder
+knowledge. Since we are using backwards search, we will not have a precise
+picture of the intruder knowledge set at each protocol state, but we use the
+convention that the intruder learns a term only once, i.e., if the intruder does
+learn a term in the future, then it cannot know it in the present. Thus, in our
+17
+backwards search, we keep track of the set of terms that the intruder positively
+knows or doesn’t know at some point. In order to represent the knowledge of
+the intruder, we use a signature ΣI allowing us to specify positive and negative
+constraints t∈I and t/∈I stating what the intruder knows or doesn’t know. The
+exact point in a protocol run where a term t that was not known, i.e., t/∈I,
+becomes known, i.e., t∈I, indicates the moment when the intruder learned t.
+Definition 3 (Intruder Signature) We define the intruder signature
+ΣI = Σ∪{ ∈I, /∈I, 6≈ , , }, the sorts IntruderCtr and IntruderSet, declare
+the subsort relation IntruderCtr < IntruderSet, and introduce the operators
+∈I : Msg→ IntruderCtr /∈I : Msg→ IntruderCtr
+6≈ : Msg ×Msg→ IntruderCtr
+and the operator
+, : IntruderSet× IntruderSet→ IntruderSet
+which is a multiset union operator that is associative, commutative and has
+identity ∅.
+Remark 1 Given a message term t (i.e., a term of sort Msg) and the in-
+truder knowledge IK (i.e., a term of sort IntruderSet) if two occurrences of
+the constraint term t∈I, or two occurrences of the constraint term t/∈I, or a
+constraint term t∈I and a constraint term t/∈I occur at the same time in the
+multiset IK, then we can discard such intruder knowledge as invalid, because
+of the learn-only-once restriction. Therefore, sort IntruderSet is treated as a
+set instead of a multiset.
+Another important aspect is how a state is represented. In the NPA tool,
+complex definitions of states are possible. However, in Maude-NPA we sim-
+ply consider that a state is a set of strands (i.e., a term of sort StrandSet)
+together with the knowledge of the intruder in that state (i.e., a term of sort
+IntruderSet).
+Definition 4 (State Signature) We define the state signature
+ΣState = Σ∪ΣStrand∪ΣI ∪{ { }, & }, the sorts StateElm and State, declare
+subsort relations StateElm < State, and StrandSet < StateElm, introduce an
+operator
+{ } : IntruderSet→ StateElm
+and extend the associative and commutative operator & with identity ∅ to the
+State supersort
+& : State× State→ State.
+Remark 2 Given a term SS of sort State, there is only one subterm {IK}
+18
+in SS where IK is a term of sort IntruderSet and IK is not invalid as defined
+in Remark 1.
+Example 4 Continuing Example 3. A possible state is (we annotate each
+strand in the state with the strand identifier from Example 3 that it comes
+from):
+[ pk(B,A;n(A, r))+, pk(A, n(A, r);n(B, r′))− | pk(B, n(B, r′))+ ] & (s1)
+[ pk(B,A;Z)−, pk(A,Z;n(B, r′))+ | pk(B, n(B, r′))− ] & (s2)
+{ pk(B, n(B, r′))/∈I, IK }
+where the message pk(B, n(B, r′)) will be sent by the initiator (first strand)
+and received by the responder (second strand). Another possible state is
+[ pk(B,A;n(A, r))+ | pk(A, n(A, r);n(B, r′))−, pk(B, n(B, r′))+ ] & (s1)
+[ pk(B,A;Z)−, pk(A,Z;n(B, r′))+ | pk(B, n(B, r′))− ] & (s2)
+[ nil | (n(A, r);n(B, r′))−, pk(A, n(A, r);n(B, r′))+ ] & (s5)
+[ n(A, r)−, n(B, r′)− | (n(A, r);n(B, r′))+ ] & (s3)
+{ pk(B, n(B, r′))/∈I, pk(A, n(A, r);n(B, r′))/∈I, (n(A, r);n(B, r′))/∈I, IK }
+where the intruder is ready to send the message n(A, r);n(B, r′) (fourth strand)
+to itself (third strand) in order to be able to send the message
+pk(A, n(A, r);n(B, r′)) later to the initiator (first strand).
+The following definition formalizes the notion of an initial state, which is
+relevant for the rest of the paper.
+Definition 5 (Initial State) A term SS of sort State is initial if every
+strand in SS is in its initial position, denoted by [nil | L], and the intruder is
+not required to know anything, i.e., the intruder knowledge does not contain
+any constraint of the form t∈I.
+5.2 Outline of the General Algorithm
+The outline of the general search algorithm for flaw detection in the Maude-
+NPA is as follows.
+Input :
+(1) The protocol-specific signature Σ.
+(2) The protocol specification P described as a set of strands.
+19
+(3) A sequence of “seed” terms D = 〈sd1, . . . , sdn〉. These seed terms are
+indeed grammar productions that define an initial grammar to be further
+extended.
+(4) A term SSbad of sort State describing the insecure goal state, i.e., con-
+taining some strands required for the protocol run and any positive and
+negative facts about the intruder knowledge.
+Output : The algorithm tries to deduce whether the protocol is safe for SSbad
+or not. If the protocol is unsafe, Maude-NPA terminates with an intruder
+learning sequence (i.e., the attack trace). If the protocol is safe, the algorithm
+can often terminate, thanks to the drastic reduction on the search space given
+by the grammars, but it may in some cases loop. This provides a semi-decidable
+algorithm.
+Algorithm: First, build the fixpoint G!sdi of the grammar G
+0
+sdi
+associated to
+each seed term sdi w.r.t. the grammar generation process VP,Gk
+sdi
+,s defined
+below, i.e.,
+G0sdi VP,G0sdi ,s G
+1
+sdi
+VP,G1
+sdi
+,s G
+2
+sdi
+· · ·Gh−1sdi VP,Gh−1sdi ,s G
+h
+sdi
+≡ G!sdi
+This process may not terminate for some seed terms and may not produce a
+grammar for some others. The grammar sequence G contains the fixpoint G!sdi
+of all those grammars G0sdi for which the grammar generation process success-
+fully terminates, i.e., G = 〈G!sdi1 , . . . , G!sdim 〉 where {i1, . . . , im} ⊆ {1, . . . , n}
+and for each j ∈ {i1, . . . , im}, G0sdj VP,G0sdj ,s G
+1
+sdj
+· · ·Gh−1sdj VP,Gh−1sdj ,s G
+!
+sdj
+.
+Second, for the grammar sequence G, check reachability of SSbad using the
+backwards reachability relation
+〈SSbad, 〉;∗σ,P,G〈SSini, w〉
+defined below, where w is the concrete message exchange sequence.
+Example 5 Let us consider again the Needham-Schroeder Protocol of Exam-
+ple 3. A final attack state pattern to be given as input to the system can be:
+[ pk(B,A;Z)−, pk(A,Z;n(B, r′))+, pk(B, n(B, r′))− | nil ] &
+{ n(B, r′)∈I, IK }
+This attack state pattern represents a situation in which B has completed the
+expected communication with someone and the intruder has learned B’s nonce.
+For this insecure goal state, the reachability analysis returns several possible
+solutions, for instance the following initial state corresponding to Lowe’s attack
+(Lowe, 1996) (we again annotate each strand in the state with the strand
+20
+identifier from Example 3 that it comes from):
+[ nil | pk(c, A;n(A, r))+, pk(A, n(A, r);n(B, r′))−, pk(c, n(B, r′))+ ] & (s1)
+[ nil | pk(c, A;n(A, r))−, (A;n(A, r))+ ] & (s6)
+[ nil | (A;n(A, r))−, pk(B, (A;n(A, r))+ ] & (s5)
+[ nil | pk(B,A;n(A, r))−, pk(A, n(A, r);n(B, r′))+, pk(B, n(B, r′))− ] & (s2)
+[ nil | pk(c, n(B, r′))−, n(B, r′)+ ] & (s6)
+[ nil | n(B, r′)−, pk(B, n(B, r′))+ ] & (s5)
+{ n(B, r′)/∈I, pk(c, n(B, r′))/∈I, pk(A, n(A, r);n(B, r′))/∈I,
+pk(c, A;n(A, r))/∈I, (A;n(A, r))/∈I, pk(B, (A;n(A, r))/∈I,
+pk(B, n(B, r′))/∈I }
+And the concrete message exchange sequence w that is obtained by the reach-
+ability analysis is the following:
+pk(c, A;n(A, r))+ . pk(c, A;n(A, r))− . (A;n(A, r))+ . (A;n(A, r))− .
+pk(B, (A;n(A, r))+ . pk(B, (A;n(A, r))− . pk(A, n(A, r);n(B, r′))+ .
+pk(A, n(A, r);n(B, r′))− . pk(c, n(B, r′))+ . pk(c, n(B, r′))− . n(B, r′)+ .
+n(B, r′)− . pk(B, n(B, r′))+ . pk(B, n(B, r′))−
+This attack (Lowe, 1996) corresponds to the following informal message ex-
+change sequence:
+(1) A ↪→ I : {A,NA}c
+A sends a nonce NA, together with his/her name to the intruder I, en-
+crypted with I’s key c. I decrypts the message to get A’s name and nonce.
+(2) IA ↪→ B : {A,NA}KB
+I initiates communication with B impersonating A.
+(3) B ↪→ A : {NA, NB}KA
+B sends a nonce NB and previous A’s nonce NA to A, encrypted with
+A’s key. A decrypts the message and checks whether it finds the previous
+nonce NA or not. If A finds NA, assumes that a connection has been
+established with B.
+(4) A ↪→ I : {NB}c
+A thinks this is a response from I and responds with B’s nonce. I now
+can use B’s nonce to impersonate A.
+(5) I ↪→ B : {NB}KB
+I completes the protocol with B impersonating A.
+21
+5.3 Protocol Rules and Their Execution
+To execute a protocol P (described as a set of strands) we associate to P a
+rewrite theory RP . The protocol rules RP are obtained from the strands in
+P in an automatic way. However, we must carefully choose the rules RP in
+order to reduce the backwards narrowing search space that they produce. Let
+us consider a na¨ıve first approach. In a forward or backwards execution of the
+strands, we would need the following three rules
+R = { [ L | M−, L′ ] & {M∈I, IK} → [ L,M− | L′ ] & {M∈I, IK}, (1)
+[ L | M+, L′ ] & {IK} → [ L,M+ | L′ ] & {IK}, (2)
+[ L | M+, L′ ] & {M /∈I, IK} → [ L,M+ | L′ ] & {M∈I, IK} } (3)
+where L,L′, L1, L′1, L2, L
+′
+2, L
+′′
+2 are variables of sort SMsgList, M is a variable
+of sort Msg, and IK is a variable of sort IntruderSet. Rule (1) synchronizes an
+input message with a message already learned by the intruder, symbolizing
+that the intruder knows such message at that moment. Note that when this
+rule is applied backwards, it can introduce new facts t∈I by unification with
+an intruder knowledge variable IK. Rule (2) accepts output messages but the
+intruder knowledge is not increased, symbolizing that the message has been
+generated but the intruder doesn’t require such message for an attack. Rule (3)
+accepts output messages and the intruder knowledge is positively increased.
+Again, this rule can introduce new facts t∈I by unification with an intruder
+knowledge variable IK.
+In a regular forward execution of the protocol, we start with the strands de-
+scribing the protocol in the initial state, e.g., strands (s1) and (s2) of Example
+3 for the NSPK example. We then use rules (1)–(3) to move the bars of the
+strands to the right until reaching the final state. In a backwards execution,
+we use strands in a final state position and rules (1)–(3) in reverse. However,
+in an intruder attack we can have many partially executed strands together
+with many intruder strands from the Dolev-Yao attacker’s capabilities, i.e.,
+strands (s3)–(s6). Thus, an initial or final state in our tool might involve an
+unbounded number of strands, which would be unfeasible. To avoid this prob-
+lem we can use a more perspicuous set of rewrite rules describing the protocol,
+where the necessary strands are introduced dynamically. The key idea is to
+specialize rule (3) using the different protocol strands.
+In a backwards execution, which is the one we are interested in, we add the
+following specializations of rule (3):
+RP =R ∪ {[ l1 |u+, l2 ] & {u/∈I, IK} → {u∈I, IK} s.t. [ l1, u+, l2 ] ∈ P} (4)
+where l1, l2 are terms of sort SMsgList, u is a term of sort Msg, and IK is a
+22
+variable of sort IntruderSet.
+Definition 6 (Protocol Rewrite Theory) We associate to P a rewrite the-
+ory RP = (ΣP , φP , EP , RP), where RP contains the protocol rules obtained
+from the strands P using rules (1), (2), (3), and (4), EP contains the protocol-
+specific equational theory E plus equations for associativity, commutativity and
+identity of the & operator, associativity and identity of the , operator for
+sort SMsgList and associativity, commutativity and identity of the , oper-
+ator for sort IntruderSet; and the frozenness function φP is φP( −) = {1},
+φP( ∈I) = {1}, φP( /∈I) = {1}, φP( 6≈ ) = {1, 2}, φP(f) = {1, . . . , ar(f)}
+for f ∈ Σ, and φP(f) = ∅ for the remaining.
+Note that these frozenness restrictions for ΣP imply that input messages, mes-
+sages stored in the intruder knowledge, and all the arguments of the messages
+themselves are assumed to be strongly → ~E-irreducible. In Example 3, it im-
+plies that no input message of the form pk(A,Z)− or sk(A,Z)− where Z is a
+variable of sort Msg, can appear in a strand, e.g., Z could be instantiated to
+sk(A, Y ) and then pk(A, sk(A, Y ))− is not→ ~E-irreducible. Note also that RP
+is defined as a topmost theory, i.e., terms of sort State can be rewritten and
+narrowed only at the top position using RP . And note that the rewrite theory
+RP is used in the Maude-NPA in a backwards way, i.e., we will therefore use the
+backwards narrowing relation ;R−1P ,EP
+where R−1P = {r → l | l→ r ∈ RP}.
+Example 6 Given the strands of Example 3, the associated strand rules are
+the following.
+• First the fixed rules of R.
+(r1) [ L | M−, L′ ] & {M∈I, IK} → [ L,M− | L′ ] & {M∈I, IK}
+(r2) [ L | M+, L′ ] & {IK} → [ L,M+ | L′ ] & {IK}
+(r3) [ L | M+, L′ ] & {M /∈I, IK} → [ L,M+ | L′ ] & {M∈I, IK}
+The strands of Example 3 are transformed into the following rules. They model
+the inclusion of new strands.
+• Strand (s1) is transformed into the following two rules:
+(r4) [ pk(B,A;n(A, r))+, pk(A, n(A, r);Z)− | pk(B,Z)+ ] &
+{ pk(B,Z)/∈I, IK }
+→ { pk(B,Z)∈I, IK }
+For instance, this rule describes, when executed in a backwards way, that
+the intruder learns a term pk(B,Z) because of a new strand being executed.
+It represents also the introduction of a new protocol run in parallel, i.e.,
+a new session.
+23
+(r5) [ nil | pk(B,A;n(A, r))+, pk(A, n(A, r);Z)−, pk(B,Z)+ ] &
+{ pk(B,A;n(A, r))/∈I, IK }
+→ { pk(B,A;n(A, r))∈I, IK }
+• Strand (s2) is transformed into the following rule:
+(r6) [ pk(B,A;Z)− | pk(A,Z;n(B, r))+, pk(B, n(B, r))− ] &
+{ pk(A,Z;n(B, r))/∈I, IK }
+→ { pk(A,Z;n(B, r))∈I, IK }
+• Strand (s3) is transformed into the following rule:
+(r7) [ M−1 , M
+−
+2 | (M1;M2)+ ] & { (M1;M2)/∈I, IK } → { (M1;M2)∈I, IK }
+• Strand (s4) is transformed into the following two rules:
+(r8) [ (M1;M2)
+−, M+1 | M+2 ] & { M2 /∈I, IK } → { M2∈I, IK }
+(r9) [ (M1;M2)
+− | M+1 , M+2 ] & { M1 /∈I, IK } → { M1∈I, IK }
+• Strand (s5) is transformed into the following rule:
+(r10) [ M− | pk(Y,M)+ ] & { pk(Y,M)/∈I, IK } → { pk(Y,M)∈I, IK }
+• Strand (s6) is transformed into the following rule:
+(r11) [ M− | sk(c,M)+ ] & { sk(c,M)/∈I, IK } → { sk(c,M)∈I, IK }
+Then, given the following state:
+[ pk(B,A;n(A, r))+, pk(A, n(A, r);n(B, r))− | pk(B, n(B, r))+ ] &
+[ pk(B,A;Z)−, pk(A,Z;n(B, r))+ | pk(B, n(B, r))− ] &
+{ pk(B, n(B, r))∈I }
+Using backwards narrowing modulo EP , we can apply rule r8 and obtain the
+following state:
+[ pk(B,A;n(A, r))+, pk(A, n(A, r);n(B, r))− | pk(B, n(B, r))+ ] &
+[ pk(B,A;Z)−, pk(A,Z;n(B, r))+ | pk(B, n(B, r))− ] &
+[ (M1; pk(B, n(B, r)))
+−, M+1 | pk(B, n(B, r))+ ] &
+{ pk(B, n(B, r))/∈I }
+where the third strand says that the message pk(B, n(B, r)) received by the
+second strand is learned (and thus produced) by the intruder, who obtained such
+message from another message (M1; pk(B, n(B, r))), that he/she still needs to
+resolve.
+24
+5.4 The Reachability Inference System
+The key requirement for an inference system that can make use of the gram-
+mar generation technique is that it supports the notion of an intruder who
+knows some terms in the present and past, and will learn more terms in the
+future. The reachability inference system offered by the Maude-NPA meets
+this requirement.
+Before defining the main backwards reachability relation ;P,G, we must in-
+troduce a procedure for the unification of variables in the intruder knowledge,
+necessary for a correct reachability algorithm, as shown in the following ex-
+ample.
+Example 7 Consider a protocol with a unique strand [ t+ ] where t is a fixed
+message without Fresh variables. And consider an initial bad state such as
+{ X∈I, Y ∈I } declaring that the intruder is able to learn two pieces of in-
+formation X and Y and no strand is provided. If we run the protocol, we
+expect the initial state [ nil | t+ ] & [ nil | t+ ] & { t/∈I, t/∈I } declaring that
+the intruder was able to learn the message t twice. However, because of the
+learn-only-once restriction, such an initial state is invalid (see Remark 1) and
+the appropriate initial state is [ nil | t+ ] & { t/∈I }, computable only if the
+variables X and Y are unified at some point.
+Therefore, before applying a backwards narrowing step using the protocol
+rules, we must check if some variables in the intruder knowledge can be unified
+and in such a case, create two versions of the same state, one where they are
+indeed unified and another one where they are necessarily different, denoted
+by the intruder constraint X 6≈Y given in Definition 3.
+Definition 7 (Splitting of Intruder Knowledge) Given a term SS of sort
+State, the relation ⇒σ,splitIK is defined as follows:
+SS & { IK } ⇒id,splitIK SS & { IK, X 6≈Y } and
+SS & { IK } ⇒σ,splitIK σ(SS & { IK ′ })
+if ∃X, Y ∈ X and σ s.t. (X∈I) ∈ IK, (Y ∈I) ∈ IK, (X 6≈Y ) 6∈ IK,
+σ = mgu(X, Y ), and IK ′ is IK without the term (Y /∈I).
+A sequence S ⇒σ1,splitIK S1 ⇒σn,splitIK · · · ⇒σn,splitIK Sk is denoted by
+S ⇒∗σ,splitIK Sk where σ = σ1 ◦ · · · ◦ σn.
+Remark 3 Given a term SS of sort State, if we have a constraint of the form
+t6≈t in the intruder knowledge IK of SS, then we can discard SS as invalid.
+25
+We define the backwards narrowing reachability relation ;σ,P,G.
+Definition 8 (Backwards Reachability) Given a term SS of sort State,
+the backwards reachability relation ;P,G is defined by the equivalence
+〈SS,w〉 ;σ◦σ′,P,G 〈SS ′′, σ ◦ σ′(m± . w)〉
+iff SS ⇒!σ,splitIK SS ′, SS ′ ;•σ′,φP ,R−1P ,EP SS
+′′, and SS ′′ is G-safe
+where SS ′, SS ′′ are also terms of sort State, w is the concrete message ex-
+change sequence described using the list concatenation operator . which is
+associative and has identity , and m± is the concrete message expression
+moved from past to future, i.e., there is a strand [ l | m±, l′ ] in SS ′′ such that
+[ l, m± | l′ ] appeared in SS ′ or [ l | m±, l′ ] has been added to SS ′′.
+Its auxiliary relations are depicted in Figure 3. We will write ;P,G when the
+concrete computed substitution is not relevant. The auxiliary (backwards)
+narrowing relation ;•
+σ,φP ,R−1P ,EP
+is defined in Appendix A. And the notion of
+G-safe state is defined as follows.
+Definition 9 (G-safe Protocol State) Given a term SS of sort State and
+a grammar sequence G, we say that SS is G-safe if, for IK the intruder knowl-
+edge in SS, for each strand [ l | l′ ] ∈ SS, and for eachm− in l, the term (m/∈I)
+does not appear in IK and 〈G, filter 6∈(IK)〉 6` (m∈L), where filter 6∈(IK)
+returns all the constraints of the form /∈I in IK. We write G-safe instead of
+G-safe when we want to emphasize that a single grammar G (possibly not in
+G) is used.
+The intuition behind the notion of a G-safe state is that a state is G-safe if
+it is not discarded by the learn-only-once restriction and it is not captured
+by the grammars G, where by being captured we mean that there is an input
+message in a strand of the state that is a member of the language defined by
+a grammar G in the sequence G.
+Recall that messages inside the operators −, ∈I, and /∈I are frozen, since
+we assume that they are always strongly → ~E-irreducible.
+Although grammars are explained in detail in Section 6, we give the following
+example of how they are used to cut the search space for motivational purposes.
+26
+〈SS,w〉 ;P,G 〈SS ′, w′〉
+ttiiii
+iiii
+i
+ **
+UUUU
+UUU
+SS ′ is G-safe
+
+⇒σ,splitIK t;•σ,φP ,R−1P ,EP t
+′
+〈G,D〉 ` C
+
+c v c′
+Fig. 3. Dependencies between relations and operators in the Reachability Phase
+Example 8 Continuing Example 6. For the state:
+[ pk(B,A;n(A, r))+, pk(A, n(A, r);n(B, r))− | pk(B, n(B, r))+ ] &
+[ pk(B,A;Z)−, pk(A,Z;n(B, r))+ | pk(B, n(B, r))− ] &
+[ (M1; pk(B, n(B, r)))
+−, M+1 | pk(B, n(B, r))+ ] &
+{ pk(B, n(B, r))/∈I }
+we can use the following grammar G (where X, Y are variables of sort Msg,
+B is a variable of sort Name, and r is a variable of sort Fresh):
+Y /∈I, Yn(B, r) 7→ X;Y ∈L
+to conclude that this state is not G-safe, i.e., the input message
+M1; pk(B, n(B, r)) in the third strand is a member of the formal tree language
+of G and so it is unreachable for an intruder. This grammar G describes a
+formal tree language containing any concatenation message t1; t2 of two mes-
+sages t1 and t2, where subterm t2 is positively not known by the intruder (i.e.,
+t2 /∈I) and t2 is not a nonce (i.e., t2n(B, r)).
+5.5 Soundness and Completeness
+Soundness of the reachability algorithm is now clear by the definition of the
+backwards narrowing relation ;∗P,G.
+Theorem 1 (Soundness) Let P be a protocol and let SSbad be a final attack
+state pattern. If 〈SSbad, 〉;∗σ,P,G〈SSini, w〉 and SSini is an initial state term,
+then SSini →∗RP ,EP σ(SSbad).
+To establish completeness of the reachability algorithm, we need an auxiliary
+result.
+27
+Theorem 2 (Topmost Strong Completeness) (Meseguer and Thati, 2004)
+Let R = (Σ, φ, E,R) be a topmost rewrite theory, t, t′ ∈ TΣ(X ), and let σ be
+a substitution such that σ(t)→∗R,E t′. Then, there are substitutions θ, τ and a
+term t′′ such that t;∗θ,R,E t
+′′, σ(t) ≡ τ(θ(t)), and t′ ≡ τ(t′′).
+Completeness of the reachability analysis follows from Theorem 2 and The-
+orem 9 below, which provides soundness of grammars, i.e., soundness of the
+G-safe test.
+Theorem 3 (Completeness) Let P be a protocol and let G be a set of gen-
+erated grammars. Let σ be a substitution, SSini be an initial state term, and
+SSbad be a final state term such that σ(SSini) →∗RP ,EP σ(SSbad). Then, there
+are substitutions θ, τ and an initial State term SS ′ini such that
+〈SSbad, 〉 ;∗θ,P,G 〈θ(SS ′ini), w〉, σ(SSbad) ≡ τ(θ(SSbad)), and
+σ(SSini) ≡ τ(θ(SS ′ini)).
+Proof. There are three issues here: (i) the relation ⇒ρ,splitIK , (ii) topmost
+narrowing using ;•
+σ,φP ,R−1P ,EP
+, and (iii) the G-safe test. If we have an attack
+σ(SSini)→∗RP ,EP σ(SSbad) for a substitution σ, there cannot be more than one
+occurrence of a constraint t/∈I in the intruder knowledge of SSini due to the
+learn-only-once restriction of Remark 1. If there are some variables in SSbad
+that σ unifies, then the relation ⇒ρ,splitIK would perform such unification of
+variables. Otherwise, the relation⇒ρ,splitIK would introduce constraints of the
+form t6≈s that do not affect the reachability process. The rewrite theory used
+in our backwards reachability analysis is not topmost in the strict sense, but
+given the fact that it rewrites a flat set modulo associativity, commutativity,
+and identity, it is ACU-topmost in the sense of (Meseguer and Thati, 2004) and
+is therefore semantically equivalent to a topmost theory in the strict sense,
+so that Theorem 2 applies. This means that the general backwards search
+narrowing analysis is complete. It now remains to be shown that completeness
+is not lost by using the strategy associated to the grammar sequence G, i.e.,
+the G-safe test. This follows from Theorem 9 in Section 6.6, since the paths
+removed by the grammars G are paths leading to unreachable states, i.e., states
+unreachable from the initial state. 2
+6 Grammar Generation
+Now, we focus on how grammars are generated by the Maude-NPA tool. In
+Section 6.1, we informally explain how the Maude-NPA tool generates gram-
+mars defining formal tree languages. For generating grammars, we do not need
+the strand representation of protocols defined in Section 4, so we provide in
+Section 6.2 an abstraction of the protocols into rewriting rules. In Section 6.3,
+28
+we introduce the notation that we use to specify grammars and how they are
+transformed into a rewrite theory for membership purposes. In Section 6.4,
+we define how membership of a message into a grammar’s language is per-
+formed. In Section 6.5, we formally describe how grammars are generated in
+terms of narrowing and rewriting. We provide the dependencies between the
+different operators used to generate grammars in Figure 5 below. Soundness
+of the grammars, i.e., that they describe states unreachable for an intruder, is
+proved in Section 6.6. We show how the grammar generation process is applied
+to the Needham-Schroeder example throughout this entire section.
+6.1 How Maude-NPA Generates Languages
+In this section we describe the Maude-NPA’s language generation strategy in
+broad outline, using Example 2 as an illustration. Recall that in Example 2, we
+had a protocol rule X → d(k,X), an equation property d(K, e(K,X)) = X,
+and the (informally described) grammar L ≡ { L 7→ m, L 7→ e(k, L) } arose.
+The Maude-NPA starts out with a simple seed term. This seed term defines
+an initial language stating only that the seed term is in the language. In
+Example 2, this seed term m is represented by the initial grammar {L 7→ m}.
+The Maude-NPA strategy for generating languages involves three stages: (i)
+the term generation stage, (ii) the rule verification stage, and (iii) the rule
+generation stage.
+In the term generation stage, the Maude-NPA takes each term defined by a
+language production and finds a complete set S of paths to the state in which
+the intruder knows that term, where by “complete” we mean that any path
+from an initial state to that term must contain a path from S as a subpath.
+In Example 2, there is only one path to the seed term m, namely the path in
+which the intruder sends e(k,m) to an honest principal.
+In the rule verification stage, the Maude-NPA examines each path and de-
+termines which paths already require the intruder to know a member of the
+language in order to produce the goal, and thus removes those paths from
+consideration. In the first iteration of Example 2, the single generated path
+only requires that the intruder knows e(k,m) in order to learn the goal m. At
+this stage e(k,m) has not yet been defined to be a member of the language,
+so that path stays in.
+In the rule generation stage, the Maude-NPA looks at the remaining paths,
+and generates a new set of grammar rules according to a set of heuristics. For
+instance, one such heuristic says that, if a path contains a term containing a
+word in the language as a subterm, then replace that subterm by a variableW
+and add a condition saying thatW is in the language, to obtain a new grammar
+29
+rule. In Example 2, this heuristic generates the grammar rule L 7→ e(k, L),
+where the non-terminal L can be seen as such a variable W .
+After the rule generation stage, the Maude-NPA reiterates the three stages
+until either all paths are eliminated in the rule verification stage, in which case
+it has successfully defined a language, or it can define no new language rules
+in the rule generation stage, in which case it has failed to define a language.
+It can also conceivably fail to terminate adding new rules forever.
+In Example 2, the Maude-NPA successfully defines a language. In the second
+iteration, the Maude-NPA shows that the sole path generated by each generic
+term defined by a language rule contains a member of the language. At this
+point it terminates with success.
+In actual fact, the Maude-NPA interleaves the term generation stage and the
+rule verification stage. And, as we shall see, both the rule verification and
+rule generation stages can be considerably more complex than for the simple
+example given here. However, this example should help the reader understand
+in broad outline the more detailed ideas that we present below.
+6.2 Simplified Protocol Rules and Their Execution
+To facilitate the grammar generation process, we use an abstract version of the
+protocol rules of Section 5.3. We use a more abstract and simple description
+of the protocol rules that extracts from the strands the information of what
+terms the intruder must know in order to send a term. This approach is similar
+to other rule-based or clause-based approaches (Weidenbach, 1999; Blanchet,
+2001; Genet and Klay, 2000) and the multiset rewriting formalism (Bistarelli
+et al., 2005). A detailed comparison is left for future work, since there are many
+differences, e.g., we don’t really have multisets but sets, and the number of
+messages is not increasing (non-monotonic or non-cumulative), etc. The reason
+is that our abstraction keeps only information on how the intruder is able to
+produce a concrete message and thus removes all the unnecessary data about
+strands and the intruder knowledge. Moreover, it doesn’t represent the actual
+intruder knowledge nor the reachability process as in other approaches. Note
+that the instantiation restriction for variables of sort Fresh defined in Section
+4 does not apply here, and thus nonces can be merged.
+We break each strand up into substrands, with one substrand for each place
+where a negative node directly precedes a positive node. We represent the
+substrand as a protocol rule of the form u1, . . . , un → v, where v, u1, . . . , un
+are terms of sort Msg, the u1, . . . , un are all the negative nodes preceding v,
+and v is a positive node. Thus, the left-hand side of a protocol rule describes
+what the intruder must know in order to produce v. If the intruder observes or
+30
+creates u1, . . . , un, then can send them to a principal in the appropriate order,
+and that principal will then produce v, and if the principal does not receive
+u1, . . . , un, then will not produce v.
+Definition 10 (Simplified Protocol Rewrite Theory) The simplified pro-
+tocol rewrite theory is defined as RSP = (ΣSP , φSP , ESP , RSP). The signature
+is defined as ΣSP = ΣG ∪ { , } (ΣG is defined in Section 6.3.1 below) where
+the operator , : MsgSet ×MsgSet → MsgSet is a set union operator that is
+associative, commutative, and has identity ∅, and we assume that there is a
+subsort relation Msg < MsgSet. The rewrite rules are defined as
+RSP = {neg(l)→ m s.t. [ l,m+, l′ ] ∈ P }
+where
+neg(l) =
+
+(m,neg(l′)) if l ≡ (m−, l′)
+neg(l′) if l ≡ (m+, l′)
+∅ if l ≡ nil
+The frozenness function is φSP( 7→ ) = {1} and φSP(f) = φG(f) for the
+remaining f ∈ ΣG (symbol 7→ ∈ ΣG describes a grammar rule and φG is the
+frozenness function for grammars; both are defined in Section 6.3). And the
+equational theory ESP is defined as the protocol-specific equations E explained
+in Section 4, together with the equations for associativity, commutativity and
+identity of the , operator.
+Recall that the frozenness restriction φSP( 7→ ) = {1} implies that the first
+argument of the symbol 7→ is frozen. The rewrite theory RSP is used in the
+Maude-NPA in a backwards way, i.e., we will therefore use ;R−1SP ,ESP
+where
+R−1SP = {r → l | l→ r ∈ RSP}.
+Example 9 Consider the signature Σ of Example 3. In the rewrite theory
+RSP = (ΣP , φSP , ESP , RSP), the rules RSP are listed below (rules p1-p7):
+• Strand (s1) is transformed into the following rules:
+(p1) ∅ → pk(B, A;n(A, r))
+(p2) pk(A, n(A, r);Z)→ pk(B,Z)
+• Strand (s2) is transformed into the following rule:
+(p3) pk(B,A;Z)→ pk(A,Z;n(B, r))
+Rules p4-p7 describe the intruder abilities according to strands (s3)–(s6):
+Strand (s3) is transformed into the following rule:
+(p4) M1,M2 →M1;M2
+• Strand (s4) is transformed into the following two rules:
+(p5) M1;M2 →M1
+31
+(p6) M1;M2 →M2
+• Strand (s5) is transformed into the following rule:
+(p7) M → pk(Y,M)
+• Strand (s6) is transformed into the following rule:
+(p8) M → sk(c,M)
+The following results relate the narrowing relations associated to the two
+rewrite theories RP and RSP of a protocol P . First, we introduce an aux-
+iliary definition for relating a protocol state and an abstract protocol state.
+Definition 11 (Abstract Protocol Representation) We define a trans-
+formation function mset : State→ MsgSet from a term SS of sort State into
+a term of sort MsgSet as
+mset(SS) = {m | (m∈I) ∈ IK, or
+(m/∈I) 6∈ IK and ∃[ l | l′ ] ∈ SS s.t. m ∈ neg(l)}
+where IK is the intruder knowledge appearing in the term {IK} in SS.
+Intuitively, mset(SS) denotes all the messages the intruder has to learn, i.e.,
+input messagesm− in the strands in SS and each messagem∈I in the intruder
+knowledge IK in SS.
+In the following, ;
+{0,1}
+σ,R,E denotes zero or one narrowing steps of the relation
+;σ,R,E. Note that, since the abstract form RSP of P can bind variables of sort
+Fresh (i.e., merge nonces), unlike RP , we can prove only one direction of the
+following statement.
+Proposition 1 Given a protocol P, its associated rewrite theory
+RP = (ΣP , φP , EP , RP), its associated rewrite theory
+RSP = (ΣSP , φSP , ESP , RSP), and two terms SS and SS ′ of sort State, if
+SS ;•
+σ,φP ,R−1P ,EP
+SS ′
+then
+mset(SS) ;
+• {0,1}
+σ′,φSP ,R−1SP ,ESP
+mset(SS ′)
+where σ′ ≡ σ↓Var(mset(SS)).
+Proof. By considering each possible protocol rule in RP ; recall that they are
+applied in a backwards way.
+• [ L | M−, L′ ] & {M∈I, IK} → [ L,M− | L′ ] & {M∈I, IK}.
+Immediate, sincemset(SS ′) ≡ mset(SS), i.e., σ(M) ∈ neg(σ(L)) ⊆ mset(SS)
+and σ(M) ∈ mset(SS ′) due to its inclusion in the intruder knowledge.
+• [ L | M+, L′ ] & {IK} → [ L,M+ | L′ ] & {IK}.
+Immediate, since mset(SS ′) ≡ mset(SS).
+32
+• [ L | M+, L′ ] & {M /∈I, IK} → [ L,M+ | L′ ] & {M∈I, IK}.
+This rule accepts an output message u in a strand [ l1, u
++ | l2 ] in SS ′. By def-
+inition, there is a rule u1, . . . , uk → m in RSP such that σ(u) =EP σ(m) and
+neg(l1) = {σ(u1), . . . , σ(uk)}. Therefore, we havemset(SS) ;•σ′,φSP ,R−1SP ,ESP
+mset(SS ′) such that σ′ = σ↓Var(m) and mset(SS ′) = (mset(SS)−{σ(u)})∪
+{σ(u1), . . . , σ(uk)}.
+• [ l1 | u+, l2 ] & {u/∈I, IK} → {u∈I, IK}.
+This rule introduces a new strand [ l1 | u+, l2 ] in SS ′, i.e., SS ′ = SS ∪
+{σ([ l1 | u+, l2 ])}. By definition, there is a rule u1, . . . , uk → m in RSP
+such that σ(u) =EP σ(m) and neg(σ(l1)) = {σ(u1), . . . , σ(uk)}. Therefore,
+we have mset(SS) ;•
+σ′,φSP ,R−1SP ,ESP
+mset(SS ′) such that σ′ = σ↓Var(m) and
+mset(SS ′) = (mset(SS)− {σ(u)}) ∪ {σ(u1), . . . , σ(uk)}. 2
+And the main theorem relating the narrowing relations associated to RP and
+RSP is the following one.
+Theorem 4 (Correspondence) Given a protocol P, its associated rewrite
+theory RP = (ΣP , φP , EP , RP), its associated rewrite theory
+RSP = (ΣSP , φSP , ESP , RSP), a State term SS, and an initial State term
+SSini, if SS ;
+• !
+σ,φP ,R−1P ,EP
+SSini then mset(SS) ;
+• !
+σ′,φSP ,R−1SP ,ESP
+∅ where
+σ′ ≡ σ↓Var(mset(SS)).
+Proof. By induction on the number n of rewriting steps SS ;• n
+σ,φP ,R−1P ,EP
+SSini.
+• (n = 0) Immediate, since SS is an initial State term and mset(SS) = ∅.
+• (n > 0) We have SS ;•
+θ,φP ,R−1P ,EP
+SS ′ ;• n−1
+ρ,φP ,R−1P ,EP
+SSini and σ = θ◦ρ. By
+Proposition 1, we have that there is θ′ such that mset(SS) ;• {0,1}
+θ′,φSP ,R−1SP ,ESP
+mset(SS ′) and θ′ = θ↓Var(mset(SS)). Then, by induction hypothesis, there is
+ρ′ such that mset(SS ′) ;• !
+ρ′,φSP ,R−1SP ,ESP
+∅ and ρ′ = ρ↓Var(mset(SS′)), and
+therefore mset(SS) ;• !
+σ′,φSP ,R−1SP ,ESP
+∅ where σ′ = θ′ ◦ ρ′. 2
+6.3 Grammar Notation and Execution
+This section introduces our grammar notation and explains how grammars
+are executed as rewrite theories.
+Grammars are described by means of three basic kinds of constraints. To
+motivate our notation, we informally explain how the different constraints are
+generated.
+(1) Seed terms may be described in two different ways, either as terms the
+33
+intruder is not expected to know, or as the result of performing operations
+on terms the intruder does not yet know. An example of the latter case
+is a term such as pk(X, Y ), where Y is not in the intruder knowledge.
+This last fact will be denoted by the constraint Y /∈I which is the same
+notation used for the intruder knowledge in Section 5.1. Therefore, facts
+of the form (t/∈I) will make up our first type of constraints.
+(2) Another possibility is that the intruder will be able to learn some instance
+of the seed term, i.e., the user was wrong when he/she believed the seed
+term was unknown to the intruder, and so we shall have to introduce some
+exceptions in our definition of the seed term, e.g., (t1p1), ..., (tkpk).
+Facts (tp) will be our second type of constraint.
+(3) Once we have identified the seed term, we will use it to construct grammar
+rules stating that a term t is in the language if some subterm s of t is
+in the language, e.g., (X;Z) is in L if Z is in L. For example, we start
+out with a seed term saying that pk(X, Y ) is in the language if Y is not
+known by the intruder. Thus we start by trying to find the conditions
+under which the intruder knows pk(X, Y ). Applying rule p7 in Example
+9 (in a backwards way and modulo encryption/decryption equations in E)
+gives us that this can be achieved if the intruder knows sk(Z, pk(X, Y )).
+The term sk(Z, pk(X, Y )) is not in the language, but we can make it so
+by introducing a rule that says that sk(W,T ) is in the language L if T
+is. This motivates the use of the third type of constraint, (t∈L).
+In what follows we define grammar rules and constraints more formally. Given
+a grammar G in the sequence G, a grammar rule is written
+c1, . . . , ck 7→ (t1, . . . , tn)∈L, with terms t1, . . . , tn of sort Msg and constraints
+c1, . . . , ck of sort Ctr. The intuitive idea of a rule c1, . . . , ck 7→ (t1, . . . , tn)∈L
+is that in order for any of the terms t1, . . . , tn to be in the language of the
+grammar G, say 9 L, then the constraints c1, . . . , ck must be satisfied, i.e.,
+c1, . . . , ck 7→ (t1, . . . , tn)∈L is understood as t1∈L∨ · · · ∨ tn∈L if c1 ∧ · · · ∧ ck.
+Definition 12 (Grammar Signature) We define the sort Ctr, the signa-
+ture ΣG = Σ ∪ { 7→ } ∪ ΣCtr where 7→ : CtrSet × LCtr → GRule, and the
+signature ΣCtr = { , , ∈L ,  , /∈I }. Within the sort Ctr we represent
+the three kinds of constraints by means of subsorts LCtr DCtr ICtr < Ctr:
+(i) constraints of the form (t/∈I) are constructed with the symbol
+( /∈I) : Msg→ ICtr,
+9 We should write t ∈ LG to denote that t is in the language of the grammar G.
+Since we always make explicit the grammar G that it is being used, we can simply
+write t∈L.
+34
+(ii) constraints of the form (tp) are constructed with the symbol
+(  ) : Msg ×Msg→ DCtr,
+(iii) constraints of the form (t∈L) are constructed with the symbol
+( ∈L) : MsgSet→ LCtr.
+The operator , : CtrSet × CtrSet → CtrSet is a set union operator that is
+associative, commutative, and has identity ∅, and we assume that there is a
+subsort relation Ctr < CtrSet.
+Remark 4 We assume that the pattern p in a constraint tp always has fresh
+variables and therefore no substitution computed by our inference system can
+bind pattern p in a constraint tp.
+Example 10 Consider the simplified protocol rules of Example 9. We gen-
+erate all the intermediate and final grammars shown in Figure 4. Grammars
+G0sd1 , G
+0
+sd2
+, G0sd3 , G
+0
+sd4
+are the seed terms provided for Example 3. Grammars
+G!sd1 , G
+!
+sd2
+, G!sd3 , G
+!
+sd4
+represent the fixpoint of each G0sdi and each grammar
+rule is marked with a number gi.j, since they will be used in the rest of the
+paper.
+Informally speaking, (g1.1) implies that any expression of the form pk(B,W )
+is in the language L associated to the grammar G!sd1 if the subterm at the
+position of the variable W is also in the language L, i.e., pk(B,W )∈L if
+W∈L. Similarly, (g1.5) implies that a term of the form X;Y is in L if the
+subterm at the position of Y is not in the intruder knowledge and is not of the
+form n(B, r).
+6.3.1 Grammar Execution
+To perform membership of a term in the language defined by a grammar, we
+associate to a grammar G a rewrite theory RG.
+Definition 13 (Grammar Rewrite Theory) Given a grammar G, we as-
+sociate a rewrite theory RG = (ΣG, φG, EG, RG), where RG = {C → C ′ | (C 7→
+C ′) ∈ G}, EG contains the protocol-specific equations E plus equations for as-
+sociativity, commutativity and identity of the , operator, and the frozenness
+function φG is φG( 7→ ) = {2}, φG( , ) = φG( ∈L) = φG(  ) = φG( /∈I) = ∅,
+and φG(f) = {1, . . . , ar(f)} for the remaining f ∈ Σ.
+Note that the restrictions for Σ allow rewriting or narrowing steps only at the
+top of terms of sort Msg, which also implies that every term of sort Msg is
+strongly → ~E-irreducible. Note also that RG is a topmost theory.
+35
+G0sd1
+Y /∈I 7→ (X;Y )∈L
+G1sd1
+Z∈L 7→ pk(c, Z)∈L
+Z∈L 7→ pk(A,n(A, r); sk(B,Z))∈L
+Z∈L 7→ sk(A,Z)∈L
+Z∈L 7→ (X;Z)∈L
+Z∈L 7→ (Z;Y )∈L
+Y /∈I 7→ (X;Y )∈L
+G!sd1
+(g1.1) Z∈L 7→ pk(B,Z)∈L
+(g1.2) Z∈L 7→ sk(A,Z)∈L
+(g1.3) Z∈L 7→ X;Z∈L
+(g1.4) Z∈L 7→ Z;Y ∈L
+(g1.5) Y /∈I, Yn(B, r) 7→ X;Y ∈L
+G0sd2
+X/∈I 7→ (X;Y )∈L
+G1sd2
+Z∈L 7→ pk(c, Z)∈L
+Z∈L 7→ pk(A,n(A, r); sk(B,Z))∈L
+Z∈L 7→ sk(A,Z)∈L
+Z∈L 7→ (X;Z)∈L
+Z∈L 7→ (Z;Y )∈L
+X/∈I 7→ (X;Y )∈L
+G2sd2
+Z∈L 7→ pk(B,Z)∈L
+Z∈L 7→ sk(A,Z)∈L
+Z∈L 7→ (X;Z)∈L
+Z∈L 7→ (Z;Y )∈L
+X/∈I 7→ (X;Y )∈L
+Z /∈I 7→ pk(B, c;Z)∈L
+G3sd2
+Z∈L 7→ pk(B,Z)∈L
+Z∈L 7→ sk(A,Z)∈L
+Z∈L 7→ (X;Z)∈L
+Z∈L 7→ (Z;Y )∈L
+X/∈I, Xn(c, r) 7→ (X;Y )∈L
+Z /∈I, Zn(c, r) 7→ pk(B,B′;Z)∈L
+Z /∈I, Zn(c, r) 7→ (c;Z)∈L
+G!sd2
+(g2.1) Z∈L 7→ pk(B,Z)∈L
+(g2.2) Z∈L 7→ sk(A,Z)∈L
+(g2.3) Z∈L 7→ X;Z∈L
+(g2.4) Z∈L 7→ Z;Y ∈L
+(g2.5) X/∈I, Xn(c, r) 7→ X;Y ∈L
+(g2.6) Z /∈I, Zn(B′, r) 7→ B;Z∈L
+G0sd3
+Z /∈I 7→ pk(A,Z)∈L
+G1sd3
+Z∈L 7→ pk(c, Z)∈L
+Z∈L 7→ pk(A,n(A, r); sk(B,Z))∈L
+Z∈L 7→ sk(A,Z)∈L
+Z∈L 7→ (X;Z)∈L
+Z∈L 7→ (Z;Y )∈L
+Z /∈I, Z(Z′;n(A′, r))
+7→ pk(A,Z)∈L
+Z /∈I, Z(Z′;n(A′, r′))
+7→ pk(A,n(A, r);Z)∈L
+G!sd3
+(g3.1) Z∈L 7→ pk(B,Z)∈L
+(g3.2) Z∈L 7→ sk(A,Z)∈L
+(g3.3) Z∈L 7→ X;Z∈L
+(g3.4) Z∈L 7→ Z;Y ∈L
+(g3.5) Z /∈I, Zn(B, r), ZZ′;n(B′, r′)
+7→ pk(A,Z)∈L
+(g3.6) Z /∈I, Zn(B, r′), ZZ′;n(B′, r′′)
+7→ n(A, r);Z∈L
+G0sd4
+Z /∈I 7→ sk(A,Z)∈L
+G1sd4
+Z∈L 7→ pk(c, Z)∈L
+Z∈L 7→ pk(A,n(A, r); sk(B,Z))∈L
+Z∈L 7→ sk(A,Z)∈L
+Z∈L 7→ (X;Z)∈L
+Z∈L 7→ (Z;Y )∈L
+Z /∈I 7→ sk(A,Z)∈L
+G!sd4
+(g4.1) Z∈L 7→ pk(B,Z)∈L
+(g4.2) Z∈L 7→ sk(A,Z)∈L
+(g4.3) Z∈L 7→ X;Z∈L
+(g4.4) Z∈L 7→ Z;Y ∈L
+(g4.5) Z /∈I 7→ sk(A,Z)∈L
+Fig. 4. All the Grammars obtained for the Needham-Schroeder example
+Recall that, since φSP( 7→ ) = {1} and φG( 7→ ) = {2}, a term
+c1, . . . , ck 7→ (t1, . . . , tn)∈L
+has the first argument frozen when it is rewritten or narrowed using the ab-
+stract protocol rules RSP , but it has instead the second argument frozen when
+it is rewritten or narrowed using the rules RG of a grammar G. Of course, the
+rules RSP and RG will be used in different contexts and for different purposes
+as explained later. Furthermore, note that in the Maude-NPA RG is used in a
+backwards way, i.e., we will consider the relation→φG ,R−1G ,EG for a grammar G,
+and we can use the relation →!
+φG ,R−1G ,EG
+without any risk of non-termination
+thanks to the shape of the rules in RG, although the relation is non-confluent
+and several normal forms must be explored.
+36
+6.4 Membership in a Grammar’s Language: Relations 〈G, C〉 ` (u∈L) and
+c v c′
+Often one needs to check whether a term t is in the language, say L, generated
+by one grammarG in the sequence G, i.e., G ` (t∈L). More generally, one needs
+to check whether 〈G,D〉 ` C, where C is the set of constraints of sort CtrSet
+that are being tested for satisfaction, and D is a set of premised conditions
+of sort CtrSet. This implies performing a form of backwards rewriting using
+the rewrite theory RG associated to a grammar G in the sequence G together
+with some constraint cancellation between C and the premises D using some
+disequality reasoning capabilities for constraints of the form tp.
+Definition 14 (Constraint Order) Given C and D of sort CtrSet, we de-
+fine the partial order relation C v D to hold iff for each ci ∈ C, there is a
+dj ∈ D such that ci v dj, and where c v c′ is defined on individual constraints
+as follows (for u, t, s terms of sort Msg):
+(u∈L) v (u∈L)
+(u/∈I) v (u/∈I)
+(up) v (up′) if @θ : u ≡ θ(p) and p  p′
+(up) v dj for any dj of sort Ctr if @θ : θ(u) ≡ θ(p)
+Note that the order v is transitive by the transitivity of .
+Definition 15 (Membership in a Grammar’s Language) Given C and
+D of sort CtrSet, we define
+〈G,D〉 ` C iff there is G ∈ G s.t. (C →!
+φG ,R−1G ,EG
+C ′) ∧ (C ′ v D)
+We write 〈G, C ′〉 ` C instead of 〈G, C ′〉 ` C when we want to emphasize that a
+single grammar G (possibly not in G) is used.
+Recall that Var(u)∩Var(p) = ∅ for each up, see Remark 4. In the following
+examples, we write t →gi.j−1 s to indicate that t →φG ,R−1G ,EG s is rewritten
+using a grammar rule gi.j in G.
+Example 11 Continuing Example 10, we give some examples of membership
+tests. For the membership test:
+〈 G!sd3 , Y ∈L 〉 ` (pk(c, Y );M2)∈L
+37
+we have
+(pk(c, Y );M2)∈L →g3.4−1 pk(c, Y )∈L →g3.1−1 Y ∈L
+and since Y ∈L is already a premise, we have that (pk(c, Y );M2) is a member
+of G!sd3. For the following test:
+〈 G!sd3 , ∅ 〉 ` (A;n(A, r))(Z ′;n(B, r′))
+we have that it does not hold because indeed A;n(A, r)  Z ′;n(B, r′). And for
+the test
+〈 G!sd3 , n(B, r)/∈I 〉 ` pk(A, n(B, r))∈L
+we have
+pk(A, n(B, r))∈L →g3.5−1 n(B, r)/∈I, n(B, r)n(B′, r′), n(B, r)B′′;n(B′′, r′′)
+and these constraints are not satisfied, since n(B, r)  n(B′, r′).
+The rest of this section studies a different property, called satisfiability, that
+we show is related to soundness of grammars. Informally, satisfiability of a set
+C of constraints means that they are still valid under instantiation. However,
+this is not true in general because of the constraints of the form tp in C, so
+we have to restrict satisfiability of C to satisfiability of another (greater) set
+D of constraints such that constraints of the form  in D imply constraints
+of the form  in C. This is useful when proving that if a word belongs to the
+grammar of a language under some constraints C, then any possible instanti-
+ation σ satisfying C (or a greater set D) makes such word still a member. The
+following definition determines satisfiability of constraints of the form tp,
+which can be understood as that there is still some (future) substitution σ
+that can make true that σ(t) 6 p, possibly the identity substitution.
+Definition 16 (-Satisfiable Constraints) Given a term C of sort CtrSet,
+we say that C ≡ c1, . . . , ck is -satisfiable if for each ci ≡ (up), we have that
+either: (i) @σi : σi(u) ≡ σi(p), or (ii) ∃σi : σi(u) ≡ σi(p) and @θi : u ≡ θi(p).
+Example 12 The constraint n(A, r)(Z ′;n(B, r′)) is -satisfiable, since the
+root symbol of both terms is different. The constraint (A;n(A, r))(Z ′;n(B, r′))
+is not -satisfiable, since there is σ s.t. (A;n(A, r)) ≡ σ(Z ′;n(B, r′)). How-
+ever, the more generic constraint Y(Z ′;n(B, r′)) is -satisfiable, since there
+is no σ s.t. Y ≡ σ(Z ′;n(B, r′)) even though there is θ s.t. θ(Y ) ≡ θ(Z ′;n(B, r′)).
+Corollary 1 Given two terms C and D of sort CtrSet if (C v D) and D is
+-satisfiable, then C is -satisfiable.
+Proof. The only relevant type of constraints is ut. If (C v D), then for each
+(ut) in C, either (i) @θ : θ(u) ≡ θ(t) and (ut) is -satisfiable independently
+38
+of D, or (ii) (ut) v (us) for (us) in D such that ∃σ : σ(u) ≡ σ(s) and
+@θ : u ≡ θ(s), and then, since t  s, ∃σ′ : σ′(u) ≡ σ′(t), and @θ′ : u ≡ θ′(t). 2
+Corollary 2 Given a term C of sort CtrSet and a substitution σ, if σ(C) is
+-satisfiable, then C is -satisfiable.
+Proof. By Corollary 1, since σ(C) v C for constraints of the form up due to
+the restriction Var(p) 6⊆ Dom(σ). 2
+The following results prove that membership is closed under substitution,
+provided some conditions hold.
+Lemma 1 (Constraint Substitution Closure) Given two terms C and D
+of sort CtrSet and a substitution σ, if (C v D) and σ(D) is -satisfiable, then
+σ(C) v σ(D).
+Proof. Recall that, by Remark 4, the substitution σ cannot bind variables of
+the pattern p in a constraint tp, and thus we don’t apply σ to the pattern p
+in a constraint tp. By considering each case associated to (C v D):
+• In the case “(u∈L) v (u∈L)”, we clearly have that for each σ,
+(σ(u)∈L) v (σ(u)∈L).
+• In the case “(u/∈I) v (u/∈I)”, we also have that for each σ,
+(σ(u)/∈I) v (σ(u)/∈I).
+• In the case “(ut) v (us) if @θ : u ≡ θ(t) and t  s”, we have that @θ :
+σ(u) ≡ θ(t), since t  s and σ(u)s is -satisfiable (i.e., @θ : σ(u) ≡ θ(s)).
+• In the case “(ut) v dj for any dj of sort Ctr if @θ : θ(u) ≡ θ(t)”, we also
+have that for each σ, (σ(u)t) v dj, since @θ : θ(σ(u)) ≡ θ(t). 2
+Theorem 5 (Membership Substitution Closure) Given a grammar G
+and two terms C and D of sort CtrSet, if 〈G,D〉 ` C, then for each substitution
+σ such that σ(D) is -satisfiable, we have 〈G, σ(D)〉 ` σ(C).
+Proof. 〈G,D〉 ` C implies that there is C ′ s.t. C →!
+φG ,R−1G ,EG
+C ′, and C ′ v D.
+Therefore, σ(C) →!
+φG ,R−1G ,EG
+σ(C ′), since no extra variables are introduced by
+the rewriting relation→φG ,R−1G ,EG except those in patterns of constraints of the
+form tp, but they are not bound by σ by definition. Finally, by Lemma 1,
+σ(C ′) v σ(D). 2
+The following result proves that membership is implied by a greater set of
+premises.
+Theorem 6 (Membership Implication) Given a grammar G and three
+terms C, D and D′ of sort CtrSet, if 〈G,D〉 ` C and D v D′, then 〈G,D′〉 ` C.
+39
+Proof. 〈G,D〉 ` C implies that there is C ′ s.t. C →!
+φG ,R−1G ,EG
+C ′, and C ′ v D.
+Thus, C ′ v D′. 2
+6.5 The Grammar Generation Inference System
+In this section, we formally describe how grammars are generated. To moti-
+vate the procedure, we briefly rephrase the informal description of how the
+Maude-NPA generates languages given at Section 6.1, but using the nota-
+tion and operators formally described below and using Example 2 and the
+Needham-Schroeder Example. We depict in Figure 5 the dependencies be-
+tween the different operators.
+The Maude-NPA starts the grammar generation process with a seed term sdi.
+This seed term defines an initial grammar G0sdi stating that the seed term is
+in the language, i.e., the user believes it is unreachable for the intruder.
+Definition 17 (Seed Term) A seed term, i.e., the first grammar rule pro-
+vided as the seed of a grammar to be generated, is either of the form
+t|q /∈I 7→ t∈L where t|q is a variable of t, or of the form ∅ 7→ t∈L.
+Example 13 In Example 2, the unique seed term sd1 is represented by the
+initial grammar G0sd1 ≡ ∅ 7→ m∈L, denoting that the intruder cannot learn
+the message m.
+Example 14 For the Needham-Schroeder Example, the seed terms are the
+grammars G0sd1 ≡ Y /∈I 7→ (X;Y )∈L, G0sd2 ≡ X/∈I 7→ (X;Y )∈L, G0sd3 ≡
+Z /∈I 7→ pk(A,Z)∈L, and G0sd4 ≡ Z /∈I 7→ sk(A,Z)∈L, all shown in Figure
+4. For instance, the initial grammar G0sd1 denotes all the terms (t1; t2) such
+that we know that t2 is not known by the intruder at the current state in a
+protocol run.
+The Maude-NPA mechanism for generating languages is represented by the
+operator
+Gkj VP,Gkj ,s G
+k+1
+j
+where Gk+1j is the new grammar generated from G
+k
+j . The fixpoint of G
+0
+sdi
+w.r.t. the operator Gkj VP,Gkj ,s G
+k+1
+j is denoted by G
+!
+sdi
+. An attempt to
+transform a grammar Gksdi that is not in its fixpoint form is performed, re-
+sulting in a new grammar Gk+1sdi or failing to produce a new grammar rule,
+which implies discarding such grammar Gksdi . The fixpoint of all the seed
+terms for which we have obtained a fixpoint are kept in a grammar sequence
+G = 〈G!sdi1 , . . . , G!sdim 〉, where {i1, . . . , im} ⊆ {1, . . . , n}. Note that the word s
+in the operator Gkj VP,Gkj ,s G
+k+1
+j is a global strategy parameter that can be in-
+stantiated to either S1 or S2 and that determines how new grammar rules are
+40
+G
+k j
+V
+P,
+G
+k j
+,s
+G
+k
++
+1
+j
+
+))TTTTTTTTTTTT
+rrdd
+dd
+dd
+dd
+dd
+dd
+dd
+dd
+dd
+dd
+dd
+dd
+dd
+dd
+dd
+dd
+n
+ew
+G
+ra
+m
+m
+a
+r s
+(G
+,C
+,H
+)
+ww oo
+oo
+oo
+oo
+oo
+oo
+
+%%LLLLLLLLLLLL
+op
+ti
+m
+iz
+e(
+G
+)
+uu kk
+kk
+kk
+kk
+kk
+kk
+kk
+k
+
+〈C
+,H
+,G
+〉⇒
+P,
+G
+k j
+,s
+〈C
+′ ,
+H′
+,G
+′ 〉
+
+
+α
+(G
+,C
+)
+β
+(G
+,C
+)
+Ĝ
+re
+m
+ov
+eC
+on
+st
+ra
+in
+st
+s(
+G
+)
+
+re
+m
+ov
+eR
+u
+le
+s(
+G
+)
+
+h
+eu
+ri
+st
+ic
+s G
+k j
+,s
+(g
+,σ
+,g
+′ )
+uujj
+jj
+jj
+jj
+jj
+jj
+j
+〈G
+k j
+,D
+〉`
+C
+uu kk
+kk
+kk
+kk
+kk
+kk
+kk
+k
+))TTTTTTTTTTTTTTT
+g
+;
+σ
+,P
+−
+1
+,G
+k j
+−
+1
+g
+′
+oo
+uu kk
+kk
+kk
+kk
+kk
+kk
+kk
+
+c
+v
+c′
+→
+φ
+G
+,R
+−
+1
+G
+,E
+G
+;
+• σ,
+φ
+S
+P
+,R
+−
+1
+S
+P
+,E
+S
+P
+F
+ig
+.
+5.
+D
+ep
+en
+de
+nc
+ie
+s
+be
+tw
+ee
+n
+re
+la
+ti
+on
+s
+an
+d
+op
+er
+at
+or
+s
+in
+th
+e
+G
+ra
+m
+m
+ar
+G
+en
+er
+at
+io
+n
+P
+ha
+se
+41
+generated; see Section 6.5.6 for details. This strategy parameter is fixed dur-
+ing the whole generation of a grammar. All the generated grammars, i.e., seed
+terms, intermediate grammars, and the fixpoint grammars, are characterized
+as follows.
+Definition 18 (General Grammar Rule Shape) A grammar rule g of a
+grammar G is always of one of the following forms:
+(positive) ts1, . . . , tsn 7→ t∈L (n ≥ 0)
+(negative-S1) t|q /∈I, t|qs1, . . . , t|qsn 7→ t∈L (t|q∈X , n ≥ 0)
+(negative-S2) t|q /∈I, ts1, . . . , tsn 7→ t∈L (t|q∈X , n ≥ 0)
+(recursive) t|q∈L 7→ t∈L (t|q∈X )
+Intuitively, we can have the following grammar productions:
+Positive Messages in the language of the grammar that do not need extra
+requirements about negative information of the intruder knowledge, such as
+∅ 7→ m∈L of Example 13. They originated as a seed term.
+Negative Messages in the language of the grammar that require negative
+information of the intruder knowledge, such as Y /∈I 7→ (X;Y )∈L of Figure
+4. They originated also as a seed term.
+Constrained Messages of the positive and negative previous forms but that
+include some syntactic restriction on the message, where:
+• (Positive) For messages of the positive form, only restrictions of the form
+(ts) are included, such as pk(A,Z)pk(A′, n(B, r)) 7→ pk(A,Z)∈L. They
+are generated only by applications of the generation strategy S2.
+• (Negative) For messages of the negative form, restrictions of either the
+form (t|ps) or the form (ts) are included.
+· (Negative-S1) For strategy S1, constraints (t|ps) are included, such
+as Z /∈I, Zn(B, r) 7→ pk(A,Z)∈L.
+· (Negative-S2) For strategy S2, constraints (ts) are included, such
+as Z /∈I, pk(A,Z)pk(A′, n(B, r)) 7→ pk(A,Z)∈L.
+Recursive Messages that involve a recursive membership call within the
+grammar, such as Z∈L 7→ pk(B,Z)∈L of Figure 4.
+Example 15 For the Needham-Schroeder Example, all the grammars shown
+in Figure 4 are characterized as described by Definition 18.
+The transformation of a grammar Gkj into G
+k+1
+j , i.e., G
+k
+j VP,Gkj ,s G
+k+1
+j , is
+performed in two steps. First, we obtain the fixpoint of the operator
+〈C,H, G〉 ⇒P,Gkj ,s 〈C
+′,H′, G′〉
+42
+which starts with 〈∅, ∅, Gkj 〉 and ends with 〈C ′′,H′′, ∅〉, where C ′′ is a set of
+constraints of the form tp and H′′ is a set of grammar rules. Note that if
+C ′′ ≡ ∅ and H′′ ≡ ∅, then we say that grammar Gkj has reached its fixpoint.
+But if 〈C,H, G〉 is a normal form w.r.t. the relation ⇒P,Gkj ,s and G 6= ∅, then
+we say that grammar Gkj failed and is removed.
+Example 16 For the Needham-Schroeder Example and the grammar G0sd3 of
+Figure 4, containing only the grammar rule Z /∈I 7→ pk(A,Z)∈L, we have the
+transformation step 〈∅, ∅, G0sd3〉 ⇒P,G0sd3 ,S1 〈C,H, ∅〉 where
+C = { ZA;n(A, r), ZZ ′;n(A, r) }
+and
+H = {Z∈L 7→ pk(c, Z)∈L,
+Z∈L 7→ pk(A, n(A, r); sk(B,Z))∈L,
+Z∈L 7→ sk(A,Z)∈L,
+Z∈L 7→ Z;Y ∈L,
+Z∈L 7→ X;Z∈L,
+Z /∈I 7→ pk(A, n(A, r);Z)∈L}
+The generation of constraints C and rules H is explained in the following.
+Second, we use the operator
+newGrammars(G
+k
+j , C ′′,H′′)
+to combine these sets C ′′ and H′′ with the previous grammar Gkj to produce
+a preliminary version of Gk+1j and optimize this preliminary version of G
+k+1
+j
+using the operator optimize(G), which removes redundant constraints of the
+form tp and redundant grammar rules.
+Example 17 Continuing Example 16. The combination of C and H into G0sd3,
+i.e., newGrammarS1(G
+0
+sd3
+, C,H), provides the following grammar
+Z∈L 7→ pk(c, Z)∈L
+Z∈L 7→ pk(A,n(A, r); sk(B,Z))∈L
+Z∈L 7→ sk(A,Z)∈L
+Z∈L 7→ (X;Z)∈L
+Z∈L 7→ (Z;Y )∈L
+Z /∈I, Z(A′;n(A′, r)), Z(Z ′;n(A′′, r′)) 7→ pk(A,Z)∈L
+Z /∈I, Z(A′;n(A′, r′)), Z(Z ′;n(A′′, r′′)) 7→ pk(A,n(A, r);Z)∈L
+and the optimization of newGrammarS1(G
+0
+sd3
+, C,H) provides the grammar
+G1sd3 of Figure 4.
+The operator 〈C,H, G〉 ⇒P,Gkj ,s 〈C ′,H′, G′〉 includes the three stages men-
+tioned before: (i) the term generation stage, (ii) the rule verification stage,
+43
+and (iii) the rule generation stage.
+The term generation stage is performed by the backwards narrowing operator
+g ;
+σ,P−1,Gkj
+−1 g′
+which takes a grammar rule g and returns a grammar rule g′ representing a pre-
+ceding state in the protocol. We call g′ a pre-grammar rule. The pre-grammar
+rule g′ is computed by the backwards narrowing relation g ;•
+σ,φSP ,R−1SP ,ESP
+g′,
+which is just a slightly modified version of ;σ,φSP ,R−1SP ,ESP
+(see Appendix A).
+Example 18 For the Needham-Schroeder Example and the grammar G0sd3 of
+Figure 4, the term generation stage using the relation ;•
+σ,φSP ,R−1SP ,ESP
+provides
+the following pre-grammar rules w.r.t. the simplified protocol rules RSP of
+Example 9:
+Z /∈I 7→ pk(A,Z)∈L ;•
+[Z/(A′;n(A′,r))],φSP ,R−1SP ,ESP
+(A′;n(A′, r))/∈I 7→ ∅∈L
+Z /∈I 7→ pk(A,Z)∈L ;•
+id,φSP ,R−1SP ,ESP
+Z /∈I 7→ pk(A′, n(A′, r);Z)∈L
+Z /∈I 7→ pk(A,Z)∈L ;•
+id,φSP ,R−1SP ,ESP
+Z /∈I 7→ pk(A′, n(A′, r); sk(B, pk(A,Z)))∈L
+Z /∈I 7→ pk(A,Z)∈L ;•
+[Z/(Z′;n(B,r))],φSP ,R−1SP ,ESP
+(Z ′;n(B, r))/∈I 7→ pk(B,A;Z ′)∈L
+Z /∈I 7→ pk(A,Z)∈L ;•
+id,φSP ,R−1SP ,ESP
+Z /∈I 7→ pk(A,Z);M2∈L
+Z /∈I 7→ pk(A,Z)∈L ;•
+id,φSP ,R−1SP ,ESP
+Z /∈I 7→ M1; pk(A,Z)∈L
+Z /∈I 7→ pk(A,Z)∈L ;•
+[A/c],φSP ,R−1SP ,ESP
+Z /∈I 7→ pk(c, Z)∈L
+Z /∈I 7→ pk(A,Z)∈L ;•
+id,φSP ,R−1SP ,ESP
+Z /∈I 7→ pk(c, pk(A,Z))∈L
+Z /∈I 7→ pk(A,Z)∈L ;•
+id,φSP ,R−1SP ,ESP
+Z /∈I 7→ Z∈L
+Z /∈I 7→ pk(A,Z)∈L ;•
+id,φSP ,R−1SP ,ESP
+Z /∈I 7→ sk(A′, pk(A,Z))∈L
+The rule verification stage is embedded into the g ;
+σ,P−1,Gkj
+−1 g′ relation as
+a test called G-expandable. That is, the Maude-NPA takes the grammar rule
+g ≡ C 7→ t∈L, computes each path preceding message t in the protocol using
+t ;•
+σ,φSP ,R−1SP ,ESP
+s1, . . . , sn, and tests several things for each si, for instance
+whether si /∈I appears in C or whether 〈G, σ(C)〉 ` (si∈L) for each si. In such
+case, the preceding state represented by s1, . . . , sn is not G-expandable and
+this path is discarded. Otherwise, we apply the rule generation stage to this
+grammar rule σ(C) 7→ (s1, . . . , sn)∈L.
+44
+Example 19 In Example 2, we obtain ∅ 7→ m∈L;σ,P−1,G−1 ∅ 7→ e(k,m)∈L
+as the backwards narrowing step m ;•
+σ,φSP ,R−1SP ,ESP
+e(k,m) using the abstract
+version RSP of the protocol rules. We test that ∅ 7→ e(k,m)∈L is G0-expandable
+by checking that 〈G0, ∅〉 ` (e(k,m)∈L) returns false. And then, apply the rule
+generation stage to ∅ 7→ e(k,m)∈L.
+Example 20 Continuing Example 18, the following backwards narrowing steps
+are not G0sd3-expandable and are discarded.
+Z /∈I 7→ pk(A,Z)∈L;•
+id,φSP ,R−1SP ,ESP
+Z /∈I 7→ Z∈L
+Z /∈I 7→ pk(A,Z)∈L;•
+[A/c],φSP ,R−1SP ,ESP
+Z /∈I 7→ pk(c, Z)∈L
+The rule generation stage is performed by the operator heuristicsGkj ,s(g, σ, g
+′) =
+〈C,H〉, which applies several heuristics to add either new constraints C of the
+form tp or new grammar rules H.
+Example 21 In Example 2, one of the heuristics generates the grammar rule
+Y ∈L 7→ e(k, Y )∈L from ∅ 7→ e(k,m)∈L.
+Example 22 Continuing Example 20, for each G0sd3-expandable pre-grammar
+rule the heuristics generate the following constraint or new grammar rule,
+where g ≡ Z /∈I 7→ pk(A,Z)∈L:
+σ1 ≡ [Z/(A′;n(A′, r))] g1 ≡ (A′;n(A′, r))/∈I 7→ ∅∈L
+heuristicsG0
+sd3
+,S1(g, σ1, g1) = { Z(A′;n(A′, r)), ∅ }
+σ2 ≡ id g2 ≡ Z /∈I 7→ pk(A′, n(A′, r);Z)∈L
+heuristicsG0
+sd3
+,S1(g, σ2, g2) = { ∅, Z /∈I 7→ pk(A′, n(A′, r);Z)∈L }
+σ3 ≡ id g3 ≡ Z /∈I 7→ pk(A′, n(A′, r); sk(B, pk(A,Z)))∈L
+heuristicsG0
+sd3
+,S1(g, σ3, g3) = {∅, Y ∈L 7→ pk(A′, n(A′, r); sk(B, Y ))∈L}
+σ4 ≡ [Z/(Z ′;n(B, r))] g4 ≡ (Z ′;n(B, r))/∈I 7→ pk(B,A;Z ′)∈L
+heuristicsG0
+sd3
+,S1(g, σ4, g4) = { Z(Z ′;n(B, r)), ∅ }
+σ5 ≡ id g5 ≡ Z /∈I 7→ pk(A,Z);M2∈L
+heuristicsG0
+sd3
+,S1(g, σ5, g5) = { ∅, Y ∈L 7→ Y ;M2∈L }
+σ6 ≡ id g6 ≡ Z /∈I 7→ M1; pk(A,Z)∈L
+heuristicsG0
+sd3
+,S1(g, σ6, g6) = { ∅, Y ∈L 7→ M1;Y ∈L }
+σ7 ≡ id g7 ≡ Z /∈I 7→ pk(c, pk(A,Z))∈L
+heuristicsG0
+sd3
+,S1(g, σ7, g7) = { ∅, Y ∈L 7→ pk(c, Y )∈L }
+45
+σ8 ≡ id g8 ≡ Z /∈I 7→ sk(A′, pk(A,Z))∈L
+heuristicsG0
+sd3
+,S1(g, σ8, g8) = { ∅, Y ∈L 7→ sk(A′, Y )∈L }
+that are exactly the constraints and new rules shown in Example 16.
+Recall that the entire grammar generation procedure is iterated by the op-
+erator ⇒P,Gkj ,s until it reaches a fixpoint. If the term generation stage (i.e.,
+g ;
+σ,P−1,Gkj
+−1 g′) does not produce any new state or the rule verification stage
+(i.e., the G-expandable test) cuts all the generated states, then we say that
+grammar Gkj has reached its fixpoint. Otherwise, if the heuristics were not able
+to generate either new constraints or new rules, then the operator⇒P,Gkj ,s fails
+and the grammar Gkj is discarded.
+Note that we cannot guarantee at the moment whether the grammar gen-
+eration process might terminate with success, terminate with failure, or not
+terminate. Examples 29 and 30 below motivate when the grammar genera-
+tion process might terminate with failure or do not terminate. But even if
+the grammar generation process terminates for each seed term (with success
+or failure), we cannot detect whether we have a finite search space using the
+protocol rewrite theory RP . A detailed study of the conditions on the protocol
+and the seed terms to have a terminating grammar generation process and a
+finite search space is left for future work. However, practical experience shows
+that the grammar generation process terminates (with success or failure) for
+many protocols and for some of them we have a finite search space.
+In the following, we formally define the relations and operators involved in
+grammar generation in a top-down (almost) left-to-right order following Figure
+5.
+6.5.1 Generating a New Grammar: The Relation Gkj VP,Gkj ,s G
+k+1
+j
+We generate a new grammar Gk+1j from a grammar G
+k
+j using the main gram-
+mar transformation relation VP,Gkj ,s.
+Definition 19 (Generating a New Grammar) Given a grammar Gkj , the
+set of strand P, and a generation strategy s, we generate a new grammar Gk+1j
+as follows:
+Gkj VP,Gkj ,s G
+k+1
+j if 〈∅, ∅, Gkj 〉 ⇒!P,Gkj ,s 〈C,H, ∅〉,
+Gk+1j = optimize(newGrammars(G
+k
+j , C,H)),
+and Gk+1j 6≡ Gkj
+46
+Recall that 〈C,H, G〉 ⇒P,Gkj ,s 〈C ′,H′, G′〉 produces a set of constraints and
+grammar rules for Gkj , the operator newGrammars(G
+k
+j , C,H) combines C and
+H into Gkj to create a new grammar, and the operator optimize(G) removes
+redundant information. The word s is a global strategy parameter that can
+be instantiated to either S1 or S2 and is only relevant for the heuristics ap-
+plication, see Section 6.5.6 below.
+Example 23 The global grammar generation process for the Needham-Schroeder
+Example 3 using the relation Gkj VP,Gkj ,s G
+k+1
+j is as follows, where the gram-
+mars used were given in Figure 4:
+G0sd1VP,G0sd1 ,S1 G
+1
+sd1
+VP,G1
+sd1
+,S1 G
+!
+sd1
+G0sd2VP,G0sd2 ,S1 G
+1
+sd2
+VP,G1
+sd2
+,S1 G
+2
+sd2
+VP,G2
+sd2
+,S1 G
+3
+sd2
+VP,G3
+sd2
+,S1 G
+!
+sd2
+G0sd3VP,G0sd3 ,S1 G
+1
+sd3
+VP,G1
+sd3
+,S1 G
+!
+sd3
+G0sd4VP,G0sd4 ,S1 G
+1
+sd4
+VP,G1
+sd4
+,S1 G
+!
+sd4
+6.5.2 Adding New Grammar Rules: The Operator newGrammars(G, C,H)
+The intuition behind this operator is that the new grammar rules H can
+be added to the previous grammar G without problems, since they extend
+the language of the grammar, but the constraints C of the form ts pose a
+problem, since they restrict the language of the grammar. Therefore, we must
+add those constraints C to the rules in G∪H, but only to those rules without
+a constraint of the form t∈L, which are the ultimate rules used for testing
+membership. For adding these constraints, we must consider the strategy used
+for generating C and H, i.e., strategy S1 or S2. For strategy S1, we must
+add constraints  only to those rules with a constraint of the form Y /∈I
+(called negative in Definition 18), since strategy S1 uses such kind of rules,
+and adapt each constraint  to the variable Y . For strategy S2, we must
+add constraints  to rules with and without a constraint of the form Y /∈I
+but each constraint  must be adapted to the term in the right-hand side
+of the grammar rule.
+Definition 20 (Adding New Grammar Rules) Given a set G of gram-
+mar rules, a set C of constraints of the form ts, and a set H of grammar
+rules, the function newGrammars(G, C,H) joins the set of grammar rules in
+G and the new rules in H with the constraints C:
+newGrammarS1(G, C,H) = α(G, C) ∪ α(H, C) ∪ Ĝ ∪ Ĥ
+newGrammarS2(G, C,H) = β(G, C) ∪ Ĝ ∪ Ĥ
+The operator α(G, C) adds constraints C to grammar rules in G of the form
+47
+negative-S1:
+α(G, C) = {c1, . . . , ck, θα(C) 7→ t∈L | (c1, . . . , ck 7→ t∈L) ∈ G
+∧ ∃!ci,∃Y ∈ X : ci ≡ (Y /∈I)}
+where the substitution θα is obtained as follows: C consists of several (possibly
+renamed) dj1 , . . . , djm of the form (Wj′sj′) with variables W1, . . . ,Wm and
+terms s1, . . . , sm. We then define θα(Wj′) = Y for j
+′ ∈ {1, . . . ,m} and θα is
+the identity elsewhere.
+The operator β(G, C) adds constraints C to grammar rules in G of the forms
+positive and negative-S2:
+β(G, C) = {c1, . . . , ck, θβ(C ′) 7→ t∈L | (c1, . . . , ck 7→ t∈L) ∈ G
+∧ @ci,@w : ci ≡ (w∈L) ∧ C ′ = {c′i ∈ C | c′i ≡ (uivi) ∧ t  ui}}
+where the substitution θβ is obtained as follows: C ′ consists of several (possibly
+renamed) dj1 , . . . , djm of the form (uj′vj′) with terms u1, . . . , um, v1, . . . , vm.
+We define θβ such that θβ(uj′) ≡ t for j′ ∈ {1, . . . ,m} and Dom(θβ) ⊆
+Var(u1) ∪ · · · ∪ Var(um).
+Finally, for a set S of grammar rules, we define the operator Ŝ collecting all
+the grammar rules in S of the recursive form:
+Ŝ = {(t|q∈L 7→ t∈L) ∈ S | t|q ∈ X}.
+Lemma 2 (Grammar Shape Preservation) The new grammar generated
+by the operator newGrammars(G, C,H) satisfies the shape for grammar rules
+given in Definition 18.
+Proof. The operator α(G, C) takes negative-S1 grammar rules, i.e., of the form
+t|q /∈I, t|qs1, . . . , t|qsn 7→ t∈L, and adds new constraints of the form t|qs′
+to them. Note that the set C of new constraints contains only constraints
+of the form Ys′ where Y is a variable because strategy S1 has been used.
+And note that the substitution θα applied to the new added constraints C
+ensures that they share the same variable t|q than the previous constraints
+in the rule. The operator β(G, C) takes positive and negative grammar rules
+and adds new constraints of the form ts′ to them. Note that the subset C ′ of
+the set C of new constraints and the substitution θβ applied to the new added
+constraints C ′ ensure that they share the same term t than the right-hand
+side of the grammar rule. The operator Ŝ takes recursive grammar rules, i.e.,
+t|q∈L 7→ t∈L, without any modification. 2
+Example 24 Consider the following set C of new constraints (represented as
+48
+a term of sort CtrSet)
+C = { Z(A;n(A, r)), Z(Z ′;n(A, r)) }
+and the following set H of new grammar rules
+H = {Z∈L 7→ pk(c, Z)∈L,
+Z∈L 7→ pk(A, n(A, r); sk(B,Z))∈L,
+Z∈L 7→ sk(A,Z)∈L,
+Z∈L 7→ Z;Y ∈L,
+Z∈L 7→ X;Z∈L,
+Z /∈I 7→ pk(A, n(A, r);Z)∈L}
+Then, we add the set C of new constraints and the set H of new grammar rules
+to the grammar G0sd3 of Figure 4 in order to produce later the grammar G
+1
+sd3
+and thus compute
+newGrammarS1(G
+0
+sd3
+, C,H) = α(G0sd3 , C) ∪ α(H, C) ∪ Ĝ0sd3 ∪ Ĥ
+where
+α(G0sd3 , C) = {Z /∈I, Z(A′;n(A′, r)), Z(Z ′;n(A′′, r′)) 7→ pk(A,Z)∈L}
+because we simply look for a rule that includes a constraint of the form Y /∈I,
+namely Z /∈I 7→ pk(A,Z)∈L, and add the (appropriately renamed) constraints
+C to the left part of the rule. We produce α(H, C) in a similar way
+α(H, C) = {Y /∈I, Y(A′;n(A′, r′)), Y(Z ′;n(A′′, r′′)) 7→ pk(A, n(A, r);Y )∈L}
+The set Ĝ0sd3 is empty, i.e., Ĝ
+0
+sd3
+= ∅, since there is no rule in G0sd3 with a
+constraint in the left part of the form (Y ∈L). Finally we collect all the rules
+in H with a constraint of the form (Y ∈L)
+Ĥ = {Z∈L 7→ pk(c, Z)∈L,
+Z∈L 7→ pk(A, n(A, r); sk(B,Z))∈L,
+Z∈L 7→ sk(A,Z)∈L,
+Z∈L 7→ Z;Y ∈L,
+Z∈L 7→ X;Z∈L}
+49
+Thus, we finally obtain
+newGrammarS1(G
+0
+sd3
+, C,H)
+= {Y /∈I, Y(A′;n(A′, r′)), Y(Z ′;n(A′′, r′′)) 7→ pk(A, n(A, r);Y )∈L
+Z /∈I, Z(A′;n(A′, r)), Z(Z ′;n(A′′, r′)) 7→ pk(A,Z)∈L
+Z∈L 7→ pk(c, Z)∈L
+Z∈L 7→ pk(A, n(A, r); sk(B,Z))∈L
+Z∈L 7→ sk(A,Z)∈L
+Z∈L 7→ Z;Y ∈L
+Z∈L 7→ X;Z∈L}
+6.5.3 Optimizing Grammars: The Operator optimize(G)
+The operator optimize(G) removes redundant grammar rules and redundant
+constraints of the form  as follows.
+Definition 21 (Optimizing Grammars) Given a grammar G, we define:
+optimize(G) = removeRules(removeConstraints(G))
+where removeConstraints(G) = {maximalv(C) 7→ (t∈L) | (C 7→ (t∈L)) ∈
+G} and, by definition, maximalv(C) ⊆ C is the subset of constraints c ∈ C
+that are maximal elements in the partial order v. And where removeRules(G)
+is defined as follows: we first choose a grammar rule (C 7→ (t∈L)) ∈ G; if we
+have 〈G − {C 7→ (t∈L)}, C〉 ` (t∈L), then we remove it from G, in any case
+we repeat the process until no more grammar rules can be removed (we reach
+a fixpoint).
+The following result follows in a straightforward way from the definition.
+Lemma 3 (Language Preservation) Let G be a grammar, and C,D be two
+sets of constraints. If 〈G,D〉 ` C, then 〈optimize(G),D〉 ` C.
+Example 25 For the grammar newGrammarS1(G
+0
+sd3
+, C,H) of Example 24,
+its optimization is
+optimize(G) = {Z /∈I, Z(Z ′;n(B, r′)) 7→ pk(A, n(A, r);Z)∈L
+Z /∈I, Z(Z ′;n(B, r)) 7→ pk(A,Z)∈L,
+Z∈L 7→ pk(c, Z)∈L,
+Z∈L 7→ pk(A, n(A, r); sk(B,Z))∈L,
+Z∈L 7→ sk(A,Z)∈L,
+Z∈L 7→ Z;Y ∈L,
+Z∈L 7→ X;Z∈L
+50
+since (YA′;n(A′, r)) v (YZ ′;n(A′′, r′)). And if we had a rule
+Y ∈L 7→ pk(c, n(A, r); sk(B, Y ))∈L, this would be removed, since it can be ob-
+tained from the other rules.
+6.5.4 Generating New Grammar Rules from a Previous Grammar Rule: The
+Relation 〈C,H, G〉 ⇒P,Gkj ,s 〈C ′,H′, G′′〉
+Given a set G of grammar rules, a set C of constraints, and a setH of grammar
+rules, we define the transformation relation ⇒P,Gkj ,s on tuples 〈C,H, G〉, that
+extends H with new grammar rules and C with new constraints, all associated
+to a grammar rule g ∈ G.
+Definition 22 (Generating New Rules and Constraints) Given a gram-
+mar G to be transformed, a grammar Gkj , a set of constraints C, a set of
+grammar rules H, and a generation strategy s, we define
+〈C,H, G ∪ {g}〉 ⇒P,Gkj ,s 〈C ∪ Cg,H ∪Hg, G〉
+where the set of new constraints is Cg = ∪{Cg;σg′}, the set of new grammar
+rules is Hg = ∪{Hg;σg′}, and Cg;σg′ and Hg;σg′ are defined for each back-
+wards narrowing step g ;
+σ,P−1,Gkj
+−1 g′ as heuristicsGkj ,s(g, σ, g
+′) =
+〈Cg;σg′ ,Hg;σg′〉 such that either Cg;σg′ or Hg;σg′ are not empty. The
+;
+σ,P−1,Gkj
+−1 relation is defined in the following.
+Example 26 For the grammar G0sd3 of Figure 4, we obtain a set of back-
+wards narrowing steps sd3 ;σ,P−1,G0
+sd3
+−1 g′ from the only rule sd3 in G0sd3
+and apply heuristicsG0
+sd3
+,S1(sd3, σ, g
+′) to each one of them. Then, the sets
+Hsd3 = ∪{Hsd3;σg′} and Csd3 = ∪{Csd3;σg′} are the sets H and C shown
+in Example 24.
+6.5.5 Generating a Pre-grammar Rule from a Previous Grammar Rule: The
+Backwards Narrowing Relation g ;
+σ,P−1,Gkj
+−1 g′
+Given a rule g in a grammar Gkj , we consider each backwards narrowing step
+from g producing what we call a pre-grammar rule g′ which we will use, to-
+gether with the heuristics, to generate new grammar rules that will be included
+into Gk+1j .
+A pre-grammar rule is validated using the grammar Gkj produced up to now.
+Definition 23 (Gkj -expandable Pre-grammar Rule) A pre-grammar rule
+g ≡ C 7→ (t1, . . . , tn)∈L is Gkj -expandable iff
+51
+(1) C is -satisfiable; and
+(2) for each ti, we have that 〈Gkj , C〉 6` (ti∈L) and ti /∈I does not occur in C.
+Intuitively, a pre-grammar rule is Gkj -expandable if: (i) the current constraints
+of the form up are satisfiable, (ii) none of the messages are captured by the
+grammar Gkj , and (iii) none of the messages are discarded by the learn-only-
+once restriction. If a pre-grammar rule is Gkj -expandable, we apply the heuris-
+tics to generate a new grammar rule such that it implies that the conditions of
+the pre-grammar rule are satisfied. Otherwise, we discard that pre-grammar
+rule.
+The backwards narrowing relation producing pre-grammar rules is denoted by
+the arrow;
+σ,P−1,Gkj
+−1 , where σ is the computed unifier, P is the set of strands
+generating the set RP of rules to be used for narrowing modulo EP , and Gkj is
+used to further narrow the grammar rule and for Gkj -expandable test. Recall
+that rules are always renamed to avoid variable name clashes.
+Definition 24 (Generating a Pre-grammar Rule) Given a grammar rule
+g, the set of strands P, and a grammar Gkj , the relation;σ,P−1,Gkj−1 producing
+a pre-grammar rule g′′ is defined as
+g ;
+σ,P−1,Gkj
+−1 g′′
+if g ;•
+σ,φSP ,R−1SP ,ESP
+g′, g′ →!
+φG ,R−1
+Gk
+j
+,EG
+g′′, and g′′ is Gkj -expandable
+The narrowing relation;•
+σ,φSP ,R−1SP ,ESP
+used in the Maude-NPA is slightly more
+restrictive than the ordinary narrowing relation;σ,φSP ,R−1SP ,ESP
+(see Appendix
+A for details).
+Recall from Sections 6.2 and 6.3 that the symbol 7→ has its first argument
+frozen in RSP , whereas it has instead its second argument frozen in RG, i.e.,
+given a grammar rule c1, . . . , ck 7→ (t1, . . . , tn)∈L, the relation ;•σ,φSP ,R−1SP ,ESP
+narrows only the right part, whereas the relation 10 →φG ,R−1
+Gk
+j
+,EG rewrites only
+the left part.
+Example 27 Consider the following backwards narrowing steps. For the gram-
+mar G0sd3 of Figure 4, we have the following backwards narrowing step using
+10 Note that in (Escobar et al., 2005) we wrote g′ ;!
+θ,φG ,R−1
+Gk
+j
+,EG
+g′′ in Definition
+24. However, such normalization by narrowing usually does not terminate for the
+considered rewrite theory R−1
+Gkj
+.
+52
+the protocol rule (p2) ≡ pk(A, n(A, r);Z ′)→ pk(B,Z ′):
+Z /∈I 7→ pk(A,Z)∈L
+;•
+id,φSP ,R−1SP ,ESP
+Z /∈I 7→ pk(A′, n(A′, r); sk(B, pk(A,Z)))∈L
+where Z /∈I 7→ pk(A′, n(A′, r); sk(B, pk(A,Z)))∈L is a G0sd3-expandable gram-
+mar rule and we have solved the equational unification problem pk(B,Z ′) =ESP
+pk(A,Z) using the unifier id and the equation sk(Y, pk(Y, Z)) = Z. We also
+have the following backwards narrowing step for G0sd3 using the protocol rule
+(p7) ≡M → pk(Y,M):
+Z /∈I 7→ pk(A,Z)∈L ;•
+id,φSP ,R−1SP ,ESP
+Z /∈I 7→ Z∈L
+but this step is not G0sd3-expandable, because term Z appears in a constraint
+Z /∈I. For the grammar G1sd3 of Figure 4, we have the following backwards
+narrowing step using (p1) ≡ ∅ → pk(B,A;n(A, r)):
+Z /∈I, Z(Z ′;n(B, r)) 7→ pk(A,Z)∈L
+;•
+[Z/(A′;n(A′,r′))],φSP ,R−1SP ,ESP
+(A′;n(A′, r′)/∈I, (A′;n(A′, r′)(Z ′;n(B, r))) 7→ ∅
+but this step is not G0sd3-expandable, because (A
+′;n(A′, r′)  (Z ′;n(B, r)).
+Again for G1sd3, we have the following backwards narrowing step using (p5) ≡
+M1;M2 →M1:
+Y ∈L 7→ pk(c, Y )∈L;•
+id,φSP ,R−1SP ,ESP
+Y ∈L 7→ pk(c, Y );M2∈L
+but this step is not G!sd3-expandable because the term (pk(c, Y );M2) is captured
+by G1sd3, i.e., 〈 G1sd3 , Y ∈L 〉 ` (pk(c, Y );M2)∈L.
+6.5.6 Deciding which Grammar Rule or Restriction to Generate from a Pre-
+grammar Rule: The Operator heuristicsGkj ,s(g, σ, g
+′)
+Here, we use the result of a backwards narrowing step ;
+σ,P−1,Gkj
+−1 to de-
+cide which grammar rule or constraint should be generated in order to re-
+fine the language L associated to the grammar Gkj . We define the operator
+heuristicsGkj ,s(g, σ, g
+′) that yields a pair 〈C,H〉, where C is a set of constraints
+(empty or with one constraint) and H is a set of new grammar rules (empty
+or with one rule).
+Definition 25 (Heuristics Generating New Rules or Constraints) The
+following inference rules define the four heuristics, where s is a global strategy
+parameter that can be instantiated to either S1 or S2 (see below), the variable
+Y is a fresh new variable, g = C 7→ t∈L, and g′ = D 7→ (s1, . . . , sn)∈L:
+53
+H1
+∃si, p ∈ Pos(si) : 〈Gkj ,D〉 ` (si|p∈L)
+heuristicsGkj ,s(g, σ, g
+′) = 〈∅, {Y ∈L 7→ si[Y ]p∈L}〉
+H2a
+∃u, di ∈ D : di ≡ (u/∈I) ∧ u 6∈ X
+heuristicsGkj ,s(g, σ, g
+′) = 〈{Xu}, ∅〉
+H2b
+σ(t) 6≡ t @u, di ∈ D : di ≡ (u∈L)
+heuristicsGkj ,s(g, σ, g
+′) = 〈{tσ(t)}, ∅〉
+H3
+∃di ∈ D, sj, p ∈ Pos(sj) : di ≡ (sj|p /∈I)
+heuristicsGkj ,s(g, σ, g
+′) = 〈∅, {Y /∈I 7→ sj[Y ]p∈L}〉
+The intuition behind the heuristics is the following. If we have a grammar
+G with its associated language L and we consider one grammar production
+rule in G, e.g., g = c1, . . . , ck 7→ t∈L, and all of the possible predecessors of
+message t w.r.t. the protocols rules RSP , e.g., g′ = D 7→ (s1, . . . , sn)∈L such
+that t ;
+σ,P−1,Gkj
+−1 s1, . . . , sn, and also none of s1, . . . , sn is captured by G
+k
+j ,
+then we want Gkj to be able to capture one of them and thus we try to extend
+(or complete) Gkj adding production rules. Heuristics H1 and H3 make an over-
+approximation and introduce terms in the grammar that might be reachable
+for the intruder, whereas heuristics H2a and H2b restrict the grammar:
+(H1) This heuristic extends the grammar Gkj and, essentially, looks for terms
+that could be captured byGkj but are not. For Example 2, ∅ 7→ m∈L is the
+only rule in grammar G0, we also have that message e(k,m) is learned by
+the intruder from message m and since m is a proper subterm of e(k,m),
+we add a grammar rule Y ∈L 7→ e(k, Y )∈L that captures message e(k,m).
+(H2a) This heuristic detects that there is a constraint u/∈I in the constraints D
+of rule g′, where term u is not a variable. This implies that the intruder
+can learn some partial data (symbols introduced by unification) and thus
+such partial data should be excluded from the grammar Gkj .
+(H2b) This heuristic detects also that some partial data can be learned by the
+intruder and also excludes them from the grammar. The difference be-
+tween H2a and H2b is explained below.
+(H3) This heuristic detects that the intruder has been able to learn a message sj
+that contains a subterm that appears as a constraint sj|p /∈I in D, which
+implies that it must be unknown by the intruder. Therefore, assuming
+that sj|p is unknown by the intruder, we have to include sj in the grammar
+and thus introduce a rule Y /∈I 7→ sj[Y ]p∈L.
+54
+These heuristics are applied following one of the two possible global strategies
+for s:
+• S1. Apply heuristics in the following order: try H1, if it fails try H2a, if it
+fails try H3, otherwise stop the whole grammar generation process for this
+grammar.
+• S2. Like S1, but try H2b instead of H2a.
+Note that the choice of S1 or S2 is fixed during the entire generation of a
+grammar.
+The difference between strategies S2 and S1 (i.e., between heuristics H2b and
+H2a) is that S2 generates more restricted grammars, thus cutting less terms,
+than strategy S1. However, strategy S1 can be applied in fewer situations
+than strategy S2 because of the /∈I constraint. Therefore, for a seed term of
+the form ∅ 7→ t∈L only strategy S2 can be applied, whereas for a seed term
+of the form t|q /∈I 7→ t∈L it is usually better to start with strategy S2 and if
+it fails, try strategy S1. A deeper study of both strategies, refinements, and
+their automatization is left for future work.
+Example 28 Consider the grammar G0sd3 of Figure 4. For the backwards nar-
+rowing step using protocol rule (p5)
+g ≡ Z /∈I 7→ pk(A,Z)∈L;id,P−1,G0
+sd3
+−1 g′ ≡ Z /∈I 7→ pk(A,Z);M2∈L
+we can apply heuristic 1 yielding
+heuristicsG0
+sd3
+,S1(g, id , g
+′) = 〈∅, {Y ∈L 7→ Y ;M2∈L}〉,
+since the subterm pk(A,Z) is already in the language of G0sd3, i.e., 〈G0sd3 , Z /∈I〉 `
+pk(A,Z)∈L. For the following backwards narrowing step using protocol rule
+(p1)
+g ≡ Z /∈I 7→ pk(A,Z)∈L;[Z/A′;n(A′,r)],P−1,G0
+sd3
+−1 g′ ≡ A′;n(A′, r)/∈I 7→ ∅
+we can apply heuristic 2a yielding
+heuristicsG0
+sd3
+,S1(g, id , g
+′) = 〈{ZA;n(A, r)}, ∅〉,
+since we have found a constraint ci ≡ u /∈ I such that u is not a variable. For
+the backwards narrowing step using protocol rule (p2)
+g ≡ Z /∈I 7→ pk(A,Z)∈L;id,P−1,G0
+sd3
+−1 g′ ≡ Z /∈I 7→ pk(A′, n(A′, r);Z)∈L
+55
+we can apply heuristic 3 yielding
+heuristicsG0
+sd3
+,S1(g, id , g
+′) = 〈∅, {Y /∈I 7→ pk(A′, n(A′, r);Y )∈L}〉,
+since the subterm Z is already in an original constraint of the form /∈I in g.
+And for a grammar rule Z /∈I 7→ pk(Y, Z)∈L, where Y and Z are variables
+of sort Msg, we can consider the following backwards narrowing step using
+protocol rule (p2), where B is a variable of sort Name
+g ≡ Z /∈I 7→ pk(Y, Z)∈L;[Y/B],P−1,G0
+sd3
+−1 g′ ≡ Z /∈I 7→ pk(A, n(A, r);Z)∈L
+and then we can apply heuristic 2b yielding
+heuristicsG0
+sd3
+,S2(g, id , g
+′) = 〈{pk(Y, Z)pk(B,Z)}, ∅〉,
+since there is no constraint of the form ∈L and the substitution binds variable
+Y of pk(Y, Z).
+When no heuristic can be applied, the grammar generation process stops with
+failure for such a seed term, as shown in the following example.
+Example 29 Consider again the Needham-Schroeder Protocol of Example 9
+with the following new strand representing some initial knowledge of the in-
+truder (where A is a variable of sort Name):
+(s7) [A+]
+This strand is transformed into the following simplified protocol rule for the
+grammar generation process
+(p9) ∅ → A
+Let us consider a new seed term represented by the initial grammar
+G0sd5 ≡ ∅ 7→ A∈L
+This seed term means that the user believes all the principal’s names are un-
+known for the intruder, which is obviously false because of the new intro-
+duced strand. The grammar generation process fails for this seed term, since
+no heuristic can be applied to a pre-grammar rule obtained from the gram-
+mar rule in G0sd5. That is, for the following backwards narrowing step obtained
+using the simplified protocol rules:
+∅ 7→ A∈L ;•
+id,φSP ,R−1SP ,ESP
+∅ 7→ ∅∈L
+no heuristic of Definition 25 can be applied for either strategy S1 or S2 because
+(i) there is no term in the right-hand side of the pre-grammar rule ∅ 7→ ∅∈L,
+56
+and therefore heuristics H1 and H3 cannot be applied, and (ii) the substitution
+computed during the backwards narrowing step is the identity, and therefore
+heuristics H2a and H2b cannot be applied either.
+The grammar generation might also not terminate adding new grammar pro-
+ductions, as shown in the following example.
+Example 30 Consider a protocol with a cryptographic system with only two
+keys k and k′, where only k is shared by all principals. The following strand
+defines the protocol:
+(s1) [pk(k′, A;M)−, pk(k′,M)+]
+The Dolev-Yao strands are defined as follows, where the intruder can encrypt
+and decrypt using only the key k:
+(s2) [M−1 ,M
+−
+2 , (M1;M2)
++]
+(s3) [(M1;M2)
+−,M+1 ,M
++
+2 ]
+(s4) [M−, pk(k,M)+]
+(s5) [M−, sk(k,M)+]
+The equational properties are the same as in Example 3. These strands are
+transformed into the following simplified protocol rules for grammar genera-
+tion
+(p1) pk(k′, A;M)→ pk(k′,M)
+(p2) M1,M2 →M1;M2
+(p3) M1;M2 →M1
+(p4) M1;M2 →M2
+(p5) M → pk(k,M)
+(p6) M → sk(k,M)
+Let us consider a seed term represented by the initial grammar
+G0sd1 ≡ Z /∈I 7→ pk(k′, Z)∈L
+This seed term asks whether the intruder can learn any message encrypted with
+the key k′ provided that the message itself is unknown. The grammar gener-
+ation process never terminates for this seed term, as shown in the generated
+grammars of Figure 6. The point is that at each grammar generation step,
+there are several backwards narrowing steps of the form
+t|p /∈I 7→ pk(k′, t)∈L ;•id,φSP ,R−1SP ,ESP t|p /∈I 7→ pk(k
+′, A; t)∈L
+and each of these pre-grammar rules t|p /∈I 7→ pk(k′, A; t)∈L is not captured by
+the previous grammar. Thus, we can apply heuristic H3 to each of them, ob-
+taining a new rule where the variable t|p is replaced by a new variable, i.e., the
+57
+G1sd1
+Z∈L 7→ pk(k, Z)∈L
+Z∈L 7→ sk(k, Z)∈L
+Z∈L 7→ X;Z∈L
+Z∈L 7→ Z;Y ∈L
+Z /∈I 7→ pk(k′, Z)∈L
+Z /∈I 7→ pk(k′, A;Z)∈L
+Z∈L 7→ pk(k′, A; sk(k′, Z))∈L
+G2sd1
+Z∈L 7→ pk(k, Z)∈L
+Z∈L 7→ sk(k, Z)∈L
+Z∈L 7→ X;Z∈L
+Z∈L 7→ Z;Y ∈L
+Z /∈I 7→ pk(k′, Z)∈L
+Z /∈I 7→ pk(k′, A;Z)∈L
+Z /∈I 7→ pk(k′, A; (A;Z))∈L
+Z∈L 7→ pk(k′, A; sk(k′, Z))∈L
+Z∈L 7→ pk(k′, A; (A; sk(k′, Z)))∈L
+G3sd1
+Z∈L 7→ pk(k, Z)∈L
+Z∈L 7→ sk(k, Z)∈L
+Z∈L 7→ X;Z∈L
+Z∈L 7→ Z;Y ∈L
+Z /∈I 7→ pk(k′, Z)∈L
+Z /∈I 7→ pk(k′, A;Z)∈L
+Z /∈I 7→ pk(k′, A; (A;Z))∈L
+Z /∈I 7→ pk(k′, A; (A; (A;Z)))∈L
+Z∈L 7→ pk(k′, A; sk(k′, Z))∈L
+Z∈L 7→ pk(k′, A; (A; sk(k′, Z)))∈L
+Z∈L 7→ pk(k′, A; (A; (A; sk(k′, Z))))∈L
+G4sd1
+Z∈L 7→ pk(k, Z)∈L
+Z∈L 7→ sk(k, Z)∈L
+Z∈L 7→ X;Z∈L
+Z∈L 7→ Z;Y ∈L
+Z /∈I 7→ pk(k′, Z)∈L
+Z /∈I 7→ pk(k′, A;Z)∈L
+Z /∈I 7→ pk(k′, A; (A;Z))∈L
+Z /∈I 7→ pk(k′, A; (A; (A;Z)))∈L
+Z /∈I 7→ pk(k′, A; (A; (A; (A;Z))))∈L
+Z∈L 7→ pk(k′, A; sk(k′, Z))∈L
+Z∈L 7→ pk(k′, A; (A; sk(k′, Z)))∈L
+Z∈L 7→ pk(k′, A; (A; (A; sk(k′, Z))))∈L
+Z∈L 7→ pk(k′, A; (A; (A; (A; sk(k′, Z)))))∈L
+Fig. 6. Infinite grammar generation sequence in Example 30.
+very same t|p /∈I 7→ pk(k′, A; t)∈L. Moreover, these new rules are not implied
+from the previous ones, and thus they are not removed by the optimization
+stage. A similar argument exists for grammar productions in Figure 6 of the
+form t|p∈L 7→ pk(k′, A; sk(k′, t))∈L and the heuristic H1.
+6.6 Grammar Unreachability
+This section introduces the main theorems regarding soundness of the gram-
+mars, i.e., if a message m belongs to the language of a grammar G!sdi obtained
+from a seed term sdi, then such message cannot be learned by the intruder.
+Note that the user starts the grammar generation process providing a seed
+term that he/she believes that the intruder cannot learn. Therefore, these seed
+terms may be unsound, and must be refined during the grammar generation
+process to more precise sound versions. Intermediate grammars might also be
+unsound, since further backwards protocol steps must be explored to refine the
+intermediate grammar. Therefore, we can prove soundness of the grammars
+only at the end, for the fixpoint grammars. Only at this final state do we know
+that every possible protocol step has been analyzed for every possible message
+belonging to the current grammar.
+The following properties establish that, whenever we have a protocol state
+SS and a message m that the intruder must learn, i.e., that appears as an
+input message m− in the past part of some strand of SS, and that it is in the
+58
+language of a grammar G!sdi , then for every previous state SS
+′ of SS w.r.t.
+the protocol rules RP , i.e.,
+SS ;•
+σ,φP ,R−1P ,EP
+SS ′
+there is a message m′ that the intruder must also learn, i.e., m′ is an input
+message of the past part of some strand of SS ′. This fact, together with the
+assumption that the intruder doesn’t know anything in an initial state, are
+the basis of the soundness of the grammars. However, grammars are generated
+using the rewrite theory RSP instead of the rewrite theory RP and therefore
+we must rephrase the previous statement in terms of RSP . That is, whenever
+we have a message m that is in the language of a grammar G!sdi , for every
+previous set u1, . . . , uk of messages obtained by the simplified protocol rules
+RSP , i.e.,
+t ;•
+σ,φSP ,R−1SP ,ESP
+u1, . . . , uk
+there is a message ui that the intruder must learn and that it is also in the
+grammar G!sdi .
+First, we state an auxiliary corollary that follows in a straightforward way
+from the definition of the relation ;
+σ,P−1,Gkj
+−1 .
+Corollary 3 Let Gkj be a grammar. If g ≡ (C 7→ t∈L) is a grammar rule in
+Gkj that is in normal form w.r.t. the relation ;P−1,Gkj
+−1, then either:
+(1) g is in normal form w.r.t. relation ;•
+φSP ,R−1SP ,ESP
+; or
+(2) for all g′, g′′, and σ such that g ;•
+σ,φSP ,R−1SP ,ESP
+g′ and g′ →!
+φG ,R−1
+Gk
+j
+,EG
+g′′,
+then g′′ is not Gkj -expandable, i.e., g
+′′ ≡ (D 7→ (t1, . . . , tn)∈L) and either
+(a) D is not -satisfiable, or
+(b) D is -satisfiable and ∃ti s.t. 〈Gkj ,D〉 ` (ti∈L) or (ti /∈I) in D.
+The following auxiliary corollary follows in a straightforward way from the
+definition of the relation VP,Gkj ,s.
+Corollary 4 If G! is the fixpoint w.r.t. VP,G,s of a grammar G, then for all
+g ≡ (C 7→ t∈L) in G!, g is in normal form w.r.t. the relation ;P−1,G!−1.
+The following result states that, given a narrowing sequence from a term t
+with a substitution ρ, then we can simulate ρ by narrowing just from t.
+Theorem 7 Let R = (Σ, φ, E,R) be a topmost rewrite theory, t, t′ ∈ TΣ(X ),
+and ρ, σ be substitutions such that ρ(t) ;∗σ,R,E t
+′. Then, there are substitutions
+θ, τ and a term t′′ such that t ;∗θ,R,E t
+′′, σ(ρ(t)) ≡ τ(θ(t)), and t′ ≡ τ(t′′).
+Proof. ρ(t) ;∗σ,R,E t
+′ implies σ(ρ(t)) →∗R,E t′, and then, by Theorem 2 there
+59
+are substitutions θ, τ and a term t′′ such that t ;∗θ,R,E t
+′′, σ(ρ(t)) ≡ τ(θ(t)),
+and t′ ≡ τ(t′′). 2
+Now, we state and prove the following key result for the simplified protocol
+rules.
+Lemma 4 If G! is the fixpoint w.r.t. VP,G,s of a grammar G. Let C be a term
+of sort CtrSet such that it does not contain any constraint of the form ∈L and
+t be a term of sort Msg such that 〈G!, C〉 ` (t∈L). Then, for each backwards
+narrowing step t ;•
+σ,φSP ,R−1SP ,ESP
+u1, . . . , un such that σ(C) is -satisfiable,
+there is a ui such that 〈G!, σ(C)〉 ` (ui∈L) or (ui /∈I) occurs in σ(C).
+Proof. 〈G!, C〉 ` (t∈L) implies there is Ct such that
+α ≡ (t∈L) →!
+φG ,R−1
+G!
+,EG
+Ct, and Ct v C. Let us take g ≡ D 7→ s∈L as the
+grammar rule applied in the first rewrite step of α. There is a substitution τ
+such that t ≡ τ(s) and α ≡ (t∈L)→φG ,R−1
+G!
+,EG τ(D)→!φG ,R−1
+G!
+,EG
+Ct.
+Now, let us focus on g. By Theorem 7 and φSP( 7→ ) = {1}, g can simu-
+late t ;•
+σ,φSP ,R−1SP ,ESP
+u1, . . . , un, i.e., there are substitutions ρ, τρ and terms
+s1, . . . , sn such that g ;
+•
+ρ,φSP ,R−1SP ,ESP
+g′, g′ ≡ ρ(D) 7→ (s1, . . . , sn)∈L, σ(t) ≡
+τρ(ρ(s)), ui ≡ τρ(si) for 1 ≤ i ≤ n, and σ(τ(D)) ≡ τρ(ρ(D)).
+Since φG( 7→ ) = {2}, σ(τ(D)) →!φG ,R−1
+G!
+,EG
+σ(Ct) can be partially simulated
+by g′ and rewriting, i.e., there is a term D′ such that g′ →!
+φG ,R−1
+G!
+,EG
+g′′,
+g′′ ≡ D′ 7→ (s1, . . . , sn)∈L, and τρ(D′) →!φG ,R−1
+G!
+,EG
+σ(Ct). That is, we have
+D 7→ s∈L ;•
+ρ,φSP ,R−1SP ,ESP
+ρ(D) 7→ (s1, . . . , sn)∈L
+and
+ρ(D) 7→ (s1, . . . , sn)∈L →!φG ,R−1
+G!
+,EG
+D′ 7→ (s1, . . . , sn)∈L
+such that σ(t) ≡ σ(τ(s)) ≡ τρ(ρ(s)), ui ≡ τρ(si), and
+σ(t)∈L →φG ,R−1
+G!
+,EG σ(τ(D)) ≡ τρ(ρ(D))→∗φG ,R−1
+G!
+,EG
+τρ(D′)→!φG ,R−1
+G!
+,EG
+σ(Ct)
+Since G! is a fixpoint grammar, by Corollary 4, we have that g is a normal
+form w.r.t. ;P−1,G!−1 . By Corollary 3, we have that for g ;
+•
+ρ,φSP ,R−1SP ,ESP
+g′
+and g′ →!
+φG ,R−1
+G!
+,EG
+g′′, there is a sj such that either 〈G!,D′〉 ` (sj∈L) or
+(sj /∈I) occurs in D′. Note that D′ is -satisfiable because σ(C) is, i.e., by
+Lemma 1, σ(Ct) v σ(C), by Corollary 1, σ(Ct) is -satisfiable, by Corollary
+2, Ct is -satisfiable, then, since terms rooted by  are normal forms w.r.t.
+RG! , we have that all constraints of the form  in τρ(D′) are constraints
+60
+of σ(Ct), thus making τρ(D′) -satisfiable, and finally, by Corollary 2, D′ is
+-satisfiable.
+Now, recall that ui ≡ τρ(si) for 1 ≤ i ≤ n. If (sj /∈I) occurs in D′, then
+(τρ(sj)/∈I) occurs in τρ(D′). Since terms rooted by /∈I are normal forms w.r.t.
+RG! , (τρ(sj)/∈I) occurs in σ(Ct). And, since σ(Ct) v σ(C) (recall that w/∈I v
+w/∈I only), (τρ(sj)/∈I) occurs also in σ(C).
+If (sj /∈I) does not occur in D′, we have that 〈G!,D′〉 ` (sj∈L). Since C does
+not contain any constraint of the form ∈L, Ct neither. Since τρ(D′)→!φG ,R−1
+G!
+,EG
+σ(Ct), we have that any constraint of the form w∈L appearing in τρ(D′) is de-
+ducible from σ(Ct), i.e., 〈G!, σ(Ct)〉 ` (w∈L) for each w∈L in τρ(D′). Thus,
+〈G!, τρ(D′)〉 ` (τρ(sj)∈L) implies 〈G!, σ(Ct)〉 ` (τρ(sj)∈L). Finally, by Theo-
+rem 6, 〈G!, σ(C)〉 ` (τρ(sj)∈L). 2
+Now we state and prove the following result for the protocol rules.
+Theorem 8 If G! is the fixpoint w.r.t. VP,G,s of a grammar G. Let SS
+be a term of sort State. If SS is not G!-safe, then for all SS ′ such that
+SS ;•
+σ,φP ,R−1P ,EP
+SS ′, SS ′ is not G!-safe.
+Proof. Recall that SS being not G!-safe means that there is a term t of sort
+Msg such that [ l1, t
+−, l2 | l′ ] appears in SS for terms l1, l2, l′ of sort SMsgList,
+and for IK being the intruder knowledge in SS, either (t/∈I) appears in IK
+or 〈G!, filter 6∈(IK)〉 ` (t∈L).
+Given
+SS ;•
+σ,φP ,R−1P ,EP
+SS ′
+by Proposition 1, we have
+mset(SS) ;
+• {0,1}
+σ′,φSP ,R−1SP ,ESP
+mset(SS ′)
+where σ′ ≡ σ↓Var(mset(SS)). Let us consider that t is the term of sort Msg
+making SS not being G!-safe. So, t ∈ mset(SS). If mset(SS ′) ≡ mset(SS),
+then we are done. Otherwise, mset(SS ′) ≡ (mset(SS) \ {t}) ∪ {u1, . . . , uk}
+such that
+t ;•
+σ′′,φSP ,R−1SP ,ESP
+u1, . . . , uk
+where σ′′ ≡ σ′↓Var(t). Then, by Lemma 4, there is ui such that
+〈G!, σ(filter 6∈(IK))〉 ` (ui∈L) or (ui∈L) occurs in σ(filter 6∈(IK)). There-
+fore, the conclusion follows. 2
+And our main theorem in this section is the following one.
+Theorem 9 (Grammar Unreachability) Let P be a protocol. Let G! be
+the fixpoint of a grammar G. Let SS be a State term. If SS is not G!-safe,
+61
+then there is no substitution σ such that SS ;•
+σ,φP ,R−1P ,EP
+SS ′ where SS ′ is
+an initial state term.
+Proof. To prove this theorem we use the fact that an intruder does not know
+in an initial state, see Definition 5, any of the terms belonging to the gram-
+mars generated in the language. Then, the conclusion follows by repeated
+application of Theorem 8. 2
+7 Concluding Remarks
+We have given a precise rewriting-based formalization of the NPA reachabil-
+ity analysis and language generation mechanisms that we call Maude-NPA.
+And we have illustrated its use by means of a well-known protocol. We have
+implemented both the reachability analysis and the grammar generation infer-
+ence systems based on rewriting and narrowing in the Maude rewriting logic
+language (Clavel et al., 2002). This prototype has been used to produce all
+the grammar-generation examples in the paper. We have also proved several
+meta-logical properties of the inference system, in particular that terms pro-
+duced by the grammar-generation algorithm represent unreachable states in
+the reachability analysis.
+As pointed out in the Introduction, this work is a first step within a longer-
+term research project to use NPA-like mechanisms in the analysis of protocols
+for which attacks may make use of the algebraic properties of underlying
+cryptographic functions. Much work remains ahead including:
+(1) Formalization of NPA’s other techniques for search space reduction, in-
+cluding various types of partial order reduction.
+(2) Generalization of our inference system to handle equational theories for
+the underlying cryptography; this should take the form of a modular
+inference system in which such equational theories are a parameter.
+(3) Based on (1) and (2) above, development of a next-generation tool based
+on the generalized inference system and having a rewriting-based imple-
+mentation.
+(4) Furthermore, the meta-logical properties of the current inference system
+and of its generalization based on their precise rewriting semantics should
+be systematically studied. Besides proving the types of theorems that
+we have proved in this paper, but for more general types of equational
+theories, we also want to characterize the types of languages and protocols
+for which termination of the reachability analysis process is guaranteed,
+and to characterize the conditions under which the language generation
+process itself terminates. If successful, this will provide us with a class of
+protocols for which we can guarantee that NPA-style reachability analysis
+62
+always returns an answer.
+Acknowledgments We thank David Basin, Hubert Comon, Jean Goubault-
+Larrecq, Luca Vigano`, and the anonymous referees for the useful remarks and
+suggestions which helped us to improve the paper.
+Santiago Escobar has been partially supported by the EU (FEDER) and Span-
+ish MEC TIN-2004-7943-C04-02 project, the “Generalitat Valenciana” un-
+der grant GV06/285, and the ICT for EU-India Cross-Cultural Dissemination
+ALA/95/23/2003/077-054 project.
+References
+Baader, F., Snyder, W., 2001. Unification theory. In: Robinson, A., Voronkov,
+A. (Eds.), Handbook of Automated Reasoning. Vol. 1. Elsevier Science,
+Ch. 8, pp. 445–532.
+Basin, D., Mo¨dersheim, S., Vigano`, L., 2005. OFMC: A symbolic model
+checker for security protocols. International Journal of Information Secu-
+rity 4 (3), 181–208.
+Bistarelli, S., Cervesato, I., Lenzini, G., Martinelli, F., 2005. Relating multiset
+rewriting and process algebras for security protocol analysis. Journal of
+Computer Security 13 (1), 3–47.
+Blanchet, B., 2001. An efficient cryptographic protocol verifier based on prolog
+rules. In: 14th IEEE Computer Security Foundations Workshop (CSFW-14
+2001). IEEE Computer Society, pp. 82–96.
+Chevalier, Y., Ku¨sters, R., Rusinowitch, M., Turuani, M., 2003a. Deciding
+the security of protocols with Diffie-Hellman exponentiation and products
+in exponents. In: 23rd Conference on Foundations Software Technology and
+Theoretical Computer Science. Vol. 2914 of Lecture Notes in Computer
+Science. pp. 124–135.
+Chevalier, Y., Ku¨sters, R., Rusinowitch, M., Turuani, M., 2003b. An NP de-
+cision procedure for protocol insecurity with XOR. In: 18th Annual IEEE
+Symposium on Logic in Computer Science (LICS ’03).
+Clavel, M., Dura´n, F., Eker, S., Lincoln, P., Mart´ı-Oliet, N., Meseguer, J.,
+Quesada, J., 2002. Maude: specification and programming in rewriting logic.
+Theoretical Computer Science 285, 187–243.
+Comon-Lundh, H., Shmatikov, V., 2003. Intruder deductions, constraint solv-
+ing and insecurity decision in presence of exclusive-or. In: 18th Annual IEEE
+Symposium on Logic in Computer Science (LICS ’03). pp. 271–280.
+Dershowitz, N., Mitra, S., Sivakumar, G., 1992. Decidable matching for conver-
+gent systems (preliminary version). In: Kapur, D. (Ed.), 11th International
+Conference on Automated Deduction (CADE-11). Vol. 607 of Lecture Notes
+in Computer Science. Springer, pp. 589–602.
+63
+Dolev, D., Yao, A., 1983. On the security of public key protocols. IEEE Trans-
+action on Information Theory 29 (2), 198–208.
+Escobar, S., Meadows, C., Meseguer, J., 2005. A rewriting-based inference
+system for the NRL Protocol Analyzer: Grammar generation. In: Ku¨sters,
+R., Mitchell, J. (Eds.), Proceedings of the 2005 ACM Workshop on Formal
+Methods in Security Engineering, FMSE 2005. ACM, pp. 1–12.
+Fabrega, F. J. T., Herzog, J. C., Guttman, J., 1999. Strand spaces: Proving
+security protocols correct. Journal of Computer Security 7, 191–230.
+Genet, T., Klay, F., 2000. Rewriting for cryptographic protocol verification.
+In: McAllester, D. A. (Ed.), 17th International Conference on Automated
+Deduction (CADE-17). Vol. 1831 of Lecture Notes in Computer Science.
+Springer, pp. 271–290.
+Heather, J., Schneider, S., 2005. A decision procedure for the existence of a
+rank function. Journal of Computer Security 13 (2), 317–344.
+Hullot, J., 1980. Canonical forms and unification. In: Bibel, W., Kowalski, R.
+(Eds.), 5th Conference on Automated Deduction. Vol. 87 of Lecture Notes
+in Computer Science. Springer, pp. 318–334.
+Kapur, D., Narendran, P., 1987. Matching, Unification and Complexity. ACM
+SIGSAM Bulletin 21 (4), 6–9.
+Lowe, G., 1996. Breaking and fixing the Needham-Schroeder public-key pro-
+tocol using FDR. In: Tools and algorithms for construction and analysis
+of systems (TACAS ’96). Vol. 1055 of Lecture Notes in Computer Science.
+Springer, pp. 147–166.
+Meadows, C., 1992. Applying formal methods to the analysis of a key man-
+agement protocol. Journal of Computer Security 1 (1).
+Meadows, C., 1996a. Analyzing the needham-schroeder public-key protocol:
+A comparison of two approaches. In: Bertino, E., Kurth, H., Martella, G.,
+Montolivo, E. (Eds.), Proceedings of the 4th European Symposium on Re-
+search in Computer Security - ESORICS 96. Vol. 1146 of Lecture Notes in
+Computer Science. Springer, pp. 351–364.
+Meadows, C., 1996b. Language generation and verification in the NRL Proto-
+col Analyzer. In: Proceedings of the 9th IEEE Computer Security Founda-
+tions Workshop. IEEE Computer Society Press, pp. 48–61.
+Meadows, C., 1996c. The NRL Protocol Analyzer: An overview. The Journal
+of Logic Programming 26 (2), 113–131.
+Meadows, C., 2000. Invariant generation techniques in cryptographic proto-
+col analysis. In: Proceedings of the 13th Computer Security Foundations
+Workshop. IEEE Computer Society Press.
+Meadows, C., Cervesato, I., Syverson, P., 2004. Specification of the Group
+Domain of Interpretation Protocol using NPATRL and the NRL Protocol
+Analyzer. Journal of Computer Security 12 (6), 893–932.
+Meseguer, J., 1992. Conditional rewriting logic as a unified model of concur-
+rency. Theoretical Computer Science 96 (1), 73–155.
+Meseguer, J., 1998. Membership algebra as a logical framework for equational
+specification. In: Parisi-Presicce, F. (Ed.), Proc. WADT’97. Springer LNCS
+64
+1376, pp. 18–61.
+Meseguer, J., Thati, P., 2004. Symbolic reachability analysis using narrow-
+ing and its application to the verification of cryptographic protocols. In:
+Mart´ı-Oliet, N. (Ed.), Proc. 5th. Intl. Workshop on Rewriting Logic and its
+Applications. ENTCS, Elsevier.
+Millen, J., Shmatikov, V., 2001. Constraint solving for bounded-process cryp-
+tographic protocol analysis. In: 8th ACMConference on Computer and Com-
+munications Security (CCS ’01). pp. 166–175.
+Needham, R., Schroeder, M., December 1978. Using encryption for authenti-
+cation in large networks of computers. Communications of the ACM 21 (12),
+993–999.
+Peled, D., 1998. Ten years of partial order reduction. In: 10th conference on
+computer-aided verification (CAV’98). Vol. 1427 of Lecture Notes in Com-
+puter Science. Springer-Verlag, Berlin, pp. 17–28.
+Stubblebine, S., Meadows, C., 2000. Formal characterization and automated
+analysis of known-pair and chosen-text attacks. IEEE Journal on Selected
+Areas in Communications 18 (4), 571–581.
+TeReSe (Ed.), 2003. Term Rewriting Systems. Cambridge University Press,
+Cambridge.
+Weidenbach, C., 1999. Towards an automatic analysis of security protocols in
+first-order logic. In: Ganzinger, H. (Ed.), 16th International Conference on
+Automated Deduction (CADE-16). Vol. 1632 of Lecture Notes in Computer
+Science. Springer, pp. 314–328.
+A The Narrowing Relation ;•σ,φ,R,E
+The narrowing relation ;•σ,φ,R,E is entirely similar to the narrowing modulo
+E relation ;σ,φ,R,E, except that the unification algorithm modulo E and its
+corresponding set of unifiers are modified as explained below, and the variables
+of sort Fresh are treated in a special way.
+t
+p
+; •σ,φ,R,E t
+′ if there is a non-φ-frozen position p ∈ PosΣ(t), a (possibly
+renamed) rule l → r in R such that Var(t) ∩ (Var(l) ∪ Var(r)) = ∅, and a
+E-unifier σ ∈ CSU•E,φ(t|p = l,W ) for Var(t) ∪ Var(l) ∪ Var(r) ⊆ W such
+that t′ = σ(t[r]p) and VarFresh(t) ∪ VarFresh(l) ∪ VarFresh(r) 6⊆ Dom(σ)
+where the set of unifiers CSU•E,φ(u = v,W ) is defined by
+σ↓V ∈ CSU•E,φ(u = v,W ) for V = Var(u) ∪ Var(v) and V ⊆ W if
+u •' v ;!B,σ,φ, •~E True, where we add the frozenness requirement φ( •' ) =
+{1} and we assume that the equations E can be viewed as finite set of rewrite
+rules ~E, and where •~E is the set of rewrite rules •~E = ~E∪{x •'x→ True}.
+65
+In other words, in this modified procedure, when unifying two terms u and v
+modulo the equations E by basic narrowing with the rules ~E, we begin with
+the expression u •' v and try to reach the term True, but the frozenness of
+•' does not allow the rules in ~E to be applied to the term u: they can only
+be applied to v. Only in the end, by narrowing with the rule x •'x → True,
+is a final unification of u with the narrowed right term performed.
+The reason for using this modified narrowing relation
+;•σ,φ,R,E in the NPA is that when narrowing from input terms t1, . . . , tm to
+output terms s1, . . . , sk, the terms t1, . . . , tm are assumed to be strongly → ~E-
+irreducible, whereas the output terms s1, . . . , sk are not necessarily strongly
+→ ~E-irreducible. This is because the terms t1, . . . , tm represent messages al-
+ready received by a principal so that encryptions/decryptions have already
+been applied and, therefore, the terms have been simplified. Instead, the terms
+s1, . . . , sk, represent newly produced terms (messages) that have not yet been
+simplified.
+66
