@@ -1,0 +1,870 @@
+Higher-Order Abstract Syntax
+Frank Pfenningy Conal Elliotty
+Department of Computer Science
+Carnegie Mellon University
+Pittsburgh, Pennsylvania 15213-3890
+Abstract
+We describe motivation, design, use, and implemen-
+tation of higher-order abstract syntax as a central rep-
+resentation for programs, formulas, rules, and other
+syntactic objects in program manipulation and other
+formal systems where matching and substitution or
+unication are central operations. Higher-order ab-
+stract syntax incorporates name binding information
+in a uniform and language generic way. Thus it acts
+as a powerful link integrating diverse tools in such
+formal environments. We have implemented higher-
+order abstract syntax, a supporting matching and
+unication algorithm, and some clients in Common
+Lisp in the framework of the Ergo project at Carnegie
+Mellon University.
+1 Introduction
+Higher-order abstract syntax is a generalization of the
+usual data type of abstract syntax tree that is used to
+represent syntactic objects in implementations of sys-
+tems that manipulate programs, formulas, rules, etc.
+This research was supported in part by the Oce of Naval
+Research under contract N00014-84-K-0415 and in part by the
+Defense Advanced Research Projects Agency (DOD), ARPA
+Order No. 5404, monitored by the Oce of Naval Research
+under the same contract.
+yThe authors can be reached via electronic mail on the
+ArpaNet as fp@cs.cmu.edu and conal@cs.cmu.edu.
+Higher-order abstract syntax uses a simply typed -
+calculus enriched with products and polymorphism
+and thus extends a proposal by Huet and Lang [11].
+It diers from LF [1,9] in that we do not allow depen-
+dent function types, since no appropriate matching
+or unication algorithm is known. Moreover, we feel
+that products and polymorphism, which are absent
+from LF, are an essential feature for practical appli-
+cations.
+The requirements that led to the design of higher-
+order abstract syntax arose through one of the Ergo
+project’s goals, namely to build a language-generic
+environment for formal program development. Com-
+ponents of such an environment that we have com-
+pleted include a parser and unparser generator, an
+attribute grammar compiler, a type inference facility,
+and an interaction facility based on the X window
+system. Other components now being implemented
+include a language- and rule-independent transforma-
+tion system and a logic-independent deduction sys-
+tem.
+Such a program design environment should support
+rapid prototyping of all relevant aspects of program-
+ming languages. That is, one should be able to easily
+specify syntax, semantics, and transformation rules
+for a language and obtain an environment tailored to
+manipulating programs in that language. Our goals
+are even broader, since we believe that logical lan-
+guages and proof systems are essential for formal pro-
+gram development and, therefore, that we must be
+able to support these as well.
+The requirements for the internal representation of
+syntactic objects in such a system are quite dierent
+from the requirements in a single-language system.
+On the other hand, many of the same issues come up
+in compiler generation systems. We believe the basic
+principles that should guide the design of an inter-
+nal representation for programs (and other syntactic
+objects) in our context are:
+ Simple, user-friendly syntactic and semantic de-
+nition of a language should be supported through
+the representation. It should also allow denition
+of transformation and inference rules in a simi-
+lar style. In particular, it should be possible to
+avoid complex side-conditions wherever possible.
+ Ecient and correct use can be made of the def-
+initions. In particular, the system must be able
+to eciently and correctly transform programs
+or apply inference rules.
+ The representation should be general enough to
+be used by all relevant tools in an environment,
+thereby providing for a high degree of integration
+between the tools.
+Abstract syntax trees have proved very useful in
+similar contexts. This has been well established in
+systems like PSG [2], the Cornell Synthesizer Gen-
+erator [19], Gandalf [8,6], or Popart [20]. However,
+abstract syntax trees do not completely satisfy the
+more general requirements listed above. The crux of
+the problem is that almost all languages in this con-
+text will have name binding constructs. These bind-
+ing constructs make correct matching and substitu-
+tion dicult (see Section 2 for some examples). Also,
+the requirements of a language generic system do not
+allow incorporation of the information about binding
+constructs the way it can be done in single-language
+systems. Instead, the language implementor must ex-
+plicitly dene the binding constructs of the language
+once and for all, and the system must be able to in-
+corporate this information into the representation.
+We found that all static binding constructs we
+examined can be represented in a simply typed -
+calculus with Cartesian products. We also added
+polymorphism to the representation to make it pow-
+erful to enough to conveniently state general transfor-
+mation and inference rules. A somewhat less general,
+but closely related representation was rst proposed
+by Huet and Lang [11]. It should be noted that our
+representation in no way prohibits dynamic extent of
+variables, nor does it mean a commitment to a call-
+by-name over call-by-value semantics. Also, since the
+types are syntactic sorts, no commitment to the se-
+mantic type structure of the object language is made.
+Higher-order abstract syntax is appropriate and use-
+ful for almost all languages, including Prolog, ML,
+Pascal, various logics and type theories, Hoare logics,
+etc.
+Adopting this typed -calculus representation al-
+lows us to use the very powerful mechanism of higher-
+order unication (of which higher-order matching
+and substitution are special cases). We have imple-
+mented Huet’s algorithm [10] for higher-order uni-
+cation with extensions to deal with products and
+polymorphism. It is complete except for some rare
+cases involving higher-order polymorphism. In cer-
+tain cases, straightforward matching would produce
+too many uniers to be useful, and in this case the
+client (user or program) can preinstantiate some vari-
+ables to generate a more specialized version of a pat-
+tern. Note that this problem of too many rewrites is
+inherent in program transformation, and not a defect
+of our implementation. On the contrary: our imple-
+mentation provides a simple way of stating a very
+general, valid rule and then partially instantiating it
+to a more specialized one which is automatically cor-
+rect and can be applied eciently.
+We also provide a rst-order interface to higher-
+order abstract syntax. This rst-order interface is
+dened through the augments in the grammar and is
+used by tools that still depend on the conventional no-
+tion of abstract syntax (like the parser and unparser
+generators and the current attribute grammar com-
+piler). As discussed in Section ?? the eciency loss
+due to the dual interface seems to be minimal.
+In the remainder of this paper, we rst point out
+some of the inadequacies of the representation of pro-
+grams as abstract syntax trees. We then discuss
+higher-order abstract syntax and illustrate its use
+through a diverse set of examples. Finally, some im-
+plementation issues concerning higher-order abstract
+syntax and related work are discussed.
+2 Some Motivating Examples
+In this section we highlight some of the problems that
+arise in matching and substitution due to the presence
+of binding constructs in a language. Almost all lan-
+guages have these binding constructs, though some-
+times they are not immediately apparent. For ex-
+ample, in Prolog the \free" variables in a clause are
+actually bound in that clause, since they are clearly
+distinct from variables with the same name in other
+clauses. A function denition stated as f(x) = b actu-
+ally binds x and f (see the beginning of Section 3.2).
+The rules we present throughout this paper are
+stated without any semantic side conditions such as
+strictness or termination. Depending on the language
+semantics, such conditions may still be necessary to
+ensure full semantic equivalence between the trans-
+formed programs. However, it should be noted that
+in all the examples the syntactic side conditions on
+the rules disappear without compromising the valid-
+ity of the rule.
+2.1 Correct Matching and Substitution
+This problem should be very familiar; it is generally
+called \variable capturing". It appears in two dier-
+ent forms: during matching and during substitution.
+Consider the rule of let-conversion.
+let x = e in b () b[e=x]
+Here are two incorrect applications of this rule.
+Note that reading them from right to left shows the
+problem of doing correct matching against b[e=x].
+let x = y in let y = 5 in x  y =()
+let y = 5 in y  y
+let x = 5 in let x = x  x in x =()
+let x = 5  5 in 5
+What is required for correct substitution is recog-
+nition of name conflicts and renaming of bound vari-
+ables. If this rule is read from right-to-left, it is
+clear that there are many possible ways of abstract-
+ing an expression from a program, and that there-
+fore straightforward matching on any representation
+would be very non-deterministic. In a situation like
+this the solution is to partially instantiate the pattern
+before matching.
+2.2 Variable Occurrence Restriction
+Variable occurrence restrictions again require renam-
+ing of bound variables during substitution, or failure
+of matching. The following example is taken from a
+formalization of a natural deduction system to show
+the variety of circumstances in which these problems
+occur.
+Γ ‘ P 8I; where x not free in Γ.
+Γ ‘ 8xP
+If this rule is used by matching against the lower
+line, the restriction on x must be checked separately
+| it is dicult to formulate the rule simply and con-
+cisely. Ideally, x would be renamed to a new variable
+x0 if x is already free in Γ. If the rule is used in
+the other direction, it should simply not match if x
+appears in Γ. As we will see in Section 3.3, rules in-
+corporating occurrence conditions can be formulated
+easily and applied correctly using higher-order ab-
+stract syntax.
+Note that in a system that uses rst-order abstract
+syntax, not only would the rule be conditional, but
+the language implementor would somehow have to
+dene a predicate not-free-in for the language in
+question.
+2.3 Correct Treatment of Contexts
+Many program transformation rules can be stated
+naturally through the use of contexts. Correct appli-
+cations of these rules, however, is tricky. For example,
+a rule propagating computation into the branches of
+an if expression could be written as
+C[if p then a else b] () if p then C[a] else C[b]
+Consider the following incorrect application.
+let p = false in if p then 1 else 2 =()
+if p then let p = false in 1
+else let p = false in 2
+As noted in [16] syntactic conditions on C are dif-
+cult to formulate if one wishes to eliminate the pos-
+sibility of incorrect rule application as in the exam-
+ple. The use of higher-order abstract syntax solves
+this problem by allowing the statement of the rule
+as above, but automatically prohibiting the incorrect
+use below without any additional conditions.
+3 Design and Use of Higher-Order
+Abstract Syntax
+In this section we will sketch higher-order abstract
+syntax and illustrate how it solves the problems men-
+tioned in the previous section.
+3.1 Well-Sorted First-Order Abstract Syntax
+Ordinarily a parser creates untyped abstract syntax
+trees. They can be viewed as terms where the opera-
+tors in the language act as function symbols, and the
+lexical terminals as constants. Variables as such do
+not exist in this representation, that is, object lan-
+guage variables are represented as identiers, which
+are all considered constants. In some systems in
+which program schemas are considered, explicit no-
+tations for schema-variables are introduced. These
+schema- or meta-variables become variables in the ab-
+stract syntax.
+In the context of syntax manipulation tools the
+need for types in the abstract syntax soon arises. This
+is because one needs to be able to test whether a sub-
+stitution of a subterm for another is syntactically le-
+gal. The types then are derived from the syntactic
+sorts or syntactic categories. The notion of syntactic
+sort and object language type usually do not coincide,
+though typically the object language types rene the
+syntactic sort structure.
+As an example throughout this paper we will use
+a simple functional language with mutually recursive
+function denitions, because it provides a good frame-
+work for illustrating the use of higher-order abstract
+syntax.
+We begin with a grammar that, except for special
+fonts, can be read directly by the parser and unparser
+generator in the Ergo Support System. The gram-
+mar augments surrounded by \< >" indicate the ab-
+stract syntax that the parser constructs to represent
+the concrete syntax on the left. We omit some of the
+straightforward grammar augments.
+P ::= rec D <rec0(D)>
+D ::= F = E j D0 and D1
+F ::= V j V F
+E ::= V <var(V )>
+j C <const(V )>
+j if E0 then E1 else E2 <ite(E0; E1; E2)>
+j let B in E <let0(B;E)>
+j E0 E1 <apply(E0; E1)>
+j lam V : E <lam0(V; E)>
+B ::= V = E j B0 and B1
+This completes the outline of a view of abstract
+syntax as typed terms, where operators correspond to
+function symbols and syntactic sorts to types. Meta-
+variables or schema variables would have to be a dis-
+tinct syntactic category.
+In the Ergo Support System, the rst-order ab-
+stract syntax as dened by means of the grammar
+above is used by the parser, unparser, formatter,
+and interaction facility (for highlighting proper sub-
+terms). However, if a higher-order view is dened
+for a language the abstract syntax tree is never built.
+Instead, we parse directly into higher-order abstract
+syntax.
+The rst-order view from the higher-order repre-
+sentation is then created through a function that de-
+composes a term into its rst-order operator and ar-
+guments. Currently, this function must be specied
+directly by the language implementor.
+3.2 Higher-Order Abstract Syntax
+Motivated by the examples in Section 2 we now gener-
+alize to higher-order terms. This representation was
+suggested by Huet and Lang [11] for use in program
+transformation. In this rst generalization, simply
+typed lambda terms represent programs. Syntactic
+sorts become -calculus types. The lexical termi-
+nals and the operators that do not introduce vari-
+able bindings are, respectively, rst-order and second-
+order constants of the -calculus.
+Another crucial change occurs for the variables.
+Operators in the object language that are binding
+constructs are now explicitly encoded as third-order
+constants. As the following examples will show, this
+requires that bound object language variables actu-
+ally become variables in the typed lambda calculus.
+The generalization to simply typed -terms is still
+insucient for many languages. The problem is the
+presence of lists of various forms: lists of arguments,
+lists of bound variables, lists of mutually recursive
+function denitions. The usual solution is to curry
+functions, which enables representation, but not sim-
+ple, nitary denition of transformation or inference
+rules. See, for example, the formalization of Hoare
+logic in LF [1], where the natural encoding remains
+restricted to a two-register machine. More generally,
+LF can naturally formalize an n-register machine for
+any xed n, but only give a very unsatisfactory en-
+coding of full Hoare logic.
+To solve this problem, we have extended higher-
+order abstract syntax and the unication algorithm to
+handle products. In our formulation of the -calculus
+with products, we use pattern binders akin to ML,
+rather than constants fst and snd . The product is bi-
+nary and associates to the left. Our example language
+has three constructs that introduce scope: let, lam,
+and rec. Figure 1 shows how they are represented in
+higher-order abstract syntax.
+In order to express transformation rules through
+patterns, we now augment the grammar for the ob-
+ject language to a grammar for an associated pattern
+language. The pattern language is not universal, but
+rather is be constructed in harmony with a given ob-
+ject language. Because of the higher-order nature of
+let V1 = E1 and . . . and Vn = En in E as <let(hV1 . . .Vni : E)hE1; . . . ; Eni>
+lam V : E as <lam(V : E)>
+rec V1V11 . . .V1n1 = E1 and . . . and VmVm1 . . .Vmnm = Em as
+<rec(hV1; . . . ; Vmi : hlam(V11 : lam(V12 . . .E1 . . .)); . . . ; lam(Vm1 : lam(Vm2 . . .Em . . .))i)>
+Figure 1: Representation of let, lam, and rec.
+our abstract syntax, this requires more than just the
+introduction of schema variables. Typically, an object
+language and its associated pattern language will dif-
+fer by three or four productions. These additional
+productions provide for specifying variable applica-
+tions, in some cases also for variables, abstractions,
+and products.
+Here we include higher-order application and ab-
+straction. Note how the augments of these produc-
+tions dier from the cases building apply and lam.
+E ::= . . . j E0[E1] <E0(E1)>
+j V : E <V : E>
+Let us reconsider the let-conversion rule from Sec-
+tion 2.1. We can now state a single polymorphic rule
+for let-conversion. The rst line shows how it would
+actually be stated, the second line shows the hidden
+type variable . The given type is the most gen-
+eral, with let being a polymorphic constant of type
+( ! E) !  ! E. Remember that the types in
+the representation correspond roughly to the syntac-
+tic categories of the language denition.
+let x = e in b[x] () b[e]
+let x = e in b!E [x] () b[e]
+We can match this rule, for example, against the
+following term
+let x = 5 and y = 6 in x  y
+In this example, the substitution will be
+ − E  E
+e − h5; 6i
+b − hx; yi : x  y
+Then the right-hand side becomes
+b[e] = (hx; yi : x  y)[h5; 6i] =
+
+5  6
+The Fold and Unfold rules [3] provide two more ex-
+amples of how rules can be concisely and easily for-
+mulated in this framework. Here we show the simpler
+Unfold rule and give a denition that states one sin-
+gle rule for any number of mutually recursive function
+denitions.
+rec f = b[f ][f ] () rec f = b [b[f ][f ]] [f ]
+We now consider an example where this rule is ap-
+plied to a recursive function denition. The objective
+of the transformation is to replace the rst recursive
+call to gcd by the properly instantiated function body.
+This is achieved in two steps: the rst is to replace
+a recursive function call by its denition, the second
+is to use lam-reduction (analogous to -reduction,
+but on the level of the object language) to obtain the
+instantiated body.
+rec gcd x y = if x = 1 then 1
+else if x = y then x
+else if x < y then gcd y x
+else gcd (x− y) y
+This program matches the unfold rule in four dif-
+ferent ways, each either unfolding or not unfolding
+each of the two recursive calls. In the substitution
+below, g abstracts the occurrences of gcd that are to
+be unfolded and f the ones that remain unchanged
+in the transformation.
+b − g : h : if x = 1 then 1
+else if x = y then x
+else if x < y then g y x
+else h (x − y) y
+Applying the substitution to rec f = b[b[f ][f ]][f ],
+the right-hand side of the rule, yields:
+rec gcd x y = if x = 1 then 1
+else if x = y then x
+else if x < y then
+(lam x : lam y :
+if x = 1 then 1
+else if x = y then x
+else if x < y then gcd y x
+else gcd (x− y) y) y x
+else gcd (x− y) y
+Now we can apply lam-reduction twice, yielding
+the correctly unfolded program:
+rec gcd x y = if x = 1 then 1
+else if x = y then x
+else if x < y then
+if y = 1 then 1
+else if y = x then y
+else if y < x then gcd x y
+else gcd (y − x) x
+else gcd (x− y) y
+Then, using two simple rules for simplifying
+if-then-else expressions we can eliminate some of
+conditions to get
+rec gcd x y = if x = 1 then 1
+else if x = y then x
+else if x < y then
+if y = 1 then 1
+else gcd (y − x) x
+else gcd (x− y) y
+Higher-order rule descriptions, like the description
+of Unfold, can be embedded in a programming lan-
+guage so that compositions of transformations like
+the one above can be described as short pieces of
+programs. A good example of such a system is
+Prolog [15]. Higher-order abstract syntax provides
+a way for systems like Prolog to use readable con-
+crete syntax for programs without sacricing power,
+simplicity of expression, or eciency.
+3.3 Propagating Contexts
+Here is the promised solution to the challenge in Sec-
+tion 2.3. The context variable C simply becomes a
+second-order variable and will be instantiated only to
+proper contexts. A typical rule would be the follow-
+ing:
+C[if p then a else b] () if p then C[a] else C[b]
+See Figure 2 for an example of a context prop-
+agation rule and its use with higher-order abstract
+syntax. The last counterexample demonstrates how
+higher-order matching ensures that bound variables
+will not leave their scope. This restriction is not en-
+forced through a test after a potential match is pro-
+duced, but is an integral part of the higher-order uni-
+cation algorithm.
+3.4 Raising Rules
+So far all examples have been second-order. However,
+there are many applications, in which one would like
+to use third-order matching. In the context of raised
+rules (as discussed here), our algorithm will always
+terminate (a result due to Miller [13]). Raised rules
+are a signicant generalization of Huet & Lang’s tem-
+plate matching [11].
+Here is an example of an equivalence we would to
+obtain as a consequence of a general rule for context
+propagation.
+let x = y  y in
+let z = x  y in
+if y > 0 then z else x
+()
+if y > 0
+then let x = y  y in
+let z = x  y in z
+else let x = y  y in
+let z = x  y in x
+This does not match the context propagation rule
+from above, since a substitution like a − z would be
+captured by the binding on z. A general solution in a
+case like this is to raise the order of the rule through
+explicit abstraction. This solution is inspired by Paul-
+son’s 8-lifting [18] that was discovered independently
+by Miller and called raising [13]. Both raise the order
+of certain equations in the presence of parameters.
+Raising requires that we be able to explicitly men-
+tion the \" of the -calculus representation in the
+pattern. The following is a raised version of context
+propagation.
+C[x : if p then a[x] else b[x]] ()
+if p then C[x : a[x]] else C[x : b[x]]
+C[if p then a else b] () if p then C[a] else C[b]
+x  (if x > 0 then 1 else −1) () if x > 0 then x  1 else x  (−1)
+where C  − z : x  z; a − 1; b − −1; p − x > 0:
+(if x > 0 then 1 else −1)  x () if x > 0 then 1  x else (−1)  x
+where C  − z : z  x; a − 1; b − −1; p − x > 0:
+let q = false in if q then 1 else −1 =() if q then let q = false in 1 else let q = false in −1
+since C  − (z:let q = false in z); a − 1; b − −1 and p − q leads to a clash.
+Figure 2: Examples of context propagation.
+This operation raised the order of a and b to be
+second-order variables, C is now a third-order vari-
+able of type (E ! E)! E. A match of this pattern
+against its motivating example is given through the
+substitution
+C  − f : let x = y  y in let z = x  y in f [hx; zi]
+p  − y > 0
+a  − hz0; z1i : z1
+b  − hz0; z1i : z0
+Again note the use of polymorphism in the rule
+description and the instantiation of type variables to
+product types to capture the fact that this should
+apply to any number of bound variables that may
+appear in the branches of the if, but not in the test
+p.
+This also shows that variable occurrence conditions
+become unnecessary. The fact that p could not de-
+pend on any variable bound in the context is implicit
+in the formulation of the rule.
+Our current incomplete support for polymorphism
+cannot handle this example.
+4 Other Applications
+Higher-order abstract syntax captures the binding in-
+formation present in a language. We have shown in
+Section 3 how this can be used for correct unication,
+matching, and substitution and direct formulation of
+rewrite rules in the context of a language-generic en-
+vironment for manipulating programs, formulas, and
+other syntactic objects.
+In the following subsections we indicate how other
+components of such a generic environment can exploit
+the scoping information embedded in the representa-
+tion.
+4.1 Type Inference
+In the Ergo Support System, we have prototyped
+a component for general type inference, given the
+semantic type signature of a language. Conceptu-
+ally, the type signature is translated into an attribute
+grammar that will do type inference on a given term,
+though the actual implementation is slightly more ef-
+cient.
+An early problem with our type signature speci-
+cation language was that implicit binding constructs
+could not be handled. For example, in Prolog the
+binding of the free variables over a clause is implicit,
+and it need not have the same type as a variable with
+the same name in another clause. Other languages,
+where binding constructs are complicated could not
+be handled either. An example is an imperative lan-
+guage where an arbitrary number of local variable
+declarations may follow a begin.
+With the use of higher-order abstract syntax these
+problems disappear, since the necessary analysis is
+done once and for all at parse time. Without go-
+ing into detail, here is a possible type signature for
+our functional example language that is based on the
+higher-order abstract syntax representation. Note
+that this completely eliminates the need for analyz-
+ing the syntactic categories D, F , and B, which are
+not present in the higher-order abstract syntax. Con-
+stants of the object language may be declared sepa-
+rately | the last line is an example.
+Briefly, the operator in the language (constant in
+the higher-order abstract syntax) is listed with their
+semantic types. Type constructors of the object lan-
+guage are funtype, prodtype, boolean, and number, type
+variables are  and .
+rec : (! )! 
+ite : boolean! ! ! 
+let : (! ) ! ! 
+apply : (funtype  )! ! 
+lam : (! ) ! (funtype  )
+ : (funtype (prodtype number number) number)
+The higher-order nature of the abstract syntax
+makes this straightforward specication possible.
+Note that this specication does not treat let in the
+way ML does, that is, it does not copy the type vari-
+ables in instances of .
+4.2 Attribute Grammar Evaluator
+Most attribute grammars on a language with binding
+constructs will have to pass around an environment
+as context in which the attribute value will be com-
+puted. Typically that environment is enlarged when
+descending through a binding construct of language.
+As mentioned above, determining where variables are
+bound often requires a signicant amount of work,
+like collecting free variables from a term.
+Using higher-order abstract syntax the repeated
+work can be avoided, thereby improving the eciency
+of attribute analysis. Moreover, expression of at-
+tribute equations is more concise, since the environ-
+ment of bound variables can eectively be hidden
+from the user in most cases.
+The Analysis Facility in the Ergo Support System
+can currently process only attribute grammars that
+traverse rst-order abstract syntax. The implemen-
+tation of an extension of attribute grammars to take
+advantage of the higher-order abstract syntax is out-
+lined here and planned for the near future.
+Again, lacking space, the example is not fully ex-
+plained but should indicate the form of such gen-
+eralized attribute grammars. We show a fragment
+of an attribute grammar that evaluates expressions
+from our simple language. A higher-order subterm is
+treated as if it returns a function from the attribute
+value for the bound variable to the attribute value
+for the whole expression. That function can then be
+applied in the denition of other attributes. In the
+implementation, the function objects are never built,
+but they serve as a convenient, conceptual device. In
+eect, the attribute grammar will be translated into
+another computing the same value, but using envi-
+ronments in which the variable name is bound to the
+value to which the function would eventually be ap-
+plied.
+E("value) = C("value) j . . .
+j let([E ! E]("valuefn); E("value0))
+where value = valuefn(value0)
+j apply(E("value0); E("value1))
+where value = value0(value1)
+j lam([E ! E]("valuefn))
+where value = valuefn
+In this example, the evaluation of a let would be
+signicantly more ecient that evaluation of and ap-
+plication of an abstraction to an argument. The rea-
+son is that the term corresponding to the lam expres-
+sion is actually built rst, then later reduced by appli-
+cation, while the reference to valuefn in the clause for
+let will be compiled into a form using environments.
+4.3 Denotational Specication of Language
+Semantics
+We have found that using higher-order abstract syn-
+tax signicantly simplies denotational semantics
+specications. The key idea here, proposed in [11], is
+to specify the semantics of a language simply by giv-
+ing an interpretation of the constants, and adopting
+the standard interpretations for variables, abstrac-
+tions and applications.
+Semantic specications are syntax-directed, that is,
+the meaning of a compound expression should be a
+\function" of the meanings of its components in the
+abstract syntax. The constant interpretations are
+exactly these functions, and putting together terms
+with application has the semantic eect of applying
+the meaning of the constant to the meanings of the
+components. This frees the language specier from
+this step and makes the semantic specications very
+direct.
+The standard technique for handling binding con-
+structs is to make the meaning of an expression be a
+function from environments to values. For example,
+the semantics of a let expression in a call-by-name
+language is commonly given as
+E [[let v = e0 in e1]] = E [[e1]](+ [v ! E [[e0]]])
+Using the formulation of let given above, this sim-
+plies greatly to
+[[let]] = f : a : f a
+The formulation of the call-by-value case is only
+slightly more complicated.
+Formal syntactic systems involving semantic prop-
+erties (such as total or partial equivalence of mean-
+ings) that are based on higher-order abstract syntax
+will naturally be much simpler than their traditional
+counterparts. This is because there is less distance
+between the (abstract) syntax being manipulated and
+the meanings that motivate them.
+5 Some Implementation Issues and
+Further Work
+5.1 Implementation of Higher-Order Ab-
+stract Syntax
+It seems that the most costly operations on abstract
+syntax are higher-order matching and unication. We
+therefore decided to implement the typed -terms,
+and provide the rst-order interface through explicit
+conversion functions that are called when the rst-
+order components of a term are accessed. Our posi-
+tive experience with the current implementation con-
+rms that this was the right decision. The rst-order
+constituents of a -term are cached as they are com-
+puted, thus making term-traversal almost as ecient
+as for rst-order abstract syntax. We have not no-
+ticed a performance loss during formatted unpars-
+ing, which is the most time-consuming operation car-
+ried out using the rst-order view of abstract syn-
+tax. However, the representation of -terms them-
+selves leaves room for improvement. Currently, we
+use the normal form described by Huet in [10], but
+lazy normalization and the use of deBruijn’s nota-
+tion [5] should lead to some eciency improvements
+in the implementation of the unication algorithm.
+5.2 Specication of Name Binding Con-
+structs
+Currently the language implementor has to supply
+some highly stylized Lisp functions that achieve the
+translations between higher- and rst-order view of
+abstract syntax. We have not yet had enough experi-
+ence to feel condent in a design of a user-oriented
+way of specifying the binding properties of a lan-
+guage.
+5.3 Nondeterminism
+In general during program transformation, many of
+the rules will be too non-deterministic to be simply
+matched against a given program. In such a case we
+need a more specic instance of a general rule. This
+more specic instance can be obtained through sub-
+stitution for some of the free variables in the pattern.
+The correctness of the specialized rule follows directly
+from the correctness of the general rule.
+If one uses higher-order matching as part of the
+execution of a higher-order logic program [15] then
+it is the programmer’s responsibility to formulate
+and order the clauses in such a way that the non-
+determinism of the higher-order unication is con-
+trolled. This requires some experience with Prolog,
+but is in general not too dicult.
+Another solution we have used successfully is to in-
+teractively point at subterms displayed in a window,
+for example, to identify subterms over which to ab-
+stract.
+5.4 Language Representation
+When one is faced with the task of implementing an
+object language using higher-order abstract syntax,
+one is faced with a variety of choices. The most
+straightforward representation is described in this pa-
+per: syntactic categories (usually a subset of the non-
+terminals) become types and there is a distinct, pos-
+sibly higher-order constant for each operator in the
+language.
+However, sometimes one would like to eliminate
+some of the syntactic sugar from the concrete syntax
+and thus map dierent concrete syntax expressions
+to the same representation. This is currently possible
+in our implementation, but not very well supported,
+since the unparser would only unparse into concrete
+syntax corresponding to the core language. The ad-
+vantage of using a smaller core language is that one
+needs to dene semantics, transformation rules, etc.,
+only for the core language.
+Another possibility for a more concise representa-
+tion of a typed language is to use the types of the
+-calculus to represent the types of the object lan-
+guage. The class of languages for which this is possi-
+ble is limited by the expressiveness of the type system
+of the higher-order abstract syntax.
+6 Related Work
+LF, the Edinburgh Logical Framework [1,9,7] makes
+explicit use of a dierent version of the -calculus
+to represent logical formulas and programs and the
+deduction system for reasoning about them. The
+way quantiers are encoded is similar to the way
+it is done in higher-order abstract syntax and goes
+back to Church [4]. Because of the power of their
+-calculus with dependent function types, it is not
+known whether there is a natural unication algo-
+rithm that could be used for proof search in their
+system in a general way. However, their system is
+at the same time weaker in a dierent respect, since
+it does not allow products or polymorphism. This
+means that many natural formulations of transfor-
+mation or inference rules cannot be represented in
+LF.
+Isabelle [18] uses a representation similar to ours
+for the statement of rules, and uses higher-order uni-
+cation for deduction. Isabelle’s -calculus represen-
+tation does not have the expressive power of higher-
+order abstract syntax, but explicitly encodes quanti-
+er dependencies.
+Prolog [14,12,17] provides a natural metalan-
+guage for writing programs acting on higher-order ab-
+stract syntax. This was the basic point made in [15].
+We plan a generalization of Prolog that would deal
+with products and thus allow us to use it as a very
+expressive metalanguage for metaprogramming in the
+context of language-generic program derivation and
+theorem proving.
+7 References
+[1] Arnon Avron, Furio A. Honsell, and Ian A. Ma-
+son. Using typed Lambda Calculus to Implement
+Formal Systems on a Machine. Technical Re-
+port ECS-LFCS-87-31, Laboratory for Founda-
+tions of Computer Science, University of Edin-
+burgh, Edinburgh, Scotland, June 1987.
+[2] Rolf Bahlke and Gregor Snelting. The PSG sys-
+tem: from formal language denitions to interac-
+tive programming environments. ACM Transac-
+tions on Programming Languages and Systems,
+8(4):547{576, October 1986.
+[3] R. M. Burstall and John Darlington. A trans-
+formation system for developing recursive pro-
+grams. Journal of the Association for Comput-
+ing Machinery, 24(1):44{67, January 1977.
+[4] Alonzo Church. A formulation of the simple the-
+ory of types. Journal of Symbolic Logic, 5:56{68,
+1940.
+[5] N. G. de Bruijn. Lambda-calculus notation with
+nameless dummies: a tool for automatic formula
+manipulation with application to the Church-
+Rosser theorem. Indag. Math., 34(5):381{392,
+1972.
+[6] David Garlan. Views for Tools in Integrated En-
+vironments. PhD thesis, Carnegie Mellon Uni-
+versity, 1987. Available as Technical Report
+CMU-CS-87-147.
+[7] Timothy G. Grin. An Environment for Formal
+Systems. Technical Report 87-846, Department
+of Computer Science, Cornell University, Ithaca,
+New York, June 1987.
+[8] Gandalf Group. Special issue on the Gandalf
+project. In The Journal of Systems and Soft-
+ware, Volume 5, Number 2, May 1985.
+[9] Robert Harper, Furio Honsell, and Gordon
+Plotkin. A framework for dening logics.
+In Symposium on Logic in Computer Science,
+pages 194{204, IEEE, June 1987.
+[10] Gerard Huet. A unication algorithm for typed
+-calculus. Theoretical Computer Science, 1:27{
+57, 1975.
+[11] Gerard Huet and Bernard Lang. Proving
+and applying program transformations expressed
+with second-order patterns. Acta Informatica,
+11:31{55, 1978.
+[12] Dale Miller, Gopalan Nadathur, and Andre Sce-
+drov. Hereditary Harrop formulas and uniform
+proof systems. In Second Annual Symposium on
+Logic in Computer Science, pages 98{105, IEEE,
+June 1987.
+[13] Dale A. Miller. Unication under mixed prexes.
+1987. Unpublished manuscript.
+[14] Dale A. Miller and Gopalan Nadathur. Higher-
+order logic programming. In Proceedings of the
+Third International Conference on Logic Pro-
+gramming, Springer Verlag, July 1986.
+[15] Dale A. Miller and Gopalan Nadathur. A logic
+programming approach to manipulating formu-
+las and programs. In Symposium on Logic
+Programming, San Francisco, IEEE, September
+1987.
+[16] B. Mo¨ller. A survey of the project CIP:
+Computer-aided, intuition-guided programming.
+Technical Report TUM{18406, Institut fu¨r In-
+formatik der TU Mu¨nchen, Munich, West Ger-
+many, 1984.
+[17] Gopalan Nadathur. A Higher-Order Logic as the
+Basis for Logic Programming. PhD thesis, Uni-
+versity of Pennsylvania, 1987.
+[18] Lawrence Paulson. Natural deduction as higher-
+order resolution. Journal of Logic Programming,
+3:237{258, 1986.
+[19] Thomas Reps and Tim Teitelbaum. The synthe-
+sizer generator. In Proceedings of the ACM SIG-
+SOFT/SIGPLAN Software Engineering Sympo-
+sium on Practical Software Development Envi-
+ronments, pages 42{48, ACM, New York, April
+1984.
+[20] David S. Wile. POPART: Producer of Parsers
+and Related Tools, System Builder’s Manual.
+Technical Report, University of Southern Cali-
+fornia, Information Sciences Institute, 1987.
