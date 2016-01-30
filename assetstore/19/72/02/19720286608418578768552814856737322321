@@ -1,0 +1,868 @@
+A Four Russians Algorithm for Regular Expression Pattern
+Matching
+GENE MYERS
+The z%u’ersc~ofh.zona, TzLcson,A?zzona
+Abstract. Given a regular expression R of length Panda wordxf of length N, the membership
+problem lstodeterminelf A isinthe language denoted by R. AnO(PN/lg N)time algorithmic
+presented that 1s based on a lgN speedup of the standard O(PN) time simulation of R“s
+nondeterministic finite automaton on A using a combination of the node-listing and “Four-
+Russlans” paradigms. This result places a new worst-case upper bound on regular expression
+pattern matching. Moreover, in practice the method provides an implementation that is faster
+than existing software for small regular expressions.
+Categories and Subject Descriptors: F.2.2 [Analysis of Algorithms and Problem Complexity]:
+Nonnumerical Algorithms and Problems—pattem rnatclzwzg;L 1.2 [Algebraic Manipulation]: Algo-
+rithms—arzalysu ofalgondzrns; 1.5.0 [Pattern Recognition] —Generd.
+General Terms: Algorithms, Theory
+Additional Key Words and Phrases: Finite automaton, Four Russians paradigm, node listing,
+regular expression
+I. Introduction
+The “Four Russians” paradigm, first introduced in [4], decomposes a problem
+into smaller subparts, precomputes in a table all possible outcomes of a small
+computation, and then solves the larger problem by looking up a series of
+solutions to its subparts. This technique led to an 0( Na/ lg N)-time Boolean
+matrix multiplication algorithm [2, Sect. 6.6; 4] and an O(N~/ lg N)-time
+sequence comparison algorithm [7]. Both of these results assumed a RAM
+model with logarithmic operation costs, that is, operations take time propor-
+tional to the size (number of bits) in their operands. In this paper, we assume
+that operation costs are uniform. Precisely, a Ig N-bit uniform RAM can add
+and compare integers of size O(N), and can access an O(N) memory, all in
+constant time. No assumptions are made about the complexity of multiplicative
+operations because we do not need them. Under this more powerful model, the
+results above improve 0(N3/ lg2N) and 0(N2\ lg2N), respectively.
+This research was .upported in part by the National Libra~ of Medicine under Grant RO 1
+LM4960.
+Author’s address: Department of Computer Science, The University of Arizona, Tucson, AZ
+85721.
+Permission to copy without fee all or part of this material is granted provided that the copies are
+not made or distributed for direct commercial advantage, the ACM copyright notice and the title
+of the publication and its date appear, and notice is gwen that copying is by permission of the
+Association for Computing Machinery. To copy othervme, or to republish, requires a fee and/or
+specific permission.
+01992 ACM 0004-5411 /92/0400-0430 $01.50
+Joumdl of the A.wclatmn for Computmg Machinery. Vol 39, No 4. ,+pd 1992,pp 43(1-448
+A Four Russians Algorithm for Regular Expression Pattern Matching 431
+We present an O(PN/ lg N) worst-case time and space algorithm for deter-
+mining if a word A of length IV is in the language denoted by a regular
+expression R of length P. For a small integer parameter K, our method
+achieves a K-fold speedup of the standard 0( PN) state-set simulation of R’s
+nondeterministic finite automaton, F, on the word A [14, Sect. 9]. For a given
+K, F is hierarchically decomposed into O(P/K) modules. In O(K2K )-time
+and 0(2~)-space, tables are constructed that permit the state-set of a module
+to be advanced in 0(1)-time. In essence, the tables encode a deterministic
+finite automaton for each subautomaton module of F and information about
+the connections between them. With these tables, the module-based simulation
+of F on A can be performed in O(PN/K) time. Thus, on a B-bit uniform
+RAM, we have an O(P(N/B + 2~))-time, 0( P2~/B)-space algorithm for
+regular expression pattern matching. If B > (lg N)/2, then choosing K =
+(lg N)/2 yields an O(PN/lg N) time and space algorithm. These results
+assume the alphabet 2 is finite, as does the result in [8]. This restriction can be
+relaxed at an additional cost in the time complexity of O(N lg P).
+Our result represents a worst-case improvement over the standard state-set
+simulation [14] because it is an O(lg P) factor faster, regardless of whether a
+uniform or logarithmic cost model is chosen. The standard 0( ITV) time claim
+relies on a lg P-bit uniform model, in which case our algorithm takes
+O(PN\lg P) time. Under the logarithmic cost model, the standard algorithm is
+O(PN lg P) and ours is O(PN). Thus, our algorithm places a new upper bound
+on regular expression pattern matching and affirmatively answers an open
+“stringology” problem posed in [5].
+Unlike the implementation of the sequence comparison algorithm of [81,
+which outperformed its standard counterpart [15] only when N >262,000 [9],
+our method yields an implementation on architectures supporting bit-vectors
+that is faster than existing software for small patterns. Most machines support
+at least 16-bit word operations, so our strategy in practice is to choose K = 14
+regardless of N or P. With this choice, the tables require less than 2520P
+words of memo~, and the time to build them is less than 4P milliseconds on a
+VAX8650 running 4.3bsd UNIX. For small patterns, our implementation is
+competitive with egrep, which employs an 0(N) expect cd-time algorithm
+[1; 3, Sect. 3.7] and is the fastest tool currently used in practice.
+2. Regular Expressions, Parse Trees, and Finite Automata
+Regular expressions are built up from individual symbols via union, concatena-
+tion, and concatenation-closure operations. Formally, the set of regular expres-
+sions over a given alphabet, X, is defined recursively as follows:
+(1) If a E X U {e}, then a is a regular expression.
+(2) If R and S are regular expressions, then so are (R) I(S), (R)(S), and (R)*.
+A regular expression determines a language, that is, a set of words where
+each word is a sequence of symbols from Z. The precise language-defining
+rules are as follows. If a l Z u {e}, then a denotes the set containing the
+single word a. The word ~ is the unique word of length zero, and e is assumed
+to be a symbol not in 2. (R)I(S) is the union of the languages denoted by R
+and S. (R)(S) denotes the set of words obtained by concatenating a word in R
+and a word in S. Finally, (R)* consists of all words that can be obtained by
+concatenating zero or more words from R. Unnecessary parentheses may be
+432 GENE MYERS
+T~ .
+/\
+a *
+/’/
+b l
+Legend
+~ dagedge
+-----D back edge
+------- . .
+“’-’a~
+.-,/,
+c/\d &
+FIG. 1. T~, F~, and F; for R = a(blcd)’.
+removed by observing that concatenation and union are associative, and by
+utilizing the “natural” precedence of the operators, which places * highest,
+concatenation next, and I last. For example, abbl b Icb* denotes the language
+{abb, b, c, cb, ebb,... }. Note that our definition differs slightly from the usual
+one in that we exclude the empty language.
+Although regular expressions permit the convenient textual specification of
+regular languages, their parse trees better model their hierarchical structure. A
+parse tree T~ for a regular expression R consists of a labeled, rooted, and
+ordered tree with the following properties.
+(1) The leaves are labeled with symbols from 2 u {~}.
+(2) The interior vertices are labeled with 1, ., or *.
+(3) Interior vertices labeled I or “ have two sons, those labeled * have one.
+Regular parse trees correspond in a one-to-one fashion with regular expres-
+sions as shown by the following inductive construction. For the basis, regular
+expressions a G X U {e} are modeled by parse trees consisting of a single leaf
+labeled a. Inductively, suppose expression R is modeled by tree T~, and
+expression S is modeled by tree T~. Then regular expression RS is modeled by
+a tree whose root is labeled - and whose sons are the roots of subtrees T~ and
+Ts. The regular expression RIS is modeled by a tree whose root is labeled I and
+whose sons are the roots of subtrees T~ and T~. Finally, R* is modeled by a
+tree whose root is labeled * and whose son is the root of subtree TR. Figure 1
+gives a regular expression R and its corresponding parse tree T~.
+The finite state machine counterpart to a regular expression is best suited to
+the task of recognizing the words in a regular language. Several different
+models of finite automata have appeared, but all are equivalent in power and
+recognize exactly the class of regular languages. The complexity results of this
+paper require the use of a nondeterministic, E-labeled model, and labeling
+states instead of edges yields simpler software. Formally, a finite automaton,
+F = (V, E, A, /3, ~), consists of:
+(1) A set, V, of vertices, called states.
+A Four Russians Algorithm for Regular Expression Pattern Matching 433
+(2) A set, E, of directed edges between states.
+(3) A function, A, assigning a “label” A(s) = 2 U {e} to each state s.
+(4) A designated “source” state, 13,and a designated “sink” state, ~.
+Intuitively, F is a vertex-labeled directed graph with distinguished source
+and sink vertices. A directed path through F spells the word obtained by
+concatenating the state labels along the path. Recall that E acts as the identity
+element for concatenation, that is, UEw = VW. So, one may think of spelling
+just the non+ labels on the path. ~F(s), the language accepted ats G V, is the
+set of words spelled on paths from 6 to s. The language accepted by F is LF( 0).
+For any regular expression, R, the following recursive method constructs a
+finite automaton, F~, that accepts exactly the language denoted by R. For
+a l ~ u {6}, construct the automaton:
+e. = i$a
+F-a. 0a
+Suppose that R is a regular expression and automaton F~ with source 13R
+and sink C$R has been constructed. Further suppose that automaton F~ with
+source 9$ and sink +s has been constructed for regular expression ~. Then
+automata for RI S, RS, and R* are constructed as follows:
+FRls: Is
+@Rs= 8
+FRs:
+‘R*;‘R*eoR*
+\ \ 0’
+*----- --
+Each diagram precisely specifies how to build the composite automaton from
+F~ and F~. For example, F~s is obtained by adding an edge from ~R to 0s,
+designating OR as its source state, and & as its sink.
+A straightforward induction shows that automata constructed for regular
+expressions by the above process have the following properties:
+(1) The in-degree of 6 is O.
+434 GENE MYERS
+(2) Theout-degreeof @is O.
+(3) Every state hasanin-degree andanout-degree of2 or less.
+(4) l~l<2F’ where l’=lR\, that is, the number of states in F~ is less than
+twice R’s length.
+For the subautomaton to be used in the subsequent modular decomposition,
+it is required that the start and final states of the automaton be distinct and
+~-labeled. This alteration is simply accommodated by modifying the automaton
+F~ produced for R above as follows:
+e’R e
+F’R:
+The altered automaton FJ satisfies the properties above, save that now
+IVI < 2P + 1. The key observation is that for any regular expression R there is
+a nondeterministic, e-labeled automaton whose size, measured in vertices or
+edges, is linear in the length of R. Figure 1 gives a regular expression R and its
+finite automaton F~. Hereafter, the subscript R is dropped whenever it can be
+inferred from context.
+The algorithms to be developed depend on another, more subtle, property of
+the constructed automata. Call the constructed edges that run left-to-right in
+the above pictures dug edges. The remaining back edges consist of just those
+from ~~ to 6R in the diagram of F~,. For those familiar with the data-flow
+analysis literature, Part 2 of Lemma 1 asserts that the loop connectedness
+parameter of the automaton’s graph is 1 [6].
+LEMMA 1. Consider any finite automaton, F, constructed by the above process.
+(1) Any cycle-free path in F that begins at % consists solely of dag edges.
+(2) Any cycle-free path in F has at most one back edge.
+PROOF. Suppose a path from (3 has a back edge. It must connect the final
+state of some subautomaton, S, to its start state. But any path passing to the
+final state of S must enter via S’s start state by the hierarchical construction of
+F. Thus, the back edge forms a cycle. This proves part (1) by contradiction.
+Let p be a cycle-free path in F and suppose that, contra~ to part (2), p
+contains two back edges. The first back edge in p connects the final state of
+some subautomaton, S, to its start state. Consider the suffix, q, of p that
+follows that back edge. If q leaves S, then a cycle would be formed when it
+exits via S’s final state. But since p is cycle-free, q must stay within F.
+However, part (l), when applied to S, implies that q contains no back edges,
+contradicting the assumption that p contains two back edges. q
+Our subsequent algorithms require an automaton F; accepting the lan-
+guage denoted by R whose only E-labeled states are the start and final states of
+the machine. We term such automata +-ee and for these automata each
+interior state of a path spells a symbol in 2. F+ is obtained from F‘ as follows.
+The vertices of F+ are 19’, ~‘, and all Z-1abeled states of F‘. A path is an
+l-path if it consists of one or more edges and its interior vertices are all labeled
+e. There is an edge from s to t in F+ if and only if there is an E-path from s
+to t in F‘. F+ has 0(P) states, 0( P2 ) edges, accepts the same language as F‘,
+A Four Russians Algorithm for Regular Expression Pattern Matching 435
+and can be constructed from F‘ in 0( P 2) time. Figure 1 gives a regular
+expression R and its finite automaton F:.
+For each edge s ~ t of F+, there is, by definition, at least one E-path from s
+to t in F‘. Choose an e-path from s to t that has the fewest number of edges
+as the image, p(s - t), of edge s ~ t. Note that P(S + t)must be cycle-free
+as paths with cycles can be shortened by excising the cycle. Consequently,
+P(S + t)has at most one back edge by Lemma 1. Term an edge s + t of F+ a
+dag edge if and only if its image consists solely of dag edges in F’. Otherwise,
+classify the edge as a back edge and note that its image has exactly one back
+edge in F‘. Further observe that for both F‘ and F+, the subgraph obtained by
+removing all back edges is acyclic.
+Lemma 2 generalizes Lemma 1 for F+ where a “cycle-free” path is consid-
+ered to be one whose image in F‘ is cycle-free. A shortcut for a path
+p=s+t, +t2+... +t,,
+-+t is a path s -+tL,+ ...+ t,m,-+t such that
+o”. t,,,is a subsequence of tlt~o..t,,,that is i~ G [1, n] and iL_l < i~, forLit,,
+a 1 k. A sfiortcut of p is proper if It is not p itself. Note that since t,does not
+necessarily have an edge to t, for j > i + 1, not all subsequences of the
+interior vertices of a path form a shortcut.
+LEMMA 2. Consider a path p in an e-free automaton, F+, constructed as
+abol)e. (1) If p starts at t), then there is a shortcut of p consisting solely of
+dag edges. (2) There is a shortcut ofp that has at most one back edge.
+PROOF. It suffices to show that if p itself does not satisfy (1) or (2), then
+there is a proper shortcut of p. This suffices because if we can repeatedly
+shorten shortcuts of p not satisfying (1) or (2), then we must eventually arrive
+at one that does. First, observe that if p contains a cycle, truncating it produces
+a proper shortcut of p. So suppose p is cycle-free, does not satisfy (1) or (2),
+and contains the edges, to+ tl+ .0.+ tn,where tO = s and t,, = t. Let the
+image of p in F‘ be the path obtained by replacing each edge of p with its
+image, that is, ~(p) = p(tO ~ tl) “ p(tl ~ t2) “ .“” “ W(t,, -l - t,,). Since p does
+not satisfy (1) or (2), itfollows by Lemma 1 that P(p) contains a cycle. Suppose
+.V is the first state to appear twice in K( p)’s state list. There is an edge
+tk _ ~ + tk such that the first occurrence of t’ is one of the vertices in
+p(tl _, -+ tk) excepting tk.Similarly, there is an edge t,,_, + th for which the
+second occurrence is one of the vertices in p(tl,-, + t~,) excepting tl, _ 1. Of
+course, k s h, but also k # h as an edge’s image does not contain a cycle.
+Moreover, the edge tk.~ + t,,exists in F+ because there is an ~-path or empty
+path from tk _ ~ to u and another from u to th.L’ can coincide with tk_~ or t,,
+but not both as p is cycle-free implies tk-,+ t),.Hence there isindeed an
+E-path from tL_ ~ to th.Thus, we may delete states tk “-”t},_ I from P’s state list
+to obtain a proper shortcut of p. q
+3. The Modular Decomposition of R’s Parse Tree
+Our modular decomposition of a finite automaton for R takes advantage of the
+hierarchical (inductive) formation of regular expressions. For this reason, it is
+easiest to express our decomposition in terms of a decomposition of the
+associated parse tree, T~, for R. In accordance with the convention established
+earlier, T will refer to T~ whenever R can be inferred from context.
+436 GENE MYERS
+Suppose T has L leaves and note that L s P. For a small integer K, it is
+possible to partition the edges of T into O(P/K) sets such that the subgraph
+of T induced by each edge set is a parse tree, V, whose leaves may have
+interior labels. That is, V is weakly connected, and if a vertex has one son, it
+has all of its sons. Each edge set and its subgraph V is termed a module. Each
+module is guaranteed to have @(K) leaves, except for the one containing the
+root of T, which has O(K) leaves. Figure 2 gives an example of our decomposi-
+tion of the parse tree for (al be)’1( ab(c Id))” with K = 3.
+LEMMA 3. For K k 2, T can be partitioned into a module U that contains T’s
+root and has no more than K leal~es, and a collection X of modules that halle
+between 1K/2] + 1 and K leaLes each.
+PROOF. By induction on the size of the tree. For the basis, T consists of a
+single leaf. The hypothesis is true with X empty and U = T. For the induction
+there are two cases depending on the outdegree of T’s root, r.
+First, suppose that r has two children, c and d, and let TC and T~ be the
+subtrees rooted at c and d, respectively. Assume inductively that TC can be
+partitioned into modules {UC} U XC satisfying the hypothesis, and similarly for
+T~. Let k, s K be the number of leaves in UC. If kC + k~ < K, then let
+X = XC U X~ and let U = {r 4 c, r ~ d] u UC U U~. Otherwise, suppose with-
+out loss of generality that kC z k~. This implies that kC z [K/2] + 1. If
+k~+l<K, then let X= XCu X~u{UC} and let U={r~c, r~d}u U~.
+Otherwise, it must be that k~ = kC = K and one can let X = XC U X~ u
+{uC, u,} and u = {Y ~ c,r ~ d}.
+Finally, suppose that r has one child c and that TC can be partitioned into
+module UC and set of modules XC. The hypothesis is made true by selecting
+X= XCand U={r~c}u UC. q
+Now we show that the number of modules, M, in a K-partition of T is
+8(L/K) where L is the number of leaves in T. Suppose for the moment that
+every module has t leaves. Then M is the number of interior vertices in a t-ary
+tree with L leaves. It thus follows that L = (t – 1)A4+ 1. In the best case,
+every module is of size K, in which case
+M=(L–l)/(K– l).
+In the worst case, every module is of size [K/2] + 1,in which case
+M= (L – 1)/[ K/2].
+Now consider partitions in which module sizes are not necessarily uniform. The
+smallest value of ~ is obtained when every module has K leaves except one
+which has between 1 and K. In this case,
+M> [(L – 1),/’(K– 1)1.
+The largest value of M is obtained when (a) L < K and there is one module,
+or (b) L > K and every module has 1K/2j + 1 leaves except one which has at
+least two leaves. In either case (a) or (b),
+M< [L,/[K/2]1.
+A Four Russians Algorithm for Regular Expression Pattern Matching 437
+FIG. 2. A K = 3 partition of T~ for R = (albc)’\(ab(cld))*.
+Thus, the bounds on the number of leaves in each module guarantee that M is
+@(L/K). Moreover, because L is 0(P), itfollows that M is O(P/K).
+The language of regular expressions over alphabet Z is LL(l) and so a
+simple recursive-descent parser can convert R to T in @(P) time and space.
+Moreover, the induction argument of Lemma 3 immediately permits one to
+mark the root of each subtree in the partition with a simple bottom-up
+traversal of T. Since T is produced by the parser in post-order as it scans R,
+both T and its partition can be computed in a single (9(P) left-to-right scan of
+D
+4. The Modular Decomposition of R’s Automaton
+Consider a module V of the partition of T produced by Lemma 3. Term a leaf
+of V atomic if and only if it is a leaf of T that is not labeled with ~. Note that
+the label of an atomic leaf is a symbol in z. A modular leaf of V is one that is
+not a leaf of T. Note that a modular leaf is labeled with an operator symbol
+and must coincide in T with the root of another module W of the partition. In
+this case, we say that V is the father of W, and, conversely, that W is a son of
+V. Let Uv ~ Z be a unique symbol associated with each module V. Consider V
+when each modular leaf is relabeled with Uw where W’s root coincides in T
+with the leaf. This module is a parse tree for a regular expression, R ~, over the
+alphabet Z U { aw: W is a son of V}. Let Ev be the automaton F~, given by
+the construction in Section 2. Term a state of Ev atomic if h is labeled with a
+symbol from X, and term it modular if it is labeled with UW for some son 1+’.
+Note that the modular and atomic leaves of V and the modular and atomic
+states of Ev are in one-to-one correspondence. Moreover, the construction of
+Ev guarantees that its start and final states, 8V and ~v, are distinct, e-labeled,
+and consequently, neither atomic or modular.
+Since regular languages are closed under the substitution of regular lan-
+guages, the automata for the modules partitioning T can be hierarchically
+combined to form a finite automaton F* for R. More precisely, for each
+module V, we recursively construct an automaton Fv accepting the language
+438 GENE MYERS
+r -----—-—-- ------------- ______________ ~
+, \(’ ~------ ----- ----- -1
+1 ,--- I
+1 1 \ 1
+1 f \ I
+1 11 MO 1I
+t
+I IF
+a’ Ml
+/’ \
+\
+1
+I
+I
+I ------------- --- .-.,//
+----- -
+‘)
+I
+1
+1
+‘\ r
+--
+-ill
+‘Y
+:;
+‘ ,/
+Y ..:
+‘ /4
+-.-------------- ------------- 4
+----- ----- -------- -------------
+/
+42
+---- ,-
+$0
+FIG. 3. F“ for the partition of Figure 2.
+denoted by the regular expression for Tv, the subtree of T rooted at module
+~’s root. For the base case where V has no sons, we let Fv be Ev. Now
+suppose V has h z 1 modular leaves and we have recursively constructed FW
+for each of the h sons, W, of V. Then Fv is constructed by replacing each
+modular state labeled UW in Ev with the automaton Fw. Every edge into the
+modular state becomes an edge into the start state 6W of Fw and every edge
+out of the modular state becomes an edge out of the final state @~ of Fw.
+Thus, if U is the module containing T’s root, then the automaton F* = Fu
+accepts the language denoted by R. F* is called the augmented automaton for
+R with respect to the partition of T. Figure 3 gives F* and its partition for the
+example of Figure 2. F* has A4 module start states @v, M module final states
+~v, and L atomic states. Thus, F* has O(P/~) E-labeled states and O(P)
+X-1abeled states. Moreover, F* has O(P10 edges, O(lK2) in each module.
+Constructing F* is easily accomplished in O(PK) time by building Fv for each
+module V’ and then redirecting the edges adjacent to modular states.
+We now associate a set of edges and states of F* with each module V in a
+manner that partitions F*. The edges of a module V are those edges in F*
+that were introduced by Ev. The edge sets partition the edges of F* because
+Ev contributes exactly one copy of its edges to F*. Note that all edges out of a
+state are in the same edge set, as are all edges into a state. It is thus sound to
+define a state s as belonging to that module ~o~(s) containing its outedges.
+With this definition, the set of states ~ ~, belonging to a module V is
+{@v} U {@W: Wis a son o~v} U {s: s is an atomic state of Ev}. Note that the sets
+11~ partition the set of all states of F* except for its final state. In symmetry
+with Mod(s), let 1+-e(s) be the module containing the edges into s. From the
+construction of F* it follows that the set of states, s, for which Pre(s) equals V
+is {@v} u {f)W: Wis a son of V} u {s: s is an atomic state of Ev}. Note that t + s
+A Four RLlssians Algorithm for Regular Expression Pattern Matching 439
+implies that t E IIpre(,),that is, the predecessors of s form a subset of the
+states belonging to module Pre(s).
+Consider classifying the edges of F* as dag or back edges according to their
+type in the E-free automaton Ev contributing the edge. Then, Lemma 2 holds
+for F*. This is most intuitively seen by considering the automaton F“ obtained
+by using F~v instead of F~V in the construction of F*. The hierarchical
+construction of F“ by the same processes that constructed each F‘ implies that
+it satisfies Lemma 1. But then F* is an e-path reduction of F“ and the
+argument of Lemma 2 applies to F*. This property of F* is important to our
+algorithm as embodied in Corollary 4. The notation s 4 *tasserts that there is
+a path from s to t all of whose vertices are labeled .s except possibly s.
+COROLLARY 4. Ifs ~ *t in F*, then s + “t along a path with at most one
+back edge, and none ~s = $.
+PROOF. Simply note that shortcuts of a path spelling l also spell ~ and
+then apply Lemma 2. q
+5. The (K + 1)-bit Uruform RAM Algorithm
+Our algorithm consists of a phase in which the regular expression is prepro-
+cessed into a number of tables, followed by a scanning phase in which the text
+is searched for occurrences of the pattern. The preprocessing phase consists of
+building F* as described in Sections 2 through 4, and then constructing tables
+as detailed in Section 5.1 below. A Goto table models a deterministic finite
+automaton for each module, and a Reach table permits e-paths between
+modules to be easily traversed. The scanning phase described in Section 5.2
+mimics the standard state-set simulation of F* save that the state-set of each
+module is modeled as an integer and advanced in O(1) time with the Goto
+table. The subtle difficulty is that e-labeled states reachable from states in
+other modules must be detected by an additional two-sweep closure pass over
+the modules. Nonetheless, the phase consumes 0( P/K) time per symbol
+scanned and thus gives a factor of K speedup over the standard state-set
+simulation. The treatment assumes 2 is finite and small. In Section 5.3, we
+present a refinement that circumvents this restriction at effectively no increase
+in space and time.
+5.1. PREPROCESSING STEP. Our algorithm uses a (K + I)-bit integer to
+encode a subset of ~ ~ for each module ~. Each state s in 11~ is assigned a
+unique bit position, Bit(s), between O and I~ ~ \ – 1 s K. For X ~ II ~, let the
+collection of set bits, BIT(X), equal {Bit(s): s e X}. For Y c [0, K], let the
+integer, NUM(Y), corresponding to set Y equal x~ ~ ~ 2k. Note that NUM is an
+isomorphism, so its inverse exists. Finally, let the integer encoding X c II ~ be
+INT(X) = NUM(BIT(X)).
+For each module, a number of tables are built in the preprocessing step.
+Setbit[k, Z] gives the integer resulting when the kth bit of Z is set. It is needed
+because O(1) integer multiplication is not assumed. Reach[s, Z] is a Boolean
+table whose entries are true if and only if there is a state in the set encoded by
+Z that is a predecessor of s. For this table, s ranges over just those states that
+are labeled with e, that is, the 19 and ~ states of F*. Reach is used to trace
+subpaths spelling E. Finally, Goto[ V, Z, a] gives the integer encoding the set of
+states in II ~ labeled a that are successors of states in the set encoded by Z.
+440 GENE MYERS
+Goto is used to discover paths ending with a specific symbol. A formal
+specification of the domain and entries of each table is given in the list below.
+(1) For k = [0, K] and Z = [0,2~+1 – 1]:
+Setbit[k, Z] = NUM(AWM-’(Z) u {k})
+(2) For s an e-labeled state and X G IIP,,(,):
+Reach [s, lNT( X ) ] = There exists t G X such that t + s
+(3) For P’ a module, X G llv, and a = X:
+Goto[V, INT(X), a]
+= LVT({,S: There exists t = X such that t + s and A(s) = a}).
+Note that t G H ~, t + s,and s atomic implies that s @ II ~ by the construc-
+tion of F*. Thus, Goto is properly defined since the set on the right is a subset
+of nv.
+For a given value of Z, the entries, Setbit[k, Z] for all k, can be computed in
+O(K) integer steps. Thus, all of Setbit can be computed in 0(K2~) time and
+space. The M2KG z entries of the table Reach can be computed in 0( P2~\K)
+time and space using the recurrence:
+Reach[s, Z] - if Z = O then false else Reach[s, Z – 2h] ort j s e F*,
+where 2~ is the greatest power of 2 less than Z (i.e., k = llg Z j), and t is the
+unique vertex for which t G IIp, ~(s) and Bit(t) = k. For a given E-labeled state
+s, successive entries, Reach[s, Z], can be computed in 0(1) time in increasing
+order of Z using the recurrence. The Goto tables can be efficiently computed
+using the same recursive decomposition over Z used for Reach. In this case,
+the recurrence for positive Z is:
+Goto[V, Z > O,a] = NUM(NUM-l(Goto[V, Z – 2k, a])
+UBIT(Succ(t, a))),
+where k = llg Z], t is the unique vertex for which t G II~ and l?it( t) = k,
+and SUcc( t,a) = {,s: t - s and A(s) = a}. Given a specific V, one first
+computes the SLICC sets and then applies the recurrence for each a, and each Z
+in increasing order. For the K IX I choices of t and a, the lists Succ(t. a) can be
+built in O(Kl Xl) time and space by setting the lists to empty and then for
+each s = IIv, for each t such that t + s l Fv, adding s to Succ(t, A(s)). To
+perform the union in the recurrence, each element of ~z~cc(t, a) is added to
+Goto[V, Z – 2k, a] with a table lookup into Setbit. For a given V and Z, a total
+of O(K) bits are set over all choices of a. Thus, the M2K + 1Ixl entries of Goto
+can be computed in 0( M2K( IZ I + K)) time. Assuming IX I is a constant, it
+takes 0( P2 K ) time and 0( P2K/K) space to build Goto and this dominates
+the complexity of the preprocessing step.
+5.2. SCANNING STEP. The standard state-set simulation of an automaton
+reads the symbols of A from left-to-right while computing the set of states
+reachable from 6 on paths spelling the prefix of A scanned thus far. More
+formally, suppose A = al az .”” a,, and let A’ denote the i-symbol prefix of A,
+A Four Russians Algorithm for Regular Expression Pattern Matching 441
+that is AO = ~ and A’ = alaz 0”0 al for i > 0. Further, let 0 -+W s assert that
+there is a path from 6 to s spelling w. After reading the ith symbol of A, the
+current set of states computed by the standard simulation is S’ = {s: t) +At s}.
+The standard algorithm computes S0 from scratch, then for each i it computes
+S’ from S’- 1 as it reads al, and it concludes by reporting that A matches R if
+and only if ~ = S“. Computing each current state-set takes 0(P) time for an
+automaton such as F~, giving an O(PN) time, O(P) space algorithm [13, Sect.
+9; 14].
+The algorithm of Figure 4 computes the same sequence of state-sets as the
+standard algorithm but in only 0( P/K) time per state-set. It achieves this
+speed up by modeling the current state-set as an array, Set[V] of M (K + 1)-bit
+integers, one for each module P’. After scanning the ith symbol of A, Set[ V]
+encodes the subset of S[ belonging to ~, that is, Set [ V ] = INT( IJ ~ n S’). Note
+that U ~O~U1,~(fIv n S’) = S’ – {~} because the sets 11~ partition the states
+of F* less ~. Thus, the array Set does indeed model the current state-set of
+the standard simulation with the exception of @ whose omission is harmless
+since it has no successors in F*.
+Given the array Set modeling S’- 1, our algorithm reads al and updates Set
+so that it models S’ and does so in two O(P\K) time phases. In the first
+module phase, Set is updated in lines 6 and 7 of Figure 4 by resetting each
+integer Set[ V] to Goto[~, Set[ v], a,]. After this phase, Set models the set of
+states, ~, that are atomic and in S’. The proof is as follows. The states in ~
+must all be labeled al and so ~ = S’ n L~l where La = {,s: A(s) = a}. More-
+over, Hv n S’ n L., = {s: s l IIv and there exists t G S’-’ such that t ~ s
+and A(s) = a,}. But by the construction of F*, t ~ s and s atomic implies that
+t and s belong to the same module. Thus, fl ~ n S’ n L., = {s: there exists
+t G IIv n S’- 1 such that t -+ s and A(s) = a,}. It then follows that llW’lIlv n
+S’ n L. ) = Goto[V, IiVT(IIv n S’- l), aJ. Thus after the module phase, Set[V]
+— L’W’(fIv n S’ n L~, ) and so models S’.
+In the second closure phase of lines 8 and 9, the E-labeled states of S’ are
+added to the state set ~ modeled by Set. Let x be the set of E-labeled states
+in F* except for its start and final states. Note that x has only O(P\K) states
+and consists solely of 6 and @ states. Moreover, s G x is in S‘ if and only if
+there exists a state t e ~ such that t ~ *s, that is, there is an l-path to s from
+an atomic state in S’. But then by Corollary 4, s G S’ n x if and only if there is
+e-path to s from a state in ~ with at most one back edge. As in the algorithm
+of [11], the algorithm of Figure 4 finds the e-labeled states in S’ by processing
+the states in x twice in a topological order relative to F*’s dag edges. Recall
+that the subgraph of F* restricted to dag edges is acyclic and so a topological
+ordering exists. Such a topological ordering of x is precomputed in 0(P) timel
+and used by each invocation of e-closure( ) to process the states once in this
+order.
+At the beginning of the phase, Set models ~, and as the phase proceeds,
+states in x are added to the state-set modeled by Set. When an l-labeled state
+s is processed, its bit is set in the integer Set[ Mod(s)] if and only if
+Redz[s, Set[Pw(.s)]]istrue. Every predecessor of s is in HF,.(,}. Thus, s’s bit is
+1To produce a topological listing of ,y, it suffices to traverse T~ top-down and left-to-right. When
+module V’s root is first visited append tJv to the list, and when leaving V’s root append @~,to the
+list.
+1.
+2.
+3.
+4.
+5.
+6.
+7.
+8.
+9.
+10.
+11.
+12.
+13.
+14.
+set
+for V a module do
+Set[V] -0
+Ser[Mod( o )] + s’etbzt[llzt( @), Set[Mod(6’)]]
+c-closure( )
+forl+l toNdo
+{ # Module Phase: S’ef[Vl = IAT(H ~, n S-‘) for all V. #
+for V a module do
+Set[ V] + Gofo(V, Set[V], a,]
+#Closure Phase: Set[V] = lNT(If~, n S’ n L,, ) for all V. #
+l-closure( )
+c-closure( )
+GENE MYERS
+}
+# Set[V] = ZNT(II, n Sn) for all V. #
+if Reuch[ O, Set[ Pre( o)]] then
+“Match A“
+procednre e-closure( )
+{ for s l x in topological order do
+if Reaclz[s, Set[ l+e( s)]] then
+set[Mod( Y)] - Setbit[13zt(s), Set[ih’od(s )11
+}
+FI~. 4. The 0( PN\K) state-set simulation of F* on xl.
+if and only if it is a successor of a state in the state-set currentlv modeled bv
+Set. It follow; by induction that Set models a subset of S’ and a s~perset of ~’
+at all times during the phase. It remains to prove that at the end of the phase,
+every state s in S’ n x has been added to Set. By Corolla~ 4, there is an
+l-path p = t j .”. ~ r + s such that it contains zero or one back edges and
+t G ~. If r = ~’, then certainly s is added to Set. Hereafter, assume r = X, or,
+equivalently, that r # t. If p contains no back edges then we
+claim by induction that s is added when it is processed in the first call to
+e-clo,sure( ). Suppose it is true for all predecessors of s in the topological order.
+r is processed before s since r + s is a dag edge, and r is also reached from t
+along a path with no back edges. Thus, by the induction hypothesis, r has been
+added before s is processed. But then s will be added since r + s. Finally, we
+claim that if p contains one back edge then s is added when it is processed in
+the second call to lclosure( ). Suppose it is true for all predecessors of s in the
+topological order. If r + s is a dag edge, then r is processed before s in the
+second call and r satisfies the induction hypothesis. Thus, in this case, r has
+been added before s and so s is also added. Otherwise, r 4 s is a back edge,
+and r is reached from t along a path with no back edges. Thus, r is added in
+the first call to c-ckzsure( ) and s is added in the second call. For those familiar
+with the data flow analysis literature, the correctness of the closure phase
+follows simply from the fact that the list obtained by concatenating two copies
+of the topological order of states in x is a node listing [7] for the set of all
+e-paths to states in x with at most one back edge.
+The algorithm of Figure 4 starts by initializing Set to model the state-set {0}
+in lines 1 –3. After executing Z4mure( ) in line 4, Set models the set {s: d -+ *s}
+as there must be a path with no back edges to s by Corollary 4. But
+{s: 6 ~ *s} = S0 and so lines 1-4 correctly start the state-set simulation. Upon
+completion of the main loop of lines 5–9, Set models the set S“ – {+}. Thus,
+in line 10, Reach[ ~, Set[ Pre( ~)]] is true if and only if ~ is the successor of a
+A Four Russians Algorithm for Regular Expression Pattern Matching 443
+state in S“, which in turn is true if and only if A matches a word in the
+language denoted by F*. Thus the algorithm reports a match exactly when
+there is one.
+Each call to ~-closure takes O(P/K) time as do the loops in lines 1–2 and
+6–7. It then follows that the algorithm takes a total of O(PN/K) time.
+Construction of the tables takes 0(P2~) time and they occupy O(P2~/K)
+space. Combining the preprocessing and scanning steps, we have a 0( P( N/K
++ 2 ~ )) time, O(P2 ~/K) space algorithm for a (K + 1)-bit uniform RAM. As
+long as K < lg(N/K), the algorithm requires O(PN\K) time and O(PN/Kz)
+space. Thus, on a lg N-bit uniform RAM, we can choose K to be (lg N )/2 and
+the algorithm requires 0( PN/ lg N) time and 0( PN ~12/ lgzN ) space.
+5.3. INFINITE ALPHABETS. We now consider the case where Z is a count-
+ably infinite set, for example, the set of all words over some infinite alphabet.
+Assume that a total ordering of 2 exists, and that two symbols may be
+compared in O(C) time. The key observation is that XR, the set of symbols
+used in R, contains no more than P symbols and hence is finite.
+Using an optimal comparison-based sort, a sorted list L~ of the symbols in
+~~ is built in O(CP lg P) time. Let Code(a) be symbol a’s position in L~ if
+a G 2R, and O, otherwise. Code(a) can be computed in O(C lg P) time using a
+binary search over the list. For each module V, let 2J, be the set of symbols
+labeling the atomic leaves of V. As above, a map Codei (a) is realized by
+producing a sorted list of Xv for each V in a total of O(CP lg K) time. In
+O(CP lg P) additional time, Code( A(s)) and Codev( A(s)) is computed and
+stored with each state s = II,, so that these quantities need not be recomputed
+during the construction of the following altered tables.
+Noting that Goto[V, Z, a] = O if a $2 xv, we reduce the range of the third
+index from 2 to the integers in the interval [1, 12~Il.That is, for each a ~ ~~,,
+Goto[V, Z, Code V(a)] - Goto[V, Z, a]. With this change, O(K2 ~ ) time and
+space is needed to compute the Goto table of a module. In addition, for each
+a 6 XR, the scanning step needs a list Cont[Code(a)] of the modules containing
+an a-labeled state and the symbol’s code in that module. Formally,
+Cont[Code(a)] = {(V, Code J,(a)): a l ZY} and this table of lists can be built in
+0(P) time with a bucketing approach.
+With these new tables, the module-phase of the scanning step consists of
+computing c = Code(al) for the current symbol al, and then looking up the
+Goto transition for each V in Cont[c]. For V not on Cent(c), the state set of V
+becomes the empty set. Thus, we can replace lines 6 and 7 of Figure 4 with:
+for V a module do
+Temp[V] -0
+c - Code(a, )
+if c + O then
+for (V, d) G Cont[c] do
+Temp[V] - Goto[V, Set[V], d]
+for V a module do
+Set[V] + Temp[V]
+This code fragment takes 0( P/K + C lg P) time, for a total over the entire
+scanning step of 0( PN/K + CN lg P) time. Table construction still takes
+0(P2~) time but now also takes this much space. There is also the smaller
+444 GENE MYERS
+O(CP lg P) term for building sorted translation lists. In summary, infinite
+alphabets can be accommodated at an additional cost of O(CN lg P) time.
+6. Experience with a Practical Algorithm for Bit Vector Machines
+We now assume more realistically that a K-bit machine can perform bit-wise
+logical operations I (or) and & (and). With these operations, we can express the
+quantities in the tables Setbit, Reach, and Goto with 0(1)-computable expres-
+sions involving four smaller tables: Power, Pred, S14CC, and Atom. The list
+below defines the four tables and how they specify the original three.
+(1) Setbit[Z, k] = ZIPower[k]
+where Power[k] = 2k.
+(2) Reach[s, Z] - (Z & Pred[s] # O)
+where Pred[s] = BIT({t: t ~ s}).
+(3) Goto[V, Z, a] - S14CC[V, Z] & Atom[V, a]
+where Succ[ V, AVT( X)] = LW’l{s: There exists t ~ X such that t ~ s
+and s is atomic})
+and Atom[V, a] = Bit({s: s l 11[, and A(s) = a).
+Power consists of K integers and takes 0(K) time to compute by successive
+doubling. The Pred table consists of 2M integers, one for each ~-labeled state.
+Each integer takes O(K) time to compute for a total of 0(P) time for the
+entire table. For each module V, its Succ table consists of 21n’ I integers that
+can be computed in 0(2K ) time with a recurrence like that for Goto and
+Reaclz. V’s Atom table consists of IZI integers and is easily computed in
+0( I~ I + K) time. Thus the time to compute the four new tables is reduced to
+0( P2K/K) time overall. Moreover, the total space required is less than
+[2 K+’/(K - 1) + 31xl/K + o(l/K)]L
+integers in the worst case. The first term is for the Succ tables, the second for
+the Atonz tables, and the remainder is an insignificant term in practice. Recall
+that L is the number of leaves in the parse tree for the regular expression. For
+example, over the ASCII alphabet at most 270L integers are needed for
+K = 10, and 2520L for K = 14.
+Software of the same functionality as UNIX egrep [1]was built using our
+bit-vector algorithm for regular expression matching. A number of pragmatic
+optimizations were employed. As in egrep, character classes are implemented
+as a single atomic state. Second, the tables are built directly from T~; F* is
+never explicitly constructed. This is done by computing the predecessor and
+successor relations of states in F* directly from T~ in two O(P) sweeps of the
+tree as observed in Section 3.9 of [3]. Third, Atom and Succ are not built for
+modules all of whose leaves are modular. For such modules V, Set[ V ] is set to
+zero as opposed to Succ[ V, Z] & Atorn[ V, a] in the module phase as
+Atonz[ V, a] = O for all symbols a. Fourth, only those vertices in x that are
+within the “scope” of a back edge are traversed in the second call to e-clo,sure( )
+in line 9 of Figure 4. A vertex u needs to be processed a second time only if it
+can follow a back edge in a noncyclic path and is in a different module than the
+one containing the back edge. This is true if and only if there is a * or +
+operator on the path from T~’s root to the root of u‘s module. Note that when
+A Four Russians Algorithm for Regular Expression Pattern Matching 445
+the regular expression does not contain * or + operators, this optimization
+halves the time spent in e-closure( ) by removing the entire second sweep.
+Our final optimization takes advantage of the particularly simple structure
+afforded our node-listing approach. Once R has been processed and before A
+is scanned, so much is known about the control flow and values in the inner
+loops of lines 6 to 9 that significant time gains can be achieved by compiling
+code for these lines that is tailored to R [10, 12]. Figure 5 shows a hypothetical
+C-program tailored to the pattern in Figures 2 and 3. The calls to llosure( )
+are in-line, and each loop in lines 6–7 and 12–14 has been completely unrolled.
+For each module, Set[V] is mapped to a register variable, for example, ~00
+through ~03 in Figure 5. Succ and Atom tables are also reduced to one-dimen-
+sional arrays by naming the table for each module, for example, SUCCO1 and
+Atom02. Also, all occurrences of Pred[s ] are known and compiled as constants.
+The values of Set computed in lines 1 to 4 are known and so are compiled into
+initialization values for the S variables. The outer loop of line 5 is realized as a
+series of buffered reads from the file Afile. Further note that the second call to
+eclosure( ) is back-edge optimized, and Succ 00 is omitted since its module has
+no atomic leaves. The declarations and initialization values of the Atonl tables
+are omitted for brevity.
+Although the compiled scanner is fast, the time taken to compile it is
+unacceptable. To circumvent this, we produce object code for the host machine
+in memory and then call it directly. We performed this optimization on a VAX
+8650 running 4.3bsd UNIX and obtained the following timing estimates. The
+time to build the tables and scanner object code is less than
+M(2K+1 “ 2.0 ps + 1 ins).
+The time taken to construct each module is thus about 65 ms when K = 14,
+and about 5 ms when K = 10. The scanner processes characters at a rate of
+one every M” .46 ws + X ..35 ws + .44 ps where X is the number of vertices
+processed in the two calls to e-closure ( ), for example, X = 8 in Figure 5. X
+varies between 2(A4 – 1) and 4( M – 1) depending on the efficacy of the
+back-edge optimization. Thus, for patterns that require one module, the
+scanner runs at 0.9 p,s per character; for two modules between 2.06 and 2.76
+KS; for three between 3.22 and 4.62; and so on. The variance in the time spent
+per character is very small, since there is very little conditional execution in the
+scanner’s inner loop.
+We compared the scanning speeds over ASCII texts of our program, called
+mgrep, against an implementation of the standard state-set simulation, called
+sgrep, and another employing Aho’s cache-based deterministic simulation used
+in the UNIX System 5 implementation of egrep [1; 3, Sect. 3.7]. Care was taken
+to fully optimize these implementations too, as evidenced by the fact that our
+implementation of egrep is faster than the UNIX implementation. Table I
+shows the scanning speed of the three programs on a set of patterns chosen to
+illustrate the following points. For all patterns, mgrep with K = 14 uses one or
+two modules and performs exactly as characterized in the paragraph above.
+Note that when L s K, mgrep effectively builds a single DFA for the pattern
+and so, not surprisingly, is very fast. egrep’s 0(1) expected-time algorithm scans
+a character every 1.6 p,s as long as its cache does not overflow frequently. This
+446
+#include (stdio.h)
+SUCCO1[] = { 000,006,006,006,010, 016,016,016,
+006,006,006.006,016, 016,016,016,
+};
+SUCC()~[] = { 000>002>004>006,000. 002,004,006,
+002,002,006,006,002, 00’2>006,006,
+GENE MYERS
+};
+SUCC03[ ] = { 000,006.000,006.000, 006.000,006, };
+main( )
+{ int ifile, num;
+char buflBUFSIZ + 1];
+register char *s;
+register int a;
+register mt S00 = 07, S01 = 01. S02 = 01, S03 = O;
+/” Scan loop ‘/
+ifile = open(c’Afile”, O);
+while((num = read(ifile, buf, 1024)) > O)
+{ buf[num] = O:
+for(s=bufl a= ’s; s++)
+/* Module phase ‘/
+{ Soo= o;
+S01 = SUCCO1[SO1]& atomOl[a];
+S02 = suIx02[S02]” & atomo~[a];
+S03 = SUCC03[S03] & atom03[a];
+/’ e-closure( ) “/
+if (S00 & 001)S011 = 001;
+lf (sol & 013)s001 = 002;
+If (s00 & 001)s021= 001:
+if (S02 & 004)S031 = 001;
+If (S03 & 006)S021 = 010:
+if (S02 & 011)S001 = 004:
+/“ e-closure( ) “/
+if (S02 & 004)S031 = 001;
+if (S03 & 006)S021 = 010;
+}
+}
+exit (S00 & 00006);
+}
+FIG. 5. Compiled scanner for F’ of Figure 3.
+TABLE I. SCANNING SPEED OF THREE ALGORITHMS IN PS PER CHARACTER
+Pattern mgrep(M, X) egrep sgrep (S)
+printf 0.9(1, o) 1.6 4.5(1.06)
+prmtl w,hzlelelse 2.1(2, 2) 1.6 11.5(4.11)
+(pnn$l whlel else)’ 2.7(2, 4) 1.6 19.0(6.11)
+[a –z][a – 20 – 9]’ 0.9(1 ,0) 1.6 14.5(2.30)
+P.2’)f 2.1(2,2) 12.3t 7.0(1.57)
+[a - z].’f 0.9(1, o) 21.4’ 19.8(3.43)
++ Time IS 1.6 for p .isf and [a – z] .Sf.
+happens only when the pattern’s deterministic finite automaton has a large
+number of states and many of them are reached during the scan, for example,
+P... f = p.4f. SUCh patterns are quite infrequent, but when they are used!
+egrep’s performance becomes worse than sgrep’s as shown in the last two
+patterns of Table I. The expected time complexity of the standard state-set
+A Four Russians Algorithm for Regular Expression Pattern Matching 44’7
+simulation is significantly better than its 0( PN) worst-case complexity sug-
+gests. sgrep consumes between 3S ws and 7S ps per character scanned where S
+is the average number of states visited when advancing its state set. The size of
+S is generally much less than P and it depends on the degree of alternation in
+the vicinity of the start state. The size of S for several patterns is shown in
+Table I.
+In practice, it is the expected time complexity of the underlying algorithm
+that determines a tool’s empirical performance. Thus, while our algorithm
+represents a worst-case improvement over the sgrep algorithm, mgrep’s perfor-
+mance in practice demonstrates that it is the most effective for small patterns.
+This is because mgrep’s expected scanning speed is @(P/K) while that of egrep
+is usually 0(1) and that of sgrep is 6)(S) where S and P/K are incomparable.
+As a consequence, mgrep is guaranteed to be superior to egrep only for
+patterns with less than 14 leaves, and sgrep only for patterns with less than
+about 40 leaves. However, mgrep’s performance is independent of the structure
+of the pattern and so does not exhibit the explosive behavior of egrep on some
+types of patterns. This fact also implies that mgrep is frequently faster than
+sgrep on patterns with more than 40 leaves.
+7. An Open Problem
+The “Four Russians” paradigm has provided algorithms for sequence compari-
+son and regular expression pattern matching that are superior in the worst
+case. The approximate regular expression matching problem, also known as
+regular order correction [16], involves the fusion of sequence comparison and
+exact pattern matching concepts. For this problem, the node-listing algorithm
+of [11] has a structure that may lend itself to modularization as in this paper.
+Can the “Four Russians” paradigm be successfully applied to approximate
+regular expression pattern matching?
+ACKNOWLEDGMENTS . The author wishes to thank the referees for their effort
+and comments that lead to an improved paper.
+REFERENCES
+1. AHO, A. V. Pattern matching in strings. In R. Book, ed. In Formal LangzLuge Theo?.
+Academic Press, Orlando, Fla., 1980.
+2. AHO, A. V., HOPCROFT, J. E., AND ULLMAN, J. D. The Design and Analysis of Computer
+Algorithms. Addison-Wesley, Reading, Mass., 1975.
+3. AHO, A. V., SETHI, R., AND ULLMAN, J. D. Compilers: Principles, Techniques, and Tools.
+Addison-Wesley, Reading, PA., 1985.
+4. ARLAZAROV, V. L., DINIC, E. A., KRONROD, M. A., AND FARADZEV, I. A. On economic
+construction of the transitive closure of a directed graph. Dokl. Acad. Nauk SSSR 194 (1970),
+487-488 (in Russian). English translation in So~’tet Math. Dokl. 11 (1975), 1209-1210.
+5. GALIL, Z. Open problems in stringology. A. Apostolic and Z. Galil, eds. In Conzbhzkmd
+Algorithms on Words. Springer-Verlag, New York, 1985, pp. 1-8.
+6. HECHT, M. S., AND ULLMAN, J. D. A simple algorithm for global flow analysis programs.
+SWIM J. Comput. 4, 4 (1975), 519-532.
+7. KENNEDY, K. Node hstmgs apphed to data flow analysls. In Ccvzference Record of the 2nd
+ACM Symposium cm Principles of Programming Languages (Palo Alto. Calif. Jan. 20-22). ACM.
+New York, 1975, pp. 10-21.
+8. MASEK, W. J., AND PATERSON, M. S. A faster algorithm for computing string-edit distances.
+J. Comput. Syst. Sci. 20, 1 (1980), 18-31.
+448 GENE MYERS
+9. MASEK, W. J., AND PATERSON, M. S. How to compute string-edit distances quickly. D.
+Sankoff and J. B. Kruskal, eds. In Time Warps, String Edzts, and Macromolecules: The Theory
+and Practice of Seqzlence Comparison. Addison-Wesley, Reading, Mass., 1983, pp. 337–349.
+10. MILLER, W. Efficient searching of biosequence databases. Tech. Rep. CS-88-34, Dept.
+Comput. Sci., The Pennsylvania State Univ., Universi@Park, Pa, 1988.
+11. MYERS, E. W., AND MILLER, W. Approximate matching of regular expressions. Ball. Math.
+Biol. 51, 1 ( 1989), 5-37.
+12.PENELLO, T. J. Very fast LR parsing. ACM SIGPLAN Nottces 21, 7 (1986), 145-150.
+13. SEDGEWICK, R. Algorithms. Addison-Wesley, Reading, Mass., 1973.
+14. THOMPSON, K. Regular expression search algorithm. Commzaz. ACM 11, 6 (June 1968),
+419-422.
+15. WAGNER, R. A., AND FISCHER, M. J. The string-to-string correction problem. J. ACM 21, 1
+(Jan. 1974), 168-173.
+16. WAGNER, R. A., AND SEIFERAS, J. I. Correcting counter-automaton-recognizable languages.
+SIAM. J. Comput. 7, 3 (1978), 357-375.
+RECEIVED OCTOBER 1988; REVISED .TULY 1990; ACCEPTED O~OBER 1990
+Journal of the Amocmtmn for Computmg Mdchmuy, Vd 39, No 4, April 1992

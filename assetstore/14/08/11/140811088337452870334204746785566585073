@@ -1,0 +1,1044 @@
+A Rewriting Decision Procedure for
+Dijkstra-Scholten’s Syllogistic Logic with
+Complements
+Camilo Rocha
+Jose´ Meseguer
+December, 2007
+Technical Report
+UIUCDCS-R-2007-2921
+Formal Methods and Declarative Languages Laboratory
+Department of Computer Science
+University of Illinois at Urbana-Champaign
+201 N Goodwin Ave
+Urbana, IL 61801
+The formalist, however, prefers to manipulate his formulae,
+temporarily ignoring all interpretations they might admit, the rules
+for the permissible symbol manipulations being formulated
+in terms of those symbols: the formalist calculates
+with uninterpreted formulae.
+E.W. Dijkstra, “The notational conventions I adopted, and why”
+EWD 1300.
+II
+Table of Contents
+Abstract . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . IV
+1 Introduction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 1
+2 Preliminaries . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 3
+3 Equational Axioms of DS Propositional Logic . . . . . . . . . . . . . . . 5
+4 Specification in Maude . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10
+5 A Decision procedure for Syllogistic Logic with Complements . . 13
+5.1 Syllogistic Logic with Complement and
+Boolean Connectives . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15
+5.2 The equational theory TCSYLL . . . . . . . . . . . . . . . . . . . . . . . . . 17
+5.3 Examples . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 23
+6 Conclusions . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 25
+List of Figures
+1 Confluence of
+∗→E/A . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 5
+Abstract
+We present an equational decision procedure a` la Dijkstra & Scholten
+for the ‘Syllogistic Logic with Complements’. First, we give an equational
+axiomatization of Dijkstra & Scholten’s propositional logic and show how
+it gives a decision procedure for propositional logic by equational term
+rewriting. We also show how one can efficiently obtain certain proposi-
+tional models (i.e., truth assignments over propositional variables) from
+the canonical forms given by the system. We then present the Syllogistic
+Logic with Complements and show how the decision procedure for propo-
+sitional logic can be easily extended to obtain a decision procedure for
+this subset of First-Order Logic. Moreover, an executable specification of
+both decision procedures is presented in the Maude system, and examples
+illustrating the use of both canonical equational systems are given.
+IV
+1 Introduction
+This paper illustrates some simple, yet nontrivial, uses of equational
+logic as a logical framework. Specifically, we show how axiomatizations
+of both the propositional calculus of E.W. Dijkstra and C.S. Scholten
+and the Syllogistic Logic with Complements with Boolean connectives
+of L.S. Moss [23] can be represented in the equational logic framework
+yielding decision procedures for both logics.
+In 1990 E.W. Dijkstra and C.S. Scholten [9] presented a calculus for
+predicate transformers suited for verifying and deriving programs, to-
+gether with the ‘calculational style’: an homogenous and compact proof
+format in which formal syntax was used to develop proofs while annotat-
+ing logical deductions with text explanations. The calculus for predicate
+transformers is based upon an axiomatization of Boolean expressions that
+facilitates and guides proofs. Within the five years following that work,
+D. Gries and F. Schneider presented a teaching methodology in discrete
+mathematics using this calculational style [13] and gave a detailed proof of
+soundness of the system for propositional logic [14]. In the late 1990’s V.
+Lifschitz gave a detailed logical basis to the proof format used in the sys-
+tem [20]. Besides the mechanization by rewriting presented in Section 3,
+we are not aware of any other mechanizations of the Dijkstra-Scholten
+logic. Therefore, this work, together with the technical report [25], that
+further develops the propositional aspects, may also be of interest for
+applications, such as program verification, in which the Dijkstra-Scholten
+logic plays a crucial role. Likewise, we are not aware of any mechanization
+of Moss’ Syllogistic Logic with Complements and Boolean connectives.
+Therefore, the decision procedure presented in this work and implemented
+in Maude seems to be the first mechanization that has been developed.
+A syllogism consists of three syllogistic propositions, two premises (or
+hypotheses) and one conclusion (or thesis). A syllogistic proposition is a
+sentence affirming or denying a fact of the form APQ (All P are Q), EPQ
+(No P is Q), IPQ (Some P is Q) and OPQ (Some P are not Q). A syl-
+logism is considered valid if its thesis follows from the two hypotheses by
+applying the Aristotelian deduction rules which, from the logical point
+of view, are particular instances of those of First-Order Logic1 (FOL).
+For example, ‘All men are mortal and all Colombians are men, then all
+Colombians are mortal’ is a valid syllogism. It was G. Frege in the late XIX
+century who pointed out the need for a more general logical system in or-
+1 Currently, this is widely accepted from the mathematical point of view, but somewhat
+disputed from a philosophic point of view. We refer the reader to [11] for further details.
+1
+der to express the foundations of all deductive reasoning. Since then, FOL
+has been the main subject of study for logicians interested in this area. In
+the past few years, the interest in Syllogistic Logic has experienced a spe-
+cial awakening as ‘specialists in communication and information theory
+employ ideas which can be traced back to Aristotle’s work’ [11]. A novel
+approach has been proposed by L.S. Moss in his axiomatization of the
+Syllogistic Logic with Complements (CSYLL) where Boolean connectives
+and the complement relation are allowed in syllogisms, thus achieving
+a more general logic than the traditional syllogistic one [23]. Our main
+goal in this paper is to provide an equational-based decision procedure
+for CSYLL which we obtain by extending our Dijkstra-Scholten decision
+procedure for propositional logic.
+The general idea of our approach is as follows. We view equational
+logic as a computational logic, that is, as a logic which can be used as
+a programming language and in which computation and deduction coin-
+cide. For this to work in practice, the equational theories used as programs
+should satisfy appropriate executability requirements, so that their equa-
+tions can be used as simplification rules from left to right. Typical such
+requirements are that the rules should be terminating (i.e., that there
+are no infinite simplification sequences) and confluent, which under the
+termination assumption is equivalent to the fact that each expression can
+be fully simplified to a unique equivalent expression, called its canonical
+form, that cannot be further simplified. For example, in a suitable equa-
+tional axiomatization of arithmetic 2 + 2 is simplified to the canonical
+form 4. Similarly, as we shall see later, in a suitable equational axiomati-
+zation of the propositional calculus the proposition p ∨ ¬p has canonical
+form T.
+Not only is equational logic itself a computational logic. It is also what
+is called a logical framework, that is, a meta-logic in which we can rep-
+resent and axiomatize other logics. Furthermore, since equational logic is
+reflective, that is, since it can correctly encode its own meta-level [7], it
+is also a meta-logical framework [2], that is a logic in which we can both
+represent other logics and reason formally about the meta-logical prop-
+erties of the logics thus represented. In this paper we will not pursue the
+meta-logical framework aspects of equational logic: we will just focus on
+its logical framework uses for the Dijkstra-Scholten logic and for CSYLL.
+However, the meta-logical framework aspect is also relevant, since we
+could use inductive theorem proving in equational logic and reflection to
+investigate meta-logical properties of both the Dijkstra-Scholten logic and
+of CSYLL.
+2
+Any computational logic worth its salt should be supported by effi-
+cient implementations. In this paper we use Maude [5, 6], which is one of
+the most efficient and general implementations of equational logic, and
+of a superlogic of equational logic called rewriting logic [22]. It turns
+out that Maude is particularly well-suited for the mechanization of the
+Dijkstra-Scholten logic and CSYLL because it efficiently supports not just
+equational simplification, but also equational simplification modulo a set
+of axioms, such as associativity and commutativity, that can be ‘built
+in’ for simplification purposes. We can illustrare this idea with a simple
+example. As it is well-known, the logical disjunction operator ∨ is asso-
+ciative and commutative. Suppose that we want to simplify propositional
+expressions using equations such as p∨¬p = T, and p∨T = T. Syntacti-
+cally speaking, we cannot apply any of these equations to the proposition
+(p∨q)∨¬p. However, if we use associativity and commutativity in a built-
+in way to rearrange our expression into its equivalent form (p∨¬p)∨q, we
+can simplify it with the first equation to T ∨ q and, using commutativity
+in a built-in way, we can then further simplify it to T with the second
+equation.
+The paper is organized as follows. Notational conventions and basic
+definitions are given in Section 2. In Section 3 we exhibit our axioma-
+tization of the propositional logic of Dijkstra & Scholten and show that
+its equational representation gives a decision procedure for propositional
+logic by equational term rewriting. Section 4 presents the correspond-
+ing executable specification in Maude of such decision procedure. An
+equational theory for CSYLL, shown to provide a decision procedure for
+CSYLL based on rewriting, is presented in Section 5, together with its ex-
+ecutable specification in Maude and some examples. Finally, in Section 6
+we present some conclusions.
+2 Preliminaries
+Throughout this paper we use t, u, v, t′ , t′′ and ti to denote terms, pi to
+denote propositional variables. Sometimes lower case letters are also used
+as quantified variables in FOL formulas.
+Generally, upper case letters such as E and A denote sets, while the
+upper case letter T is reserved for theory names. The greek letter Σ, per-
+haps decorated with subscripts, is used to denote a signature of function
+symbols. Upper case letters, such as P , Q and R, denote variables.
+Theories in equational logic are called equational theories. An equa-
+tional theory is a pair (Σ,E), where Σ, called the signature, describes the
+3
+syntax of the theory, that is, what sorts (types of data) and what function
+symbols (operation symbols) are involved, and E is a set of equations over
+terms (or expressions) in the syntax of Σ. Equational logic is a special
+case of a more general logic called membership equational [24, 4] in which,
+in addition to equations of the form t = t′, membership predicates of the
+form t : s, stating that term t has sort s, are also atomic sentences.
+The models of an equational theory T = (Σ,E) are algebras. Among
+these models a special role is played by the initial algebra of T , which
+is denoted by TΣ/E, whose elements are equivalence classes of ground Σ-
+terms (terms without variables) modulo provable equality. An equality
+t = t′ is provable from T , written T ` t = t′, iff it can be deduced from
+the equations E by the rules of equational deduction.
+Let T = (Σ,E ∪ A) be an equational theory. We assume that the
+set of equations of T is decomposed into a disjoint union E unionmulti A, where
+A is a set of equations such as associativity, commutativity and identity
+of some function symbols in Σ, which are used as ‘structural axioms’,
+and E is a set of equations used as ‘simplification rules’ or ‘rewrite rules’
+modulo the structural axioms A. Intuitively, we want to raise the level
+of abstraction by reasoning equationally with the equations E not just
+on terms t, but on equivalence classes [t]A modulo the structural axioms
+A. We say that the equations t = t′ ∈ E are admissible as equational
+simplification rules modulo A if any variable mentioned in t′ is mentioned
+in t. If the equations in T are admissible as simplification rules, we can use
+them from left to right to (hopefully) bring terms to a simpler form which
+can be interpreted as their evaluation. This simplification process is called
+equational simplification or rewriting and gives rise to binary relations
+→E/A and ∗→E/A over A-equivalence classes in TΣ/A. The relation ∗→E/A
+is the reflexive and transitive closure of →E/A. Specifically, the relation
+→E/A is defined as follows: [t]A →E/A [t′]A iff there is a representative
+u ∈ [t]A such that u can be decomposed as u = C[v], with C a context and
+v a subterm of u, and there is an equation t = t′ ∈ E and a substitution
+σ such that (i) v = σ(t), and (ii) C[σ(t′)] ∈ [t′]A.
+We say that →E/A is terminating if there is no infinite sequence
+[t0]A →E/A [t1]A →E/A · · · [tk]A →E/A [tk+1]A →E/A · · · .
+We say that →E/A is confluent if whenever we have [t]A ∗→E/A [t′]A and
+[t]A
+∗→E/A [t′′]A, there is a [u]A such that [t′]A ∗→E/A [u]A and [t′′]A ∗→E/A
+[u]A. Pictorially, this is represented in Figure 1.
+An equivalence class [t]A is called an E/A-canonical form if there is no
+[t′]A such that [t]A →E/A [t′]A. If the theory T = (Σ,E unionmulti A) is such that
+4
+Fig. 1. Confluence of
+∗→E/A
+the equations E are terminating and confluent modulo A, then each equiv-
+alence class [t]A can be rewritten to a unique canonical form canE/A[t].
+This gives us an efficient decision procedure for equational reasoning in
+T , namely,
+T ` t = t′ iff canE/A[t] = canE/A[t′] .
+3 Equational Axioms of DS Propositional Logic
+The first axiomatization of DS propositional logic was presented by Di-
+jkstra & Scholten [9], together with a calculus of predicates specialized
+for verifying and deriving programs from specifications. Gries & Schnei-
+der [13, 14] gave a complete formalization of the calculus. We present
+below our structured equational axiomatization of the DS propositional
+calculus in which we make an explicit separation between axioms ADS to
+be used as ‘structural axioms’, and axioms EDS that should be used as
+‘simplification rules’ modulo ADS.
+Definition 1. The equational theory TDS = (ΣDS, EDS unionmulti ADS) of DS
+propositional logic is given by:
+ΣDS = {F(0),T(0),¬(1),≡(2), 6≡(2),∨(2),∧(2),⇒(2),⇐(2)} ,
+ADS = {P ≡ (Q ≡ R) = (P ≡ Q) ≡ R , P ≡ Q = Q ≡ P ,
+P 6≡ (Q 6≡ R) = (P 6≡ Q) 6≡ R , P 6≡ Q = Q 6≡ P ,
+P ∨ (Q ∨R) = (P ∨Q) ∨R , P ∨Q = Q ∨ P ,
+P ∧ (Q ∧R) = (P ∧Q) ∧R , P ∧Q = Q ∧R} ,
+5
+EDS = {P ≡ P = T , P ≡ T = P , ¬P = P ≡ F ,
+P 6≡ Q = P ≡ Q ≡ F , P ∨ F = P , P ∨ T = T , P ∨ P = P ,
+P ∨ (Q ≡ R) = (P ∨Q) ≡ (P ∨R) , P ∧Q = P ≡ Q ≡ (P ∨Q) ,
+P ⇒ Q = Q ≡ P ∨Q , P ⇐ Q = P ≡ P ∨Q},
+where P , Q and R are ΣDS-variables.
+The constants F and T denote the obvious false and true constant
+symbols. The rest of function symbols in ΣDS have the following intended
+meaning and are listed by decreasing binding power: ¬ denotes negation,
+∨ and ∧ denote disjunction and conjunction respectively,⇒ and⇐ denote
+implication and consequence respectively, ≡ and 6≡ denote equivalence
+and discrepancy respectively.
+The axioms in ADS express the associativity and commutativity prop-
+erties (AC) of some binary operators. The set of axioms EDS, to be used
+as simplification rules modulo ADS, indicate that equivalence is reflexive
+and has identity T, that discrepancy and negation can be defined in terms
+of equivalence and the constant F, that disjunction is idempotent and dis-
+tributes over equivalence while having identity F and annihilator T, that
+conjunction can be expressed in terms of equivalence and negation using
+the golden rule [13], that implication has the traditional meaning and,
+finally, that consequence can be treated as an implication by swapping
+its operands.
+As already mentioned, we view the axioms ADS as ‘structural rules’
+and the equations EDS as ‘simplification rules’. Note that the axioms in
+ADS allow us to write expressions in a simplified manner by dropping
+unnecessary parentheses in expressions and by making immaterial the
+order of the arguments. For example, the terms p9 ≡ ((p9 ∨ p2) ≡ p6) can
+equivalently be written as p6 ≡ p9 ≡ (p2 ∨ p9). Furthermore, adopting
+our binding convention, the latter expression can be written as p6 ≡ p9 ≡
+p2 ∨ p9.
+We want to use TDS as an admissible simplification system modulo
+ADS. In that case, TDS can be employed as rewrite system →EDS/ADS on
+the equivalence classes of TDS/ADS, or more generally, on TΣ(X)DS/ADS ,
+where X denotes a set of propositional variables added as extra constants
+to ΣDS.
+Theorem 1. The equations EDS in TDS are confluent and terminating
+modulo ADS.
+Proof. Termination and confluence modulo A can be established me-
+chanically by using formal tools that: (i) find a well-founded ordering
+6
+ on A-equivalence classes of terms such that [t]A →E/A [t′]A implies
+[t]A  [t′]A, and (ii) check confluence of E modulo A by computing all
+so-called ‘critical-pairs’ modulo A and showing they are all confluent.
+We have used the CiME tool [19] to mechanically check termination and
+confluence of EDS modulo ADS.
+Lemma 1. The canonical form of any Boolean proposition is either T,
+F or t0 ≡ . . . ≡ tn, for some n ≥ 0, where all ti are distinct disjunctions
+(modulo AC) of propositional variables.
+Proof. We have given a mechanical proof of this fact using Maude’s Suf-
+ficient Completeness Checker [15]. This can be found in [25]. Intuitively,
+if the canonical form does not follow such pattern it is easy to check
+that at least one more equation in EDS could be used to simplify it, thus
+contradicting the fact that it is canonical.
+Since the TDS is both confluent and terminating, and since, as shown
+in [25], TDS is an equational theory isomorphic to the standard Boolean
+theory, we can use TDS as a decision procedure for propositional logic.
+Moreover, since both T and F are canonical forms, this system has very
+convenient properties. That is, we have the following equivalences for any
+propositional expressions t and t′:
+TDS ` t = t′ ⇔ TDS ` t ≡ t′ = T ⇔ canEDS/ADS [t] = canEDS/ADS [t′] .
+In particular, since T and F are both in EDS/ADS-canonical form (or
+simply, DS-canonical form), we have:
+TDS ` t ≡ t′ = T ⇔ canEDS/ADS [t ≡ t′] = [T]
+and
+TDS ` t ≡ t′ = F ⇔ canEDS/ADS [t ≡ t′] = [F] .
+We call a proposition t a tautology iff canEDS/ADS [t] = [T] and a falsity
+iff canEDS/ADS [t] = [F]. We call t satisfiable iff canEDS/ADS [t] 6= [F]. There-
+fore, our decision procedure gives also a decision procedure for checking
+satisfiability of any proposition t.
+At this point, we note an interesting and useful fact about sequences of
+equivalences. An interpretation of a Boolean proposition t is determined
+by an assignment or function σ : {p0, . . . , pn} → {t, f} from the set of
+propositional variables Vars(t) = {p0, p1, . . . , pn} occurring in t to the set
+{t, f} in the following way.
+7
+Definition 2. Given an assignment σ : Vars(t) → {t, f}, the interpre-
+tation σ〈t〉 of a Boolean proposition t under the assignment σ is defined
+inductively by:
+– σ〈T〉 = t ,
+– σ〈F〉 = f ,
+– σ〈pi〉 = σ(pi) , for propositional variable pi, where σ(pi) denotes the
+value of pi under σ,
+– σ〈¬t〉 = ¬σ〈t〉 , and
+– σ〈t1 ◦ t2〉 = σ〈t1〉 ◦ σ〈t2〉 , for any other operation ◦ ∈ Σ(2)DS,
+where all operations in ΣDS are interpreted in {t, f} in the usual way.
+Lemma 2. Let t = t0 ≡ t1 ≡ · · · ≡ tn, for n ≥ 0 and let σ be any
+interpretation. σ〈t〉 = t iff σ〈ti〉 = f for an even number of ti, 0 ≤ i ≤ n.
+Proof. By induction on n.
+Recall that the DS-canonical form of any Boolean proposition t is
+either T, F or t0 ≡ · · · ≡ tn, for some n ≥ 0, where all ti are distinct dis-
+junctions (modulo AC) of propositional variables. We now show how one
+can easily ‘extract/build’ two particular assignments from DS-canonical
+forms. We say that a DS-canonical form is sorted if it is sorted in ascending
+order by a lexicographic order on the number of propositional variables
+occurring in each disjunction and by the corresponding multi-set ordering
+over the indexes of the propositional variables occurring in each disjunc-
+tion, if the number of variables coincides. Since all the disjuncts ti are
+different, this partial order is indeed a total order.
+Problem 1. Build an assignment σ from the sorted DS-canonical form
+t0 ≡ · · · ≡ tn such that σ〈t0 ≡ · · · ≡ tn〉 = t.
+Solution We give a simple solution by cases that maximizes the
+number of true assignments in σ :
+– n = 0 and t0 = T. This is the case of a tautology. Therefore, any
+assignment will satisfy the expression. Then, our σ is such that σ(pi) =
+t for all i.
+– n = 0 and t0 = F. This is the case of a falsity, and therefore, there is
+no assignment σ satisfying the expression.
+– n = 0 and t0 6= T and t0 6= F. Similar to the case n = 0 and t0 = T.
+8
+– n ≥ 1 and t0 6= F. This is the case where there are at least two
+disjunctions in the sequence of equivalences and F does not occur.
+Therefore, by Lemma 2, σ assigning all propositional variables to t
+entails that σ satisfies the sequence of equivalences. Therefore, σ is
+the assignment where σ(pi) = t for all i.
+– n ≥ 1 and t0 = F. This is the case where there are at least two disjunc-
+tions in the sequence of equivalences and the first of them corresponds
+to the empty one, that is, to F. Since in any canonical form all disjunc-
+tions are different, there is only one occurrence of F in the sequence
+of equivalences. By Lemma 2, and forcing σ〈t1〉 = f and σ〈tj〉 = t
+(2 ≤ j ≤ n), we alter the parity of f in the sequence of equivalences,
+and minimize the assignments to f, while requiring σ to satisfy the se-
+quence of equivalences. Then, σ is the assignment satisfying σ(pi) = t
+if pi 6∈ Vars(t1) and σ(pi) = f if pi ∈ Vars(t1). uunionsq
+Problem 2. Build an assignment σ from the DS-canonical form t0 ≡ · · · ≡
+tn such that σ〈t0 ≡ · · · ≡ tn〉 = f.
+Solution. First observe that, since σ is a homomorphic function,
+σ〈t〉 = f iff ¬σ〈t〉 = t iff σ〈¬t〉 = t, for any propositional expression t.
+But ¬(t0 ≡ · · · ≡ tn) is not in DS-canonical form. Since ¬t = t ≡ F,
+¬(t0 ≡ · · · ≡ tn) is logically equivalent to t0 ≡ · · · ≡ tn ≡ F, which may
+still not be in DS-canonical form. We then have the following cases in
+order to have a sorted DS-canonical form t′ semantically equivalent to
+this last sequence of equivalences:
+– n = 0 and t0 = T. Clearly t
+′ = F.
+– n = 0 and t0 = F. Clearly t
+′ = T.
+– n ≥ 1 and t0 = F. Then t′ = t1 ≡ · · · ≡ tn.
+– n ≥ 1 and t0 6= F. Then t′ = F ≡ t0 ≡ · · · ≡ tn.
+In either case it is easy to check that t and ¬t′ are logically equivalent.
+Thus, in order to obtain σ, apply to t′ the solution to Problem 1. The
+resulting assignment σ will satisfy σ〈t〉 = f. uunionsq
+Assuming that the canonical form t = t0 ≡ · · · ≡ tn is a sorted
+sequence of equivalences in which there occur at most m propositional
+variables, we have that both problems are solvable in O(m); for all the
+cases, except when n ≥ 1 and t0 = F, the problems are solvable in O(1).
+Furthermore, both solutions provide an assignment that maximizes the
+number of t valuations on the propositional variables.
+9
+Decision procedures for propositional logic have been a matter of in-
+terest in the rewriting community for a long time. The first decision proce-
+dure for propositional logic based on rewriting was developed by J. Hsiang
+in the early 1980s [16]. His result follows from a previously known con-
+nection between Boolean algebras and Boolean rings due to M.H. Stone:
+every Boolean algebra, if properly viewed, is a special type of ring called a
+Boolean ring [17, 26]. As a matter of fact, TDS is dual to Hsiang’s canonical
+system [25]. The close connections between the work of Dijkstra-Scholten
+and that of Hsiang seem to have passed unnoticed until now.
+Various first-order and modal propositional theorem proving systems
+have used canonical systems for propositional logic. A refutation rewrite-
+based method, the N-strategy, was designed by Hsiang for the word prob-
+lem in first-order predicate logic in 1985 [18]. The N-strategy used the
+canonical system for Boolean algebras to reduce a set of clauses to canon-
+ical form and then converting the clauses into a set of simplifying equa-
+tions. Following a similar approach, L. Bachmair and N. Dershowitz devel-
+oped a complete inference system for first-order theorem proving based on
+Hsiang’s rewrite system for Boolean algebras [1]. D. Kapur and P. Naren-
+dran in 1985, following a different approach, developed another refuta-
+tion method for first-order theorem proving. In 1992 A. Foret extended
+Hsiang’s system to give a complete term rewriting system for the modal
+propositional logics known as K, Q, T and S5 [10]. In the same spirit, we
+will extend the DS-decision procedure to a decision procedure for Syllo-
+gistic Logic with Complements and Boolean connectives in Section 5.
+4 Specification in Maude
+In this section we present the specification in Maude of the equational
+theory TDS. Maude is a high-performance reflective language and system
+supporting both equational and rewriting logic specification and program-
+ming for a wide range of applications. Maude functional modules are equa-
+tional theories. We define the module BOOL-DS to represent the theory TDS
+in the following way:
+fmod BOOL-DS is
+...
+endfm
+where the contents expressed in . . . is explained in detail in what follows.
+The first thing a specification needs to declare are the types (that in the
+algebraic specification community are usually called sorts) of the data
+10
+being defined and the corresponding operations. A sort is declared using
+the sort keyword followed by an identifier (the sort name), followed by
+white space and a period. In our Maude specification of TDS we use the
+sort BoolDS as the main sort of the specification. In this way, any term
+we compute with in our specification has sort BoolDS. We specify this in
+Maude as follows:
+sort BoolDS .
+In a Maude module, an operator is declared with the keyword op
+(alternatively ops if more than one operation is defined simultaneously)
+followed by its name (or names separated with white space), followed by a
+colon, followed by the list of sorts for its arguments (called the operator’s
+arity or domain sorts), followed by ->, followed by the sort of its result
+(called the operator’s coarity or range sort), optionally followed by an
+attribute declaration, followed by white space and a period. We show
+various operator declarations in the following paragraphs.
+First, we model the constants F and T as FALSE and TRUE, respectively.
+ops FALSE TRUE : -> BoolDS .
+We use Maude’s built-in sort Nat to generate propositional variables.
+This is accomplished by importing the module NAT (the one defining the
+sort Nat) and declaring an operation p:
+protecting NAT .
+op p : Nat -> BoolDS .
+The specification of the unary and binary function symbols in ΣDS,
+with their binding power for parsing purposes, is specified in Maude as
+follows:
+op not_ : BoolDS -> BoolDS [prec 10] .
+op _equ_ : BoolDS BoolDS -> BoolDS [assoc comm prec 80] .
+op _neq_ : BoolDS BoolDS -> BoolDS [assoc comm prec 80] .
+op _or_ : BoolDS BoolDS -> BoolDS [assoc comm prec 50] .
+op _and_ : BoolDS BoolDS -> BoolDS [assoc comm prec 50] .
+op _imp_ : BoolDS BoolDS -> BoolDS [prec 70] .
+op _cos_ : BoolDS BoolDS -> BoolDS [prec 70] .
+We have used not for ¬, equ for ≡, neq for 6≡, or for ∨, and for ∧,
+imp for ⇒ and cos for ⇐. In Maude, the user can specify each operator
+with its own syntax, which can be prefix, postfix, infix, or any ‘mixfix’
+combination. This is done by indicating with underscores the places where
+the arguments appear in the mixfix syntax. For example, not is a prefix
+11
+unary operator while and is an infix binary operator. In practice, this
+improves readability (and therefore understandability) of programs and
+data. The attributes of an operation are specified within square brackets.
+In our case, we use assoc (associativity) and comm (commutativity) for
+equational attributes that can be used to reason modulo such axioms, and
+prec (precedence–the higher the value, the lower the binding power) for
+the parsing precedence attribute. Note that, in this case, the equational
+attributes of the operators correspond to the equations in ADS and the
+prec attribute specifies the syntax’s binding policy we defined previously.
+Equations are declared using the keyword eq, followed by a term (its
+lefthand side), the equality sign =, then a term (its righthand side), fol-
+lowed by white space and a period. The set EDS of equations is specified
+as follows:
+vars P Q R : BoolDS .
+eq P equ TRUE = P .
+eq P equ P = TRUE .
+eq not P = P equ FALSE .
+eq P neq Q = P equ Q equ FALSE .
+eq P or P = P .
+eq P or ( Q equ R ) = P or Q equ P or R .
+eq P or TRUE = TRUE .
+eq P or FALSE = P .
+eq P and Q = P equ Q equ P or Q .
+eq P imp Q = P or Q equ Q .
+eq P cos Q = Q imp P .
+where P, Q and R are variables of sort BoolDS. In this way, the theory TDS
+has been specified in Maude as an executable specification, and we can
+then use it to simplify terms. That is, since Maude efficiently implements
+the equational simplification relation →E/A, and the equations EDS are
+confluent and terminating modulo ADS, the Maude specification of TDS is
+automatically a decision procedure for propositional logic.
+As an example, we use this specification to solve the following instance
+of the word problem, involving two expressions commonly appearing in
+the specification of software postconditions. Are the propositions (p0 ∧
+p1) ∨ (¬p0 ∧ p2) and (p0 ⇒ p1) ∧ (¬p0 ⇒ p2) equal?
+One way of answering the question is by reducing both expressions
+to their canonical form. If the canonical forms coincide, then the terms
+are semantically equal. Indeed, it is the case that both canonical forms
+coincide, since both are:
+p1 ≡ p0 ∨ p1 ≡ p0 ∨ p2 .
+12
+In Maude, we use the red (reduce) command to simplify the corre-
+sponding expressions to canonical forms. The result is shown below:
+Maude> red (p(0) and p(1)) or (not p(0) and p(2)) .
+reduce in BOOL-DS : (p(0) and p(1)) or p(2) and
+not p(0) .
+rewrites: 28 in 0ms cpu (0ms real) (~ rewrites/second)
+result BoolDS: p(1) equ p(0) or p(1) equ p(0) or p(2)
+Maude> red (p(0) imp p(1)) and (not p(0) imp p(2)) .
+reduce in BOOL-DS : (p(0) imp p(1)) and
+(not p(0) imp p(2)) .
+rewrites: 12 in 0ms cpu (0ms real) (~ rewrites/second)
+result BoolDS: p(1) equ p(0) or p(1) equ p(0) or p(2)
+An equivalent way of solving the word problem, is by using the ≡
+symbol as the Boolean equality. By computing the canonical form of the
+expression:
+(p0 ∧ p1) ∨ (¬p0 ∧ p2) ≡ (p0 ⇒ p1) ∧ (¬p0 ⇒ p2) ,
+one can corroborate that T is the canonical form of the previous, tauto-
+logical expression.
+The corresponding simplification in Maude is the following:
+Maude> red (p(0) and p(1)) or (not p(0) and p(2)) equ
+(p(0) imp p(1)) and (not p(0) imp p(2)) .
+reduce in BOOL-DS : (p(0) and p(1)) or p(2) and not p(0)
+equ (p(0) imp p(1)) and (not p(0) imp p(2)) .
+rewrites: 40 in 0ms cpu (0ms real) (~ rewrites/second)
+result BoolDS: TRUE
+Either way we have found that (p0 ∧ p1) ∨ (¬p0 ∧ p2) and (p0 ⇒
+p1) ∧ (¬p0 ⇒ p2) are semantically equivalent propositions.
+In terms of performance, a very exhaustive comparison of this exe-
+cutable specification in Maude with another three decision procedures for
+propositional logic can be found in [25]. On average, TDS behaves among
+the best ones.
+5 A Decision procedure for Syllogistic Logic with
+Complements
+We have been investigating the use of equational theories in various do-
+mains as tools of automated deduction. Our motivation is to find simpler
+methods in which replacement of equals by equals is powerful enough to
+solve the corresponding decision problem.
+13
+Syllogistic Logic, the logic of Aristotle, was widely considered to be
+the universal foundation for all deductive reasoning for many centuries.
+According to Aristotle, ‘a syllogism is a discourse in which, certain things
+having been supposed, something different from the things supposed re-
+sults of necessity because these things are so.’ A syllogism consists of three
+syllogistic propositions, two premises (or hypotheses) and one conclusion
+(or thesis). More precisely, a syllogistic proposition is a sentence asserting
+or denying a fact of the form APQ (All P are Q), EPQ (No P is Q),
+IPQ (Some P is Q) and OPQ (Some P are not Q), where P and Q are
+monadic predicates representing subsets of some non-empty universe of
+objects. A syllogism is considered valid if its thesis follows from its two
+hypotheses by applying the Aristotelian deduction rules which, from the
+logical point of view, are particular cases of those of First-Order Logic.
+For example, ‘All men are mortal and all Colombians are men, then all
+Colombians are mortal’ is a valid syllogism. It was G. Frege who pointed
+out the need for a more general logical system in order to express the
+foundations of all deductive reasoning. Since Frege, FOL has been the
+main subject of study for logicians interested in this area. In the past few
+years, the interest in Syllogistic Logic has experienced an special awak-
+ening since ‘specialists in communication and information theory employ
+ideas which can be traced back to Aristotle’s work’ [11].
+Traditionally, Syllogistic Logic has been studied by philosophers and
+logicians pursuing different interests. While philosophers strictly adhere
+to the initial ideas of Aristotle and are users of the logical system, modern
+logicians have been interested in studying the symbolic properties of the
+system itself2. In the recent history of symbolic logic, it was P. Bernays, in
+Hilbert’s Go¨ttingen school, who first introduced the use of propositional
+Boolean connectives and FOL quantifiers to capture all the logical rela-
+tionships dealt with in Aristotelian syllogistic logic. It was J.  Lukasiewicz
+who proposed a sound and complete axiomatization of Syllogistic Logic
+within the logical framework of First-Order Logic [21]. Moreover, he
+showed that Syllogistic Logic treated from the logicians point of view
+is a proper fragment of Monadic-First Order Logic (MFOL). MFOL is
+the fragment of First Order Logic in which predicates are monadic, i.e.,
+have exactly one argument. Since MFOL is decidable [3], Syllogistic Logic
+is too.
+The standard representation of syllogistic logic in FOL is straightfor-
+ward, and it is summarized in Table 1. In a sense, Moss’ representation
+2 We refer the reader to [8, 11, 21] for detailed discussions of these two different sets of ideas.
+14
+of syllogisms in CSYLL is simpler, since it does not require an explicit
+treatment of quantifiers as in the standard FOL representation.
+Table 1. Standard representation of syllogistic propositions in FOL.
+Syllogistic prop. FOL formula
+APQ (∀x)(P (x) ⇒ Q(x))
+EPQ (∀x)(P (x) ⇒ ¬Q(x))
+IPQ (∃x)(P (x) ∧Q(x))
+OPQ (∃x)(P (x) ∧ ¬Q(x))
+First, we present the language L and deductive systemKL of L.S. Moss
+using the Boolean algebra connectives of Section 3. Secondly, we pro-
+pose an equational theory TCSYLL for the general case of CSYLL, using
+the aforementioned Boolean connectives, and we prove that it provides a
+sound and complete (with respect to KL) decision procedure for the Syl-
+logistic Logic with Complements and Boolean Connectives. Finally, we
+present three examples in which an executable specification of TCSYLL in
+Maude is used with sample syllogisms.
+5.1 Syllogistic Logic with Complement and
+Boolean Connectives
+L.S. Moss has recently proposed an axiomatization of the Syllogistic Logic
+with Complements (CSYLL) in which some Boolean connectives and the
+complement relation are allowed in syllogisms, thus obtaining a more gen-
+eral, yet complete and sound, logic than the traditional syllogistic one [23].
+We will, furthermore, allow all the Boolean connectives of TDS in CSYLL.
+Our main goal, then, will be to have a rewriting-based decision procedure
+for CSYLL by extending the decision procedure for propositional logic
+presented in Sections 3 and 4. Then, we will not be only interested in
+‘classic syllogisms’ but in their ‘modern versions’ in which the Boolean
+connectives can be freely used. In this subsection, we define the original
+system proposed by Moss and mention as main result its soundness and
+completeness.
+We use the set Π of monadic predicates (predicates for short) P,Q, . . .,
+which in turn represent plural common nouns, to parameterize the lan-
+guage of Syllogistic Logic with Complement and Boolean Connectives.
+15
+Definition 3. A Π-model M = (M, M) is a non-empty set M and
+an interpretation function M : Π → P(M) interpreting each monadic
+predicate P as a subset PM ⊆M (allowing PM to be empty).
+We take the syntax and semantics of this language, as defined in [23],
+which we will call L(Π). We consider sentences ‘All P are Q’ and ‘Some P
+are Q’, for P,Q ∈ Π, which are commonly denoted with the letter S. We
+assume that there is a complementation operation C over the predicates
+such that (PC)C = P , for any P ∈ Π. Furthermore, sentences can be
+operated on with the classical propositional operators as in ‘¬(Some P
+are QC) ∧ (All Q are R)’. Let us use the following EBNF to precisely
+define the language L(Π):
+Definition 4. We define L(Π), for any P ∈ Π and Atoms A and B, as
+follows:
+Atom ::= P |PC
+Sentence ::= All A are B | Some A are B | ¬(Sentence ) | (Sentence) ◦ (Sentence) ,
+where ◦ stands for any binary operator in ΣDS.
+Definition 5. We say that a Π-model M satisfies a L(Π)-sentence S,
+written M |= S, according to the following equivalences:
+M |= (All A are B) iff AM ⊆ BM ,
+M |= (Some A are B) iff AM ∩BM 6= ∅ ,
+where we define (AC)M = M −AM and we treat the Boolean connectives
+classically.
+For a Π model M, if Γ is a set of L(Π)-sentences, then we write
+M |= Γ to denote M |= S for every S ∈ Γ , and Γ |= S to denote that
+every model satisfying every sentence in Γ also satisfies S.
+Definition 6. Let A, B and C be L(Π)-atoms and S a L(Π)-sentence.
+The system KL is a Hilbert-style one, having modus ponens as the only
+inference rule, and with the following axioms:
+1. All substitution instances of propositional tautologies
+2. All A are A
+3. (All A are C) ∧ (All C are B) ⇒ (All A are B)
+4. (All B are C) ∧ (Some A are B) ⇒ (Some C are A)
+16
+5. (Some A are B) ⇒ (Some A are A)
+6. ¬(Some A are A) ⇒ (All A are B)
+7. (Some A are BC) ≡ ¬(All A are B) .
+We call S a theorem of KL, written `L S, iff there is a proof of S in
+KL, that is, a sequence of L(Π)-sentences ψ0, ψ1, . . . , ψn such that ψn = S
+and for each ψi, 0 ≤ i ≤ n, either ψi is an axiom of KL or ψi follows from
+two previous members of the sequence, say ψj and ψk (0 ≤ j < k < i), as
+a direct consequence of using modus ponens.
+Given a set Γ of L(Π)-sentences and an L(Π)-sentence S, we define
+the relation Γ `L S by the equivalence:
+Γ `L S iff `L (S0 ∧ · · · ∧ Sn)⇒ S ,
+for some S0, . . . , Sn ∈ Γ .
+We now present the soundness and completeness theorem for KL
+proven in [23].
+Theorem 2. Given a set Γ of L-sentences and an L-sentence S,
+Γ |= S iff Γ `L S ,
+i.e., KL is sound and complete.
+Notice that, since KL is an axiomatization at least as ‘strong’ as that
+of  Lukasiewicz, any decision procedure for KL is a decision procedure
+for the axiomatization of  Lukasiewicz, and therefore for the traditional
+syllogistic system.
+5.2 The equational theory TCSYLL
+We present the theory TCSYLL = (ΣCSYLL, ECSYLL unionmulti ACSYLL) as a many-
+sorted equational theory with sorts Term and Sentence.
+Definition 7. The theory TCSYLL = (ΣCSYLL, ECSYLLunionmultiACSYLL) is defined
+as follows. ΣCSYLL has two sorts, Term and Sentence, with the following
+function symbols:
+T,F :→ Term
+¬ : Term→ Term
+≡, 6≡,∨,∧,⇒,⇐ : Term Term→ Term
+T,F :→ Sentence
+¬ : Sentence→ Sentence
+≡, 6≡,∨,∧,⇒,⇐ : Sentence Sentence→ Sentence
+[ ], { } : Term→ Sentence .
+17
+The equations ACSYLL correspond to the equations in ADS for both sorts
+Term and Sentence. That is, if we use ATermDS and A
+Sentence
+DS to denote the
+set ADS over the sort Term and Sentence, respectively, we have:
+ACSYLL = A
+Term
+DS ∪ ASentenceDS .
+Accordingly, if we denote with ETermDS and E
+Sentence
+DS the two extensions
+of EDS over the sort Term and Sentence, respectively, we have for P,Q :
+Term:
+ECSYLL = E
+Term
+DS ∪ ESentenceDS ∪ { [P ] = ¬{¬P},
+{T} = T, {F} = F, {P} ∨ {Q} = {P ∨Q} }.
+Definition 8. A model of TCSYLL is a ΣCSYLL-algebra that satisfies the
+equations ECSYLL ∪ ACSYLL. Let M be a non-empty set. We can define
+a ΣCSYLL-algebra P(M) interpreted in the sort Term by the power set
+P(M) and with its operations interpreted as the usual operations in the
+algebra of sets; the sort Sentence is interpreted by the 2-element set {t, f},
+with the Boolean operators interpreted in the standard way as well. Given
+X ⊆M we define:
+[X] = if X = M then t else f ,
+{X} = if X 6= ∅ then t else f .
+Proposition 1. For a non-empty set M , P(M) satisfies the equations
+in ECSYLL ∪ ACSYLL.
+Proof. Since TDS is isomorphic to the traditional Boolean theory [25], the
+equations in ATermDS , A
+Sentence
+DS , E
+Term
+DS and E
+Sentence
+DS are satisfied by P(M).
+We prove that P(M) satisfies the equation [P ] = ¬{¬P}. Let X ⊆M . If
+[X] = t, then X = M and therefore ¬X = ∅. It follows that {¬X} = f
+implying ¬{¬X} = t. Conversely, if [X] = f, we have two cases: if X = ∅,
+then ¬X = M and therefore ¬{¬X} = f; if X 6= ∅, and since X 6=
+M , then {¬X} = t and ¬{¬X} = f. The satisfaction of P(M) for the
+remaining equations is proved similarly.
+Notice that a Π-modelM determines a unique TCSYLL-homomorphis-
+m M : TΣCSYLL(Π)→ P(M) such that the following diagram commutes:
+18
+where TΣCSYLL(Π) is the free ΣCSYLL-algebra on the monadic predicates
+Π, that is, the algebra of all ΣCSYLL-terms formed on the variables Π.
+In other words, the ΣCSYLL-homomorphism allows us to interpret in the
+expected way the satisfaction of all ΣCSYLL-sentences as either true or
+false in M.
+Note that L can also be viewed as a two-sorted signature with sorts
+Atom and Sentence, and operations3:
+C : Atom→ Atom
+(All are ) : Atom Atom→ Sentence
+(Some are ) : Atom Atom→ Sentence
+T,F :→ Sentence
+¬ : Sentence→ Sentence
+≡, 6≡,∨,∧,⇒,⇐ : Sentence Sentence→ Sentence .
+Definition 9. We define the obvious signature morphism H : L → ΣCSYLL,
+mapping the sorts Atom to Term and Sentence to Sentence, ( )C to
+¬ : Term → Term, (All A are B) to [A ⇒ B] and (Some A are B)
+to {A ∧ B}. H maps identically the Boolean connectives over the sen-
+tences.
+H defines a forgetful functor |H : AlgΣCSYLL → AlgL. In particular,
+given any set Π of monadic predicates, this induces a homomorphic trans-
+lation H : TL(Π) → TΣCSYLL(Π), namely, the unique L-homomorphism
+commuting the following diagram:
+Furthermore, P(M)|H is an L-algebra, so that we can reinterpret the
+L(Π)-semantics in a Π-model M as the unique L-homomorphism M
+commuting the diagram:
+3 The motivation for extending L with the sentences T and F will become clear in the
+following paragraphs.
+19
+which provides an algebraic semantics for L(Π). We can then, alter-
+natively, view the pairs (P(M)|H , M) and (P(M), M) as, respectively,
+L(Π)-algebras and ΣCSYLL(Π)-algebras, when the monadic predicates Π
+are added as extra constants. Moreover, we have the signature homomor-
+phism HΠ : L(Π) → ΣCSYLL(Π) extending H and being the identity on
+Π, inducing a functor |HΠ : AlgΣCSYLL(Π) → AlgL(Π) such that:
+(P(M), M)|HΠ = (P(M)|H , M).
+We say that the ΣCSYLL-sentence S is a theorem of TCSYLL, written
+`CSYLL S = T, iff TCSYLL ` S = T. Given a set of ΣCSYLL-sentences Γ
+and a ΣCSYLL-sentence S, we define the relation Γ `CSYLL S = T by the
+equivalence:
+Γ `CSYLL S = T iff `CSYLL (S0 ∧ · · · ∧ Sn)⇒ S = T ,
+for some S0, . . . , Sn ∈ Γ .
+Theorem 3. (Soundness) Let S be an L(Π)-sentence. If TCSYLL ` H(S) =
+T then `L S.
+Proof. Let M be any Π-model and suppose TCSYLL ` H(S) = T. Then,
+because equational logic is sound, we know that (P(M), M) |= H(S) = T.
+By the satisfaction condition for the many-sorted equational logic in-
+stitution [12], we have the equivalence (P(M), M) |= H(S) = T iff
+(P(M)|H , M) |= S = T. Moreover, since (P(M)|H , M) |= S = T iff
+M |= S, we get that M |= S is true. Because KL is sound and complete
+(Theorem 2) we can conclude `L S. Therefore, TCSYLL is sound.
+Theorem 4. (Completeness) TCSYLL is complete with respect to KL, i.e.,
+for Γ a set of L(Π)-sentences, and S an L(Π)-sentence,
+if Γ `L S then H(Γ ) `CSYLL H(S) = T ,
+where H(Γ ) = {H(S ′) | S ′ ∈ Γ}.
+Proof. By induction on the length of the proof of S in KL. Without loss
+of generality, let ψ1, . . . , ψm, where ψm=S, be a minimal length proof for
+S in KL.
+20
+– Case m = 0. Necessarily S is either an axiom of KL or an L(Π)-
+sentence in Γ . In both cases, it is easy to check that H(S) = T,
+and therefore, H(Γ ) `CSYLL S(H) = T. Observe that axiom 1. of KL
+follows trivially because TCSYLL extends TDS which is isomorphic to the
+traditional Boolean theory and therefore complete for propositional
+logic; theorems 2.-7. have been mechanically proved (see Example 2
+at the end of this Section). For the other case, observe that p0∧p1 ⇒ p0
+is a tautology.
+– Case m > 0. If S is either an axiom of KL or a sentence in Γ , the
+proof is similar to that of case m = 0. Otherwise, S is obtained by
+modus ponens from ψi and ψj = ψi ⇒ S, for 0 ≤ i 6= j < m. Then by
+the induction hypothesis (IH) we have that H(Γ ) `CSYLL H(ψi) = T
+and H(Γ ) `CSYLL H(ψi)⇒ H(S) = T. Therefore,
+H(Γ ) `CSYLL H(ψi) ⇒ H(S) = T
+⇔ 〈 Definition of Γ `CSYLL S = T 〉
+`CSYLL H(S0) ∧ . . . ∧H(Sn) ⇒ (H(ψi) ⇒ H(S)) = T
+⇔ 〈 Tautology 〉
+`CSYLL T ∧ (H(S0) ∧ . . . ∧H(Sn) ⇒ (H(ψi) ⇒ H(S))) = T
+⇔ 〈 IH: H(Γ ) `CSYLL H(ψ) = T 〉
+`CSYLL (H(S0)∧. . .∧H(Sn) ⇒ H(ψi))∧(H(S0)∧. . .∧H(Sn) ⇒ (H(ψi) ⇒ H(S))) = T
+⇔ 〈 Tautology 〉
+`CSYLL H(S0) ∧ . . . ∧H(Sn) ⇒ (H(ψi) ∧ (H(ψi) ⇒ H(S))) = T
+⇔ 〈 Tautology 〉
+`CSYLL H(S0) ∧ . . . ∧H(Sn) ⇒ H(ψi) ∧H(S) = T
+⇔ 〈 IH: H(Γ ) `CSYLL H(ψ) = T 〉
+`CSYLL H(S0) ∧ . . . ∧H(Sn) ⇒ T ∧H(S) = T
+⇔ 〈 Tautology 〉
+`CSYLL H(S0) ∧ . . . ∧H(Sn) ⇒ H(S) = T
+⇔ 〈 Definition of Γ `CSYLL S = T 〉
+H(Γ ) `CSYLL H(S) = T.
+Hence, TCSYLL is complete with respect to KL.
+Now, we show that TCSYLL gives a decision procedure for CSYLL.
+Theorem 5. TCSYLL is a (complete) decision procedure for CSYLL.
+Proof. We have proved using the CiME system that the equations ECSYLL
+are confluent and terminating modulo ACSYLL. We use fa( ) and ex( )
+for [ ] and { }, respectively, in the CiME specification of CSYLL.
+let S_CSYLL =
+signature
+" TRUE,FALSE : constant ;
+not,fa,ex : unary ;
+equ,neq,or,and : AC ;
+imp,cos : infix binary ; ";
+let V = vars "A B C";
+21
+let R_CSYLL = TRS S_CSYLL V
+" A equ TRUE -> A ;
+A equ A -> TRUE ;
+not(A) -> A equ FALSE ;
+A neq B -> not (A equ B) ;
+A or A -> A ;
+A or FALSE -> A ;
+A or TRUE -> TRUE ;
+A or (B equ C) -> (A or B) equ (A or C) ;
+A and B -> (A or B) equ A equ B ;
+A imp B -> ( A or B ) equ B ;
+A cos B -> B imp A ;
+fa(A) -> not(ex(not(A))) ;
+ex(TRUE) -> TRUE ;
+ex(FALSE) -> FALSE ;
+ex(A) or ex(B) -> ex( A or B ) ;";
+For confluence we have:
+CiME> confluence R_CSYLL ;
+Computing self critical pairs
+...
+System is confluent (160 critical pair(s) tested).
+- : bool = true
+For termination we use the dependency pair method with marks:
+CiME> termination R_CSYLL ;
+Entering the termination expert. Verbose level = 0
+The dependency graph is
+...
+(16 termination constraints)
+Search parameters: simple polynomials, coefficient bound is 10.
+Solution found for these constraints:
+[TRUE] = 0;
+[FALSE] = 0;
+[not](X0) = X0 + 1;
+[fa](X0) = 1;
+[ex](X0) = 0;
+[equ](X0,X1) = X1 + X0 + 1;
+[neq](X0,X1) = X1 + X0 + 2;
+[or](X0,X1) = X1*X0 + X1 + X0;
+[and](X0,X1) = X1*X0 + 2*X1 + 2*X0 + 2;
+[imp](X0,X1) = X1*X0 + 2*X1 + X0 + 1;
+[cos](X0,X1) = X1*X0 + X1 + 2*X0 + 1;
+Termination proof found.
+- : unit = ()
+Since TCSYLL is complete with respect to KL, it follows that TCSYLL is
+a complete decision procedure for CSYLL.
+22
+Lemma 3. The CSYLL-canonical form of any CSYLL sentence S is ei-
+ther T, F or S0 ≡ · · · ≡ Sn, where all Si are distinct and of the form {ti},
+where ti is a DS-canonical form.
+Proof. The proof has again been obtained using Maude’s Sufficient Com-
+pleteness Checker [15] and the intuition behind it is similar to that of
+DS-canonical forms.
+As a consequence, we can use TCSYLL as a decision procedure for
+CSYLL without losing the good feature of having T and F as canoni-
+cal forms. That is, we have the following equivalences for any CSYLL
+expressions S and S ′:
+TCSYLL ` S ≡ S ′ = T ⇔ canECSYLL/ACSYLL [S ≡ S ′] = [T]
+and
+TCSYLL ` S ≡ S ′ = F ⇔ canECSYLL/ACSYLL [S ≡ S ′] = [F] .
+By the similarity between CSYLL-canonical forms and DS-canonical
+forms the problems of extracting models can be addressed similarly.
+5.3 Examples
+We now present some examples of use of the executable axiomatization
+of TCSYLL in the Maude System.
+Example 1 Recall the ‘syllogism’ mentioned in the introduction of this
+paper: ‘All men are mortal and all Colombians are men, therefore all
+Colombians are mortal’. Using the ΣCSYLL-like notation, this is symbol-
+ized as follows:
+[Men⇒ Mortal] ∧ [Colombian⇒ Men] ⇒ [Colombian⇒ Mortal] .
+In Maude, we have:
+Maude> red [Men imp Mortal] and [Colombian imp Men]
+imp [Colombian imp Mortal] .
+reduce in CSYLL : [Men imp Mortal] and [Colombian imp Men]
+imp [Colombian imp Mortal] .
+rewrites: 90 in 0ms cpu (0ms real) (~ rewrites/second)
+result Sentence: TRUE
+This should be expected since [Q ⇒ R] ∧ [P ⇒ Q] ⇒ [P ⇒ Q] is a
+substitution instance of axiom 3. of KL.
+23
+Example 2 This second example presents an execution script in which
+reductions of axioms 2.-7. are all shown to be equal to T in all the cases.
+reduce in CSYLL : [A imp A] .
+rewrites: 9 in 0ms cpu (0ms real) (~ rewrites/second)
+result Sentence: TRUE
+==========================================
+reduce in CSYLL : [B imp C] and [A imp B] imp [A imp C] .
+rewrites: 90 in 0ms cpu (0ms real) (~ rewrites/second)
+result Sentence: TRUE
+==========================================
+reduce in CSYLL : [B imp C] and {B and A} imp {B and C} .
+rewrites: 97 in 0ms cpu (0ms real) (~ rewrites/second)
+result Sentence: TRUE
+==========================================
+reduce in CSYLL : {B and A} imp {A and A} .
+rewrites: 14 in 0ms cpu (0ms real) (~ rewrites/second)
+result Sentence: TRUE
+==========================================
+reduce in CSYLL : not {A and A} imp [A imp B] .
+rewrites: 26 in 0ms cpu (0ms real) (~ rewrites/second)
+result Sentence: TRUE
+==========================================
+reduce in CSYLL : not [A imp B] equ {A and not B} .
+rewrites: 14 in 0ms cpu (0ms real) (~ rewrites/second)
+result Sentence: TRUE
+Example 3 Consider the syllogism instance4:
+‘All dogs are mammals and no mammal is a herbivore. Thus, no dog
+is a herbivore.’
+Using ΣCSYLL syntax we have:
+[Dogs⇒ Mammals]∧¬{Mammals∧Herbivore} ⇒ ¬{Dogs∧Herbivore}.
+Translating this into Maude we get:
+Maude> red [Dogs imp Mammals] and
+not {Mammals and Herbivore} imp
+not {Dogs and Herbivore} .
+reduce in CSYLL : not {Mammals and Herbivore} and
+[Dogs imp Mammals] imp
+not {Dogs and Herbivore} .
+rewrites: 70 in 0ms cpu (0ms real) (~ rewrites/second)
+result Sentence: TRUE
+4 http://en.wikipedia.org/wiki/Monadic_predicate_logic
+24
+Another decision procedure using term rewriting for Syllogistic Logic
+has been developed by Glashoff [11] using a quite different approach. His
+approach consists in modeling Aristotle’s logic using the Aristotelian rules
+of deduction as inference rules (i.e. as rewrite rules) while avoiding the use
+of Boolean connectives. Given an input ‘syllogism’, this system generates
+all the possible conclusions from the premises and then checks whether
+the conclusion of the desired sentece belongs to the generated set: if it
+does, the syllogism is indeed valid, otherwise it is not. Considering the
+classification of interests on Syllogistic Logic, Glashoff’s approach can be
+regarded as a pure philosophical approach. In contrast, our approach is
+merely logical. We have extended a decision procedure for propositional
+logic and exploited the novel idea of using Boolean connectives and the
+complement relation to solve the word problem in a more general logic,
+namely CSYLL. Our approach is analogous to the idea of  Lukasiewics
+of embedding Syllogistic Logic in a more general logic like FOL, except
+that in our case we show that many-sorted equational logic is sufficient
+and full FOL is not needed. Furthermore, this work seems a good step
+towards the more ambitious goal of exploring, following the Dijkstra-
+Scholten approach, other fragments of FOL which are both decidable and
+admit an equational representation.
+6 Conclusions
+We have presented equational axiomatizations of the Dijkstra-Scholten
+formulations of propositional logic and of a fragment of Monadic First-
+Order logic, namely Syllogistic Logic with Complements and Boolean
+connectives. We have explained how these axiomatizations, when speci-
+fied in Maude, yield decision procedures for these logics. To the best of
+our knowledge these mechanizations of the Dijkstra-Scholten logic and
+of CSYLL are new. They can be useful as components of mechanized
+reasoning systems for program verification in the spirit of Dijkstra.
+There are several natural extensions of this work. One, already under-
+taken in [25], is to compare the equational axiomatization of the Dijkstra-
+Scholten propositional logic presented here with other decision procedures
+for propositional logic. Another is to extend the present axiomatizations
+to larger fragments of the Dijkstra-Scholten logic: first to full MFOL which
+is still decidable, then to other still decidable segments of FOL, and then
+to the undecidable case of full First-Order logic not by equations only,
+but by rewrite theories [22]. A third possible extension is the already-
+25
+mentioned use of these equational axiomatizations within program veri-
+fication systems in the Dijkstra style.
+References
+1. L. Bachmair and N. Dershowitz. Inference rules for rewrite-based first-order theorem
+proving. In LICS, pages 331–337. IEEE Computer Society, 1987.
+2. D. Basin, M. Clavel, and J. Meseguer. Rewriting logic as a metalogical framework. ACM
+Transactions on Computational Logic, 5:528–576, 2004.
+3. G. S. Boolos, J. P. Burgees, and R. C. Jeffrey. Computability and Logic. Cambridge
+University Press, 4th edition, 2002.
+4. A. Bouhoula, J.-P. Jouannaud, and J. Meseguer. Specification and proof in membership
+equational logic. Theor. Comput. Sci., 236(1-2):35–132, 2000.
+5. M. Clavel, F. Dura´n, S. Eker, P. Lincoln, N. Mart´ı-Oliet, J. Meseguer, and J. Quesada.
+Maude: specification and programming in rewriting logic. Theoretical Computer Science,
+285:187–243, 2002.
+6. M. Clavel, F. Dura´n, S. Eker, J. Meseguer, P. Lincoln, N. Mart´ı-Oliet, and C. Talcott.
+All About Maude - A High-Performance Logical Framework. Springer LNCS Vol. 4350,
+1st edition, 2007.
+7. M. Clavel, J. Meseguer, and M. Palomino. Reflection in membership equational logic,
+many-sorted equational logic, horn logic with equality, and rewriting logic. Electr. Notes
+Theor. Comput. Sci., 71, 2002.
+8. J. Corcoran. Completeness of an ancient logic. J. Symb. Log., 37(4):696–702, 1972.
+9. E. W. Dijkstra and C. S. Scholten. Predicate Calculus and Program Semantics. Springer-
+Verlag, 1990.
+10. A. Foret. Rewrite rule systems for modal propositional logic. In Journal of Logic Pro-
+gramming, volume 12, pages 281–298, 1992.
+11. K. Glashoff. Aristotelian syntax from a computational–combinatorial point of view.
+Journal of Logic and Computation, 15:949–937, 2005.
+12. J. Goguen and R. Burstall. Institutions: Abstract model theory for specification and
+programming. Journal of the ACM, 39(1):95–146, 1992.
+13. D. Gries and F. B. Schneider. A Logical Approach to Discrete Math. Texts and Mono-
+graphs in Computer Science. Springer Verlag, 1993.
+14. D. Gries and F. B. Schneider. Equational propositional logic. Inf. Process. Lett.,
+53(3):145–152, 1995.
+15. J. Hendrix, H. Ohsaki, and J. Meseguer. Sufficient completeness checking with propo-
+sitional tree automata. Technical Report UIUCDCS-R-2005-2635, University of Illinois
+Urbana-Champaign, 2005.
+16. J. Hsiang. Topics in automated theorem proving and program generation. PhD thesis,
+University of Illinois at Urbana-Champaign, 1982.
+17. N. Jacobson. Basic algebra. I. W. H. Freeman and Co., San Francisco, Calif., 1974.
+18. J.-P. Jouannaud, editor. Rewriting Techniques and Applications, First International
+Conference, RTA-85, Dijon, France, May 20-22, 1985, Proceedings, volume 202 of Lecture
+Notes in Computer Science. Springer, 1985.
+19. Laboratoire de Recherche en Informatique. The CiME 2.0 System (http://cime.lri.
+fr/).
+20. V. Lifschitz. On calculational proofs. Ann. Pure Appl. Logic, 113(1-3):207–224, 2001.
+21. J.  Lukasiewicz. Aristotle’s Syllogistic, From the Standpoint of Modern Formal Logic.
+Oxford University Press, 1951.
+22. J. Meseguer. Conditional rewriting logic as a unified model of concurrency. Theoretical
+Computer Science, 96(1):73–155, 1992.
+26
+23. L. S. Moss. Syllogistic logic with complements. Draft, 2007.
+24. F. Parisi-Presicce, editor. Recent Trends in Algebraic Development Techniques, 12th
+International Workshop, WADT’97, Tarquinia, Italy, June 1997, Selected Papers, volume
+1376 of Lecture Notes in Computer Science. Springer, 1997.
+25. C. Rocha and J. Meseguer. Five isomorphic Boolean theories and four equational decision
+procedures. Technical Report 2007-2818, University of Illinois at Urbana-Champaign,
+2007.
+26. G. F. Simmons. Introduction to topology and modern analysis. McGraw-Hill Book Co.,
+Inc., New York, 1963.
+27

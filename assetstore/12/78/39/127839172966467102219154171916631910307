@@ -1,0 +1,618 @@
+Extending Higher-Order Unification to support
+Proof Irrelevance⋆
+Jason Reed
+Carnegie Mellon University, Pittsburgh, PA 15213, USA
+jcreed@cs.cmu.edu
+Abstract. As theories and proofs in logical frameworks become larger,
+careful control over what information within them can safely be omitted
+or erased becomes useful for efficient implementation. The notion of proof
+irrelevance provides exactly this control, but requires existing algorithms
+used in logical frameworks, in particular higher-order pattern unification,
+to be extended to accommodate the richer type theory. We describe this
+extended algorithm, whose presentation is simplified by making use of
+recent developments in explaining unification metavariables as modal
+variables, which obviates the need for full explicit substitutions.
+1 Introduction
+1.1 Proof Irrelevance
+Proof irrelevance is the treatment of all proofs of the same proposition as equal.
+The type system introduced by Pfenning [7] defines (in addition to an inten-
+tional equality, with which we are not concerned here) irrelevant versions of the
+ordinary typing and equality judgments. A characteristic feature of both these
+judgments are that they are allowed to make use of irrelevant hypotheses in the
+context, which are intuitively assumptions that some proof of a proposition (i.e.
+term at a type) exists that are provided only under a promise that the consumer
+of the assumption does not care which proof it is. The irrelevant version of the
+equality judgment is distinguished by being trivial, holding if merely the terms
+being compared are both well-typed. Since there is a new kind of hypothesis
+in the definition of contexts, there is a new function type as well, one with an
+irrelevant domain.
+As an example of the expressivity of these functions, suppose we want to
+represent a lambda calculus which has a binder λ≥1 which requires the variable
+it binds to occur at least once. We could try doing this by beginning with the
+usual higher-order abstract syntax [8] encoding of the untyped lambda calculus
+tm : type
+app : tm → (tm → tm)
+lam : (tm → tm)→ tm
+⋆ This work has been partially supported by NSF Grant CCR-9988281 “Logical and
+Meta-Logical Frameworks”. Thanks are owed to Frank Pfenning and Kaustuv Chaud-
+huri for many useful comments and corrections.
+defining a predicate occurs : (tm → tm) → type which is inhabited by proofs
+that a term closed except for one free variable actually uses it, and declaring a
+constant
+olam : Πt:(tm → tm). occurs t→ tm
+to represent the binder λ≥1. This encoding, however, is not adequate, in the
+sense that there are generally multiple representation-language terms which rep-
+resent an object-language term. This is because, in any natural logic program
+implementing the predicate occurs, each particular occurrence of the variable
+acts as a different witness of the fact that it occurs at least once, and so there
+are potentially many proofs of occurs t.
+We want, however, to equate all terms constructed using olam that differ only
+in which proof they use, for the proof ought to have no effect on the equational
+theory of terms — it only matters that the proofs exist. That is, we want an
+irrelevant function arrow →i, and we should declare1 instead
+olam : Πt:(tm → tm). occurs t→i tm
+and the encoding would then be adequate.
+Moreover, recent work with large safety proofs in a metalogical style arising
+from grid computing applications [2] suggests that significant space and time sav-
+ings (as alluded to in [7]) stand to be made in them without sacrificing soundness
+if only this sort of function type were available in the implementation of the log-
+ical framework used. These would allow many intermediate proof objects to be
+‘forgotten’ during checking, because the type system guarantees that their exact
+identity is not necessary after their existence has been verified. This metalogi-
+cal approach relies heavily, however, on the logic programming interpretation of
+type family declarations, which in turn relies on algorithms for unification, as
+well as mode checking and totality checking [12]. Revised algorithms are there-
+fore necessary for the revised underlying type theory. We focus on the first of
+these algorithms as an initial step along this path, the revision of higher-order
+pattern unification in a dependent type theory similar to LF [5].
+1.2 Higher-Order Pattern Unification
+Using explicit substitutions [1], higher-order unification can be reduced to a first-
+order equational unification problem [3]. Though higher-order unification is in
+fact undecidable in general, it is decidable for the pattern subset [4]. This decid-
+able subset can be also solved dynamically, putting off non-pattern equations in
+the hope that later instantiations will make them pattern. This constraint sim-
+plification algorithm turns to be quite useful in practice, solving many systems
+of equations which do not initially consist of only patterns.
+We had previously tried [10] to start with the algorithm as presented by
+Dowek et al. but it is not clear how to achieve right marriage of proof irrelevance
+and explicit substitutions. Either additional equations or additional rewrite rules
+1 This notation is merely suggestive. The syntax is made precise in the next section.
+2
+are necessary to establish the triviality of equality ‘at irrelevant types,’ but
+achieving and working out the desired confluence and termination properties
+seems less than trivial.
+Fortunately, these difficulties can be sidestepped entirely. The use of substi-
+tutions as full first-class citizens in the language can be eliminated in favor of
+limiting their role to only occurring applied to metavariables open to instantia-
+tion, and conversely requiring metavariables to only occur immediately under a
+substitution. This approach [9] involves a typing discipline derived from a modal
+logic of (relative) validity, and reflects faithfully aspects of the actual implemen-
+tation of unification variables.
+2 Language
+2.1 Syntax
+We work throughout with a deBruijn-index style version of LF, augmented with
+proof irrelevance [7], and relative validity variables [9] as described above. While
+the use of deBruijn indices is at a lower level of description than is strictly
+necessary, the precision which they provide is useful for concisely defining and
+reasoning about the auxiliary notions necessary for the algorithm presented be-
+low. It also has the useful side effect of highlighting the distinction between
+ordinary variables (represented as indices) and unification variables (described
+in terms of modal variables).
+The syntax is given by
+Status µ ::= r | i
+Kinds K ::= type | ΠµAK
+Families A,B ::= a | A ⋄µM | ΠµAB
+Objects M,N ::= c |M ⋄µ N | λµAM | n | u[σ]
+Substitutions σ ::= · |M ·µ σ
+Contexts Γ, Ψ ::= · | Γ ·µ A
+Modal Contexts ∆ ::= · | ∆,u :: (Ψ ⊢ A)
+Constant families are typically written a, b, constant objects c, modal variables
+u, v, and deBruijn indices n.
+For uniformity of notation, we use superscript annotations (generally µ) on
+various pieces of syntax indicating whether they are relevant (r) or irrelevant
+(i) versions. On binders (λµA, Π
+µ
+A) the µ indicates whether the bound variable is
+‘relevantly’ or ‘irrelevantly’ at the appropriate type, that is, whether the func-
+tion or function type respectively can or cannot distinguish between different
+arguments passed to it. Function application (M ⋄µ N , A ⋄µM) is written with
+the non-blank symbol ⋄ so that it can carry an annotation µ, to bring the elim-
+ination forms for function types in correspondence with the introduction forms.
+That is, for M ⋄r N to be well-typed, M should have type Π rA.B for some A,B,
+and for M ⋄i N to be well-typed, M should have a type of the shape Π iA.B.
+Conses Γ ·µ A of a variable at type A onto a context Γ have a µ to indicate
+3
+whether the variable is a relevant or irrelevant hypothesis. Contexts are written
+left-to-right (that is, the deBruijn index 1 refers to a variable at the rightmost
+type in the context) so that, as customary, types only depend on other types on
+their left. Conses M ·µ σ of terms M onto substitutions σ carry a µ to indicate
+whether the M should be typed (and dealt with respect to equality) relevantly
+or irrelevantly.
+We abbreviate :r by : and :i by ÷ to match the notation of [7].
+The ‘irrelevant arrow’ used in the example in the introduction becomes a Π
+by defining the syntactic sugar A →µ B = ΠµA.B where B does not actually
+depend on A, a simple extension of that typically made for→ in dependent type
+theories. The full typing of olam from the example in the introduction, in the
+syntax developed thus far, is
+olam : Π rΠr
+tm
+tm
+Π i
+ours⋄r1 tm
+The syntax u :: (Ψ ⊢ A) [9] indicates a modal variable u which stands in place
+of a term which has type A in the context Ψ . The variable u is ‘relatively closed’
+(logically, represents a hypothesis of the ‘relative validity’ of A relative to Ψ) in
+that it cannot refer to any variables in any context but Ψ .
+2.2 Definitions
+Since the presentation is nameless, we sketch the definition of shifting and substi-
+tution, only for the object level. The definitions given should not be surprising,
+as they are essentially the same as they would be if irrelevance were absent,
+except that all annotations µ are simply preserved. The definitions at the family
+and kind levels are straightforward.
+The operation ↑m increments all indices ≥ m. Note that this is merely an
+operation on terms, not a full-fledged substitution. It is defined by
+↑mc = c ↑m(M ⋄
+µ N) = ↑mM ⋄
+µ ↑mN ↑m(λ
+µ
+AM) = λ
+µ
+↑mA
+(↑m+1M)
+↑mn =
+{
+n+ 1 if n ≥ m;
+n otherwise.
+↑m(u[σ]) = u[↑mσ]
+↑m(·) = · ↑m(M ·
+µ σ) = ↑mM ·
+µ ↑mσ
+We abbreviate ↑1 by just ↑. Ordinary substitution [σ]M (again merely an oper-
+ation on terms) is defined by
+[σ]c = c [σ](M ⋄µ N) = [σ]M ⋄µ [σ]N [σ]λµAM = λ
+µ
+[σ]A[1 ·
+µ ↑σ]M
+[M ·µ σ]1 = M [M ·µ σ]n + 1 = [σ]n [σ](u[τ ]) = u[[σ]τ ]
+[σ](·) = · [σ](M ·µ τ) = [σ]M ·µ [σ]τ
+Following [9], the operation of substitution is written as a prefix operator to
+distinguish the substitution attached to occurrences of modal variables u[σ],
+which is written postfix.
+4
+The introduction of modal variables carries with it a novel substitution prin-
+ciple. The substitution operation [[P/u]] of a (closed, relative to the context Ψ)
+term P for the modal variable u :: (Ψ ⊢ A) for some context Ψ and type A, is
+defined by
+[[P/u]]c = c [[P/u]](M ⋄µ N) = [[P/u]]M ⋄µ [[P/u]]N
+[[P/u]]λµAM = λ
+µ
+[[P/u]]A[1 ·
+µ ↑σ]M [[P/u]]n = n
+[[P/u]](u[τ ]) = [[[P/u]]τ ]P
+[[P/u]](v[τ ]) = v[[[P/u]]τ ] (for u 6= v)
+[[P/u]](·) = · [[P/u]](M ·µ τ) = [[P/u]]M ·µ [[P/u]]τ
+Since P can only refer to variables in the context Ψ , variable capture is
+impossible, and this substitution can be (and in practice is) carried out in the
+implementation by simple in-place update.
+We use θ for simultaneous modal substitutions P1/u1, P2/u2, . . . , Pn/un. We
+say ∆′ ⊢ θ : ∆ if θ is a substitution for the variables ui :: (Ψi ⊢ Ai) in ∆ and
+∆′;Ψi ⊢ Pi : Ai for all i. The relevant substitution property is
+Lemma 1. If ∆;Γ ⊢M : A and ∆′ ⊢ θ : ∆, then ∆′; [[θ]]Γ ⊢ [[θ]]M : [[θ]]A.
+which is easily established by induction. The identity substitution is defined by
+id· = · idΓ ·µA = 1 ·
+µ ↑(idΓ )
+We often omit the subscript when it is clear from context.
+The typing rules require a context promotion operation —⊕, defined by
+·⊕ = · (Γ ·µ A)⊕ = (Γ⊕ ·r A)
+which promotes all irrelevant assumptions to relevant.
+2.3 Judgments
+The central judgments are
+⊢ ∆mctx ∆ is a valid modal context
+∆ ⊢ Γ ctx Γ is a valid context
+∆;Γ ⊢M = N :µ A M and N are equal at type A
+∆;Γ ⊢M :µ A M has type A
+∆;Γ ⊢ σ : Ψ σ has type Ψ
+There are a handful of other, analogous judgments at the family and kind level,
+which we again omit for brevity.
+The judgments ∆mctx and ⊢ Γ ctx, as common for dependent type theories,
+insure that every type in the context Γ (resp. modal context ∆) is actually
+constructed correctly from previous context variables. We omit the exact rules
+defining them.
+The equality and typing judgments each have a µ annotation to indicate
+whether the equality or typing, respectively, takes place in a relevant or irrelevant
+way. The following sections detail their effect.
+5
+2.4 Object Typing
+The critical rule for proof irrelevance is the sole rule which has an irrelevant
+typing judgment as its conclusion:
+∆;Γ⊕ ⊢M : A ∆;Γ ⊢ A : type
+∆;Γ ⊢M ÷A
+which allows (via the promotion operation defined above) irrelevant assumptions
+in Γ to be used to show thatM÷A, as long as A is a valid type in Γ unpromoted.
+([11] treats why this second premise is necessary)
+The other typing rules are mostly straightforward:
+c : A ∈ Σ
+∆;Γ ⊢ c : A
+∆;Γ ⊢M : ΠµAB ∆;Γ ⊢ N :
+µ A
+∆;Γ ⊢M ⋄µ N : [N ·µ idΓ ]B
+∆;Γ ·µ A ⊢M : B
+∆;Γ ⊢ λµAM : Π
+µ
+AB
+∆;Γ ·r A ⊢ 1 : A
+∆;Γ ⊢ n : B
+∆;Γ ·µ A ⊢ n + 1 : ↑B
+∆;Γ ⊢M : A ∆;Γ ⊢ A = B : type
+∆;Γ ⊢M : B
+The rule for typing uses of modal variables u :: (Ψ ⊢ A) is
+∆,u :: (Ψ ⊢ A), ∆′;Γ ⊢ σ : Ψ
+∆, u :: (Ψ ⊢ A), ∆′;Γ ⊢ u[σ] : [σ]A
+Intuitively, it expresses the fact that u requires (and requires no more than) a
+justification of Ψ to be usable; if a substitution for the variables of Ψ valid in
+the contexts ∆,u :: (Ψ ⊢ A), ∆′, Γ can be found, it can be attached to u to form
+an object of type [σ]A.
+Substitutions themselves are typed by
+∆;Γ ⊢ · : ·
+∆;Γ ⊢M :µ [σ]A ∆;Γ ⊢ σ : Ψ
+∆;Γ ⊢M ·µ σ : Ψ ·µ A
+2.5 Object Equality
+For brevity we only mention a few equality rules relevant to proof irrelevance.
+The others are largely similar to those in the original definition of LF.
+The first is
+∆;Γ⊕ ⊢M : A ∆;Γ⊕ ⊢M ′ : A ∆;Γ ⊢ A : type
+∆;Γ ⊢M = M ′ ÷A
+6
+which gives the meaning of proof irrelevance:M and M ′ are equal at ÷A if they
+are both merely well-typed.
+This ‘irrelevant equality’ is made use of in the rule
+∆;Γ ⊢M =M ′ : ΠµAB ∆;Γ ⊢ N = N
+′ :µ A
+∆;Γ ⊢M ⋄µ N =M ′ ⋄µ N ′ : [N ·µ idΓ ]B
+which means in particular that M ⋄i N = M ⋄i N ′, even if N 6= N ′, as long as
+both N and N ′ are well-typed.
+Continuing with the example from the introduction, suppose we have some
+object t : Π rtm tm (representing an object-language term with one free variable)
+and two different proofs p1, p2 : occurs ⋄
+rt. Now we should have
+∆;Γ ⊢ olam ⋄rt ⋄i p1 = olam ⋄
+rt ⋄i p2 : tm
+and indeed we do; to derive this judgment we must show
+∆;Γ ⊢ olam ⋄rt = olam ⋄rt : Π r
+ours ⋄rt tm
+which follows by a reflexivity lemma, and
+∆;Γ ⊢ p1 = p2 ÷ occurs ⋄
+rt
+which holds precisely because of the former equality rule above.
+Substitution equality (required, incidentally for equality of modal variable
+uses u[σ]) is defined by
+∆;Γ ⊢ · = · : ·
+∆;Γ ⊢M =M ′ :µ [σ]A ∆;Γ ⊢ σ = σ′ : Ψ
+∆;Γ ⊢M ·µ σ = M ′ ·µ σ′ : Ψ ·µ A
+Notice that in the case of µ = i, at irrelevant conses ·i the consed terms M,M ′
+are only required to be irrelevantly equal (∆;Γ ⊢ M = M ′ ÷ [σ]A), that is,
+merely both well-typed.
+3 Unification
+3.1 Pattern Substitutions
+Pattern substitutions [6, 4], ordinarily substitutions consisting of only distinct
+bound variables, are distinguished by being injective, that is, there is at most one
+P such that [σ]P =M if σ is pattern. This property makes decidable the subset
+of unification problems where all terms being unified are higher-order patterns,
+that is, terms where all metavariables occur under pattern substitutions.
+We define the judgment I ⊢ σ pat (“σ is a pattern substitution using vari-
+ables I”) for I a list of natural numbers and σ a substitution. This is a simple
+7
+generalization of the ordinary definition of pattern substitution. The difference
+is that here we allow arbitrary terms to occur at irrelevant positions.
+⊢ · pat
+I ⊢ σ pat
+I ⊢M ·i σ pat
+I ⊢ σ pat n 6∈ I
+I, n ⊢ n ·r σ pat
+A term in context ∆;Γ ⊢M : A is said to be an atomic pattern if every subterm
+of M of the form u[σ] is such that u :: (Ψ ⊢ B) ∈ ∆ with B an atomic (that
+is, not a function) type, and I ⊢ σ pat for some I. Assuming all modal variables
+are atomic incurs no loss, however. The process of lowering unification variables
+present in the given problem to atomic type and raising them again before
+presenting the answer to the user is well-known, and in fact is concisely justified
+by the modal variable framework [9].
+3.2 Inversion
+The fact that pattern substitutions are injective has a constructive proof, namely
+an algorithm (see Figure 1) for computing the inverse when it exists. It is mu-
+tually recursive with the definition of the restriction substitution ξ |σ.
+The correctness of inversion amounts to the two lemmas stated below. Since
+inversion is computed in the process of unification, however, it can generate new
+equations as necessary. There is, therefore, also a sort of conceptual mutual re-
+cursion going on with the definition of the unification algorithm itself. The state-
+ment and style of proof of these lemmas could be separated from the language of
+unification, but not without some complication. We therefore assume familiar-
+ity with typical reasoning about equation-rewriting unification algorithms and
+speak of terms being known or being shown to be equal ‘modulo’ the other
+equations in the system or being newly introduced. See the following section for
+details of what it means for variables to be added to ∆B .
+Lemma 2. If [σ]−1M exists, then [σ][σ]−1M = M , modulo the additional equa-
+tions generated, if any.
+Proof. By induction on M . We show just a few representative cases.
+For NI, we must show n = [M ·i σ](↑([σ]−1n)). but it can be shown that
+[M ·µ σ](↑N) = [σ]N for any M,N, µ, σ, (cf. the λσ [1] rewrite rule ShiftCons)
+so we apply the induction hypothesis to [σ][σ]−1n.
+For A−, use induction hypothesis and the fact that M ⋄i N = M ⋄i v[σ].
+In the case of V− we must apply the induction hypothesis to [ξ]ξ′, but by
+inspection of the rules defining the restriction operation, it can be seen that
+[ξ](ξ |σ) is just a substitution consisting of a subsequence of the terms in ξ, and
+so is no bigger than ξ. So we have [σ](u′[[σ]−1([ξ]ξ′]]) = u′[[σ][σ]−1([ξ]ξ′)], which
+by the induction hypothesis is equal to u′[[ξ]ξ′] = [ξ](u′[ξ′]) = [ξ](u[id]) = u[ξ]. It
+is also easy to show that [ξ](ξ |σ) always exists, by the definition of restriction.
+8
+C [σ]−1c = c
+NI [M ·i σ]−1n = ↑([σ]−1n)
+N6= [m ·r σ]−1n = ↑([σ]−1n) if m 6= n
+N= [n ·r σ]−1n = 1
+E [·]−1n fails
+L [σ]−1(λµAM) = λ
+µ
+[σ]−1A
+[1 ·µ ↑σ]−1M
+A [σ]−1(M ⋄µ N) = [σ]−1M ⋄µ [σ]−1N if [σ]−1N exists
+A− [σ]−1(M ⋄µ N) = [σ]−1M ⋄µ v[id] if not, for v added to ∆B
+V+ [σ]−1(u[ξ]) = u[[σ]−1ξ] if [σ]−1ξ exists
+V− [σ]−1(u[ξ]) = u′[[σ]−1([ξ]ξ′)] if not, adding the equation
+that u[id] = u′[ξ′] where ξ′ =
+ξ |σ, for u′ added to ∆B
+SN [σ]−1(·) = ·
+SC [σ]−1(M ·µ ξ) = [σ]−1M ·µ [σ]−1ξ
+R+ (M ·µ ξ) |σ = 1 ·µ (↑(ξ | σ)) if [σ]−1M exists
+R− (M ·µ ξ) |σ = (↑(ξ |σ)) if not
+RN · |σ = ·
+Fig. 1. Inversion and Restriction
+Lemma 3. If there exists θ and N such that ·;Ψ ⊢ N : A and ∆;Γ ⊢ σ : Ψ and
+∆;Γ ⊢ [[θ]][σ]N = [[θ]]M : [σ]A, then [σ]−1M exists and is equal to N , modulo
+the additional equations generated, if any.
+Proof. Without loss of generality, assume N andM are in η-long β-normal form.
+We can then proceed by induction on the structure of M .
+The case for the new ruleNI requires showing that if∆;Γ ⊢ [[θ]][M ·iσ]N = n,
+then [σ]−1n exists and is equal to N . For N under a substitution to be equal
+to a deBruijn index, it must be itself a deBruijn index, and it can’t be 1, since
+that would not be well-typed: it accesses M from M ·i σ, violating the implicit
+contract that a legitimate, relevant term cannot use irrelevant assumptions from
+the context (respectively, irrelevantly cons-ed terms from a substitution) except
+under irrelevant application. Therefore there exists a deBruijn index m such that
+N = ↑m. What we know by assumption becomes ∆;Γ ⊢ [[θ]][M ·i σ]↑m = n, and
+ShiftCons-like reasoning again gives [σ]m = n. Now the induction hypothesis
+applies, giving m = [σ]−1n, which implies N = ↑([σ]−1n), as required.
+For A, we have that [[θ]][σ](N1 ⋄
+iN2) = [[θ]](M1 ⋄
+iM2), but we can only apply
+the induction hypothesis to M1, N1, because we have no guarantee of equality
+under the irrelevant application. However, if M2 under the inverse of σ does not
+exist, then A− applies, and we still get the required definitional equality.
+9
+If M = u[ξ] and V− applies, then suppose that P/u, P ′/u′ ∈ θ. Then we
+know [[θ]][σ]N = [[[θ]]ξ]P . So the new equation u[id] = u′[ξ |σ] means P =
+[[[θ]](ξ |σ)]P ′. Thus [[[θ]]ξ]P = [[[θ]]([ξ](ξ |σ))]P ′ = [[θ]](u′[[ξ](ξ |σ)]). By the in-
+duction hypothesis, (the new term can be construed as smaller because the sub-
+stitution applied to the modal variable is now guaranteed to be in the domain
+of [σ]−1 by the definition operation) u′[[σ]−1[ξ](ξ |σ)] exists and is equal to N ,
+but this is the definition of [σ]−1M .
+The restriction operation ξ |σ serves to take ξ and produce a substitution
+such that [ξ](ξ |σ) is just like ξ only leaving out those terms that are not in the
+domain of [σ]−1. The rule R+ in fact needs not pass along even those irrelevant
+terms that do fall in the domain of [σ]−1, however. We could have written instead
+of R+ the two rules
+RR+ (M ·r ξ) |σ = 1 ·r (↑(ξ |σ)) if [σ]−1M exists
+RI+ (M ·i ξ) |σ = ↑(ξ |σ) if [σ]−1M exists
+without sacrificing correctness. The reason for this is that we never strictly need,
+during unification, to preserve irrelevantly used terms (i.e. N in M ⋄i N or M in
+M ·i σ) since the equational theory permits them to be replaced by fresh modal
+variables of the appropriate type. The restriction rules are written as they are,
+since preserving the terms seems desirable even if not necessary. This issue is
+treated in some more detail in the next section.
+3.3 Unification Transformations
+A unification problem is given by
+∆F ; ∃∆B .
+∧
+i∈I
+Γi ⊢Mi
+?
+=Ni : Ai
+for modal contexts ∆F of free variables and ∆B of bound variables. These two
+modal contexts are used to separate the two roles played by modal variables in
+the unification algorithm. ∆F is initially populated by those variables for which
+we seek instantiations, and ∆B contains variables for which instantiations need
+to exist for an instantiation of ∆F to be a unifier. When new variables are added,
+(for instance, when a flex-flex equation u[σ] = u[σ′] is transformed to u′[σ ∩ σ′]
+to enforce that u is instantiated with some term that behaves the same under σ
+and σ′) they are added to ∆B, since the instantiations of these new variables is
+not important to answer the original problem posed.
+Therefore formally we say a unification problem is unified by a modal sub-
+stitution ∆′ ⊢ θF : ∆F if there exists a substitution ∆
+′′ ⊢ θB : ∆B for ∆
+′′
+extending ∆′ such that if
+∆′′; [[θF , θB]]Γi ⊢ [[θF , θB]]Mi = [[θF , θB]]Ni : [[θF , θB ]]Ai
+for all i. The notion of most general unifier is defined in the usual way.
+10
+Since a unifier is only required to make the terms under substitution equal
+up to definitional equality, we could at the outset replace every term M ⋄iN in a
+problem with M ⋄i v[·] for a fresh modal variable v of the appropriate type. The
+fact that we can safely effect this kind of replacement is extremely important for
+solving problems such as
+λrA(c ⋄
+i 1)
+?
+=λrAu[·]
+No modal substitution for u results in u[·] becoming c ⋄i 1, since the argument
+to the function is not made available to u, but we can produce a substitution
+c ⋄i v[·]/u, which produces the equation
+λrA(c ⋄
+i 1)
+?
+=λrA(c ⋄
+i v[·])
+which does hold, by virtue of how equality is defined for ⋄i. Note that with
+regard to the the problem for finding closed substitutions (i.e., containing no
+modal variables) for all the modal variables, we have merely deferred to the
+problem of determining whether there indeed exist closed terms at the type A.
+So, as stated, it would be possible to replace at the outset all irrelevant
+arguments with fresh modal variables. This would in no way compromise the
+correctness of the algorithm, since up to definitional equality, we are changing
+nothing. Why not do exactly this? It is because we aim to make as easy as pos-
+sible the problem of finding closed solutions unification is complete, which may,
+because of the presence of proof irrelevance, require solving (generally undecid-
+able) inhabitation problems. Therefore throughout the algorithm below we take
+care to preserve, whenever possible, the structure of irrelevant arguments, in the
+hope that they might later prove useful as witnesses of inhabitation.
+The unification algorithm proceeds, as expected, by rewriting equations in a
+way that maintains the same set of unifiers, towards the goal of a solved form
+∆F ; ∃∆
+′
+B.
+∧
+i∈J
+Ψj ⊢ uj [idΨj ]
+?
+=Pj : Aj
+(where no modal variables occur in Pi) which witnesses that the mgu of the
+original system is P1/u1, . . . , Pm/um. It is very close to the “practical transfor-
+mations” in the algorithm of Dowek et al. [4] except that we need not cover cases
+for inverted substitutions applied to yet other substitutions, because the presen-
+tation does not use full explicit substitutions. We maintain the invariant that
+terms in equations are weak head normal, and use the notation 〈M〉 to denote the
+weak head normal form of M . We omit several rules which are merely symmet-
+ric versions of rules listed, or are straightforward analyses of equations involving
+constants. We also omit the ordinary contexts Γ , since their role is easily inferred.
+For instance, LL written out fully is Γ ⊢ λµAM
+?
+=λµAN → Γ ·
+µ A ⊢ 〈M〉
+?
+=〈N〉.
+The intersection σ ∩ ξ of two substitutions as in VV is defined by
+(n ·r σ) ∩ (n ·r σ′) = n ·r (σ ∩ σ′)
+(n ·r σ) ∩ (m ·r σ′) = σ ∩ σ′ if n 6= m
+(M ·i σ) ∩ (M ′ ·i σ′) = M ·i (σ ∩ σ′)
+11
+AA M1 ⋄
+r M2
+?
+=N1 ⋄
+r N2 → M1
+?
+=N1 ∧ 〈M2〉
+?
+=〈N2〉
+AAI M1 ⋄
+i M2
+?
+=N1 ⋄
+i N2 → M1
+?
+=N1
+LL λµAM
+?
+=λµAN → 〈M〉
+?
+=〈N〉
+TL N
+?
+=λµAM → 〈M〉
+?
+=〈(↑N) ⋄µ 1〉
+N= n
+?
+= n → T
+N6= n
+?
+=m → F if m 6= n
+NA n
+?
+=M1 ⋄
+µM2 → F
+VV u[σ]
+?
+= u[ξ] → u′[σ ∩ ξ] 1
+VT u[σ]
+?
+=M → u[id]
+?
+=[σ]−1M 2
+OCI u[σ]
+?
+=M → u[σ]
+?
+=[[v[id]/u]]M 3
+OC u[σ]
+?
+=M → F 4
+1 for u′ a fresh variable added to ∆B
+2 if VV does not apply, [σ]−1M exists, and u does not occur in M
+3 if VV does not apply and u only occurs under the argument side of ⋄i in M , for v a
+fresh variable of the same type as u added to ∆B
+4 if none of VV, VT, OCI applies.
+Fig. 2. Unification Transformations
+The presence of proof irrelevance in the type system forces several novelties
+into the algorithm. The rule AAI handles comparison of two irrelevant appli-
+cations. We can neglect trying to solve the equation of the arguments, since we
+know that M1 ⋄
+i N1 =M2 ⋄
+i N2 if merely M1 = M2.
+The occurs-check need not (and in fact must not) reject equations u[id] =M
+where u occurs in M , if it occurs only “irrelevantly”, that is, somewhere inside
+the arguments of irrelevant applications. For if it does, we can swap in (ruleOCI)
+a new modal variable v of the same type, keeping the whole term invariant up
+to definitional equality.
+RulesVV,VT, andOCI use the new definitions of substitution, intersection,
+and inversion. To verify the correctness of VV, we must show that [σ]P = [ξ]P
+if and only if there exists P ′ such that P = [σ∩ ξ]P ′.2 But this is established an
+easy inductive argument. The correctness of the other two rules can be shown
+using the properties of inversion already proved.
+4 Conclusions
+With some modifications, an established algorithm for higher-order pattern uni-
+fication can be made to perform correctly in the presence of proof irrelevance. It
+2 We need not consider the possibility that σ and ξ in the left-hand side of VV contain
+occurrences of u, because if u does occur in them, it only occurs under an irrelevant
+cons because σ, ξ are pattern, so we can, as above, swap in a fresh modal variable in
+place of u without loss.
+12
+is hoped that future work can do the same for mode, termination, and coverage
+checking, so that logic programs can be written in a style conscious of which
+arguments are safe to discard during execution, realizing space and time savings
+in the distribution and checking of proof terms.
+References
+1. Mart´ın Abadi, Luca Cardelli, Pierre-Louis Curien, and Jean-Jacques Le`vy. Explicit
+substitutions. In Conference Record of the Seventeenth Annual ACM Symposium
+on Principles of Programming Languages, San Francisco, California, pages 31–46.
+ACM, 1990.
+2. Karl Crary and Susmit Sarkar. A metalogical approach to foundational certified
+code. Technical Report CMU-CS-03-108, Carnegie Mellon University, January
+2003.
+3. Gilles Dowek, The´re`se Hardin, and Claude Kirchner. Higher-order unification via
+explicit substitutions. In D. Kozen, editor, Proceedings of the Tenth Annual Sym-
+posium on Logic in Computer Science, pages 366–374, San Diego, California, June
+1995. IEEE Computer Society Press.
+4. Gilles Dowek, The´re`se Hardin, Claude Kirchner, and Frank Pfenning. Unification
+via explicit substitutions: The case of higher-order patterns. In M. Maher, edi-
+tor, Proceedings of the Joint International Conference and Symposium on Logic
+Programming, pages 259–273, Bonn, Germany, September 1996. MIT Press.
+5. Robert Harper, Furio Honsell, and Gordon Plotkin. A framework for defining logics.
+Journal of the Association for Computing Machinery, 40(1):143–184, January 1993.
+6. Dale Miller. A logic programming language with lambda-abstraction, function
+variables, and simple unification. Journal of Logic and Computation, 1(4):497–
+536, 1991.
+7. Frank Pfenning. Intensionality, extensionality and proof irrelevance in modal type
+theory. In Proceedings of the 16th Annual Symposium on Logic in Computer Science
+(LICS’01), 2001.
+8. Frank Pfenning and Conal Elliott. Higher-order abstract syntax. In Proceedings
+of the ACM SIGPLAN ’88 Symposium on Language Design and Implementation,
+pages 199–208, Atlanta, Georgia, June 1998.
+9. Brigitte Pientka and Frank Pfenning. Optimizing higher-order pattern unification.
+Submitted, 2003.
+10. Jason Reed. Higher-order pattern unification and proof irrelevance. Appears in
+TPHOLs 2002 Track B proceedings, NASA tech report CP-2002-211736, 2002.
+11. Jason Reed. Proof irrelevance and strict definitions in a logical framework. Tech-
+nical Report CMU-CS-02-153, Carnegie Mellon University, 2002.
+12. Ekkehard Rohwedder and Frank Pfenning. Mode and termination checking for
+higher-order logic programs. In Hanne Riis Nielson, editor, Proceedings of the
+European Symposium on Programming, pages 296–310, Linko¨ping, Sweden, April
+1996. Springer-Verlag LNCS 1058.
+13

@@ -1,0 +1,869 @@
+Abstract Notions and Inference Systems
+for Proofs by Mathematical Induction
+Claus-Peter Wirth? and Klaus Becker
+Fb. Informatik, Universita¨t Kaiserslautern, D-67663, Germany
+fwirth, klbeckerg@informatik.uni-kl.de
+Abstract. Soundness of inference systems for inductive proofs is sometimes
+shown ad hoc and a posteriori, lacking modularization and interface notions. As
+a consequence, these soundness proofs tend to be clumsy, difficult to understand
+and maintain, and error prone with difficult to localize errors. Furthermore, com-
+mon properties of the inference rules are often hidden, and the comparison with
+similar systems is difficult. To overcome these problems we propose to develop
+soundness proofs systematically by presenting an abstract frame inference sys-
+tem a priori and then to design each concrete inference rule locally as a sub-rule
+of some frame inference rule and to show its soundness by a small local proof
+establishing this sub-rule relationship. We present a frame inference system and
+two approaches to show its soundness, discuss an alternative, and briefly clas-
+sify the literature. In an appendix we give an example and briefly discuss failure
+recognition and refutational completeness.
+1 Motivation
+Given some set of rst-order axioms ‘R’, one is often not only interested in those
+properties ‘Γ’ which are logical consequences of ‘R’, i.e. which hold in all models
+of ‘R’:  R j= Γ ; but also in properties which are only required to hold in some
+specic sub-class of the class of models of ‘R’. Instead of restricting the class of mod-
+els by some required property, one may also ask for those ‘Γ’ for which (instead of
+ R j= Γ ) only  R j= Γτ  must hold for all τ taken from a specic set of (e.g.
+ground) substitutions. Notions of validity resulting from combinations of possible re-
+strictions of these two kinds are usually called inductive validity and the inductively
+valid properties are called inductive theorems. In Wirth & Gramlich (1994) we dis-
+cussed the most important of these notions in a unied framework on the basis of
+positive/negative-conditional equational specications as introduced in Wirth & Gram-
+lich (1993). These theorems are called inductive since (nite) proofs for most of
+them require mathematical induction. Inductive reasoning extends deductive reasoning
+by capturing innite deductive proofs in a nite cyclic representation, e.g. capturing
+? supported by the Deutsche Forschungsgemeinschaft, SFB 314 (D4-Projekt)
+Γ(x0)
+Γ(0) Γ(c(x1))
+Γ(c(0)) Γ(c(c(x2)))
+Γ(c(c(0))) : : :
+(using xi =0 } 9xi+1: xi =c(xi+1))
+in something like
+Γ(x0)
+Γ(0) Γ(c(x1))
+Γ(x1)
+(back to top)
+(where the formulas below each line imply the formula above). For this kind of cyclic
+reasoning to be sound, the deductive reasoning must terminate for each instantiation of
+the theorem. This can be guaranteed when one requires for each cyclic reasoning the
+preconditions (usually called induction hypotheses) (e.g. Γ(x1)) to be smaller than
+the induction conclusion (e.g. Γ(c(x1))) w.r.t. some wellfounded ordering, called
+induction ordering.
+In Walther (1994) we can read the following about proving inductive theorems:
+Research on automated induction these days is based on two competing paradigms:
+Implicit induction (also termed inductive completion, inductionless induction, or, less
+confusingly, proof by consistency) evolved from the Knuth-Bendix Completion Proce-
+dure . . . . . . . The other research paradigm . . . is called explicit induction and resembles
+the more familiar idea of induction theorem proving using induction axioms.
+While the two paradigms are not uniformly dened in the research community,
+we call the latter paradigm explicit because in the underlying inference systems each
+cyclic reasoning is made explicit in a single inference step which brings together induc-
+tion hypotheses and conclusions in a set of induction base and induction step formulas
+and explicitly guarantees the termination of their cycles with the help of a sub-proof or
+-mechanism for the wellfoundedness of the induction ordering resulting from the step
+formulas.
+The inference systems for implicit induction, however, permit us to spread the
+cyclic reasoning as well as the termination control over several inference steps. To re-
+discover the inductive cycles in the reasoning we usually have to inspect several in-
+ference steps instead of a single one that explicitly does the induction. Possibly since
+this seemed to be somewhat difcult compared to the older and well-known explicit
+induction, the paradox inductionless induction became a name for implicit induc-
+tion. Another reason for this name might be the emphasis the researchers in the eld of
+implicit induction gave to the refutational completeness (cf. xB) of their inference sys-
+tems: In general the set of inductively valid theorems is not enumerable for all reason-
+able and interesting notions of inductive validity; therefore refutational completeness
+is highly appreciated for an inference system for inductive theorem proving as it is an
+optimal theoretical quality. Refutational completeness, however, does not help to nd
+nite proofs for inductively valid formulas (whereas the ability of an inductive theorem
+prover to detect invalid formulas is most important under a practical aspect (cf. xA),
+especially for inductive theorem proving because of the important role generalizations
+play in it, where an invalid formula can result from a valid input theorem due to over-
+generalization).
+To succeed in proving an inductive theorem in nite time, implicit inductive the-
+orem provers have to solve exactly the same problem as explicit inductive theorem
+provers, namely to nd a nite cyclic representation for an innite deductive proof as
+well as an induction ordering guaranteeing the termination of its cycles. Therefore, if
+a theorem prover with sufcient deductive power fails to show an inductive theorem,
+then either it fails to construct the proper reasoning cycles or its mechanisms for book-
+keeping of ordering information (cf. x 2) or for satisfying ordering constraints are too
+weak. While inference systems for implicit induction usually have sufcient poten-
+tiality to construct the proper reasoning cycles, their bookkeeping of relevant ordering
+information may be insufcient for certain proofs (cf. xC for an example), even though
+their powerful orderings for satisfying the ordering constraints partially compensate for
+this insufciency. Inference systems for explicit induction on the other hand do not re-
+quire any bookkeeping of ordering information since the ordering information is only
+of local importance within single explicit induction steps. Explicit inductive theorem
+provers usually use rather simple semantic orderings which have turned out to be pow-
+erful enough for almost all practical applications. These provers, however, usually do
+not nd more sophistically structured reasoning cycles, e.g. in mutually recursive do-
+mains or in the case (which may be of more importance in practice) that the required
+instantiations of the induction hypotheses are difcult to be guessed when the step for-
+mulas are synthesized and do not become obvious before the induction hypotheses can
+be applied to the induction conclusions (cf. Protzen (1994) for a simple example). From
+an abstract point of view and beyond the technicalities usually involved, however, all
+inductive proofs of our intuition can be formulated according to each of the two para-
+digms without changing the reasoning cycles.
+Note, however, that the scope of mathematical induction (i.e. reasoning in termi-
+nating cycles) goes beyond inductive theorem proving (w.r.t. our denition above). A
+eld of application of mathematical induction which is very similar to inductive the-
+orem proving w.r.t. data and problem structures is to prove (ground) conuence for
+rst-order clauses, cf. Becker (1993) and Becker (1994).
+Therefore, in our opinion, while arguing for the one and against the other paradigm
+should be overcome, a unifying representation of all these induction-based approaches
+is not only theoretically possible, but also strongly required from a practical point of
+view: The possible combination of insight, methods, techniques, and heuristics based
+on results of research in all these elds will be benecial for the search for proofs by
+mathematical induction in practice.
+The abstract notions and the frame inference system we present in this paper are
+proposed as a top level step towards such a unication. This frame inference system
+is necessarily more similar to inference systems for implicit than for explicit induc-
+tion, since, from a top level view and according to our denition of the terms, explicit
+induction is a form of implicit induction where the induction is restricted to be done
+explicitly within single inference steps. The results of the eld of explicit induction,
+however, are most important for developing concrete inference systems consisting of
+practically useful sub-rules of our frame inference rules. While the construction of such
+concrete inference systems as well as a comparison and a combination of implicit and
+explicit induction are supported by the abstract framework of this paper, a proper treat-
+ment of these subjects cannot be given here but must be elaborated in several future
+papers.
+2 Prover States
+Prover states are intended to represent the state of the prover, i.e. to record which sub-
+tasks of a proof have been successfully established, which goals remain to be proved,
+&c.. Technically, the prover states are the eld of our inference relation ‘ ` ’. For de-
+ductive reasoning we may start with a set ‘G’ of goals which contains the theorems we
+want to prove, transform them and nally delete them after they have become trivial
+tautologies. Such an inference relation, starting from the theorems to be proved and
+reducing them until some termination criterion is satised, is called analytic, cf. e.g.
+Bibel & Eder (1993). These theorems must belong to some set ‘Form’ which contains
+the formulas the inference system can treat. If ‘ ` ’ permits only sound transformation
+and deletion steps, then from  G ` /0  (where ‘ ` ’ denotes the reexive and transitive
+closure of ‘ ` ’) we may conclude that ‘G’ is valid. For practical reasons, we would like
+to have a set ‘L’ of lemmas at hand. Into this ‘L’ inference steps can store axioms of
+the specication, already proved lemmas or the results of any theorem prover called for
+solving special tasks which might be helpful in our inference process. We can then use
+‘L’ for transformations of ‘G’ that are only known to be sound relative to ‘L’. Thus our
+prover states should be pairs of sets ‘(L;G)’ such that  ( /0;G) ` (L; /0)  implies validity
+of ‘G’ and ‘L’. For inductive reasoning, we additionally need a set ‘H’ of induction
+hypotheses. Similar to ‘L’, the set ‘H’ may be built up during the inference process and
+used for transformations of ‘G’ which are founded on ‘H’ in the sense that they are only
+known to be sound relative to ‘H’. Similar to the treatment of lemmas, our prover states
+should be triples of sets ‘(L;H;G)’ such that  ( /0; /0;G) ` (L;H; /0)  implies validity of
+‘G’, ‘L’, and ‘H’. Unlike the lemmas in ‘L’, however, the hypotheses in ‘H’ are not
+known to be valid before the whole induction proof is done (i.e.  G = /0 ). Here we
+are running the risk of being caught in a cyclic kind of reasoning like: The goal can
+be deleted, since it is valid due to the hypothesis, which is valid, if the goal can be
+deleted, . . . . On the other hand, some kind of cyclic reasoning is really required for
+successful inductive proofs of nite length. We only have to make sure that this cyclic
+reasoning terminates. This can be achieved by equipping each formula in ‘H’ or ‘G’
+with a weight and allowing a hypothesis to transform a goal only if the weight of the
+hypothesis is smaller than the weight of the goal w.r.t. a wellfounded quasi-ordering
+‘ . ’ (i.e. some reexive and transitive relation . , whose ordering < := . n& does
+not allow innite descending sequences i0 >i1 >i2 > :: : ), which we will call the
+induction ordering in what follows.
+We would like to point out that we distinguish between the weight of a formula
+and the actual formula itself: For explicit induction, weights are not needed on the in-
+ference system level because each inductive reasoning cycle is encapsuled in a single
+inference step which combines induction conclusions with induction hypotheses into
+step formulas. For implicit induction, however, induction conclusions and hypotheses
+are not joined from the beginning. Instead, the conclusions are taken as goals and trans-
+formed until it becomes obvious which hypotheses will be useful for proving them;
+an idea which is just now coming into view of the researchers in the eld of explicit
+induction, cf. Protzen (1994). At this point, when hypotheses are to be applied to the
+transformed goals, their weights are needed to transfer ordering information from the
+original goals that generated the hypotheses to the transformed goals. Roughly speak-
+ing, the goals must store the weights of hypotheses for which they carry the proof work.
+(This still permits mutual induction.) A possible weight for a formula, which is so natu-
+ral that there are hardly any other weights in the literature on implicit induction, is (the
+value of a measure applied to) the formula itself. However, if we require the weight of a
+goal to be determined by the formula alone, then the chance to transform or delete this
+goal by means of some xed hypothesis (which must be smaller w.r.t. ‘< ’) gets smaller
+with each transformation of the goal into other goals which are smaller w.r.t. ‘< ’. Such
+transformation of goals is usually called simplication. While simplication of a goal is
+an important1 heuristic, the weight of the goal should not change during simplication.
+This can be stated more generally: For concrete inference rules it is very important that
+a goal can transmit its weight unchanged to the goals which it is transformed into. This
+would be generally impossible if the weight of a formula were restricted to be the for-
+mula itself. In our approach, therefore, each element ‘i’ of H [G is some syntactic
+construct from a set ‘SynCons’. Besides its formula ‘form(i)’, ‘i’ may have some ad-
+ditional contents describing its weight. Theoretically, one can consider each syntactic
+construct to be a pair made up of a formula expressing some property and a weight
+carrying the ordering information for avoiding non-terminating cycles in the use of in-
+ductive arguments. For the description of concrete inference systems within our abstract
+framework, however, it is more convenient not to restrict the syntactic constructs to this
+form because in some of these inference systems the formulas share some structure
+with the weights: E.g., in Bachmair (1988) the formulas are the weights, and in Becker
+(1994) the weights restrict the semantics of the formulas by the so-called reference
+compatibility. The distinction between formulas and syntactic constructs (i.e. formu-
+las augmented with weights) has the following advantages compared to other inference
+systems for implicit induction:
+Easier Design of Inference Rules: The design of concrete inference rules
+(e.g. as sub-rules of the abstract inference rules of x 5 below) becomes simpler
+because a transformation of the actual formula does not necessarily include an ap-
+propriate transformation of its weight (into a smaller one) and is thus not restricted
+by ordering constraints. For an illustrating example cf. xC.
+No Global Ordering Restriction: The design of inference steps becomes possible which
+transform the formula of a goal into another one which is bigger w.r.t. the induction
+ordering, cf. Gramlich (1989).
+High Quality of Ordering Information: The loss of ordering information during simpli-
+cation of a goal (as described above) is avoided, which (as far as we know) was
+rst described in Wirth (1991), exemplied by a failure of a formal induction proof
+1 when the induction ordering contains the evaluation ordering of the functional definitions of
+the specification, cf. Walther (1994)
+just caused by this loss of ordering information. There it is also sketched how to
+store the weight of the goal to avoid this information lossan idea which is also to
+be found in Becker (1993). For an illustrating example cf. xC.
+Focus on Relevant Ordering Information: Some induction proofs are only possible
+if we do not measure the whole formula (as often is the case when a clause is
+measured as the multi-set of all its literals) but only some sub-formula, subterm or
+variable of it. Focusing on certain variables is common for human beings (speaking
+of induction on variable x, e.g.). While for the mechanisms usually applied inside
+the induction rule of explicit induction focusing on certain variables (called mea-
+sured variables in Boyer & Moore (1979) and Walther (1994)) is standard, for fo-
+cusing in implicit induction a marking concept was introduced in Wirth (1991) due
+to practical necessity, exhibited by an example. The more general focusing that can
+be achieved with the syntactic constructs here, permits us not to measure those parts
+of formulas which (due to unsatisable ordering constraints) block the application
+of useful hypotheses, thereby permitting us to focus on the literals (or even terms,
+variables) that do get smaller on their way from the induction conclusion to the
+induction hypothesis. This permits additional applications of induction hypotheses.
+For an illustrating example cf. xC.
+All in all, the inference relation ‘ ` ’ should operate on prover states which are triples
+ (L;H;G)  of nite sets such that ‘L’ contains formulas (from ‘Form’) and ‘H’ and
+‘G’ contain syntactic constructs (from ‘SynCons’) whose formulas may be accessed via
+the function  form : SynCons ! Form . While prover states being trees of syntactic
+constructs may be more useful in practice, the simpler data structure presented here
+sufces for the purposes of this paper.
+3 Counterexamples and Validity
+For powerful inductive reasoning we must be able to restrict the test for the weight of a
+hypothesis to be smaller than the weight of a goal (which must be satised for the per-
+mission to apply the hypothesis to the goal) to the special case semantically described by
+their formulas. This can be achieved by considering only such instances of their weights
+that result from ground substitutions describing invalid instances of their formulas. A
+syntactic construct augmented with such a substitution providing extra information on
+the invalidity of its formula is called a counterexample. A syntactic construct whose for-
+mula is valid thus has no counterexamples. We assume the existence of some set ‘Info’
+describing this extra information and require the induction ordering ‘ . ’ to be a well-
+founded quasi-ordering not simply on  SynCons  but actually on  SynConsInfo .
+Furthermore, we require being a counterexample to be a well-dened basic property
+which must be either true or false for each (i;J) 2 SynConsInfo. Finally, in order to
+formally express the relation between counterexamples and our abstract notion of va-
+lidity, we require for each syntactic construct i 2 SynCons that ‘form(i)’ is valid iff
+there is no J 2 Info such that (i;J) is a counterexample.
+Let us consider this nal requirement for two instantiations of our abstract notion
+of validity of formulas:
+For the case of inductive validity of a formula ‘Γ’ given as indicated in x 1 (i.e. iff
+j=A Γτ for all inductive substitutions τ and all algebras A belonging to the class ‘K’ of
+those models which satisfy some additional property required for this kind of inductive
+validity) an appropriate way of satisfying the requirement is to dene a formula to be
+a clause, to dene a syntactic construct to be a pair (Γ; f ) of a formula Γ and a weight
+f (described in terms of the variables of the formula), to dene  form((Γ; f )) := Γ ,
+to dene the elements of ‘Info’ to be triples (τ;A ;κ) with A2K and κ valuating the
+remaining free variables of  Γτ  to elements of the universe (or carrier) of the algebra
+A , and then to say that  ((Γ; f );(τ;A ;κ)) 2 SynConsInfo is a counterexample  if
+τ is an inductive substitution and Ak evaluates  Γτ  to false.
+For the case of ground joinability (as dened in Becker (1993) or Becker (1994)),
+an appropriate way is to dene a formula to be either a clause C (where validity means
+joinability of all ground instances Cτ) or a pair of clauses (C;D) (where validity means
+joinability of all those ground instances Cτ for which ((C;D);τ) is reference com-
+patible), to dene syntactic constructs to be pairs of clauses, ‘form’ to be the iden-
+tity function, ‘Info’ to be the set of substitutions, and then to say that  ((C;D);τ) 2
+SynConsInfo is a counterexample  if τ is ground, ((C;D);τ) is reference com-
+patible, and  Cτ  is not joinable.
+Note that our notion of counterexample is a semantic one contrary to the no-
+tion of inconsistency proof used in Bachmair (1988). Generally speaking, an abstract
+frame inference system that is to be xed prior to the design of concrete inference rules
+has to be sufciently stable and therefore its notions should not rely on our changeable
+ideas on formal proofs.
+Finally note that even with our emphasis here on proving valid formulas positively
+(instead of being refutationally complete), the somewhat negative kind of argumenta-
+tion with counterexamples is handier, somewhat less operationally restricted, and more
+convenient for dening and proving properties of practically useful inference systems
+than the less local formal proofs used in the positive proving approach of Gramlich
+(1989) or Reddy (1990).
+4 Foundedness
+In this section we move from counterexamples to an even higher level of abstraction
+which allows the reader to forget about ‘ . ’, ‘Info’, and counterexamples from x 5 on.
+We use the notion of counterexamples to lift ‘ . ’ from SynConsInfo to subsets of
+‘SynCons’ by explaining what we mean by saying that a set H of hypotheses is founded
+on a set G of goals (written HyG) or by saying that a set G of goals is strictly founded
+on a set H of hypotheses (written G&H or H.G). Roughly speaking, HyG indicates
+that the hypotheses are known to be valid if a nal prover state (i.e. one with an empty
+set of goals) can be entailed. H.G indicates that the goals in G can be deleted by the
+application of smaller hypotheses from H.
+Definition 1 (Foundedness). Let M;H;G  SynCons. Let ‘&=y’ be a symbol for
+a single relation. Now M is said to be strict/quasi-founded on (H;G) (denoted by
+M &=y (H;G) ) if
+8ℵ 2M: 8I 2 Info:
+
+((ℵ; I) is a counterexample)
+)
+
+
+9i 2 H: 9J 2 Info:
+(
+((i;J) is a counterexample)
+| (ℵ; I)>(i;J)
+)
+} 9i 2 G: 9J 2 Info:
+(
+((i;J) is a counterexample)
+| (ℵ; I) & (i;J)
+)
+
+
+
+:
+M is said to be strictly founded on H (denoted by M&H) if M &=y (H; /0).
+M is said to be (quasi-) founded on G (denoted by MyG) if M &=y ( /0;G).
+Note that (for ℵ 2 SynCons) the expressive power of  fℵ§&=y : : :  is higher than
+that of  fℵ§& : : :  and  fℵ§y : : :  together, since  fℵ§&H } fℵ§yG  implies
+ fℵ§&=y (H;G) , but the converse does not hold in general.
+Corollary 1. Let H  SynCons. Now each of the following seven properties is logi-
+cally equivalent to validity of form[H]:
+(1) Hy /0
+(2) H& /0
+(3) H&H (due to
+wellfoundedness of ‘> ’)
+(4) 8GSynCons: HyG
+(5) 8GSynCons: H&G
+(6) 9GSynCons: ((form[G] is valid ) | HyG)
+(7) 9GSynCons: ((form[G] is valid ) | H&G)
+Corollary 2. Let H  G SynCons: Now: /0&HyG:
+Corollary 3. The following inclusion-properties hold:&y. &y&. y&
+&.
+Corollary 4.
+(1) M1 y N1 | M2 yN2 ) M1[M2 y N1[N2
+(2) M1 & N1 | M2&N2 ) M1[M2 & N1[N2
+(3) M1[M2 y N1 ) M1 y N1[N2
+(4) M1[M2 & N1 ) M1 & N1[N2
+(5) G& H ) G & HnG
+Note that the last item of the previous as well as the rst item of the following corollary
+rely on the wellfoundedness of ‘> ’.
+Corollary 5.
+(1) M &=y (H;G) | H yG[M ) M y G
+(2) M &=y (H;G) | G&N ) M & H[N
+Corollary 6. y is a quasi-ordering.
+Corollary 7.
+& is a transitive relation, which is neither irreexive nor generally reexive.
+Let 8i2N: Hi; Gi  SynCons: Then (by the wellfoundedness of > )
+8i2N: Hi&Hi+1 implies that form[Hi] must be valid. More generally,
+8i2N: Hi &=y (Hi+1;Gi+1) implies Hi y
+S
+j>i G j: Moreover, the restriction
+of & to those H  SynCons with invalid form[H] is a wellfounded ordering.
+5 The Frame Inference System
+We now come to four abstract inference rules dening ‘ ` ’. Thus, in this and the fol-
+lowing three sections, ‘ ` ’ will be restricted to application of one of the four following
+inference rules.
+In what follows, let Γ2 Form ; ℵ;j2 SynCons ; L, L0 be nite subsets of ‘Form’;
+and H, H 0, G, G0, and M be nite subsets of ‘SynCons’:
+Expansion: (L ;H ;G )
+(L ;H ;G[fj§ )
+Hypothesizing: (L ;H ;G )
+(L ;H [fℵ§ ;G )
+if L is invalid or fℵ§yH[G
+Acquisition: (L ;H ;G )
+(L[fΓ§ ;H ;G )
+if L is invalid or Γ is valid.
+Deletion: (L ;H ;G[fj§ )
+(L ;H ;G )
+if L is invalid or fj§&=y (H;G)
+The Expansion rule has two typical applications. The rst introduces sub-goals for a
+goal that is to be deleted, cf. the Transformation rule below. The second is the very dif-
+cult task of introducing new conjectures that are needed for the whole induction proof to
+work. The Hypothesizing rule makes a new hypothesis ‘ℵ’ available for the proof. Since
+forward reasoning on hypotheses is hardly required, it can usually be restricted to the
+following sub-rule (cf. Corollary 2) which just stores the goals. This storing is necessary
+indeed because these goals
+usually have been transformed when they become useful for inductive reasoning.
+Memorizing: (L ;H ;G[fℵ§ )
+(L ;H [fℵ§ ;G[fℵ§ )
+The Acquisition rule makes a new lemma ‘L’ available for the proof. The rule may be
+used to include axioms from the specication or formulas proved in other successful
+runs of the inference system or by any other sound prover which seems appropriate for
+some special purposes. The Deletion rule permits the deletion of a goal that is strictly
+founded on some hypotheses. While we cannot to go into details on how to nd this out,
+the Deletion rule especially permits us to remove a goal if its formula is implied by the
+formula of an instance of a hypothesis and this instance is smaller than the goal in our
+induction ordering. More frequently, however, is the Deletion rule used in the following
+combination with several preceding Expansion steps:
+Transformation: (L ;H ;G[fj§ )
+(L ;H ;G[M )
+if L is invalid or fj§&=y (H;G[M)
+The Transformation rule replaces a goal ‘j’ with a (possibly empty) set ‘M’ of sub-goals
+whose completeness may rely on hypotheses from ‘H’ or lemmas from ‘L’. It is the real
+working rule of the frame inference system. The intended design of concrete inference
+systems for specic kinds of validity mainly consists of nding corresponding sub-rules
+of the Transformation rule.
+In the following sections we will present two alternative approaches for explaining
+why the above inference system implements the ideas presented in the beginning of x 2.
+The rst is called analytic because it is based on an invariance property that holds
+for an initial state and is kept invariant by the analytic inference steps. The second is
+called backwards because it is based solely on an invariance property which holds for
+a nal (i.e. successful) state and is kept invariant when one applies the inference rules
+in backward direction.
+6 The Analytic Approach
+The analytic approach was rst formalized in Wirth (1991). In x 2 we indicated that if
+‘ ` ’ permits sound steps only, then from  ( /0; /0;G) ` (L;H; /0)  we may conclude that
+‘G’ is valid. This idea is formalized in:
+Definition 2 (Soundness of Inference Step).
+The inference step  (L;H;G) ` (L0;H 0;G0)  is called sound if validity of ‘form[G0]’
+implies validity of ‘form[G]’.
+Corollary 8. If all inference steps in  (L;H;G) ` (L0;H 0; /0)  are sound, then ‘form[G]’
+is valid.
+Besides the soundness of an inference step described above, it is also useful to know
+about invariant properties of a prover state because they can be used to justify why an
+inference step must be sound. The following such property is most natural, stating that
+all lemmas are valid and that the hypotheses are founded on the goals, i.e. that for each
+counterexample for a hypothesis there is a smaller counterexample for a goal.
+Definition 3 (Correctness of Prover State).
+A prover state (L;H;G) is called correct if L is valid and HyG:
+While the rst part of this denition should be immediately clear,  HyG  states that
+the goals carry the proof work (which has to be done for the hypotheses) in such a way
+that the transformation of a goal may make use of hypotheses which are smaller (w.r.t.
+our induction ordering < ) than the goal itself since minimal counterexamples for goals
+cannot be deleted that way. While correctness of prover states obviously formulates
+this idea, it is not the only possible way to do it:
+Definition 4 (Weak Correctness of Prover State).
+A prover state (L;H;G) is called weakly correct if
+L is valid and (H.G ) ( form[H] is valid)) .
+By Corollary 3 and 1(3) we get:
+Corollary 9. If a prover state is correct, then it is weakly correct, too.
+As announced above, correctness of prover states really permits us to conclude that the
+inference steps of our frame inference system are sound:
+Lemma 1 (Soundness of Inference Steps).
+If (L;H;G) is a [weakly] correct prover state, then an inference step
+ (L;H;G) ` (L0;H 0;G0)  (with the above rules) is sound.
+(For a proof cf. xD.) Furthermore, correctness holds indeed for an initial state and is
+kept invariant by the frame inference system:
+As a corollary of Corollaries 2 and 9 we get:
+Corollary 10 (Initial State is Correct).
+Let L be valid and H  G: Now (L;H;G) is [weakly] correct.
+Lemma 2 (Invariance of Correctness of Prover States).
+If  (L;H;G) ` (L0;H 0;G0)  (with the above rules) and the prover state
+(L;H;G) is [weakly] correct, then ‘(L0;H 0;G0)’ is [weakly] correct, too.
+(For a proof cf. xD.) Finally, correctness of prover states as an invariance property is
+not only useful to conclude soundness of single steps, but also globally useful, which
+can be seen in the following corollary stating that the lemmas and hypotheses gathered
+in a nal prover state are valid:
+As a corollary of Corollary 2 and 1(1), and 9 we get:
+Corollary 11 (For Final State: Correctness means Validity).
+(L0;H 0; /0) is [weakly] correct iff  L0[ form[H 0]  is valid.
+7 The Backwards Approach
+The backwards approach was rst formalized in Becker (1994).
+Definition 5 (Inductiveness and Inductive Soundness).
+A prover state (L;H;G) is called inductive if ((L is valid) ) H.G):
+The inference step  (L;H;G) ` (L0;H 0;G0)  is called inductively sound2 if induc-
+tiveness of (L0;H 0;G0) implies inductiveness of (L;H;G).
+2 In Becker (1994) this is called preservation of (inductive) counterexamples, but we cannot use
+this name here because the notion of “counterexample” is different there.
+Inductiveness is a technical notion abstracted from inference systems similar to the
+frame inference system of x 5. Roughly speaking, inductiveness of a state means that an
+inductive proof of it is possible in the sense that a nal (i.e. successful) prover state can
+be entailed. This is because the goals can be deleted, since there are either false lemmas
+(ex falso quodlibet) or false hypotheses below all invalid goals.
+Inductive soundness can replace soundness of prover steps, by the following argu-
+mentation, which (just like soundness) requires to think ‘ ` ’ backwards, starting from
+a nal prover state (L0;H 0; /0), which must be inductive. Now, if the steps deriving a
+nal state are inductively sound, then all states involved must be inductive. Finally,
+inductiveness of an initial state implies validity of the initial set of goals.
+As a corollary of Corollary 2 we get:
+Corollary 12 (Final State Must Be Inductive). (L0;H 0; /0) is inductive.
+By Corollary 1(5) for the forward and by Corollary 2, 3 and 1(3) for the backwards
+direction we get:
+Corollary 13 (For Initial State: Inductiveness means Validity of Goals). Let L be
+valid and H  G . Now, ‘form[G]’ is valid iff (L;H;G) is inductive.
+By the Corollaries 12 and 13 we conclude:
+Corollary 14. If all inference steps in  ( /0; /0;G) ` (L0;H 0; /0)  are inductively sound,
+then ‘form[G]’ is valid.
+Unlike soundness, inductive soundness also captures the basic idea of our frame infer-
+ence system which for the analytic approach had to be expressed by some correctness
+property, namely the idea that transformations of goals may make use of hypotheses
+which are smaller than the goal itself since minimal counterexamples for goals can
+never be deleted that way. Note, however, that being not inductive is no invariance
+property of ‘ ` ’ (like correctness is) because one never knows whether it holds for
+some state or not: If all steps are inductively sound, we only know that the property of
+being not inductive is never removed by an inference step, but this does not mean that
+it ever holds. Especially for successful proofs it never does, cf. Corollary 12. Instead,
+inductiveness (i.e. being inductive) is an invariance property of ‘ a ’.
+Since inductive soundness captures the basic idea of our frame inference system,
+we get (cf. xD for a proof):
+Lemma 3 (Inductive Soundness of Inference Steps).
+An inference step with the above rules is inductively sound.
+8 Discussion of the Two Approaches
+While the relation between the two approaches of the previous two sections is not sim-
+ple, both seem to be equally useful in capturing the ideas presented in the beginning of
+x 2 as well as in explaining the soundness of our inference system: The following is a
+corollary of 8, 1, 10, & 2, as well as a corollary of 14 & 3:
+Corollary 15 (Soundness of “ ( /0; /0;G) ` (L0;H 0; /0) ”).
+If  ( /0; /0;G) ` (L0;H 0; /0)  (with the above rules), then  form[G]  is valid.
+The analytic approach even permits a slightly stronger conclusion via Corollary 11:
+Corollary 16. If  ( /0; /0;G) ` (L0;H 0; /0)  (with the above rules), then
+ form[G][L0[ form[H 0]  is valid.
+Considering the design of concrete inference systems by presenting sub-rules of the
+frame inference rules, another advantage of the analytic approach could be that the
+additional assumption of correctness of the states could be essential for the sub-rule
+relationship.
+Finally, we compare the analytic and the backwards approach independently of
+our frame inference system. Here, we consider one approach to be superior to the other,
+when it permits additional successful proofs, whereas we do not respect the fact that one
+notion may be more appropriate for effective concretion than the other. Invariance of
+correctness cannot be superior to invariance of weak correctness or to inductive sound-
+ness, since a step with the former and without one of the latter properties starts from an
+invalid set of goals and thus the required soundness of inference steps does not permit
+additional proofs. Invariance of weak correctness cannot be superior to invariance of
+correctness (or else to inductive soundness), since a step with the former and without
+one of the latter properties leads to (or else starts from) an invalid set of goals and thus
+the required soundness of inference steps does not permit additional proofs. Finally,
+inductive soundness is very unlikely to be superior to invariance of [weak] correctness,
+since a step with the former and without one of the latter properties leads to an invalid
+set of lemmas or hypotheses. Moreover, if we do not consider all proofs but only the
+existence of proofs, then (on our non-effective level!) all approaches are equivalent:
+Using the Deletion rule jGj -times we get:
+Corollary 17 (Completeness of “ ( /0; /0;G) ` (L0;H 0; /0) ”).
+If  form[G]  is valid, then  ( /0; /0;G) ` ( /0; /0; /0)  (with the above rules).
+Note, however, that (as far as we know) for the construction of effective concrete in-
+ference systems based on rules which are no (effective) sub-rules of the rules of our
+frame inference system, each of the three approaches (i.e.: soundness and invariance of
+correctness; soundness and invariance of weak correctness; inductive soundness) may
+be superior to each of the others. The same may hold for generalizing them to inference
+systems on generalized prover states. E.g., for
+Parallelization: (L;H;G[G
+0)
+(L;H;G) (L;H;G0)
+it is obvious how to generalize inductive soundness, whereas the two other approaches
+do not seem to permit an appropriate generalization based on local properties of triples
+(L;H;G).
+9 The “Switched” Frame Inference System
+In x 2 we pointed out that we have to avoid non-terminating reasoning cycles
+between hypotheses and goals. In our formalization we achieved this by founding
+a hypothesis ‘ℵ’ on smaller or equal goals from ‘G’, i.e.  fℵ§yG  (cf. the condition
+of the Hypothesizing rule), and by applying to a goal ‘j’ only strictly
+smaller hypotheses from ‘H’, i.e.  fj§&H  (cf. the condition of the Deletion rule).
+From a cyclic reasoning  HyG&H  we immediately get  H&H  and  G&G  by
+Corollary 3, and then ‘form[H[G]’ is valid by Corollary 1(3), which means that the rea-
+soning cycle is sound. Now an alternative way to achieve this is the following: Instead of
+doing our quasi-decreasing step ‘y’ from hypotheses to goals  HyG  and our strictly
+decreasing step ‘&’ from goals to hypotheses  G&H , we could go from hypotheses
+to goals with a strict and from goals to hypotheses with a quasi step. More precisely:
+The condition of the Hypothesizing rule would be changed into  if L is invalid or
+fℵ§&=y (G;H) , and the condition of the Deletion rule is changed into  if L is
+invalid or fj§yG[H . The Expansion and the Acquisition rules remain unchanged.
+A Memorizing sub-rule cannot exist and the Transformation rule must be composed of
+several Expansions, an optional following Hypothesizing, and then a Deletion into one
+of the following forms:
+Memorizing Switched Transformation: (L ;H ;G[fℵ§ )
+(L ;H [fℵ§ ;G[M )
+if L is invalid or fℵ§ &=y (G[M;H)
+Simple Switched Transformation: (L ;H ;G[fℵ§ )
+(L ;H ;G[M )
+if L is invalid or fℵ§yG[M[H
+When we then also switch ‘y’ and ‘&’ (i.e. replace one by the other) in the denitions
+of correctness and inductiveness and when we require an initial state additionally
+to have an empty set of hypotheses, then we get the analogous results for the soundness
+of our switched frame inference system. The reasons why we prefer the non-switched
+version presented here are the following:
+From a user’s point of view, the non-switched version may be more convenient,
+because hypotheses become available earlier and easier via the Memorizing rule, which
+does not exist for the switched version.
+From the inference system designer’s point of view, the non-switched version is
+more convenient, due to the following argumentation: With both the switched and the
+non-switched version of the inference system, a proof can be thought to consist mainly
+of steps of the kind that a goal ‘ℵ’ may become available as a hypothesis and is then
+transformed into sub-goals ‘M’. For the non-switched case this can be achieved by an
+application of the Memorizing and then of the Transformation rule. For the switched
+inference system this is just a Memorizing Switched Transformation. One shortcom-
+ing of the switched version results from the fact that the transformation of a goal into
+sub-goals has to be strictly decreasing instead of quasi-decreasing (as required for the
+non-switched case). The design of quasi-decreasing transformations, however, is eas-
+ier than that of strictly decreasing ones, for the same reason as exhibited in x 2 (Easier
+Design of Inference Rules) and as illustrated in xC. Therefore, the non-switched infer-
+ence system allows for small grain inference steps which in the switched system must
+be replaced with a very big inference step bridging over all quasi-decreasing steps until
+a strictly decreasing step is reached. Another shortcoming of the Memorizing Switched
+Transformation is that each simplication step has to decrease the weight of the goal
+strictly, i.e. that the possibility to apply some xed smaller hypothesis gets more and
+more unlikely with each simplication step, cf. x 2 (High Quality of Ordering Infor-
+mation). If we, however, use the Simple Switched Transformation instead, then the
+goal is not made available as a hypothesis. Thus, in order not to lose the possibility to
+apply hypotheses, simplication should not be done via inference steps of the switched
+inference system, but incorporated into the hypotheses applicability test. With the non-
+switched version, however, the full inference power of the whole inference system can
+be homogeneously used for simplication.
+On the other hand, the comparison of weights for an applicability test of a hypo-
+thesis to a goal is simpler in the switched inference system because there the weight of
+the hypothesis is often equal to the weight of the goal, in which case the test is success-
+ful. While this does not allow for additional proofs with the switched inference system,
+it may allow to avoid possibly complicated reasoning on ordering properties.
+10 Classifying Other Work
+In this section we give an incomplete sketch of the literature on inference systems for
+implicit induction and briey classify these inference systems according to our presen-
+tation here.
+In Bachmair (1988) our sets of hypotheses and goals are not separated yet. A disad-
+vantage of this is that a success of a proof due to an empty set of goals is more difcult
+to detect and that understanding the inference system gets more difcult without the
+concepts of hypotheses and goals. The missing separation into hypotheses and goals
+also requires both the foundedness step from hypotheses to goals (as in our switched
+system of x 9) and the step from goals to hypotheses (as in the non-switched system
+of x 5) to be strictly decreasing (i.e. ‘&’), which means a combination of the disad-
+vantages of both the switched and the non-switched approach. The soundness of a
+proof in Bachmair’s inference system results from the fact that a fair derivation se-
+quence Mi `Mi+1 (i 2 N) always satises MiyMi+1 and has a sub-sequence such
+that 8i2N: M ji&M ji+1 ; which means that ‘form[M0]’ must be valid, cf. Corollary 7, 6,
+and 1(6). The foundedness relations are dened by use of sizes of inconsistency proofs
+for the equations in Mi instead of the counterexamples themselves. As already men-
+tioned in x 3, it is in general undesirable to base the notions of a frame inference system
+on formal proofs instead of semantic notions because the latter impose no operational
+restrictions and are likely to change less frequently. One of the operational restrictions
+in Bachmair (1988) is the conuence requirement for the specifying set of rules. That
+this restriction can be removed was noted in Gramlich (1989) by dening the founded-
+ness relations by use of the sizes of positive proofs measured via the applications of
+equations from Mi.
+The important separation between hypotheses and goals was introduced in Reddy
+(1990), where a frame inference system similar to our switched one in x 9 is used, the ar-
+gumentation for soundness follows the analytic approach using operationally restricted
+versions of soundness and (switched) correctness, and the foundedness notions are still
+the operationally restricted ones of Gramlich (1989). In Wirth (1991) this operational
+restriction is overcome by using a semantic foundedness notion.
+In Fraus (1993) we have found the rst3 argumentation for soundness following
+the backwards approach. While the inference system already is of the (superior) non-
+switched style, the foundedness relations are still operationally restricted (by measuring
+positive proofs in the natural deduction calculus). In Becker (1994) we nally nd the
+backwards approach based on semantic foundedness notions as presented here.
+11 Conclusion
+We tried to give an intuitive understanding of proofs by mathematical induction, exhib-
+ited the essential requirements, and provided a simple data structure for prover states.
+To enable a clear understanding of the functions of inference systems for proofs by
+mathematical induction, we introduced the concept of foundedness which also has
+applications beyond this paper. We presented an abstract frame inference system, elab-
+orated two approaches for explaining why this system is sound, and argued why we
+prefer our frame inference system to the switched one. We classied argumentation for
+soundness occurring in the literature according to our taxonomy. When practically ap-
+propriate concrete inference systems are designed as systems of sub-rules of the rules of
+the presented frame inference system, soundness of these systems is given immediately.
+While we did not present a concrete inference system in this paper, the example in xC
+should be sufcient to make our intention obvious.
+A Safe Steps and Failure Recognition
+As already mentioned in x 1, the ability of an inductive theorem prover to detect invalid
+formulas is most important under a practical aspect, especially for inductive theorem
+proving because of the important role generalizations play in it, where an invalid for-
+mula can result from a valid input theorem due to over-generalization. Thus, suppose
+we have some failure predicate ‘FAIL’ dened on sets of formulas which is correct in
+the sense that 8F2FAIL: (F is invalid). Note that this failure predicate is dened on
+sets of formulas for operational reasons, namely in order to be able to recognize that
+3 This actually goes back to an unpublished manuscript of Alfons Geser (1988) at the University
+of Passau entitled “An inductive proof method based on narrowing”.
+one formula contradicts another one; whereas for a theoretical treatment it would be
+sufcient to dene it on single formulas since one of those formulas must be invalid in
+a consistent specication; but to nd out which formula it is is undecidable in general.
+We dene a prover state (L;H;G) to be a failure state if
+(L[ form[H [G]) 2 FAIL:
+Note that we have included L and H (instead of just testing G) because we want to be
+able to detect an invalid lemma or hypothesis when it has just been generated and do not
+want to have to wait until it will have been harmfully applied to a goal. One is tempted to
+argue that, in case of [weak] correctness of a prover state, an invalid hypothesis implies
+the existence of an invalid goal, but this argument again does not respect the operational
+aspect.
+Now, when an inductive theorem prover has realized to be in a failure state, the
+following questions arise: How far do we have to backtrack to reach a state with valid
+formulas? Have some of our original input formulas been invalid? For answering these
+questions the following notion is useful:
+An inference step  (L;H;G) ` (L0;H 0;G0)  is called safe if
+validity of  L[ form[H [G]  implies validity of  L0[ form[H 0[G0] .
+It is not reasonable to require all possible steps of an inductive theorem prover to be
+safe, since this property is undecidable for generalization steps which play a major role
+in inductive theorem proving. For concrete inference systems, however, it is usually
+possible to give interesting sufcient conditions for the application of an inference rule
+to be safe. Now, when the prover has found out that a prover state (L00;H 00;G00) is a
+failure state and all steps in (L0;H 0;G0) ` (L00;H 00;G00) are known to be safe, then
+(L0;H 0;G0) must be a failure state, too. To recover from this failure we may iterate the
+following:
+If this (L0;H 0;G0) is the original input state (with L0 known to be valid and H 0G0),
+then we have refuted our original set of goals G0 and should stop proving. Otherwise the
+step that yielded (L0;H 0;G0), say (L;H;G) ` (L0;H 0;G0) , must be carefully inspected: If
+it is known to be safe we backtrack this step and reiterate. Otherwise it might be possible
+to nd a (minimal) subset of L00[form[H 00[G00] for which the failure predicate FAIL is
+still known to hold and which also is (implied by) a subset of L[form[H [G]; in which
+case we also backtrack this step and reiterate. Otherwise, when (L;H;G) ` (L0;H 0;G0)
+is likely to be an unsafe step which might have caused the failure, we backtrack this
+step and may try to go on with a hopefully safe inference step instead.
+B Refutational Completeness
+For achieving refutational completeness we need a wellfounded ordering >refut on -
+nite sets of syntactic constructs. To be able to refute initial failure states we need the
+following property.
+Definition 6 (FAIL-Completeness).
+The failure predicate FAIL is complete w.r.t. ‘ ` ’ and ‘>refut’ if for all nite sets
+L  Form; H;G  SynCons; if form[G] is invalid, but (L;H;G) is not a failure state,
+then there are nite sets L0, H 0, G0 with (L;H;G) +` (L0;H 0;G0) and G>refutG0.
+By wellfoundedness of ‘>refut’ we immediately get:
+Corollary 18 (Refutational Completeness).
+Let L  Form; H;G  SynCons be nite sets. Assume either that ‘ ` ’ is sound or
+that L is valid, HG, and ‘ ` ’ is inductively sound. Furthermore assume FAIL to be
+complete w.r.t. ‘ ` ’ and ‘>refut’. Now, if form[G] is invalid, then there is some failure
+state (L0;H 0;G0) with (L;H;G) ` (L0;H 0;G0) .
+Definition 7 (Fairness).
+Let β be an ordinal number with β  ω . Let Li  Form; Hi;Gi  SynCons
+for all i  1+β. Consider the derivation (Li;Hi;Gi) ` (Li+1;Hi+1;Gi+1) (i  β).
+It is called fair if βω | (Lb;Hb;Gb) 62dom( ` ) (i.e. no inference
+rule can be applied to (Lb;Hb;Gb)) or 9i1+β: Gi = /0 or 8i1+β:(
+(form[Gi] invalid | (Li;Hi;Gi) not a failure state) ) 9 j1+β: Gi>refutG j
+)
+:
+Corollary 19. Let β be an ordinal number with β  ω . Let Li  Form; Hi;Gi
+ SynCons be nite sets for all i  1+β. Let (Li;Hi;Gi) ` (Li+1;Hi+1;Gi+1) (i  β)
+be a fair derivation. Assume either that ‘ ` ’ is sound or that L0 is valid, H0G0, and
+‘ ` ’ is inductively sound. Furthermore assume FAIL to be complete w.r.t. ‘ ` ’ and
+‘>refut’. Now, if form[G] is invalid, there must exist some i 1+β such that (Li;Hi;Gi)
+is a failure state.
+C An Example
+In this section we give an example to illustrate our abstract argumentation on the ben-
+et of separating weights from formulas and of using non-switched inference systems.
+Consider the following specication of a member-predicate mbp(x; l) testing for x
+occurring in the list l, a delete-function dl(x; l) deleting all occurrences of x in the
+list l, a remove-copies-function bc(x; l) removing repeated occurrences of x in the list
+l, and a brushing function bb(k; l) removing repeated occurrences in the list l for all
+elements of the list k:
+mbp(x;nil) = falce
+mbp(x;conc(y; l))=dbee if x=y
+mbp(x;conc(y; l))=mbp(x; l) if x6=y
+dl(x;nil) =nil
+dl(x;conc(y; l)) =dl(x; l) if x=y
+dl(x;conc(y; l)) =conc(y;dl(x; l)) if x 6=y
+bc(x;nil) =nil
+bc(x;conc(y; l)) =conc(y;dl(x; l)) if x=y
+bc(x;conc(y; l)) =conc(y; bc(x; l)) if x6=y
+bb(nil; l) = l
+bb(conc(x;k); l)=bb(k; bc(x; l))
+Suppose we want to show the following theorem (;  denotes logical or):
+(0) bb(k;conc(x; l))=conc(x;bb(k; l)); mbp(x; l)= dbee
+saying that either x occurs in l or the wave-front conc(x; : : :) can be rippled out. Apply-
+ing a covering set of substitutions to (0) we get a base case for fk 7! nil§ (which is
+trivial after two rewriting steps applying the rst rule for bb) and the following case for
+fk 7! conc(y;k)§:
+(1) bb(conc(y;k);conc(x; l))=conc(x;bb(conc(y;k); l)); mbp(x; l)= dbee
+After two rewriting steps applying the second rule for bb we get:
+(2) bb(k; bc(y;conc(x; l)))=conc(x;bb(k; bc(y; l))); mbp(x; l)= dbee
+A rewriting step applying the third rule for bc in the left-hand side of the rst equation
+yields
+(3) x=y; bb(k;conc(x; bc(y; l)))=conc(x;bb(k; bc(y; l))); mbp(x; l)= dbee
+as well as the goal
+(G) x 6=y; bb(k; bc(y;conc(x; l)))=conc(x;bb(k; bc(y; l))); mbp(x; l)= dbee
+whose proof we do not treat here.
+Applying our induction hypothesis (0) instantiated by f l 7! bc(y; l)§, i.e.
+(I) bb(k;conc(x; bc(y; l)))=conc(x;bb(k; bc(y; l))); mbp(x; bc(y; l))=dbee
+to (3) we get:
+(4) mbp(x; bc(y; l)) 6=dbee;
+x=y; bb(k;conc(x; bc(y; l)))=conc(x;bb(k; bc(y; l))); mbp(x; l)=dbee
+Rewriting with the lemma mbp(x; bc(y; l))=mbp(x; l) nally yields a tautology.
+For this induction proof to be sound we have to nd a wellfounded ordering in
+which the instance (I) of our hypotheses is (strictly) smaller than the goal (3) to which
+it is applied. When we consider the weight of a formula to be the formula itself (consid-
+ered as the multi-set of (its literals considered as the multi-sets of) its terms), this cannot
+be achieved with a simplication ordering, whereas the evaluation ordering of the speci-
+cation is a sub-relation of a simplication ordering, namely the lexicographic path
+ordering given by the following precedence on function symbols: mbp % dbee; falce;
+bb % bc % dl  conc: The rst thing we can do is to use weight pointers to avoid the
+deterioration of ordering information on the way from (1) to (3): Initially the weight
+pointer of (0) points to (0) itself, i.e. the weight of this formula is this formula itself.
+The same holds for (1) because when applying the substitution the weight is instanti-
+ated as well as the formula. During the simplication steps yielding (2) and then (3)
+the weight remains unchanged, i.e. the weight of the formula (3) is still the formula (1).
+Now (I) is indeed strictly smaller than (1) in the lexicographic path ordering given by:
+bb conc; bb % bc; bbmbp: Thus the high quality of ordering information preserved
+by separating the formula from its weight when simplifying (1) into (3) now permits
+us to justify the application of (I) to (3) with a simplication ordering, i.e. we can now
+realize that our (partial) proof is sound. This success, however, is not very convincing
+because the last pair in the above precedence (i.e. bbmbp) is not all motivated by the
+evaluation ordering of our specication. After all, our example proof is nothing but a
+structural induction and thus should work out without such a sophisticated ordering. If
+we have a closer look on the derivation from (0) (or (1)) to (3), then we notice that
+the rst literal as usual does get smaller in the evaluation ordering on the way from our
+original goal (over the goal the hypothesis is applied to) to the instantiated hypothesis
+(I), but the second literal does not. Thus, if we focus on the rst literal by setting our
+weight to it, then we only have to show that the rst literal of (I) is smaller than the rst
+literal of (1) which does not require the unmotivated precedence of bb mbp: Going
+one step further, setting the weight of (0) to be the variable k, the weight of (1) and (3)
+becomes conc(y;k) which is trivially greater than the weight k of (I).
+The proof of (G) gets easier when we have the following lemma:
+(L) dl(x; l)= l; mbp(x; l)= dbee
+We will now use this lemma to show why the design of inference rules gets easier when
+we separate the weight of a formula from the formula itself and when we do not use the
+switched inference system of x 9 instead of the non-switched one of x 5. Suppose we
+want to apply (L) in the proof of a formula
+(10) Γ[dl(x; l)] containing dl(x; l) as a subterm.
+Rewriting with (L) yields the following two sub-goals:
+(11) mbp(x; l)= dbee; Γ[l] (12) mbp(x; l) 6= dbee; Γ[dl(x; l)]
+When we restrict the weight of a formula to be the formula itself, then the sub-goals
+(11) and (12) must be smaller than (10) (without focusing on Γ[dl(x; l)]). When we
+choose the switched inference system and want to make (10) available as an induction
+hypotheses, then the weights of the sub-goals (11) and (12) must be strictly smaller than
+the weight (10) in a wellfounded ordering. For (11) this might be achieved again by the
+unmotivated trick of extending the precedence on function symbols with dlmbp (ad-
+ditionally to mbp % dbee ); for (12), however, this does not seem to be reasonably pos-
+sible in general. Thus the design of an inference rule applying (L) in the intended form
+to (10) must be very difcult to develop without separated weights or for a switched
+frame inference system, because the step from (10) to (12) must be replaced with a
+very big inference step bridging over all steps following in the proof of (12) until all
+branches of this proof have reached a smaller weight. Separating weights from formu-
+las and using a non-switched frame inference system, however, the design of such an
+inference rule is very easy: One just sets the weight of (11) and (12) to the the original
+weight of formula (10).
+D The Proofs
+Proof of Lemma 1: The only rule whose soundness is non-trivial is the Deletion rule
+for form[G] being valid. By Corollary 1(2) we get G& /0: Thus by Corollary 5(2) and
+the condition of the rule we get fj§&H: By Corollary 9 (L;H;G[fj§) is weakly
+correct. Thus (since G[fj§&H due to Corollary 4(2)) we can conclude that form[H]
+must be valid. By Corollary 1(7) this means that form(j) is valid, i.e. that form[G[fj§]
+is valid.
+Proof of Lemma 2: Assume L to be valid. We show invariance of weak correctness rst:
+Expansion: Assume G[fj§&H: By Corollary 4(4) we get G&H: Now form[H] must
+be valid due to weak correctness of (L;H;G). Hypothesizing: Assume G&H[fℵ§:
+By Lemma 3 we get G&H: By weak correctness of (L;H;G), form[H] must be valid,
+which by Corollary 1(7) means that form[G[H] is valid. By the condition of the rule
+and Corollary 1(6), we know that form(ℵ) is valid. Therefore form[H[fℵ§] is valid,
+too. Acquisition: Trivial. Deletion: Assume G&H. By Lemma 3 we get G[fj§&H:
+By weak correctness of (L;H;G[fj§), form[H] must be valid.
+Finally we show invariance of correctness: Expansion: By Corollary 4(3).
+Hypothesizing: By Corollary 6 we get GyG. If we assume HyG, we get H[GyG
+by Corollary 4(1). By the condition of the rule and Corollary 6 this means fℵ§yG:
+By our assumption we now get H[fℵ§yG via Corollary 4(1). Acquisition: Trivial.
+Deletion: Assume HyG[fj§: By Corollary 5(1) from the condition of the rule we get
+fj§yG: By Corollary 6 we have GyG and then by Corollary 4(1) G[fj§yG: By
+the assumption and Corollary 6 this means HyG:
+Proof of Lemma 3: Expansion: By Corollary 4(4). Hypothesizing: By Corollary 6 we
+get HyH and then from the condition of the rule H[fℵ§yH[G by Corollary 4(1). If
+we now assume G&H[fℵ§ , we get G&H[G by Corollary 2, and then by corollaries
+4(5) and 4(4) G&H: Acquisition: Trivial. Deletion: Assume G&H: By the condition
+of the rule and Corollary 5(2) we get fj§&H: Thus by our assumption and Corol-
+lary 4(2) we get G[fj§&H:
+Acknowledgements: We would like to thank J¤urgen Avenhaus, Alfons Geser, Bernhard
+Gramlich, Ulrich K¤uhler, and Martin Protzen for useful hints.
+References
+Leo Bachmair (1988). Proof by Consistency in Equational Theories. 3 rd IEEE Symposium on
+Logic In Computer Sci., pp. 228–233, IEEE Press.
+Klaus Becker (1993). Proving Ground Confluence and Inductive Validity in Constructor Based
+Equational Specifications. TAPSOFT 1993, LNCS 668, pp. 46–60, Springer.
+Klaus Becker (1994). Rewrite Operationalization of Clausal Specifications with Predefined
+Structures. PhD thesis, Fachbereich Informatik, Universita¨t Kaiserslautern.
+Wolfgang Bibel, E. Eder (1993). Methods and Calculi for Deduction. In: Dov M. Gabbay, C.
+J. Hogger, J. A. Robinson (eds.). Handbook of Logic in Artificial Intelligence and Logic
+Programming. Vol. 1, pp. 67–182, Clarendon.
+Robert S. Boyer, J S. Moore (1979). A Computational Logic. Academic Press.
+Ulrich Fraus (1993). A Calculus for Conditional Inductive Theorem Proving. 3 rd CTRS 1992,
+LNCS 656, pp. 357–362, Springer.
+Bernhard Gramlich (1989). Inductive Theorem Proving Using Refined Unfailing Completion
+Techniques. SEKI-Report SR–89–14, FB Informatik, Univ. Kaiserslautern(SFB). Short ver-
+sion in: 9th European Conf. on Artificial Intelligence (ECAI 1990), pp. 314–319, Pitman.
+Martin Protzen (1994). Lazy Generation of Induction Hypotheses. 12 th CADE 1994, LNAI 814,
+pp. 42–56, Springer.
+Uday S. Reddy (1990). Term Rewriting Induction. 10 th CADE 1990, LNAI 449, pp. 162–177,
+Springer.
+Christoph Walther (1994). Mathematical Induction. In: Handbook of Logic in Artificial Intelli-
+gence and Logic Programming. eds. cf. above. Vol. 2, pp. 127–228, Clarendon.
+Claus-Peter Wirth (1991). Inductive Theorem Proving in Theories specified by Positive/Negative
+Conditional Equations. Diplomarbeit, Fachbereich Informatik, Universita¨t Kaiserslautern.
+Claus-Peter Wirth, Bernhard Gramlich (1993). A Constructor-Based Approach for
+Positive/Negative-Conditional Equational Specifications. 3rd CTRS 1992, LNCS 656,
+pp. 198–212, Springer. Revised and extended version in J. Symbolic Computation (1994)
+17, pp. 51–90, Academic Press.
+Claus-Peter Wirth, Bernhard Gramlich (1994). On Notions of Inductive Validity for First-Order
+Equational Clauses. 12th CADE 1994, LNAI 814, pp. 162–176, Springer.
