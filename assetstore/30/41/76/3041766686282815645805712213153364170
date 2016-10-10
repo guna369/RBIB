@@ -1,0 +1,1643 @@
+Formal Certification of Code-Based Cryptographic Proofs
+Gilles Barthe1,2 Benjamin Gre´goire1,3 Santiago Zanella1,3
+1 Microsoft Research - INRIA Joint Centre, France
+2 IMDEA Software, Madrid, Spain 3 INRIA Sophia Antipolis - Me´diterrane´e, France
+Gilles.Barthe@imdea.org {Benjamin.Gregoire,Santiago.Zanella}@sophia.inria.fr
+Abstract
+As cryptographic proofs have become essentially unverifiable,
+cryptographers have argued in favor of developing techniques that
+help tame the complexity of their proofs. Game-based techniques
+provide a popular approach in which proofs are structured as se-
+quences of games, and in which proof steps establish the validity
+of transitions between successive games. Code-based techniques
+form an instance of this approach that takes a code-centric view of
+games, and that relies on programming language theory to justify
+proof steps. While code-based techniques contribute to formalize
+the security statements precisely and to carry out proofs system-
+atically, typical proofs are so long and involved that formal veri-
+fication is necessary to achieve a high degree of confidence. We
+present CertiCrypt, a framework that enables the machine-checked
+construction and verification of code-based proofs. CertiCrypt is
+built upon the general-purpose proof assistant Coq, and draws on
+many areas, including probability, complexity, algebra, and seman-
+tics of programming languages. CertiCrypt provides certified tools
+to reason about the equivalence of probabilistic programs, includ-
+ing a relational Hoare logic, a theory of observational equivalence,
+verified program transformations, and game-based techniques such
+as reasoning about failure events. The usefulness of CertiCrypt
+is demonstrated through various examples, including a proof of
+semantic security of OAEP (with a bound that improves upon ex-
+isting published results), and a proof of existential unforgeability
+of FDH signatures. Our work provides a first yet significant step
+towards Halevi’s ambitious programme of providing tool support
+for cryptographic proofs.
+Categories and Subject Descriptors D.3.1 [Programming Lan-
+guages]: Formal Definitions and Theory; D.3.4 [Programming
+Languages]: Processors—Compilers, Optimization; F.3.1 [Logics
+and Meanings of Programs]: Specifying and Verifying and Reason-
+ing about Programs; F.3.2 [Logics and Meanings of Programs]:
+Semantics of Programming Languages—Operational semantics,
+Denotational semantics, Program analysis.
+General Terms Languages, Security, Verification
+1. Introduction
+Provable security [33], whose origins can be traced back to the
+pioneering work of Goldwasser and Micali [18], advocates a math-
+Copyright c© ACM, 2009. This is the author’s version of the work. It is posted
+here by permission of ACM for your personal use. Not for redistribution.
+The definitive version was published in Proceedings of the 36th annual ACM
+SIGPLAN-SIGACT symposium on Principles of programming languages, pp. 90-101.
+http://doi.acm.org/10.1145/1480881.1480894
+ematical approach based on complexity theory in which the goals
+and requirements of cryptosystems are specified precisely, and
+where security proofs are carried out rigorously and make all un-
+derlying assumptions explicit. In a typical provable security set-
+ting, one reasons about effective adversaries, modeled as arbitrary
+probabilistic polynomial-time Turing machines, and about their
+probability of thwarting a security objective, e.g. secrecy. In a sim-
+ilar fashion, security assumptions about cryptographic primitives
+bound the probability of polynomial algorithms to solve hard prob-
+lems, e.g. computing discrete logarithms. The security proof is per-
+formed by reduction by showing that the existence of an effective
+adversary with a certain advantage in breaking security implies the
+existence of an effective algorithm contradicting the security as-
+sumptions. Although the adoption of provable security has signif-
+icantly enhanced confidence in security proofs, several published
+proofs have been found incorrect (cf. [30]), and the cryptographic
+community is increasingly wary that the field may be approaching
+a crisis of rigor [8, 19].
+The game-playing technique [8, 19, 31] is a general method to
+structure and unify cryptographic proofs, thus making them less
+error-prone. Its central idea is to view the interaction between an
+adversary and the cryptosystem as a game, and to study transfor-
+mations that preserve security. In a typical game-based proof, one
+considers transitions of the form G,A→hG′, A′, where G and G′
+are games, A and A′ are events, and h is a monotonic function such
+that PrG[A] ≤ h(PrG′ [A′]). One can obtain an upper bound for
+the probability of an event A0 in some initial game G0 by succes-
+sively refining G0, A0 into a game/event pair Gn, An,
+G0, A0 →
+h1 G1, A1 → · · · →
+hn Gn, An
+and then bounding the probability of event An in Gn.
+Code-based techniques [8] is an instance of the game-playing
+technique whose distinguishing feature is to take a code-centric
+view of games, security hypotheses and computational assump-
+tions, that are expressed using (probabilistic, imperative, polyno-
+mial) programs. Under this view, game transformations become
+program transformations, and can be justified rigorously by seman-
+tic means; in particular, many transformations can be viewed as
+common program optimizations, and are justified by proving that
+the original and transformed programs are observationally equiva-
+lent. Although code-based proofs are easier to verify, they go far
+beyond established theories of program equivalence and exhibit a
+surprisingly rich and broad set of reasoning principles that draws
+on program verification, algebraic reasoning, and probability and
+complexity theory. Thus, despite the beneficial effect of their un-
+derlying framework, code-based proofs remain inherently complex.
+Whereas Bellare and Rogaway [8] already observed that code-
+based proofs could be more easily amenable to machine-checking,
+Halevi [19] argued that formal verification techniques should be
+used to improve trust in cryptographic proofs, and set up a pro-
+1
+gramme for building a tool that could be used by the cryptographic
+community to mechanize their proofs.
+This article reports on a first yet significant step towards
+Halevi’s programme. We describe CertiCrypt, a framework to
+construct machine-checked code-based proofs in the Coq proof
+assistant [34], supporting:
+Faithful and rigorous encoding of games. In order to be readily
+accessible to cryptographers, we have chosen a formalism that
+is commonly used to describe games. Concretely, the lowest
+layer of CertiCrypt is the formalization of pWHILE, an imper-
+ative programming language with random assignments, struc-
+tured datatypes, and procedure calls. We provide a deep and
+dependently-typed embedding of the syntax; thanks to depen-
+dent types, the typability of pWHILE programs is obtained for
+free. We also provide a small-step operational semantics using
+the measure monad of Audebaud and Paulin [4]. The seman-
+tics is instrumented to calculate the cost of running programs;
+this offers the means to define complexity classes, and in par-
+ticular to define formally the notion of effective (probabilistic
+polynomial-time) adversary. In addition, we also model non-
+standard features, such as policies on variable accesses and pro-
+cedure calls, and use them to capture many assumptions left in-
+formal in cryptographic proofs.
+Exact security. Many security proofs establish an asymptotic be-
+havior for adversaries and show that the advantage of any ef-
+fective adversary is negligible w.r.t. a security parameter (which
+typically determines the length of keys or messages). However,
+the cryptographic community is increasingly focused on exact
+security, a much more useful result since it gives hints as to
+how to choose system parameters in practice to satisfy a secu-
+rity guarantee. The goal of exact security is to provide concrete
+bounds both for the advantage of the adversary and for its ex-
+ecution time. CertiCrypt supports the former (but for the time
+being, not the latter).
+Full and independently verifiable proofs. CertiCrypt adopts a for-
+mal semanticist perspective and goes beyond Halevi’s vision
+in two respects. First, it provides a unified framework to carry
+out full proofs; all intermediate steps of reasoning can be jus-
+tified formally, including complex side conditions that justify
+the correctness of transformations (about probabilities, groups,
+polynomials, etc). Second, one notable feature of Coq, and thus
+CertiCrypt, is to support independent verifiability of proofs,
+which is an important motivation behind game-based proofs.
+More concretely, every proof is represented by a proof object,
+that can be checked automatically by a (small and trustworthy)
+proof checking engine. In order to trust a cryptographic proof,
+one only needs to check its statement, and not its details.
+Powerful and automated reasoning methods. CertiCrypt formal-
+izes a Relational Hoare Logic and a theory of observational
+equivalence, and uses them as stepping stones to support the
+main tools of code-based reasoning through certified, reflec-
+tive tactics. In particular, CertiCrypt shows that many trans-
+formations used in code-based proofs, including common op-
+timizations, are semantics-preserving. One of its specific con-
+tributions is to prove formally the correctness of a variant of
+lazy sampling, which is used ubiquitously in cryptographic
+proofs. In addition, CertiCrypt supports methods based on fail-
+ure events (the so-called fundamental lemma of game-playing).
+We have successfully conducted nontrivial case studies that vali-
+date our design, show the feasibility of formally verifying crypto-
+graphic proofs, and confirm the plausibility of Halevi’s programme.
+Contents The purpose of this article is to provide an overview
+of the CertiCrypt project, and to stir further interest in machine-
+checked cryptographic proofs. Additional details on design choices,
+on formalizing the semantics of probabilistic programs, and on case
+studies, will be provided elsewhere. In consequence, the paper is
+organized as follows: we begin in Section 2 with two introductory
+examples of game-based proofs, namely the semantic security of
+ElGamal encryption, and the PRP/PRF switching lemma; in Sec-
+tion 3 we introduce the language we use to represent games and
+its semantics, and we discuss the notions of complexity and ter-
+mination; in Section ?? we present a probabilistic relational Hoare
+logic that forms the core of our framework; in Sections 5 and 6 we
+overview the formulation and automation of game transformations
+in CertiCrypt; in Section 7 we report on two significant case stud-
+ies we have formalized in CertiCrypt: existential unforgeability of
+the FDH signature scheme, and semantic security of OAEP; we
+finish with a discussion of related work and concluding remarks.
+2. Basic examples
+This section illustrates the principles of CertiCrypt on two basic
+examples of game-based proofs: semantic security of ElGamal
+encryption and the PRP/PRF switching lemma. The language used
+to represent games is formally introduced in the next section. We
+begin with some basic definitions.
+The Random Oracle Model is a model of cryptography exten-
+sively used in security proofs in which some cryptographic primi-
+tives, e.g. hash functions, are assumed to be indistinguishable from
+random functions (despite the fact that no real function can imple-
+ment a truly random function [13]). Such primitives are modeled by
+oracles that return random values in response to queries. The sole
+condition is that queries are answered consistently: if some value
+is queried twice, the same response must be given. Our formalism
+captures the notion of random oracle using stateful procedures that
+store queries and their results, e.g.
+OracleO(x) : if x 6∈ dom(L) then y $← {0, 1}η ; L← (x, y) :: L;
+return L[x]
+An asymmetric encryption scheme is composed of three algo-
+rithms: key generation KG(η), where η is the security parameter;
+encryption Enc(pk,m) where pk is a public key and m a plain-
+text; and decryption—not relevant here. An asymmetric encryption
+scheme is said to be semantically secure (equivalently, IND-CPA
+secure) if it is infeasible to gain significant information about a
+plaintext given only a corresponding ciphertext and the public key.
+This is formally defined using the following game, whereA andA′
+are allowed to share state via global variables and thus are regarded
+as a single adaptive adversary:
+Game IND-CPA :
+(sk, pk)← KG(η);
+(m0,m1)← A(pk);
+b $← {0, 1}; γ ← Enc(pk,mb);
+b′ ← A′(pk, γ)
+The game first generates a new key pair and gives the public
+key to the adversary, who returns two plaintexts m0,m1 of his
+choice. Then, the challenger tosses a fair coin b and gives the
+encryption of mb back to the adversary, whose goal is to guess
+which message has been encrypted. The scheme is IND-CPA if
+for every effective adversary A,A′, |PrIND-CPA[b = b′] − 12 | is
+negligible in the security parameter, i.e. the adversary cannot do
+much better than a blind guess. Formally, a function ν :N → R is
+negligible iff ∀ c. ∃ nc. ∀ n. n ≥ nc ⇒ |ν(n)| ≤ n−c.
+2.1 The ElGamal encryption scheme
+ElGamal is a widely used asymmetric encryption scheme, and an
+emblematic example of game-based proofs, as it embodies many
+of the techniques described in Sections ?? and 5. The proof fol-
+2
+≃d
+≃d
+Game ElGamal2 :
+x $← Zq; y $← Zq ;
+(m0,m1)← A(gx);
+z $← Zq; ζ ← gz;
+b′ ← A′(gx, gy , ζ);
+b $← {0, 1};
+d← b = b′
+≃d
+(4)
+(5)
+Game ElGamal :
+(x, α)← KG();
+(m0,m1)← A(α);
+b $← {0, 1};
+(β, ζ)← Enc(α,mb);
+b′ ← A′(α, β, ζ);
+d← b = b′
+(1)
+≃d
+Game ElGamal0 :
+x $← Zq; y $← Zq ;
+(m0,m1)← A(gx);
+b $← {0, 1};
+ζ ← gxy ×mb;
+b′ ← A′(gx, gy , ζ);
+d← b = b′
+(2)
+Game ElGamal1 :
+x $← Zq; y $← Zq ;
+(m0,m1)← A(gx);
+b $← {0, 1};
+z $← Zq; ζ ← gz ×mb;
+b′ ← A′(gx, gy , ζ);
+d← b = b′
+Lemma B PPT : PPT B.
+Proof. PPT tac. Qed.
+Lemma B wf : WFAdv B.
+Proof. ... Qed.
+Game DDH1 :
+x $← Zq ;
+y $← Zq ;
+z $← Zq ;
+d← B(gx, gy, gz)
+inline l KG.
+inline l Enc.
+ep.
+deadcode.
+swap.
+eqobs in.
+inline r B.
+ep.
+deadcode.
+eqobs in.
+inline r B.
+ep.
+deadcode.
+swap.
+eqobs in.
+swap.
+eqobs hd 4.
+eqobs tl 2.
+apply mult pad.
+Adversary B(α, β, γ) :
+(m0, m1)← A(α);
+b $← {0, 1};
+b′ ← A′(α, β, γ ×mb);
+return b = b′
+Game DDH0 :
+x $← Zq ;
+y $← Zq;
+d← B(gx, gy, gxy)
+Figure 1. Code-based proof of ElGamal semantic security
+lows [31]; all games are defined in Fig. 1. Given a cyclic group of
+order q, and a generator g, we define:1
+• Key generation: KG() def= x $← Zq; return (x, gx)
+• Encryption: Enc(α,m) def= y $← Zq; return (gy, αy ×m)
+ElGamal is IND-CPA secure under the Decisional Diffie-Hellman
+(DDH) assumption, which states that it is hard to distinguish be-
+tween triples of the form (gx, gy, gxy) and (gx, gy, gz) where x,
+y, z are uniformly sampled in Zq. In our setting, DDH is formu-
+lated precisely by stating that for any polynomial-time and well-
+formed adversary B, |PrDDH0 [d] − PrDDH1 [d]| is negligible in the
+security parameter. Figure 1 presents a high level view of the proof:
+the square boxes represent games, whereas the rounded boxes rep-
+resent proof sketches of the transitions between games; the tactics
+that appear in these boxes hopefully have self-explanatory names,
+but are explained in more detail in Section 5. The rounded grey
+boxes represent proof sketches of side conditions that guarantee
+that the DDH assumption is correctly applied. The proof proceeds
+by constructing an adversary B against DDH such that the distri-
+bution of b = b′ (i.e. d) after running the IND-CPA game ElGamal
+is exactly the same as the distribution of d after running DDH0.
+Furthermore we show that the probability of d being true in DDH1
+is 1
+2
+for the same adversary B. The proof is summarized by the
+following equations:
+|PrElGamal[b = b
+′]− 1
+2
+| = |PrElGamal0 [d]−
+1
+2
+| (1)
+= |PrDDH0 [d]−
+1
+2
+| (2)
+= |PrDDH0 [d]− PrElGamal2 [d]| (3)
+= |PrDDH0 [d]− PrElGamal1 [d]| (4)
+= |PrDDH0 [d]− PrDDH1 [d]| (5)
+1 The security parameter, implicit in this presentation, determines this cyclic
+group by indexing a family of groups where the DDH problem is believed
+intractable.
+Equation (1) is justified because ElGamal and ElGamal0 induce the
+same distribution on d (ElGamal ≃d ElGamal0). To prove this, we
+inline the calls to KG and Enc, and then perform expression prop-
+agation and dead code elimination (ep, deadcode). At this point
+we are left with two almost identical games, except the sampling
+of y is done later in one game than in the other. The tactic swap
+is used to hoist instructions whenever is possible in order to obtain
+a common prefix, and allows us to hoist the sampling of y to the
+right place. We conclude by applying eqobs in that decides ob-
+servational equivalence of a program with itself. Equations (2) and
+(5) are obtained similarly, while (3) holds because b′ is independent
+from the sampling of b in ElGamal2. Finally, to prove equation (4)
+we begin by removing the common part of the two games with
+the exception of the instruction z $← Zq (eqobs hd, eqobs tl).
+We then apply an algebraic property of cyclic groups (mult pad):
+when multiplying a uniformly distributed element of the group by
+another element, the result is uniformly distributed. This allows to
+prove that z $← Zq ; ζ ← gz ×mb and z $← Zq; ζ ← gz induce
+the same distribution on ζ.
+The proof concludes by applying the DDH assumption. We
+prove that the adversary B is strict probabilistic polynomial-time
+and well-formed (under the assumption that A and A′ are so). The
+proof of the former condition is automated in CertiCrypt.
+2.2 The PRP/PRF switching lemma
+In cryptographic proofs, particularly those dealing with blockci-
+phers, it is often convenient to replace a pseudo-random permuta-
+tion (PRP) by a pseudo-random function (PRF). The PRP/PRF
+switching lemma establishes that such a replacement does not
+change significantly the advantage of an effective adversary. In
+a code-based setting, the Switching Lemma states that
+|PrGPRP [d]− PrGPRF [d]| ≤
+q(q − 1)
+2η+1
+3
+≃d
+≃d ≃L
+GameGYPRF :
+Y ← [ ];
+while |Y | < q do
+y $← {0, 1}η ; Y ← y :: Y
+Y ∗ ← Y ;
+L← [ ]; d← A()
+OracleO(x) :
+if x 6∈ dom(L) then
+if 0 < |Y | then
+y ← hd(Y ); Y ← tl(Y )
+else y $← {0, 1}η ;
+L← (x, y) :: L
+return L[x]
+GameGbadPRP :
+bad← false;
+L← [ ]; d← A()
+OracleO(x) :
+if x 6∈ dom(L) then
+y $← {0, 1}η ;
+if y ∈ img(L) then
+bad← true;
+while y ∈ img(L) do
+y $← {0, 1}η
+L← (x, y) :: L
+return L[x]
+GameGPRP :
+L← [ ]; d← A()
+OracleO(x) :
+if x 6∈ dom(L) then
+y $← {0, 1}η ;
+while y ∈ img(L) do
+y $← {0, 1}η
+L← (x, y) :: L
+return L[x]
+GameGbadPRF :
+bad← false;
+L← [ ]; d← A()
+OracleO(x) :
+if x 6∈ dom(L) then
+y $← {0, 1}η ;
+if y ∈ img(L) then
+bad← true
+L← (x, y) :: L
+return L[x]
+GameGPRF :
+L← [ ]; d← A()
+OracleO(x) :
+if x 6∈ dom(L) then
+y $← {0, 1}η ;
+L← (x, y) :: L
+return L[x]
+By lazy sampling
+|PrGbad
+PRP
+[d]− PrGbad
+PRF
+[d]| ≤ PrGbad
+PRF
+[bad]
+By Fundamental Lemma
+Figure 2. Code-based proof of the PRP/PRF switching lemma
+where games GPRP and GPRF give the adversary access to an
+oracle that represents a random permutation and a random function
+respectively, and where q bounds the number of oracle queries
+made by A.
+The proof is split in two parts: the first part formalizes the
+intuition that the probability of the adversary outputting a given
+value is the same if a PRP is replaced by a PRF and no collisions
+are observed; it uses the Fundamental Lemma of game-playing
+(Lemma 2 in Sec. 6). The second part provides an upper bound
+to the probability of a collision; it uses lazy sampling (Lemma 1 in
+Sec. 5.2).
+Figure 2 provides a high-level view of the proof. To apply the
+Fundamental Lemma, we introduce in the game GPRF a variable
+bad that is set to true whenever a collision is found; we reformu-
+late GPRP accordingly to be syntactically equal until bad is set.
+Using deadcode to eliminate the variable bad, we show that the
+resulting games GbadPRF and GbadPRP are just semantics preserving re-
+formulations of the games GPRF and GPRP respectively. Then, we
+apply the Fundamental Lemma to conclude that the difference in
+the probability of d = true between the two games is at most the
+probability of bad being set to true in game GbadPRF.
+We then prove that the probability of bad being set to true in
+game GbadPRF is upper bounded by the probability of an element
+appearing twice in the range of L in GPRF. The proof uses the
+Relational Hoare Logic and Lemma (≤JK) of Section ?? with the
+following postcondition: if bad is set in GbadPRF then some element
+appears twice in the range of L in GPRF. Next, we introduce a
+game GYPRF where the answer to the first q queries to the oracle are
+sampled at the beginning of the game and stored in a list Y . Using
+lazy sampling, we prove by induction on q that the game GPRF is
+equivalent to GYPRF w.r.t L. Finally, we bound the probability of
+having a collision in L in GYPRF. To that end, we prove that any
+collision in L is also present in Y ∗ provided the length of L is
+less than or equal to q (we use Y ∗ as a ghost variable to store the
+value of Y after being initialized). We conclude by bounding the
+probability of sampling some value twice in Y by q(q−1)
+2η+1
+.
+3. Games as programs
+The essence of code-based cryptographic proofs is to express in a
+unified semantic framework games, hypotheses, and results. This
+semanticist perspective allows a precise specification of the inter-
+action between the adversary and the challenger in a game, and
+to readily answer questions as: Which oracles does the adversary
+have access to? Can the adversary read/write this variable? How
+many queries the adversary can make to a given oracle? What is
+the length of a bitstring returned by the adversary? Can the adver-
+sary repeat a query? Furthermore, other notions such as probabilis-
+tic polynomial-time complexity or termination fit naturally in the
+same framework and complete the specification of adversaries and
+games.
+3.1 The pWHILE language
+Games are formalized in pWHILE, a probabilistic imperative lan-
+guage with procedure calls. Given a set V of variable identifiers,
+a set P of procedure identifiers, a set E of expressions, and a set
+D of distribution expressions, the set of commands can be defined
+inductively by the clauses:
+I ::= V ← E assignment
+| V $← D random sampling
+| if E then C else C conditional
+| while E do C while loop
+| V ← P(E , . . . , E) procedure call
+C ::= nil nop
+| I; C sequence
+Rather than adopting the above definition, we impose that programs
+in pWHILE are typed. Thus, x← e is well-formed only if the types
+of x and e coincide, and if e then c1 else c2 is well-formed only if
+e is a boolean expression. In practice, we assume that variables
+and values are typed, and define a dependently typed syntax of
+programs. An immediate benefit of using dependent types is that
+the type system of Coq ensures for free the well-typedness of
+expressions and commands. Although the formalization is carefully
+designed for being extensible w.r.t. user-defined types and operators
+(and we do exploit this in practice), it is sufficient for the purpose
+of this paper to consider an instance in which values are booleans,
+bitstrings, natural numbers, pairs, lists, and elements of a cyclic
+group. Similarly, we instantiate D so that values can be uniformly
+sampled from the set of booleans, natural intervals of the form
+[0..n], and bitstrings of a certain length. It is important to note that
+the formalization of expressions is not restricted to many-sorted
+algebra: we make a critical use of dependent types to record the
+length of bitstrings. This is used e.g. in the definition of the IND-
+CPA game for OAEP in Sec. 7.2 to constrain the adversary to return
+two bitstrings of equal length.
+Definition 1 (Program). A program consists of a command and an
+environment, which maps a procedure identifier to its declaration,
+consisting of its formal parameters, its body, and a return expres-
+sion (we use an explicit return when writing games, though),
+decl
+def
+= {params : list V; body : C; re : E} .
+The environment specifies the type of the parameters and the return
+expression, so that procedure calls are always well-typed.
+4
+In a typical formalization, the environment will map procedures
+to closed commands, with the exception of the adversaries whose
+code is unknown, and thus modeled by variables of type C. This is a
+standard trick to deal with uninterpreted functions in a deep embed-
+ding. In the remainder of this section we assume an environment E
+implicitly given.
+In the rest of this paper we let ci range over C; xi over V; ei
+over E ; di over D; and Gi over programs. The operator ⊕ denotes
+the bitwise exclusive or on bitstrings of equal length, and ‖ the
+concatenation of two bitstrings.
+3.2 Operational semantics
+Programs in pWHILE are given a small-step semantics using the
+measure monad M(X), whose type constructor is defined as
+M(X) def= (X → [0, 1]) → [0, 1]
+and whose operators unit and bind are defined as
+unit : X →M(X) def= λx. λf. f x
+bind : M(X)→ (X →M(Y ))→M(Y )
+def
+= λµ. λM. λf. µ(λ x. M x f)
+The monad M(X) was proposed by Audebaud and Paulin [4] as a
+variant of the expectation monad used by Ramsey and Pfeffer [27],
+and builds on earlier work by Kozen [22]. The formalization of the
+semantics heavily relies on Paulin’s axiomatization in Coq of the
+[0, 1] real interval—for our purposes, it has been necessary to add
+division to the library.
+The semantics of commands and expressions are defined rel-
+ative to a given memory, i.e. a mapping from variables to val-
+ues. We let M denote the set of memories. Expressions are de-
+terministic; their semantics is standard and given by a function
+J·Kexpr, that evaluates an expression in a given memory and re-
+turns a value. The semantics of distribution expressions is given
+by a function J·Kdistr. For a distribution expression d of type
+T , we have that JdKdistr : M → M(X), where X is the
+interpretation of type T . For instance, in the previous section
+we have used {0, 1}η to denote the uniform distribution on bit-
+strings of length η (the security parameter), formally, we have
+J{0, 1}ηKdistr
+def
+= λm f.
+P
+bs∈{0,1}η
+1
+2η
+f(bs). Thanks to depen-
+dent types, the semantics of expressions and distribution expres-
+sions is total. In the following, and whenever there is no confusion,
+we will drop the subscripts in J·Kexpr and J·Kdistr.
+The semantics of commands relates a deterministic state to a
+(sub-)probability distribution over deterministic states and uses a
+frame stack to deal with procedure calls. Formally, a deterministic
+state is a triple consisting of the current command c : C, a memory
+m : M, and a frame stack F : list frame. We let S denote the
+set of deterministic states. One step execution J·K1 : S → M(S)
+is defined by the rules of Fig. 3. In the figure, we use a  b as
+a notation for JaK1 = b and loc and glob to project memories on
+local and global variables respectively.
+We briefly comment on the transition rules for calling a proce-
+dure (3rd rule) and returning from a call (2nd rule). Upon a call,
+a new frame is appended to the stack, containing the destination
+variable, the return expression of the called procedure, the contin-
+uation to the call, and the local memory of the caller. The state re-
+sulting from the call contains the body of the called procedure, the
+global part of the memory, a local memory initialized to map the
+formal parameters to the value of the actual parameters just before
+the call, and the updated stack. When returning from a call with a
+non-empty stack, the top frame is popped, the return expression is
+evaluated and the resulting value is assigned to the destination vari-
+able after previously restoring the local memory of the caller; the
+continuation taken from the frame becomes the current command.
+If the stack is empty when returning from a call, the execution of the
+program terminates and the final state is embedded into the monad
+using the unit operator.
+Using the monadic constructions, one can define an n-step exe-
+cution function J·Kn:
+JsK0
+def
+= unit s JsKn+1
+def
+= bind JsKn J·K
+1
+Finally, the denotation of a command c in an initial memory m is
+defined to be the (limit) distribution of reachable final memories:
+JcK m : M(M) def= λf. sup {J(c,m, [ ])Kn f |final | n ∈ N}
+where f |final :S → [0, 1] is the function that when applied to a state
+(c,m, F ) gives f(m) if it is a final state and 0 otherwise. Since the
+sequence J(c,m, [ ])Kn f |final is increasing and upper bounded by
+1, this least upper bound always exists and corresponds to the limit
+of the sequence.
+We have shown that the semantics is discrete, we use this to
+apply a variant of Fubini’s theorem for proving the rules [R-Comp]
+and [R-Trans] in the next section.
+Computing probabilities The advantage of using this monadic
+semantics is that, if we use an arbitrary function as a continua-
+tion to the denotation of a program, what we get (for free) as a
+result is its expected value w.r.t. the distribution of final memo-
+ries. In particular, we can compute the probability of an event A
+in the distribution obtained after executing a command c in an
+initial memory m by measuring its characteristic function 1A:
+Prc,m[A]
+def
+= JcK m 1A. For instance, one can verify that the de-
+notation of x $← [0..1]; y $← [0..1] in the memory m is
+λf. 1
+4
+(f(m{0, 0/x, y}) + f(m{0, 1/x, y})
++f(m{1, 0/x, y}) + f(m{1, 1/x, y}))
+and conclude that the probability of the event x ≤ y after executing
+the command above is 3
+4
+.
+3.3 Probabilistic polynomial-time programs
+In general, cryptographic proofs reason about effective adversaries,
+which can only use a polynomially bounded number of resources.
+The complexity notion that captures this intuition, and which is
+pervasive in cryptographic proofs, is that of strict probabilistic
+polynomial-time. Concretely, a program is said to be strict proba-
+bilistic polynomial-time (PPT) whenever there exists a polynomial
+bound (on some security parameter η) on the cost of each possi-
+ble execution, regardless of the outcome of its coin tosses. Other-
+wise said, a probabilistic program is PPT whenever the same pro-
+gram, seen as a non-deterministic program, terminates and the cost
+of each possible run is bounded by a polynomial.
+Termination and efficiency are orthogonal. Consider, for in-
+stance, the following two programs:
+b← true;while b do b $← {0, 1}
+b $← {0, 1}; if b then while true do nil
+The former terminates with probability 1 (it terminates within n
+iterations with probability 1 − 2−n), but may take an arbitrarily
+large number of iterations to terminate. The latter terminates with
+probability 1
+2
+, but when it does, it takes only a constant time. We
+deal with termination and efficiency separately.
+Definition 2 (Termination). The probability that a program c ter-
+minates starting from an initial memory m is JcK m 1 true. We say
+that a program c is absolutely terminating, and note it Lossless(c),
+iff it terminates with probability 1 in any initial memory.
+To deal with efficiency, we non-intrusively instrument the se-
+mantics of our language to compute the cost of running a pro-
+gram. The instrumented semantics ranges over M(M × N) in-
+stead of simply M(M). We recall that our semantics is implicitly
+5
+(nil,m, [ ])  unit (nil,m, [ ])
+(nil,m, (x, e, c, l) :: F )  unit (c, (l,m.glob){JeK m/x}, F )
+(x← p(~e); c,m, F )  unit (E(p).body, (∅{J~eK m/E(p).params},m.glob), (x,E(p).re, c,m.loc) :: F )
+(if e then c1 else c2; c,m, F )  unit (c1; c,m, F ) if JeK m = true
+(if e then c1 else c2; c,m, F )  unit (c2; c,m, F ) if JeK m = false
+(while e do c; c′,m, F )  unit (c; while e do c; c′,m, F ) if JeK m = true
+(while e do c; c′,m, F )  unit (c′,m, F ) if JeK m = false
+(x← e; c,m, F )  unit (c,m{JeK m/x}, F )
+(x $← d; c,m, F )  bind (JdK m)(λv. unit (c,m{v/x}, F ))
+Figure 3. Probabilistic semantics of pWHILE programs
+parametrized by a security parameter η, on which we base our no-
+tion of complexity.
+Definition 3 (Polynomially bounded distribution). We say that a
+distribution µ : M(M × N) is (p, q)-bounded, where p and q
+are polynomials, whenever for every (m,n) occurring with non-
+zero probability in µ, the size of every value in the memory m is
+bounded by p(η) and the cost n is bounded by q(η). This notion
+is formally defined by means of the range predicate introduced in
+Sec. ??.
+Definition 4 (Strict probabilistic polynomial-time program). A
+program c is strict probabilistic polynomial-time (PPT) iff it ter-
+minates absolutely, and there exist polynomial transformers F,G
+such that for every (p, q)-bounded distribution µ, the distribution
+(bind µ JcK) is (F (p), q +G(p))-bounded.
+We can recover some intuition by taking µ = unit (m, 0) in the
+above definition. In this case, we may paraphrase the condition as
+follows: if the size of values in m is bounded by some polynomial
+p, and an execution of the program in m terminates with non-zero
+probability in memory m′, then the size of values in m′ is bounded
+by the polynomial F (p), and the cost of the execution is bounded
+by the polynomial G(p). It is in this latter polynomial that bounds
+the cost of executing the program that we are ultimately interested.
+The increased complexity in the definition is required for proving
+compositionality results (e.g. the sequential composition of two
+PPT programs results in a PPT program).
+Although our formalizations of termination and efficiency rely
+on semantic definitions, it is not necessary for users to reason di-
+rectly about the semantics of a program to prove it meets those
+definitions. CertiCrypt implements a certified algorithm showing
+that every program without loops and recursive calls is lossless.2
+CertiCrypt also provides another algorithm that, together with the
+first, establishes that a program is PPT provided that, additionally,
+the program does not contain expressions that might generate val-
+ues of superpolynomial size or take a superpolynomial time when
+evaluated in a polynomially bounded memory.
+3.4 Adversaries
+In order to reason formally about security, we make explicit which
+variables and procedures are accessible to adversaries, and provide
+a simple analysis to check whether an adversary respects its policy.
+Given a set of procedure identifiers O (the procedures that may
+be called by the adversary), and sets of global variables GA (those
+2 It is of course a weak result in terms of termination of probabilistic
+programs, but nevertheless sufficient as regards cryptographic applications.
+Extending our formalization to a certified termination analysis for loops is
+interesting, but orthogonal to our main goals, and left for future work.
+I ⊢ nil :I
+I ⊢ i :I ′ I ′ ⊢ c :O
+I ⊢ i; c :O
+Writable(x) fv(e) ⊆ I
+I ⊢ x← e :I ∪ {x}
+Writable(x) fv(d) ⊆ I
+I ⊢ x $← d :I ∪ {x}
+fv(e) ⊆ I I ⊢ ci :Oi i = 1, 2
+I ⊢ if e then c1 else c2 :O1∩O2
+fv(e) ⊆ I I ⊢ c :I
+I ⊢ while e do c :I
+fv(~e) ⊆ I Writable(x) o ∈ O
+I ⊢ x← o(~e) :I ∪ {x}
+fv(~e) ⊆ I Writable(x) A 6∈ O ⊢wf A
+I ⊢ x← A(~e) :I ∪ {x}
+GA ∪ Gro ∪AE .params ⊢ AE .body :O fv(AE .re) ⊆ O
+⊢wf A
+Writable(x) def= Local(x) ∨ x ∈ GA AE
+def
+= E(A).
+Figure 4. Static analysis for well-formedness of adversaries
+that can be read and written by the adversary) and Gro (those that
+the adversary can only read), we say that an adversary A is well-
+formed in an environment E if the judgment ⊢wf A can be derived
+using the rules in Fig. 4. These rules guarantee that each time a
+variable is written by the adversary, the adversary has the right to
+do so; and that each time a variable is read by the adversary, it is
+either a global variable in GA ∪ Gro or a local variable previously
+initialized. A well-formed adversary is free to call oracles, but any
+other procedure it calls must be a well-formed adversary itself.
+Additional constraints may be imposed on adversaries. For ex-
+ample, exact security proofs usually impose an upper bound to the
+number of calls adversaries can make to a given oracle, whereas
+for some properties such as IND-CCA2 there are some restrictions
+on the parameters with which the oracles may be called. Likewise,
+some proofs impose extra conditions such as forbidding repeated or
+malformed queries. These kinds of properties can be formalized us-
+ing lists that record the oracle calls, and verifying as postcondition
+that the calls were legitimate.
+4. Relational Hoare Logic
+Shoup [31] classifies proof steps into three categories: transitions
+based on indistinguishability—which typically involve applying a
+security hypothesis, e.g. the DDH assumption—; transitions based
+on failure events—which typically amount to bound the probability
+of bad, as in the Switching Lemma—; and bridging steps—which
+correspond to replacing or reorganizing code in a way that is not
+observable by adversaries. In some circumstances, a bridging tran-
+sition fromG1 toG2 may replace a program fragment P by another
+fragment P ′ observationally equivalent to P . In general, however,
+6
+P and P ′ are only observationally equivalent in the context where
+the replacement is done. Such transitions are supported through a
+relational Hoare logic, that generalizes observational equivalence
+through preconditions and postconditions which we use to charac-
+terize the context where the replacement is valid. Besides, we use
+relational Hoare logic to establish (in)equalities between probabili-
+ties of two events, as shown by the lemmas (=JK) and (≤JK) below,
+and to establish program invariants, e.g. in the proof of the Switch-
+ing Lemma in Sec. 2.2.
+4.1 Probabilistic Relational Hoare Logic (pRHL)
+Our logic pRHL elaborates on and extends to probabilistic pro-
+grams Benton’s Relational Hoare Logic [9]. Benton’s logic uses
+judgments of the form ⊢ G1 ∼ G2 : Ψ ⇒ Φ, and relates the eval-
+uation of a program G1 to the evaluation of a program G2 w.r.t.
+a precondition Ψ and a postcondition Φ, both defined as relations
+on deterministic states. Such a judgment states that for any initial
+memories m1 and m2 satisfying the precondition m1 Ψm2, if the
+evaluations of G1 in m1 and G2 in m2 terminate with final mem-
+ories m′1 and m′2 respectively, then m′1 Φ m′2 holds. In a proba-
+bilistic setting, the evaluation of a program w.r.t. an initial memory
+yields a (sub-)distribution. In order to give a meaning to the above
+judgment, one therefore needs to lift relations over memories into
+relations over distributions.3 We follow early work on probabilistic
+bisimulations [21]. The lifting to distributions of a unary predicate
+P and of a binary relation Φ are respectively defined as
+range P µ def= ∀f. (∀a. P a⇒ f a = 0) ⇒ µ f = 0
+µ1 ∼Φ µ2
+def
+= ∃µ. π1(µ) = µ1 ∧ π2(µ) = µ2 ∧ range Φ µ
+where the projections of µ are defined as
+π1(µ)
+def
+= bind µ (λ(x, y).unit x) π2(µ)
+def
+= bind µ (λ(x, y).unit y)
+This way of lifting relations over memories to relations over dis-
+tributions is a generalization to arbitrary relations of the defini-
+tion of Sabelfeld and Sands [29]. Their definition applies only to
+PERs, whereas our definition applies to arbitrary relations. Never-
+theless, both definitions coincide for PERs as established by Jons-
+son, Larsen and Yi [21].
+Definition 5 (pRHL judgments). Programs G1 and G2 are equiv-
+alent w.r.t. precondition Ψ and postcondition Φ iff
+ G1 ∼ G2 : Ψ⇒ Φ
+def
+=
+∀m1 m2. m1 Ψm2 ⇒ JG1K m1 ∼Φ JG2K m2
+Our approach slightly departs from Benton’s: rather than defin-
+ing the rules for pRHL and proving them sound w.r.t. the meaning
+of judgments, we place ourselves in a semantic setting and derive
+the rules as lemmas. This allows to easily extend the system by de-
+riving extra rules, or even to resort to the semantic definition if the
+system turns out to be insufficient.
+Figure 5 gathers some representative derived rules. To improve
+readability, in the figure and in the remainder of the paper we
+let e〈i〉 denote λm1 m2. JeK mi = true, where e is a boolean
+expression. As pRHL allows for arbitrary relations, we freely use
+higher-order logic; in particular, PER and SYM are predicates over
+relations that stand for partial equivalence relation and symmetric
+relation respectively. There are two points worth noting. First, most
+rules admit, in addition to their symmetrical version of Fig. 5, one-
+sided (left and right) variants, e.g. for assignments
+m1 Φ
+′ m2
+def
+= (m1{Je1Km1/x1}) Φm2
+ E1, x1 ← e1 ∼ E2, nil : Φ
+′ ⇒ Φ
+3 An alternative would be to develop a logic in which Ψ and Φ are relations
+over distributions. However, it is not clear whether such a logic would allow
+a similar level of proof automation. This is left for future work.
+Second, some rules of pRHL do not appear in RHL, or generalize
+existing rules. The rule [R-Case] allows to do a case analysis on the
+evaluation of an arbitrary relation in the initial memories. Together
+with simple rules in the spirit of
+ E1, c1 ∼ E2, c : Ψ ∧ e〈1〉 ⇒ Φ
+ E1, if e then c1 else c2 ∼ E2, c : Ψ ∧ e〈1〉 ⇒ Φ
+it subsumes [R-Cond] and allows to prove judgments that would
+otherwise not be derivable, such as the equivalence between
+(if e then c1 else c2) and (if ¬e then c2 else c1). We also use
+[R-Case] to prove the correctness of dataflow analyses that exploit
+the information provided by entering branches.
+In addition, we often use the rule [R-Inv] that generalizes the
+rule [R-Sym] to inverse of relations
+ G1 ∼ G2 : Ψ⇒ Φ
+ G2 ∼ G1 : Ψ
+−1 ⇒ Φ−1
+[R-Inv]
+and we make an extensive use of the rule [R-Comp] that generalizes
+the rule [R-Tr] to composition of relations4
+ G1 ∼ G : Ψ
+′ ⇒ Φ′  G ∼ G2 : Ψ
+′′ ⇒ Φ′′
+ G1 ∼ G2 : Ψ
+′ ◦Ψ′′ ⇒ Φ′ ◦Φ′′
+[R-Comp]
+The benefits of the rule [R-Comp], as opposed to [R-Tr], are illus-
+trated by considering “independent” preconditions and postcondi-
+tions of the form
+Ψ def= λx y .Ψ1 x ∧Ψ2 y Φ
+def
+= λx y .Φ1 x ∧ Φ2 y
+In order to apply the rule [R-Tr] to G1 and G2, we are essentially
+forced to have Ψ1 = Ψ2 and Φ1 = Φ2, and furthermore we must
+also choose the same pre and postcondition for the intermediate
+game G. This constraint makes the rule [R-Tr] impractical, we use
+instead the rule [R-Comp] to introduce intermediate games that do
+not satisfy the same specification as G1 or G2.
+The rule [R-Rand] is also (obviously) not present in RHL. Let
+Ix
+def
+= (λv.if x = v then 1 else 0), and define the support of a
+distribution, supp(JdK m), by the clause
+v ∈ supp(JdK m)⇔ JdK m Iv 6= 0
+Finally, let Jd1Km1 =g Jd2Km2 iff there exists a setX and a bijec-
+tion g : X → X such that supp(Jd1Km1) = supp(Jd2Km2) = X
+and Jd1K m1 Ia = Jd2K m2 I(g a) for all a in X. To apply rule
+[R-Rand], it is necessary to exhibit a function f such that for all
+memories m1 and m2, Jd1K m1 =f m1 m2 Jd2K m2. Thus, if
+d1 = d2 = [0..n] for some constant n, and we take f to be the
+identity function, the premise simplifies to the expected,
+m1 Ψm2
+def
+= ∀ v ∈ [0..n]. (m1{v/x1}) Φ (m2{v/x2})
+Section 5.3 shows that the generality of the rule is required for
+applications such as optimistic sampling.
+It is often fruitful to understand pRHL judgments in terms
+of the inability of the postcondition to separate between the two
+commands of the judgment. Define two functions f and g to be
+equivalent w.r.t. a predicate Φ iff
+f =Φ g
+def
+= ∀m1 m2. m1 Φm2 ⇒ f(m1) = g(m2)
+The definition of pRHL judgments entails
+ G1 ∼ G2 : Ψ⇒ Φ
+f =Φ g
+m1 Ψm2
+9=
+;⇒ JG1Km1 f = JG2Km2 g (=JK)
+4 The machine-checked rule requires that Φ,Φ′ are decidable, and uses Set-
+valued existential quantification ∃Set in the composition for preconditions,
+i.e. x (Ψ ◦Ψ′) z def= ∃Sety. xΨ y ∧ y Ψ′z.
+7
+ E1, nil ∼ E2, nil : Φ⇒ Φ [R-Skip]
+ E1, c1 ∼ E2, c2 : Φ⇒ Φ
+′
+ E1, c
+′
+1 ∼ E2, c
+′
+2 : Φ
+′ ⇒ Φ′′
+ E1, c1; c
+′
+1 ∼ E2, c2; c
+′
+2 : Φ⇒ Φ
+′′ [R-Seq]
+ E1, x1 ← e1 ∼ E2, x2 ← e2 : (λ m1 m2. (m1{Je1Km1/x1}) Φ (m2{Je2Km2/x2}))⇒ Φ [R-Ass]
+m1 Ψm2
+def
+= Jd1Km1 =f m1 m2 Jd2Km2 ∧ ∀ v ∈ supp(Jd1Km1). (m1{v/x1}) Φ (m2{f m1 m2 v/x2})
+ E1, x1 $← d1 ∼ E2, x2 $← d2 : Ψ⇒ Φ
+[R-Rand]
+∀m1 m2. m1 Ψm2 ⇒ Je1K m1 = Je2K m2  E1, c1 ∼ E2, c2 : Ψ ∧ e1〈1〉 ⇒ Φ  E1, c
+′
+1 ∼ E2, c
+′
+2 : Ψ ∧ ¬e1〈1〉 ⇒ Φ
+ E1, if e1 then c1 else c
+′
+1 ∼ E2, if e2 then c2 else c
+′
+2 : Ψ ⇒ Φ
+[R-Cond]
+∀m1 m2. m1 Φm2 ⇒ Je1K m1 = Je2K m2  E1, c1 ∼ E2, c2 : Φ ∧ e1〈1〉 ⇒ Φ
+ E1,while e1 do c1 ∼ E2,while e2 do c2 : Φ⇒ Φ ∧ ¬e1〈1〉
+[R-Whl]
+ G1 ∼ G2 : Ψ
+′ ⇒ Φ′ ∀m1 m2. m1 Ψm2 ⇒ m1 Ψ
+′ m2 ∀m1 m2. m1 Φ
+′ m2 ⇒ m1 Φm2
+ G1 ∼ G2 : Ψ⇒ Φ
+[R-Sub]
+ G1 ∼ G2 : Ψ⇒ Φ SYM(Ψ) SYM(Φ)
+ G2 ∼ G1 : Ψ⇒ Φ
+[R-Sym]
+ G1 ∼ G : Ψ⇒ Φ  G ∼ G2 : Ψ⇒ Φ PER(Ψ) PER(Φ)
+ G1 ∼ G2 : Ψ⇒ Φ
+[R-Tr]
+ G1 ∼ G2 : Ψ ∧Ψ
+′ ⇒ Φ  G1 ∼ G2 : Ψ ∧ ¬ Ψ
+′ ⇒ Φ
+ G1 ∼ G2 : Ψ⇒ Φ
+[R-Case]
+Figure 5. Selection of derived rules of pRHL
+By instantiating f and g to 1 , one can observe that observational
+equivalence enjoys some form of termination sensitivity
+( G1 ∼ G2 : Ψ⇒ Φ)∧m1 Ψm2 ⇒ JG1Km1 1 = JG2Km2 1
+This interpretation of pRHL judgments is strongly connected to the
+relation between relational logics and information flow [3, 9]. We
+extensively use (=JK), and its variant (≤JK) below, to fall back from
+the world of pRHL into the world of probabilities, in which security
+statements are expressed;
+ G1 ∼ G2 : Ψ⇒ Φ
+f ≤Φ g
+m1 Ψm2
+9=
+;⇒ JG1Km1 f ≤ JG2Km2 g (≤JK)
+where f ≤Φ g def= ∀m1 m2. m1 Φm2 ⇒ f(m1) ≤ g(m2).
+We conclude with an example that nicely illustrates some
+of the intricacies of pRHL. Let c = b $← {0, 1} and define
+m1 Φ m2
+def
+= m1 b = m2 b. Then  c ∼ c : true ⇒ Φ.
+Indeed, take µ such that µ 1 〈0,0〉 = µ 1 〈1,1〉 = 1/2 and
+µ 1 〈0,1〉 = µ 1 〈1,0〉 = 0. One can check that µ ensures
+JcK m ∼Φ JcK m
+′ for all m and m′. This example shows why
+the lifting of a binary relation involves an existential quantification,
+and why it is not possible to always instantiate µ as the product
+distribution in the definition of ∼Φ (one cannot establish the above
+judgment using the product distribution). Perhaps more surpris-
+ingly,  c ∼ c : true ⇒ ¬Φ also holds. Indeed, take µ such that
+µ 1 〈0,0〉 = µ 1 〈1,1〉 = 0 and µ 1 〈0,1〉 = µ 1 〈1,0〉 = 1/2. One can
+check that µ ensures JcK m ∼¬Φ JcK m′ for all m and m′. Thus,
+the “obvious” rule
+ G1 ∼ G2 : Ψ⇒ Φ  G1 ∼ G2 : Ψ⇒ Φ
+′
+ G1 ∼ G2 : Ψ⇒ Φ ∧ Φ
+′
+is unsound. While this example may seem unintuitive or even
+inconsistent if one reasons in terms of deterministic states, its
+intuitive significance in a probabilistic setting is that neither of
+the relations Φ and ¬Φ are enough to tell apart the two final
+distributions.
+4.2 Observational equivalence
+Observational equivalence is derived as an instance of relational
+Hoare judgments in which pre and postconditions are restricted to
+relations based on equality over a subset of variables. Given a set
+X of variables, we define =X as
+m1 =X m2
+def
+= ∀ x ∈ X. m1 x = m2 x
+Then, the observational equivalence of G1 and G2 w.r.t. an input
+set I and an output set O is defined as
+ G1 ≃
+I
+O G2
+def
+=  G1 ∼ G2 : =I ⇒ =O
+All derived rules for pRHL can be specialized to the case of obser-
+vational equivalence. For example, we have
+ e1 ≃
+I e2  E1, c1 ≃
+I
+O E2, c2  E1, c
+′
+1 ≃
+I
+O E2, c
+′
+2
+ E1, if e1 then c1 else c
+′
+1 ≃
+I
+O E2, if e2 then c2 else c
+′
+2
+where  e1 ≃I e2 iff for every memories m1 and m2, m1 =I m2
+implies Je1K m1 = Je2K m2.
+To support automation, CertiCrypt implements a calculus of
+variable dependencies and provides two functions, eqobsIn and
+eqobsOut, that given a command c and a set O (respectively I)
+of output (input) variables compute a set I (O) of input (output)
+variables such that  E1, c ≃IO E2, c. CertiCrypt also provides
+tactics for two variants of observational equivalence that are widely
+used in game-based proofs, namely
+ϕ G1 ≃
+I
+O G2
+def
+=  G1 ∼ G2 : =I ∧ ϕ⇒ =O ∧ ϕ
+Ψ,Φ G1 ≃
+I
+O G2
+def
+=  G1 ∼ G2 : =I ∧ Ψ⇒ =O ∧ Φ
+These tactics use a (sound but incomplete) weakest precondition
+calculus for relational judgments.
+5. Proof methods for bridging steps
+CertiCrypt provides a powerful set of tactics and algebraic equiv-
+alences to automate bridging steps. Most tactics rely on an imple-
+mentation of a certified optimizer for pWHILE, with the exception
+of lazy sampling which has an ad hoc implementation. Algebraic
+8
+equivalences are provided as lemmas that follow from algebraic
+properties of the interpretation of language constructs.
+5.1 Certified program transformations
+CertiCrypt provides automated support for transformations that
+consist in applying compiler optimizations. More precisely, it sup-
+ports transformations based on dependencies and dataflow analy-
+ses; we briefly discuss them below. Additionally, CertiCrypt pro-
+vides support for inlining procedure calls and performing register
+allocation (not discussed here).
+Transformations based on dependencies The functions eqobsIn
+and eqobsOut presented in Sec. ??, provide the foundations to sup-
+port transformations such as dead code elimination, code motion,
+and common context elimination.
+First, CertiCrypt features a function context that strips off two
+commands c and c′ their maximal common context relative to sets
+I and O of input and output variables. The correctness of context
+is expressed by the following rule
+context(I, c1, c2, O) = (I
+′, c′1, c
+′
+2, O
+′)  E1, c
+′
+1 ≃
+I′
+O′ E2, c
+′
+2
+ E1, c1 ≃
+I
+O E2, c2
+Using the same idea, CertiCrypt provides algorithms for removing
+only a common prefix (eqobs hd) or suffix (eqobs tl).
+Second, CertiCrypt provides a tactic that given two commands
+repeatedly tries to hoist their common instructions to obtain a
+maximal common prefix5, which can then be eliminated using the
+previous rule. Its correctness is based on the rule
+ E, c1 ≃
+I1
+O1
+E, c1  E, c2 ≃
+I2
+O2
+E, c2 modify(E, ci, Oi)
+O1 ∩ O2 = ∅ I1 ∩O2 = ∅ I2 ∩O1 = ∅
+ E, c1; c2 ∼ E, c2; c1 : =⇒ =
+where modify(E, c,X) is a semantic predicate expressing that only
+variables in X are modified by the command c in the environment
+E. This is formally expressed by ∀ m. range (λm′. m =V\X
+m′) (JE, cK m) which ensures that reachable final memories are
+equal to the initial one except maybe on variables in X. The tactic
+swap is based on the rule above and on an algorithm that over-
+approximates the set of modified variables.
+Third, CertiCrypt allows performing dead code elimination rel-
+ative to a set O of output variables (deadcode). The algorithm be-
+haves more like an aggressive slicing algorithm, i.e. it removes por-
+tions of code that do not affect variables in O, and performs at the
+same time branch prediction (replacing if true then c1 else c2 by
+c1), branch coalescing (replacing if e then c else c by c), and self-
+assignment elimination. Its correctness relies on the rule
+modify(E1, c,X) Lossless(E1, c) fv(ϕ) ∩X = ∅
+ E1, c ∼ E2, nil : ϕ⇒ ϕ
+Optimizations based on dataflow analyses CertiCrypt has built-
+in, generic, support for such optimizations: given an abstract do-
+main D (a semi-lattice) for the analysis, transfer functions for as-
+signment and branching instructions, and an operator transforming
+expressions in the language into their optimized versions (using the
+result of the analysis), CertiCrypt automatically constructs the cer-
+tified optimization function optim : C → D → C×D. When given
+a command c and an element δ ∈ D, this function transforms c into
+its optimized version c′ assuming the validity of δ. In addition, it
+returns an abstract postcondition δ′ ∈ D which is valid after ex-
+ecuting c (or c′). We use these abstract postconditions to state the
+correctness of the optimization, and to apply the optimization re-
+cursively.
+5 One could also provide a complementary tactic that hoists instructions to
+obtain a maximal common suffix.
+The correctness of optim is proved using a mixture of the
+techniques of [9] and [10, 24]: we express the validity of the
+information contained in the analysis domain using a predicate
+Valid(δ,m) that states the agreement between the compile time
+abstract values in δ and the runtime memory m. Then, correctness
+is expressed in terms of a pRHL judgment:
+let (c′, δ′) :=optim(c, δ) in  E, c ∼ E, c′ : ≍δ ⇒ ≍δ′
+where m1 ≍δ m2 def= m1 = m2 ∧ Valid(δ,m1). The following
+useful rule is derived using [R-Comp]
+∀m1 m2. m1 Ψm2 ⇒ Valid(δ,m1)
+optim(c1, δ) = (c
+′
+1, δ
+′)  E1, c
+′
+1 ∼ E2, c2 : Ψ⇒ Φ
+ E1, c1 ∼ E2, c2 : Ψ⇒ Φ
+[R-Opt]
+Our case studies extensively use instantiations of [R-Opt] to expres-
+sion propagation (ep). In contrast, we found that common subex-
+pression elimination is seldom used.
+5.2 Lazy sampling
+It is sometimes convenient to defer random choices in games until
+they are actually needed, or conversely, to make random choices
+as early as possible. The lazy sampling technique, allows to delay
+the random sampling of a value until the point in the program
+where it is first used. Conversely, eager sampling allows to choose
+a random value, which would be otherwise sampled later, at the
+beginning of a game. These techniques are presented in [8], where
+the authors discuss some of its subtleties. In this section we present
+a syntax-oriented criterion for the correctness of lazy sampling that
+can be applied provided the sampling is adequately guarded. Here
+by context we mean a program context with multiple holes that may
+appear either in the main program or any of the procedures in the
+environment.
+Lemma 1 (Lazy/eager sampling). Let C[·] be a context, c1 and
+c2 commands, e a boolean expression, d a distribution expression,
+and z a variable, such that C[·] does not modify fv(e) ∪ fv(d) and
+does not use z. Assume
+1.  z $← d; c1; if e then z $← d ∼ z $← d; c1 : (= ∧ e〈1〉)⇒ =
+2.  c2 ∼ c2 : (= ∧ ¬e〈1〉)⇒ (= ∧¬e〈1〉)
+Let c = if e then z $← d; c1 else c2 and c′ = if e then c1 else c2.
+Then,  C[c]; if e then z $← d ∼ z $← d;C[c′] : (= ∧ e〈1〉)⇒ =
+Intuitively, in the above lemma e indicates whether z has not
+been used in the game since it was last sampled. If it has not been
+used, then it is perfectly fine to resample it. The first two hypotheses
+ensure that e has exactly this meaning, c1 must set it to false if it
+has used the value sampled in z, and c2 must not reset e if it is false.
+The first hypothesis is the one that allows to swap c1 with z $← d,
+provided the value of z is not used in c1. Note that, for clarity, we
+have omitted environments in the above lemma, and so the second
+hypothesis is not as trivial as it may seem because both programs
+may have different environments.
+Suppose we want to eagerly sample the answer that a random
+oracle
+Ol(x)
+def
+= if x /∈ dom(L) then y $← d; L← (x, y) :: L;
+return L[x]
+gives to a particular query x′, i.e. we want to transform Ol into
+Oe(x)
+def
+= if x /∈ dom(L) then
+if x = x′ then y ← y′ else y $← d;
+L← (x, y) :: L
+return L[x]
+DefineO′l(x) def= if x′ /∈ dom(L) then y′ $← d;Oe(x) elseOl(x),
+O′e(x)
+def
+= if x
+′ /∈ dom(L) then Oe(x) else Ol(x), both return-
+ing L[x]. Oracles Ol and Oe result semantically equivalent to O′l
+9
+and O′e, respectively. Lemma 1 can be applied taking e = x′ /∈
+dom(L), z = y′, and c1 = Oe(x), c2 = Ol(x) to safely replace
+oracle Ol by oracle Oe in the environment of a program, sampling
+y′ at the beginning. Whenever a bound for the number of queries to
+a random oracle is known in advance, the above trick can be iter-
+atively applied to completely remove randomness from the oracle
+code, as it is done in the proof of the Switching Lemma in Sec. 2.2.
+5.3 Algebraic equivalences
+Bridging steps frequently use algebraic properties of language op-
+erators. The proof of semantic security of ElGamal uses the fact
+that in a cyclic multiplicative group, multiplication by a uniformly
+sampled element acts as a one-time pad:
+ x $← Zq;α← g
+x × β ≃{α} y $← Zq;α← g
+y
+In the proof of security of OAEP we use optimistic sampling:
+ x $← {0, 1}
+k; y ← x⊕ z ≃{z}{x,y,z} y
+$← {0, 1}
+k;x← y ⊕ z
+and incremental sampling modulo a permutation f :
+ x $← {0, 1}
+k−ρ; y $← {0, 1}
+ρ; z ← f(x‖y) ≃{z} z $← {0, 1}
+k
+We show the usefulness of [R-Rand] by sketching the proof of
+optimistic sampling, as promised in Section ??. For readability, we
+let e|i denote JeK mi. Define
+Ψ def= z|1 = z|2 Φ
+def
+= x|1 = x|2 ∧ y|1 = y|2 ∧ z|1 = z|2
+Let Φ′ def= Φ{x|1 ⊕ z|1/y|1, y|2 ⊕ z|2/x|2}. Then, by [R-Ass] we
+have
+ y ← x⊕ z ∼ x← y ⊕ z : Φ′ ⇒ Φ
+Now take f m1 m2 v def= v ⊕ z|2, and apply [R-Rand] and [R-
+Sub] to obtain  x $← {0, 1}k ∼ y $← {0, 1}k : Ψ ⇒ Φ′.
+Note that the precondition we obtain after applying [R-Rand] is
+equivalent to Ψ because f is a bijection on {0, 1}k , and because
+∀v. Φ′{v/x|1, v ⊕ z|2/y|2} is equivalent to z|1 = z|2 by algebraic
+properties of the ⊕ operator. We conclude by applying [R-Seq].
+6. Proof methods for failure events
+A technique used very often to relate two games is based on what
+cryptographers call failure events. This technique relies on a funda-
+mental lemma that allows to bound the difference in the probability
+of a given event in two games: one identifies a failure event and
+argues that both games behave identically until this event occurs.
+One can then bound the difference in probability of another event
+by the probability of occurrence of the failure event in either game.
+Lemma 2 (Fundamental lemma). Let G1 and G2 be two games, A
+an event defined on G1, B an event defined on G2 and F an event
+defined in both games. If
+PrG1 [A ∧ ¬F ] = PrG2 [B ∧ ¬F ] , and
+PrG1 [F ] ≤ PrG2 [F ]
+then |PrG1 [A]− PrG2 [B]| ≤ PrG2 [F ].6
+In code-based proofs, the failure condition is generally indicated
+by setting a global flag variable (usually called bad) to true. This
+specialization allows to define a syntactic criterion for deciding
+whether two games behave equivalently up to the raise of the failure
+condition: we say that two games G1 and G2 are equal up to bad
+and note it uptobad(G1, G2) whenever they are syntactically equal
+up to every point where the bad flag is set to true and they do not
+reset the bad flag to false afterward. For instance, games GbadPRP and
+6 The second hypothesis is usually omitted in the literature under the as-
+sumption that both games are absolutely terminating. In that case, either
+G1 or G2 will do on the right-hand side.
+Oracle Sign(m) :
+S ← m :: S
+r ← H(m);
+return f−1(r)
+Oracle H(m) :
+if m 6∈ dom(L) then
+r $← {0, 1}k ;
+L← (m, r) :: L
+return L[x]
+Game EUFDH :
+L← [ ]; S ← [ ];
+(m, x)← A();
+d← H(m)
+Figure 6. Initial game in the proof of FDH unforgeability
+GbadPRF in Fig. 2 satisfy this condition. We have used this syntactic
+criterion to implement a specialization of the fundamental lemma
+for game-based proofs.
+Lemma 3 (Syntactic criterion for fundamental lemma).
+∀ G1 G2 A. uptobad(G1, G2) ⇒
+PrG1 [A ∧ ¬bad] = PrG2 [A ∧ ¬bad]
+The first hypothesis in Lemma 2 may be proved automatically
+by using this syntactic criterion. To prove the second hypothesis
+it suffices to show that game G2 is absolutely terminating, for
+which we already have implemented a semi-decision procedure
+(see Sec. 3.3).
+7. Case studies
+The purpose of this section is to announce the successful comple-
+tion of two experiments that validate the design and usability of
+CertiCrypt. A detailed presentation of these works will be given
+elsewhere.
+7.1 Existential unforgeability of FDH
+The Full Domain Hash (FDH) scheme is a hash-and-sign signature
+scheme based on the RSA family of trapdoor permutations, and
+in which the message is hashed onto the full domain of the RSA
+function. However, the same construction—and the reduction that
+proves its security—remains valid for any family of trapdoor per-
+mutations. We have proved that FDH is existentially unforgeable
+under adaptive chosen-message attacks in the random oracle model
+for the improved bound in [15]. The proof is about 3,500 lines long.
+We will consider a generic family of trapdoor permutations f
+(and their inverses f−1) indexed by the security parameter, and an
+ideal hash function H : {0, 1}∗ → {0, 1}k , which we model as a
+random oracle. The initial game of the proof is shown in Fig. 6.
+Definition 6 (Trapdoor permutation security). We say that a trap-
+door permutation is (t, ǫ)-secure if an inverter running within time
+t(k), when given a challenge y uniformly drawn from {0, 1}k
+succeeds in finding f−1(y) with probability at most ǫ(k), i.e. if
+for any well-formed adversary B running within time t(k) in Gf
+we have PrGf
+ˆ
+x = f−1(y)
+˜
+≤ ǫ(k), where Game Gf : y $←
+{0, 1}k; x← B(y).
+Theorem 1 (FDH exact security). Assume the underlying trapdoor
+permutation is (t′, ǫ′)-secure. Then, a forger that makes at most
+qhash and qsign queries to the hash and signing oracles respectively
+and runs within time t(k) = t′(k)−(qhash(k)+qsign(k)+1)O(Tf ),
+succeeds in forging a signature for a new message—different from
+the ones asked to the signing oracle—with probability at most
+ǫ(k) =
+qsign(k)
+(1− 1
+qsign(k)+1
+)qsign(k)+1
+ǫ′(k) ≈ exp(1) qsign(k) ǫ
+′(k)
+i.e. for a well-formed adversary A running within t(k) we have
+PrEUFDH [h = f(x)] ≤ ǫ(k).
+10
+7.2 Semantic security of OAEP
+OAEP is a padding scheme whose history perfectly illustrates
+the difficulty in achieving a correct proof. Indeed, it was initially
+believed that OAEP was IND-CCA2 secure [7], but it was later
+discovered it was only IND-CCA1 secure [30], a weaker security
+notion (where the adversary does not have access to the decryption
+oracle after receiving the challenge). It is possible to recover IND-
+CCA2 security by using it together with a suitable encryption
+scheme, as it is the case for RSA-OAEP [17]. Here we focus on the
+game-based proof of [8] which shows IND-CPA security of OAEP
+in the random oracle model.
+The definition of OAEP is parametrized by a trapdoor one-
+way permutation f : {0, 1}k → {0, 1}k , and two hash functions
+G : {0, 1}ρ → {0, 1}k−ρ and H : {0, 1}k−ρ → {0, 1}ρ. OAEP
+adds randomness into the plaintext m and uses the functions G and
+H to mask it before applying f to the result, as formalized by the
+straightforward code for encryption:
+R $← {0, 1}
+ρ;S ← G(R)⊕m;T ← H(S)⊕R; return f(S‖T )
+We have proved that OAEP is IND-CPA secure. The proof is about
+3,000 lines long.
+Theorem 2 (OAEP semantic security). For well-formed adver-
+saries A and A′ making together at most qG queries to G,
+|PrIND-CPAOAEP
+ˆ
+b = b′
+˜
+−
+1
+2
+| ≤ PrGf
+ˆ
+x = f−1(y)
+˜
++
+qG
+2ρ
+where PrGf
+ˆ
+x = f−1(y)
+˜
+is the probability of an adversary in-
+verting f on a random element of its codomain, as in Definition 6.
+Our sequence of games differs from [8]: in their initial transi-
+tions, Bellare and Rogaway use the fundamental lemma, whereas
+we use lazy sampling. As a result, our bound for OAEP is tighter
+than the bound published in [8], which also involves the number
+qH of calls to H :
+|PrIND-CPAOAEP
+ˆ
+b = b′
+˜
+−
+1
+2
+| ≤ PrGf
+ˆ
+x = f−1(y)
+˜
++
+2qG
+2ρ
++
+qH
+2k−ρ
+We consider that our proof of OAEP is highly emblematic, because
+of its complexity and its history. In retrospect, the bound we prove,
+which is independent of qH , shows that formalizing proofs some-
+times leads to improvements on previous results (to the best of
+our knowledge). However, cryptographers are really interested in
+a proof of IND-CCA2, and thus our next objective is to machine-
+check the results of [17].
+8. Related work
+Cryptographic protocol verification is an established area of formal
+methods, and a wealth of automated and deductive methods have
+been developed to the purpose of verifying that protocols provide
+the expected level of security [25]. Traditionally, protocols have
+been verified in a symbolic model, for which effective decision
+procedures exist under suitable hypotheses. Although the symbolic
+model assumes perfect cryptography, soundness results such as [1]
+relate the symbolic model with the computational model, provided
+the cryptographic primitives are secure. It is possible to combine
+symbolic methods and soundness proofs to achieve guarantees in
+the computational model, as done e.g. in [5, 32]. One drawback of
+this approach is that the security proof relies on intricate soundness
+proofs. Besides, it is not clear whether computational soundness
+results will always exist to allow factoring verification through
+symbolic methods. Consequently, some authors attempt to provide
+guarantees directly at the computational level [11, 23, 28].
+In contrast, the formal verification of cryptographic functional-
+ities is an emerging trend. An early work of Barthe, Cederquist and
+Tarento [6] proves the security of ElGamal in Coq, but the proof
+relies on the generic model, a very specialized and idealized model
+that elides many of the issues that are relevant for cryptography.
+Corin and den Hartog [14] also prove ElGamal semantic security,
+using a probabilistic (non-relational) Hoare logic. However, their
+formalism is not sufficiently powerful to express precisely the se-
+curity goals: notions such as well-formed and effective adversary
+are not modeled.
+Blanchet and Pointcheval [12] were among the first to use ver-
+ification tools to carry out game-based proofs of cryptographic
+schemes. They used CryptoVerif to prove exact security of the
+FDH signature scheme, for a bound weaker than the one given in
+Section 7.1. More recently, Courant et al. [16] have developed a
+form of strongest postcondition calculus that can establish automat-
+ically asymptotic security (IND-CPA and IND-CCA2) of schemes
+that use one-way functions and random oracles. They show sound-
+ness and provide a prototype implementation that covers many ex-
+amples of the literature, including OAEP+. We believe the two ap-
+proaches are complementary to ours: compiling CryptoVerif se-
+quences of games and embedding the type system of [16] in Cer-
+tiCrypt, are interesting research directions.
+In parallel, several authors have initiated formalizations of
+game-based proofs in proof assistants, and shown the security of
+basic examples. Nowak [26] gives a game-based proof of ElGa-
+mal semantic security in Coq. Nowak uses a shallow embedding
+to model games; as a result, its framework ignores complexity is-
+sues, and has limited support for proof automation: because there is
+no special syntax for writing games, mechanizing syntactic trans-
+formations becomes very difficult. Affeldt et al. [2] formalize a
+game-based proof of the switching lemma in Coq. However, their
+formalization is tailored towards the particular example they con-
+sider, which substantially simplifies their task and hinders gener-
+ality. They deal with a weak (non-adaptive) adversary model and
+ignore complexity. All in all, both works appear like preliminary
+experiments that are not likely to scale.
+Leaving the realm of cryptography, CertiCrypt relies on diverse
+mathematical concepts and theories that have been modeled for
+their own sake. It is not possible to report on these developments
+here, so we limit ourselves to singling out Paulin’s formalization
+of the measure monad, which we use extensively in our work, and
+the work of Hurd et al. [20], who developed a mechanized theory
+in the HOL theorem prover for reasoning about pGCL programs, a
+probabilistic extension of Dijkstra’s guarded command language.
+9. Conclusion
+Summary and perspectives CertiCrypt is a fully formalized
+framework that supports machine-checked game-based proofs;
+we have validated its design through formalizing standard cryp-
+tographic proofs. Our work shows that machine-checked proofs of
+cryptographic schemes is not only plausible but indeed feasible.
+However, constructing machine-checked proofs requires a high-
+level of expertise in formal proofs and remains time consuming
+despite the high level of automation provided by CertiCrypt. Thus,
+CertiCrypt only provides a first step towards the completion of
+Halevi’s programme, in spite of the amount of work invested so
+far (the project was initiated in June 2006). A medium-term ob-
+jective would be to develop a minimalist interface that eases the
+writing of games and provides a fixed set of mechanisms (tactics,
+proof-by-pointing) to prove some basic transitions, leaving the side
+conditions as hypotheses. We believe that such an interface would
+help cryptographers ensure that there are no obvious flaws in their
+definitions and proofs, and to build sketches of security proofs. In
+fact, it is our experience that the type system and the automated
+tactics provide valuable information in debugging proofs.
+11
+Future work Numerous research directions remain to be ex-
+plored. Our first objective is to strengthen our result for OAEP. It
+would also be useful to formalize cryptographic meta-results such
+as the equivalence between IND-CPA and IND-CCA2 under plain-
+text awareness. Another objective would be to formalize proofs of
+computational soundness of the symbolic model, see e.g. [1] and
+proofs of automated methods for proving security of primitives
+and protocols, see e.g. [16, 23]. Finally, it would also be worth-
+while to explore applications of CertiCrypt outside cryptography,
+in particular to randomized algorithms and complexity.
+Acknowledgments
+We would like to acknowledge Romain Janvier and Federico
+Olmedo for their enthusiastic participation in the project, Chris-
+tine Paulin for the support provided in using her library, and the
+anonymous reviewers for their insightful comments.
+References
+[1] M. Abadi and P. Rogaway. Reconciling two views of cryptography
+(the computational soundness of formal encryption). Journal of
+Cryptology, 15(2):103–127, 2002.
+[2] R. Affeldt, M. Tanaka, and N. Marti. Formal proof of provable
+security by game-playing in a proof assistant. In Proceedings of
+International Conference on Provable Security, volume 4784 of
+Lecture Notes in Computer Science, pages 151–168. Springer, 2007.
+[3] T. Amtoft, S. Bandhakavi, and A. Banerjee. A logic for information
+flow in object-oriented programs. In Proceedings of the 33rd ACM
+Symposium on Principles of Programming Languages, pages 91–102.
+ACM Press, 2006.
+[4] P. Audebaud and C. Paulin-Mohring. Proofs of randomized
+algorithms in Coq. Science of Computer Programming, 2008.
+[5] M. Backes and P. Laud. Computationally sound secrecy proofs
+by mechanized flow analysis. In Proceedings of the 13th ACM
+Conference on Computer and Communications Security, pages 370–
+379. ACM Press, 2006.
+[6] G. Barthe, J. Cederquist, and S. Tarento. A machine-checked
+formalization of the generic model and the random oracle model.
+In 2nd International Joint Conference on Automated Reasoning,
+pages 385–399. Springer-Verlag, 2004.
+[7] M. Bellare and P. Rogaway. Optimal asymmetric encryption – How
+to encrypt with RSA. In Advances in Cryptology – EUROCRYPT’94,
+volume 950 of Lecture Notes in Computer Science, pages 92–111.
+Springer-Verlag, 1995.
+[8] M. Bellare and P. Rogaway. The security of triple encryption and
+a framework for code-based game-playing proofs. In Advances in
+Cryptology – EUROCRYPT’06, volume 4004 of Lecture Notes in
+Computer Science, pages 409–426, 2006.
+[9] N. Benton. Simple relational correctness proofs for static analyses
+and program transformations. In Proceedings of the 31th ACM
+Symposium on Principles of Programming Languages, pages 14–25.
+ACM Press, 2004.
+[10] Y. Bertot, B. Gre´goire, and X. Leroy. A structured approach to proving
+compiler optimizations based on dataflow analysis. In International
+Workshop on Types for Proofs and Programs, volume 3839 of LNCS,
+pages 66–81. Springer-Verlag, 2006.
+[11] B. Blanchet. A computationally sound mechanized prover for security
+protocols. In IEEE Symposium on Security and Privacy, pages 140–
+154, 2006.
+[12] B. Blanchet and D. Pointcheval. Automated security proofs with
+sequences of games. In Advances in Cryptology – CRYPTO’06,
+volume 4117 of Lecture Notes in Computer Science, pages 537–554.
+Springer-Verlag, 2006.
+[13] R. Canetti, O. Goldreich, and S. Halevi. The random oracle
+methodology, revisited. J. ACM, 51(4):557–594, 2004.
+[14] R. Corin and J. den Hartog. A probabilistic Hoare-style logic
+for game-based cryptographic proofs. In Proceedings of the
+33rd International Colloquium on Automata, Languages and
+Programming, volume 4052 of LNCS, pages 252–263, 2006.
+[15] J.-S. Coron. On the exact security of Full Domain Hash. In Advances
+in Cryptology, volume 1880 of Lecture Notes in Computer Science,
+pages 229–235. Springer-Verlag, 2000.
+[16] J. Courant, M. Daubignard, C. Ene, P. Lafourcade, and Y. Lakhnech.
+Towards automated proofs for asymmetric encryption in the random
+oracle model. In Computer and Communications Security. ACM
+Press, 2008.
+[17] E. Fujisaki, T. Okamoto, D. Pointcheval, and J. Stern. RSA-OAEP is
+secure under the RSA assumption. Journal of Cryptology, 17(2):81–
+104, 2004.
+[18] S. Goldwasser and S. Micali. Probabilistic encryption. J. Comput.
+Syst. Sci., 28(2):270–299, 1984.
+[19] S. Halevi. A plausible approach to computer-aided cryptographic
+proofs. Cryptology ePrint Archive, Report 2005/181, 2005.
+[20] J. Hurd, A. McIver, and C. Morgan. Probabilistic guarded commands
+mechanized in HOL. Theor. Comput. Sci., 346(1):96–112, 2005.
+[21] B. Jonsson, K. G. Larsen, and W. Yi. Probabilistic extensions of
+process algebras. In Handbook of Process Algebra, pages 685–711.
+Elsevier, 2001.
+[22] D. Kozen. Semantics of probabilistic programs. J. Comput. Syst. Sci.,
+22:328–350, 1981.
+[23] P. Laud. Semantics and program analysis of computationally secure
+information flow. In European Symposium on Programming, volume
+2028 of Lecture Notes in Computer Science, pages 77–91. Springer-
+Verlag, 2001.
+[24] X. Leroy. Formal certification of a compiler back-end, or: pro-
+gramming a compiler with a proof assistant. In Proceedings of the
+33rd ACM Symposium Principles of Programming Languages, pages
+42–54. ACM Press, 2006.
+[25] C. Meadows. Formal methods for cryptographic protocol analysis:
+Emerging issues and trends. IEEE Journal on Selected Areas in
+Communications, 21(1):44–54, 2003.
+[26] D. Nowak. A framework for game-based security proofs. In
+Information and Communications Security, volume 4861, pages
+319–333. Springer-Verlag, 2007.
+[27] N. Ramsey and A. Pfeffer. Stochastic lambda calculus and monads of
+probability distributions. In Proceedings of the 29th ACM Symposium
+on Principles of Programming Languages, pages 154–165. ACM
+Press, 2002.
+[28] A. Roy, A. Datta, A. Derek, and J. C. Mitchell. Inductive proofs
+of computational secrecy. In European Symposium On Research
+In Computer Security, volume 4734 of Lecture Notes in Computer
+Science, pages 219–234. Springer-Verlag, 2007.
+[29] A. Sabelfeld and D. Sands. A per model of secure information flow
+in sequential programs. Higher-Order and Symbolic Computation,
+14(1):59–91, 2001.
+[30] V. Shoup. OAEP reconsidered. In Advances in Cryptology –
+CRYPTO’01, volume 2139 of Lecture Notes in Computer Science,
+pages 239–259. Springer-Verlag, 2001.
+[31] V. Shoup. Sequences of games: a tool for taming complexity in
+security proofs. Cryptology ePrint Archive, Report 2004/332, 2004.
+[32] C. Sprenger and D. Basin. Cryptographically-sound protocol-model
+abstractions. In Proceedings of CSF’08, pages 115–129. IEEE
+Computer Society, 2008.
+[33] J. Stern. Why provable security matters? In Advances in Cryptology
+– EUROCRYPT’03, volume 2656 of Lecture Notes in Computer
+Science. Springer-Verlag, 2003.
+[34] The Coq development team. The Coq Proof Assistant Reference
+Manual v8.1, 2006. Available at http://coq.inria.fr .
+12
