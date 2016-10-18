@@ -1,0 +1,2357 @@
+1The algebraic
+specification
+formalism ASF
+J.A. Bergstra
+J. Heering
+P. Klint
+The Algebraic Specification Formalism ASF supports modularized
+(first-order) equational specifications. Among its features are (a) im-
+port and parameterization of modules; (b) hidden (auxiliary) sorts
+and functions; (c) positive conditional equations; (d) overloaded func-
+tions; (e) infix operators. Most of the context-dependent errors in
+ASF specifications are violations of the so-called origin rule. Besides
+catching errors, this rule enforces a certain modularization of ASF
+specifications. The meaning of the modularization constructs of ASF
+is defined by means of a syntactic normalization procedure.
+Numerous examples of both correct and incorrect ASF specifications
+are given.
+1.1 Informal definition of ASF
+1.1.1 Introduction
+ASF is a formalism for specifying abstract data types. From the viewpoint
+of ASF an abstract data type is an algebra, i.e., a collection of carrier sets
+and associated functions. The properties of the data type to be specified
+have to be expressed in terms of equations (identities). By concentrating
+2 Algebraic Specification
+on equations rather than allowing, for instance, full first-order logic with
+equality, a relatively simple semantics is obtained.
+A basic ASF module consists of
+A set of sorts and constantlfunction declarations. Together these consti-
+tute the so-called signature of the module. Sorts are names of carrier
+sets, while functions, naturally enough, correspond to functions in any
+algebra described by the module.
+A set of variable declarations. The signature together with the set of
+variable declarations defines a language of terms (expressions) and con-
+stitutes the syntactic part of the module.
+A set of equations in the language of terms defined by the signature and
+the variable declarations. This is the semantic part of the module.
+In general, a basic module describes many algebras, all of them satisfying
+the equations it contains. These are the models of the module. The model
+closest to ordinary programming practice is the so-called initial algebra.
+ASF uses initial algebra semantics (Section 1.3.1), which means that the
+data type specified by a module is its initial algebra.
+ASF supports modular construction of specifications. ASF modules
+may be parameterized and they may use other modules by importing them.
+Parameter binding and importing modules in other ones are the two ways
+in which modules can be combined in ASF.
+An ASF specification is a sequence of modules. A module can be nor-
+malized in the context of a specification to which it belongs by eliminating
+all imports and binding as many parameters as possible (Section 1.3.2).
+Normalization is a textual operation. The semantics of a module is the ini-
+tial algebra of its normal form, provided the latter is a basic module. In par-
+ticular, it should not have any remaining unbound parameters.
+1.1.2 Example of a simple ASF specification
+The following specification illustrates many of the features of ASF. It con-
+sists of the four modules Boo leans, Naturals, Sequences, and
+Nstrings.
+module Booleans
+begin
+exports
+begin
+sorts BOOL
+The algebraic specification formalism ASF 3
+functions
+true : -> BOOL
+false : -> BOOL
+and : BOOL # BOOL -> BOOL
+or : BOOL # BOOL -> BOOL
+end
+functions
+not : BOOL -> BOOL
+variables
+x, y : -> BOOL
+equations
+[B1] and(true, x) = x
+[B2] and (false, x) = false
+[B3] not (true) = false
+[B4] not (false) = true
+[B5] or(x, y) = not(and(not(x), not(y)))
+end Booleans
+The signature of module Booleans consists of the declaration of sort
+BOOL, the declaration of constants (zero-adic functions) true and false
+of sort BOOL, and the declaration of functions and and or both with two
+arguments of sort BOOL and result of sort BOOL. All of these are exported
+by Booleans, which means that they can be used outside the module in
+which they are declared and in particular in any module importing Boole-
+ans. For purposes of illustrating the concept of hidden functions, the sig-
+nature of Booleans also contains the declaration of a hidden function
+not. In ASF hidden functions are not explicitly labeled as such, but are
+declared outside the export s-section of the module. Hidden functions
+can only be used inside the module in which they are declared. They do not
+occur in the initial algebra of the module (or in any of its other models, for
+that matter), but only help in defining the visible functions (in this case or).
+Hence, the initial algebra of Booleans has carrier BOOL with elements
+true and false, and functions and and or. Equations [B1] - [B5] define
+and, not, and or in the usual way. Variables x and y are implicitly univer-
+sally quantified.
+4 Algebraic Specification
+module Naturals
+begin
+exports
+begin
+sorts NAT
+functions
+0 : -> NAT
+succ : NAT -> NAT
+eq : NAT # NAT -> BOOL
+end
+imports Booleans
+variables
+x, y : -> NAT
+equations
+[N1] eq(0, 0) = true[N2] eq(x, y) = eq(y, x)[N3] eq(succ(x), 0) = false[N4] eq(succ(x), succ(y)) = eq(x, y)
+end Naturals
+This module defines natural numbers with an equality predicate. It illus-
+trates an important feature of initial algebra semantics. In the initial model
+two elements are never equal unless their equality follows from the equa-
+tions given in the specification. This is the so-called no confusion property
+of the initial algebra. Now, due to the fact that there are no equations for
+the successor function, s (0) is not equal to 0, s (s (0) ) is not equal to
+s (0 ) or 0, etc. Hence there are elements 0, s (0) , s (s (0) ), etc., in the
+NAT-carrier of the initial model of Naturals. This is also expressed by
+saying that the successor function constructs the natural numbers from 0.
+These are also the only elements in NAT, because the initial model never
+contains elements that do not correspond to terms (without variables) over
+the signature of the module. This is the so-called no junk property of the
+initial model. Due to the fact that Naturals imports Booleans for
+defining the eq-predicate, the initial model of Naturals also contains a
+carrier BOOL with the values and functions defined in Booleans.
+module Sequences
+begin
+The algebraic specification formalism ASF 5
+parameters
+Items begin
+sorts ITEM
+functions
+eq : ITEM # ITEM -> BOOL
+end Items
+exports
+begin
+sorts SEQ
+functions
+null :
+-> SEQ
+cons : ITEM # SEQ -> SEQ
+eq : SEQ # SEQ
+-> BOOL
+end
+imports Booleans
+variables
+s, sl, s2 : -> SEQ
+i2 : -> ITEM
+equations
+[S1] eq(null, null) = true
+[S2] eq(sl, s2) = eq(s2, sl)
+[S3] eq(cons(i, s), null) = false
+[S4] eq(cons(il, sl), cons(i2, s2)) =
+and(eq(il, i2), eq(sl, s2))
+end Sequences
+This parameterized module defines sequences of unspecified items (param-
+eter sort ITEM). Constant null is the empty sequence, function cons con-
+structs a sequence given an item and a sequence, and eq is the equality
+predicate on sequences. An example of the use of overloaded functions
+can be found in equation [S4
+. The first and the third occurrences of func-
+tion eq have input type SEQ # SEQ, while the second occurrence of eq
+has input type ITEM # ITEM. By binding (formal) parameter Items to a
+suitable module (the actual parameter), sequences can be instantiated to
+a specification of sequences of specific items. Constant/function
+definitions in parameters (e.g., Items) only define a formal name for a par-
+ticular function (e.g., eq). The equations for these functions can be found
+in the module to which the parameter is bound. This is illustrated in the
+following example:
+i, ii,
+6 Algebraic Specification
+module Nstrings
+begin
+imports Sequences
+{ renamed by
+[ SEQ
+-> NSTRING,
+null -> null-nstring ]
+Items bound by
+[ ITEM -> NAT,
+eq -> eq ]
+to Naturals
+end Nstrings
+Nstrings defines sequences of natural numbers obtained by binding
+parameter Items of sequences to module Naturals as defined in the
+bound by part. This means that Naturals is substituted for Items in the
+way indicated. The renamed by part assigns new names to sort SEQ and
+constant null to avoid confusion between versions of sequences with
+different actual parameters. Note that Boo leans is imported twice in
+Nstrings, once via Sequences and once via the actual parameter
+Naturals.
+1.1.3 Structure diagrams
+The overall modular structure of ASF specifications can be illustrated by
+means of structure diagrams which can be used effectively as a design aid.
+Each module is represented by a rectangular box in the structure
+diagram. The name of each module is shown at the bottom of its box. For
+example, module Booleans (Section 1.1.2) does not import any other
+module and has the structure diagram shown in Figure 1.1.
+Boo leans
+Fig. 1.1:
+Module without imports
+All modules imported by a module NI are represented by structure diagrams
+inside the box representing M. For example, Naturals imports Boo leans
+and has the structure diagram shown in Figure 1.2.
+1
+Boo leans
+Naturals
+The algebraic specification formalism ASF 7
+Fig. 1.2:
+Module importing another one
+For nested structure diagrams levels of detail may be suppressed to gain
+space. All parameters of a module are represented by ellipses carrying the
+name of the parameter. For example, the structure diagram of Sequences
+(which has parameter Items and imports Boo leans) is shown in Figure
+1.3.
+Boo leans
+Sequences
+Fig. 1.3:
+Module with import and unbound parameter
+The binding of a formal parameter is represented by a line joining the for-
+mal parameter and the actual module to which it is bound. For example,
+NStrings is defined by binding parameter Items of Sequences to
+Naturals. The corresponding structure diagram is shown in Figure 1.4.
+Structure diagrams can be generated automatically from the text of a
+specification. This has been done in this book. Freek Wiedijk has
+designed a more concise graphical representation for the modular structure
+of specifications which is, unfortunately, not easily amenable to automation
+since it is based on finding a "most planar" representation of a directed
+graph.
+8 Algebraic Specification
+Booleans
+Naturals
+Booleans
+Sequences
+Nstrings
+Fig. 1.4:
+Module with bound parameter
+1.1.4 Signatures, variables, and equations
+1.1.4.1 Signatures
+Signatures are sets of declarations of sorts and functions over these sorts.
+Functions without arguments are also called constants. In ASF, functions
+may have various syntactic forms (Section 1.1.4.2), they may have tuples
+as output type (Section 1.1.5.1), and they may be overloaded (Section
+1.1.5.2).
+In combination with a set of typed variables, a signature defines a
+language of well-typed terms (expressions), i.e., terms obtained by type-
+wise correct composition of constants, functions, and variables. Due to the
+possibility of overloading, checking the well-typedness of a term is slightly
+more complicated than in the non-overloaded case. The type or sort of a
+term is the output sort of the outermost function occurring in it. In ASF the
+type of a term is always uniquely determined (Section 1.1.5.3).
+Unconditional equations have the form:
+[tag] u =v
+where u and v are well-typed terms of the same type. Conditional equa-
+tions can have two (equivalent) forms:
+[tag] u1=v1 , u, = v, ==> u = v
+or
+, . . .
+Items
+The algebraic specification formalism ASF 9
+[tag] u = v when u 1 = v 1 , . . . ,
+Variables in equations are implicitly universally quantified.
+1.1.4.2 Functions and operators
+Depending on the way they are declared, functions are
+ordinary prefix functions; or
+monadic prefix operators; or
+dyadic infix operators.
+For instance,
+f : S1 # S2 -> S3
+defines a prefix function f with argument sorts Sl, S2 and output sort S3.
+Prefix and infix operators may be used instead of, respectively, monadic
+and dyadic functions. The position of operands of operators is indicated by
+underline characters ( ). For instance,
++ : S1 # S2 -> S3
+defines the infix operator + with argument sorts Sl, S2 and output sort S3,
+while
+: S1 ->
+defines the monadic prefix operator "-" with both argument and output of
+sort Sl. Infix and prefix operators are only a notational device and can
+always be replaced by ordinary functions. Dyadic operators are left-
+associative. There is no difference in priority between two dyadic opera-
+tors or between two monadic operators, but a monadic operator always has
+a higher priority than a dyadic one.
+In later chapters we will allow a much more liberal syntax for functions
+than in ASF, but this requires the introduction of a new formalism (Chapter
+6).
+1.1.4.3 The if-function
+ASF provides a built-in conditional function if. This function is
+polymorphic and cannot be defined in ASF itself. To a first approximation,
+if can be defined in the following way:
+un = v,
+Si
+10 Algebraic Specification
+sorts
+a, BOOL
+functions
+if : BOOL # a # a -> a
+true
+-> BOOL
+false :
+-> BOOL
+variables
+x, y : -> a
+equations
+[if.1] if(true, x, y) = x
+[if.2] if(false, x, y) = y
+where BOOL corresponds to a predefined sort of Boolean values and a is a
+sort variable ranging over all sorts defined in a given specification includ-
+ing BOOL (such variables do not exist in ASF!).
+We prefer, however, to describe the meaning of if by showing how
+each conditional equation in which an if occurs can be replaced by two
+conditional equations from which that if has been eliminated. Assume
+that the conclusion or one of the conditions of a conditional equation e con-
+tains a (sub)term t if = if (t0,t1,t2 ) . t if can now be eliminated from e by
+replacing e by e' and e", where
+e' is obtained from e by replacing t if by ti and by adding the condition
+t 0 =t rue;
+e" is obtained from e by replacing t if by t2 and by adding the condition
+t0=false.
+Clearly, these steps can be repeated for all ifs occurring in e' and e". A
+conditional equation containing n ifs can thus be replaced by 2" condi-
+tional equations without ifs.
+This method has the advantage that the data type of Boolean values can
+still be defined by the user provided that the specification contains the con-
+stants true and false of sort BOOL.
+The definition of the if-function by means of a signature schema (the
+first method given above) is not equivalent to the definition based on if-
+elimination. The former leads to specifications containing an if-function
+for each sort, while the latter gives specifications containing no if-
+functions at all. We prefer the second definition since it amounts to a sim-
+ple, local transformation of the specification.
+:
+The algebraic specification formalism ASF 11
+1.1.5 Types
+1.1.5.1 Tupled output types
+In the signature tuples are allowed as output types, i.e., the function
+f : S1 # S2 -> S3 # S4
+has output type S3 # S4. Instances of this type are ordered pairs of
+values of sorts S3 and S9 respectively. In equations, tuples are written as a
+sequence of two or more terms enclosed by angle brackets < and > and
+separated by commas. The sorts of the components of such a tuple must be
+equal to the corresponding components of the applicable tupled output typein the signature. Tuples can be removed from the specification by intro-
+ducing new sorts and construction functions for each tupled output type in
+the signature. The above tupled output type S3 # S4 can be eliminated as
+follows:
+Introduce a new sort S5 to act as a replacement for S3 # S4;
+Replace the definition of f by
+f : S1 # S2 -> S5
+and introduce the constructor
+make-S5 : S3 # S4 -> S5
+. Replace all tuples of type S3 # S4 by applications of make-55, e.g.
+replace <s3, s4> by make-s5 (s3, s4).
+Note, that no projection functions have to be defined, since the selection of
+elements from tuples can be accomplished by means of conditional equa-
+tions. For instance, one can decompose the value of function f into com-
+ponents x and y (which are variables of sorts S3 and S4 respectively) as
+follows:
+<x, y> = f (tl, t2) ==>
+. equation using x and y
+Tuples can only occur as output values. Hence, a tupled output value itself
+cannot be used directly as the argument of a function (but its components
+can, of course).
+. . .
+12 Algebraic Specification
+1.1.5.2 Overloading
+Function names may be overloaded, i.e., the same function name may
+denote several functions with different types. For instance, after defining
+f S1 # S2 -> S3
+f : S2 # S3 -> S2
+each occurrence of the function name f in a term will have to be disambi-
+guated by inferring its type from the types of the arguments to which it is
+applied. Since an overloaded name does not identify a specific function
+uniquely, we will in the sequel use disambiguated function names, which
+are obtained by postfixing function names with their type. Because input
+types of overloaded functions are required to be unique (see next section),
+it would be sufficient to use only the input type as a postfix.
+1.1.5.3 Inside-out type checking
+Type checking of a term is accomplished by inside-out (bottom-up) type
+assignment as follows:
+Determine the types of the constants and variables in a term.
+Propagate this type information (inside-out) to the enclosing terms until
+the type of the complete term has been determined.
+To guarantee the uniqueness of types during each stage of type assignment,
+the types of functions and variables must satisfy the following constraints:
+Overloaded functions (see Section 1.1.5.2) should have unique input
+types (this forbids overloaded constants).
+Variables cannot be overloaded.
+The sets of constants and variables must be disjoint.
+1.1.6 Exports, imports, and parameters
+A module may contain definitions of the following signatures:
+an export signature;
+zero or more parameter signatures;
+a hidden signature.
+Each of these signatures may be incomplete in the sense that it may use
+sorts defined in one of the other signatures or in one of the signatures
+"inherited" from imported modules (see below).
+The export signature of a module is defined by an export s clause. The
+sorts and functions declared in it are visible outside the module. Hidden
+:
+The algebraic specification formalism ASF 13
+sorts and functions, on the other hand, are only visible inside the module in
+which they are declared. Hidden sorts are not permitted in the types of
+exported functions. Exported names are inherited, i.e., they are automati-
+cally exported by modules that (directly or indirectly) use the module from
+which the names were originally exported.
+Import of a module in another module is the fundamental composition
+operation for modules. It is described by the imports clause. Importing
+module B in module A is equivalent to constructing a new module A' con-
+sisting of the union of the signatures and equations of A and B. Note, that
+the hidden names of module B are only visible inside B and can never clash
+with hidden or visible names of A. Technically, this can be achieved by
+renaming the hidden names of B to unique new names before modules A
+and B are combined. The declaration of the imported module must precede
+the declaration of the importing module. In this way cycles in the import
+graph are avoided.
+In order to make modules more generally usable in different contexts, a
+form of parameterization is available in ASF. Parameterization is
+described by a parameters clause consisting of one or more formal
+parameters. Each parameter is a named (possibly incomplete) signature
+consisting of declarations offormal sorts and functions, which at a later
+stage when the parameterized module is imported in another module
+may be bound to actual ones (see Section 1.1.8.2). Not all its parameters
+have to be bound before a module can be imported in another one. Such
+unbound parameters are inherited by the importing module and are indis-
+tinguishable from parameters that are specified in the importing module
+itself. fr.,snce, the set of parameters of a module consists on the one hand of
+the parameters declared in the module itself (if any) and on the other hand
+of the parameters inherited from imported modules (if any). All these
+parameters should have different names. As parameter names are not sus-
+ceptible to renaming, conflicts between (inherited) parameter names cannot
+be resolved within ASF itself but require editing of at least one of the
+names involved. To avoid direct or indirect self-binding, the declaration of
+a module must precede its use as an actual parameter. Hidden sorts are not
+permitted in the types of functions in parameters
+The visible signature of a module is the complete set of names visible
+outside the module. It is the union of all its (locally declared as well as
+inherited) export and parameter signatures. As it may not use hidden
+names, the visible signature of a module must be complete.
+Finally, the internal signature of a module is the union of its visible
+14 Algebraic Specification
+signature and its hidden signature. Like the visible signature, the internal
+signature must be complete. It consists of all names available inside the
+module.
+1.1.7 The origin rule
+When combining signatures of a module or modules of a specification, the
+problem arises how multiple declarations of the same name should be han-
+dled. Clearly, one wants to avoid random, i.e., unintended, name
+identifications. To this end we introduce the origin rule.
+We associate with each (disambiguated) name a in the internal signature
+or variable section of a module an origin which is basically the textual
+position of a declaration of some (disambiguated) name n to which a
+"owes its existence." Thus, an origin is a tuple [rn,s,c,n], where
+m is the name of the module in which the declaration of n occurs.
+s is the section of the module in which the declaration of n occurs:
+s = export for the export section,
+s = hidden for the hidden and the variables section, and
+s = p for a parameter section with name p.
+c is the subcategory to which n belongs:
+c = sort for a sort name,
+c = function for a function name, and
+c = variable for a variable name.
+n is the (disambiguated) name introduced by the declaration.
+Origins propagate in the following way:
+Declaration: At the moment a name a is declared, it obtains the origin
+fm,s,c,a1, where m, s and c are determined from the context of the
+declaration. Hence, initially n = a.
+Import: Import of a name does not affect its origin.
+Renaming: A new name introduced by a renaming inherits the origin of
+the name it replaces. In general this leads to n a. This applies to both
+explicit renaming (Section 1.1.8.1) as well as implicit renaming (see
+below), but not to formal-to-actual renaming in a parameter binding.
+Parameter binding: The origin of an actual name does not change by
+binding a formal name to it (Section 1.1.8.2). The origin of the formal
+name disappears along with the formal name itself.
+The origin rule states that:
+The algebraic specification formalism ASF 15
+1. Two visible sorts or functions are identical if they have both the same(disambiguated) name and the same origin. Visible sorts and functions
+having the same (disambiguated) name but different origin are forbid-den.
+2. Two hidden sorts are identical if they have the same origin.3. Two variables are identical if they have the same origin and if the
+corresponding types (sorts) can be identified using (1) or (2).
+4. Two hidden functions are identical if they have the same origin and ifthe two corresponding types have equal structure and can be identified
+componentwise using (1) and (2).
+The origin rule allows the multiple import of the same module (via dif-ferent routes), but forbids clashes of identical (disambiguated) names ori-ginating from different modules or from different signatures within a
+module. Hidden names are implicitly renamed when modules are com-bined to avoid name clashes (Section 1.3.2). The origin rule allows hidden
+names with the same origin to be identified, even if the names themselves
+are different.
+Violations of the origin rule can always be eliminated by moving alldeclarations of conflicting names to a new module. This can be seen in the
+following example, where the declaration of sort A in both ml and M2
+causes a violation of the origin rule in M3, which imports both tql and M2:
+module Ml
+begin
+exports
+begin sorts A end
+end Ml
+module M2
+begin
+exports
+begin sorts A end
+end M2
+module M3
+begin
+imports Ml, M2
+end M3
+The origins associated with the declarations of sortA in modules ml and m2
+are [ml,export,sort,A] and [M2,export,sort,A] respectively. We can
+16 Algebraic Specification
+circumvent this violation of the origin rule by introducing a new module MO
+in which sort A is declared, and by importing MO in both ml and M2:
+module MO
+begin
+exports
+begin sorts A end
+end MO
+module Ml
+begin
+imports MO
+end Ml
+module M2
+begin
+imports MO
+end M2
+module M3
+begin
+imports Ml, M2
+end M3
+This example shows that the origin rule enforces a certain modularization
+of ASF specifications.
+1.1.8 Module expressions
+Module expressions serve the purpose of renaming visible sorts and func-
+tions and of binding formal parameters to actual ones. After evaluation,
+the result of the module expression is imported in another module. The
+constituents of module expressions are described in the following subsec-
+tions.
+1.1.8.1 Renaming
+Visible names of a module can be renamed by means of the renamed by
+construct, which specifies a renaming, i.e., a list of (old visible name, new
+visible name)-pairs, to be applied to the module. The renaming should be
+consistent, i.e., lead to a correct new signature. In particular, the new sig-
+nature should obey the origin rule. This implies that most name clashes
+due to renaming are forbidden, but that different names having the same
+origin may be renamed to the same name (Sections 1.5.1.16 and 1.5.1.17).
+The algebraic specification formalism ASF 17
+The new name inherits the origin of the name it replaces.
+Renamings do not allow the selective renaming of one of the instances
+of an overloaded function. In this case all instances are renamed simul-
+taneously.
+1.1.8.2 Parameter binding
+Binding of parameters is achieved by the bound by construct, which
+specifies the name of a parameterized module, a parameter name, a list of
+bindings, i.e., (formal name, actual name)-pairs, and the name of an actual
+module. The effect of a parameter binding is that the parameter is replaced
+by the actual module as specified by the list of bindings. A parameter can
+thus be bound only once. The following rules apply:
+Actual names must belong to the visible signature of the actual module.
+In particular, parameter to parameter binding is allowed (Section
+1.5.3.5).
+Formal names and actual names must be of the same kind, i.e., both
+should be either sort names or function names.
+The binding of formal functions should be consistent, i.e., the types of
+formal and actual functions should be equal if the binding of formal sorts
+is taken into account.
+All sorts and functions of a parameter must be bound to a sort or func-
+tion of the actual module.
+The origin of actual names is not affected by binding.
+Overloading of functions within a single parameter is allowed, but the
+instances of such a function cannot be bound independently of each other.
+In this case all instances are bound simultaneously.
+1.2 Syntax of ASF
+1.2.1 Context-free syntax
+In this section we give a context-free grammar for ASF. The following
+notational abbreviations are used:
+( <N> ] denotes an optional occurrence of <N>.
+<N>* and <N>+ denote, respectively, zero or more, and one or more
+occurrences of <N>.
+{ <N> t } * and { <N> t } + denote, respectively, zero or more, and
+one or more occurrences of <N> separated by terminal symbol t.
+1
+1
+1
+18 Algebraic Specification
+ASF has the following grammar:
+<specification> ::= <module>+
+<module> ::= "module" <module-ident>
+"begin"
+[ <parameters> ]
+[ <exports> ]
+[ <imports> ]
+[ <sorts> ]
+[ <functions> ]
+[ <variables> ]
+[ <equations> ]
+"end" <module-ident>
+<module-ident> ::= <ident>
+<parameters> ::= "parameters"
+( <parameter> "," 1+
+<parameter> ::= <parameter-ident>
+"begin"
+[ <sorts> ]
+[ <functions> ]
+"end" <parameter-ident>
+<parameter-ident> ::= <ident>
+<exports> ::= "exports"
+"begin"
+[ <sorts> ]
+[ <functions> ]
+"end"
+<imports> ::= "imports"
+{ <module-expression> "," 1+
+<module-expression> ::= <module-ident>
+[ "{" <modifier> "1" ]
+<modifier> ::= <renamed> [ <bound> ] 1
+<bound> [ <renamed> ]
+<renamed> ::= "renamed" "by" <renamings>
+<renamings> ::= "[" ( <renaming> "," "]"
+<renaming> ::= <sort> "->" <sort> 1
+<fun-or-operator-ident> "->"
+<fun-or-operator-ident>
+<fun-or-operator-ident>
+::= <fun-ident> 1
+<operator> " " 1
+<operator> " "
+)1-
+" "
+_
+_
+_
+<bound>
+<sorts>
+<sort-list>
+<sort>
+<functions>
+<function>
+<fun-ident>
+<input-type>
+<output-type>
+<product>
+<variables>
+<variable-list>
+<var-ident-list>
+<var-ident>
+<equations>
+<cond-equation>
+<tag>
+<equation-list>
+<equation>
+<term>
+<primary>
+<term-list>
+<tuple>
+The algebraic specification formalism ASF 19
+::= ( <parameter-ident>
+"bound" [ "by" <renamings> ]
+"to" <module-ident> )+
+"sorts" <sort-list>
+::= { <sort> "," 1+
+::= <ident>
+::= "functions" <function>+
+<fun-ident> ":"
+<input-type> "->"
+<output-type>
+I
+<operator>
+<sort> "->"
+<output-type> I
+<operator> " "
+<sort> "#" <sort> "->"
+<output-type>
+::= <ident>
+::= [ <product> ]
+::= <product>
+::= { <sort> "#"
+::= "variables" <variable-list>
+::= ( <var-ident-list> ":"
+"->" <sort> )+
+::= { <var-ident> ","
+::= <ident>
+::= "equations" <cond-equation>+
+::= <tag> <equation-list>
+<implies> <equation>
+I
+<tag> <equation>
+[ "when" <equation-list> ]
+::= "[" <ident> "]"
+::= { <equation> "," }+
+::= <term> "=" <term>
+::= [ <term> <operator> ]
+<primary>
+::= <fun-ident>
+["(" <terM-list> ")" 1
+<var-ident> 1
+<tuple> 1
+"(" <term> ")" 1
+<operator> <primary>
+::= { <term> "," }+
+::= "<" <term> "," <term-list> ">"
+::=
+::=
+"_"
+":"
+1+
+]
+":"
+}+
+20 Algebraic Specification
+1.2.2 Lexical syntax
+Layout or comment may separate the following lexical notions of ASF:
+<ident>, <operator>, and <implies>. Layout has no significance
+other than separating consecutive lexical tokens that would otherwise not
+be distinguished. Layout may never occur embedded in a lexical token. In
+cases of ambiguity, the longest lexical token is preferred. The lexical con-
+ventions of ASF are summarized below.
+Layout characters are space, horizontal tabulation, carriage return, line
+feed and form feed.
+Comments follow a layout character and begin with two hyphens and
+end with either an end of line (i.e., carriage return or line feed) or
+another pair of hyphens.
+Identifiers (i.e., <ident>) consist of a non-empty sequence of letters,
+digits or single quote characters, possibly with embedded hyphens. This
+is expressed by the following rules:
+<id-char> ::= <letter> 1 <digit>
+<ident> ::= <id-char>
+[ ( <id-char> 1 "-" )* <id-char> ]
+For example, x, maxl, 2-way, x", doublehyphen, Very-Long-
+Identifier and 6 are legal identifiers, but -a, and a- are illegal.
+The following identifiers are reserved as keywords and cannot be used as
+an identifier:
+begin end functions parameters to
+bound equations imports renamed variables
+by exports module sorts when
+For technical reasons we also forbid the names hidden and export as
+<parameter-ident> (see Section 1.1.7).
+Operators (i.e., <operator>) are denoted by either a sequence of one or
+more operator symbols or by an identifier surrounded by dots:
+<op-symbol> IV!IV 1 ITV 1 11$17 1 VIVI 1 11^1V 1 VIVO
+114.1I 1 H-11 1 II*11 1 .. .?. .-.
+./. .1. .\.
+<operator> ::= <op-symbol>+
+I
+<ident> "."
+The operators +, &&, . push . and ! @%%? are legal.
+1
+::= I
+I I I
+I I
+"."
+-
+""
+The algebraic specification formalism ASF 21
+The token <implies> consists of two or more consecutive = characters
+followed by either the character > or a new line:
+<implies> ::= "==" "="* ( ">" I "\n" ) .
+1.3 Semantics of ASF specifications
+1.3.1 Conditional equations and initial algebra semantics
+The conditional equations in an ASF specification may be viewed as
+axioms from which other equations can be deduced. This is similar to what
+is done in ordinary high-school algebra when one proves
++y )2 = 2+2.xy +y 2
+by means of the ordinary laws (axioms) of arithmetic.
+Consider, for instance, the equation (identity)
+or (true, false) = true
+The equations of module Booleans of Section 1.1.2 enable us to prove
+this equation by first applying equation [B5] to its left-hand side:
+or (true, false) = not (and (not (true) , not (false) ) )
+Now [B3] and [B4 ] can be applied, giving
+not (and (not (true) , not (false) ) ) =
+not (and (false, true) )
+This in turn reduces to true by [B2] and [B4].
+The equations of Booleans are all non-conditional. Such equations
+may be applied without further ado. A conditional equation, on the other
+hand, may only be applied if the equations in the condition are provable for
+the particular case at hand. See [MG85] and [GM82] for a much more pre-
+cise account of equational deduction.
+Equations are completely symmetric. They may be applied from left to
+right, but also from right to left. By interpreting them as left-to-right
+rewrite rules (which may often seem natural) one runs the risk of losing
+deductive power, i.e., such an interpretation is not necessarily complete
+with respect to the original equational system. This becomes an important
+issue when equational specifications have to be implemented (Chapter 5).
+A nice property of algebraic specifications is that they have initial
+1
+22 Algebraic Specification
+models. As was explained in Section 1.1.2, the initial algebra has two
+important characteristics. There are no elements in it that cannot be talked
+about in terms of the signature of the specification ("no junk"), and ele-
+ments are only equal if the associated terms can be proved equal by means
+of equational logic ("no confusion") [BG82, MG85, EM85].
+The initial model is unique up to isomorphism. This property is easily
+lost if the underlying logic is made more powerful. For instance, in Chapter
+9 we experiment with negative conditions in equations and this immedi-
+ately leads to ambiguous initial algebra semantics due to the fact that nega-
+tive conditions are equivalent to disjunctions.
+A specification may contain functions without any defining equations.
+Such functions act as constructors of new elements of the initial algebra.
+The succ-function in module Naturals (Section 1.1.2) is an example of
+such a constructor. A function may also be partially defined. This means
+that the equations given in the specification do not permit the elimination of
+the function from all possible terms without variables but only from some
+of them. These also act as constructors. It is important to keep in mind
+that all functions in the initial algebra are total. Hence, partially defined
+functions do not correspond to partial functions in the initial algebra but
+give rise to additional elements that must be dealt with properly.
+Although equational logic is complete with respect to equations between
+closed terms (terms without variables these are also called ground
+terms) in the initial algebra, this is not true for equations involving open
+terms (terms with variables). For instance, the equation
+not (not (x) ) = x
+is valid in the initial algebra of Booleans, but it is not provable by purely
+equational means. Although its validity simply follows from the two
+closed equations
+not (not (true) ) = true
+and
+not (not (false)) = false
+(both of which are equationally provable), the proof uses the fact that the
+only elements of the initial algebra of Booleans are true and false
+("no junk"). In general, proving the validity of open equations in the ini-
+tial algebra of a specification requires either an additional proof rule such
+as structural induction, or additional equations. See also [MG85] and
+[Hee861.
+The algebraic specification formalism ASF 23
+1.3.2 Normalization of ASF modules
+An ASF specification consists of a sequence of modules. A module can be
+evaluated in the context of a specification in which it occurs. This leads to
+a normal form, i.e., an ASF module from which all imports and as many
+parameters as possible have been eliminated. Normalization is an opera-
+tion on the text of specifications.
+We assign a semantics to each module in an ASF specification by
+assigning a semantics to its normal form (provided that it does not have
+unbound parameters), but not to the intermediate results that may occur
+during normalization.
+In the following subsections we give a semi-formal definition of the nor-
+malization process. An example of normalization is given in Section 1.3.3.
+1.3.2.1 Semantic domains
+First, we introduce the domains MNAME, PNAME, SNAME, FNAME,
+VNAME and FTYPE of, respectively, module names, parameter names,
+sort names, function names, variable names, and function types. Although
+FTYPE could be defined using SNAME (since each function type consists
+of one or more sort names), we prefer to consider FTYPE as a primitive
+domain for reasons of simplicity. The domain SFV of sort names, (disam-
+biguated) function names, and (disambiguated) variable names is defined
+as
+SFV = SNAME u (FNAME x FTYPE) u (VNAME x SNAME)
+The domain ORIGIN of origins is defined as
+MNAME x ({ export,hidden} u PNAME) x
+x Isort,function,variablel x SFV
+The domain ORF of origin functions is defined as
+ORF = SFV --> ORIGIN
+The domain IR of intermediate results consists of _modules without imports,
+with possibly incomplete signatures, and possibly improper origin func-
+tions. An intermediate result ire IR is a 6-tuple (E,P, r, V,O,E), where
+E is a signature of exported sorts and functions.
+P is a list of pairs (pi,Ei), where pi is a parameter name and Ei is the
+corresponding parameter signature. The names pi are different from
+each other. Both the export signature E and the parameter signatures Ei
+may use sorts declared in one of the others. Because ir does not contain
+24 Algebraic Specification
+imports, the union of these signatures is the visible signature of ir (Sec-
+tion 1.1.6). The visible signature of ir need not be complete.
+r is a signature of hidden sorts and functions. r may use sorts defined in
+or P. Because ir does not contain imports, the union of the visible sig-
+nature of ir with r is the internal signature of ir (Section 1.1.6). The
+internal signature of ir need not be complete.
+V is a set of typed variables over the internal signature of ir. OE ORF is
+an origin function that associates an origin (as defined in Section 1.1.7)
+with each sort and each disambiguated function name (Section 1.1.5.2)
+defined in the internal signature, and with each variable in V. 0 may be
+improper in the sense that origins may contain names of formal parame-
+ters that no longer exist. Intermediate results always obey the origin
+rule.
+E is a set of conditional equations over a signature that may be larger
+than the internal signature of ir.
+The domain NF c IR of normal forms consists of all intermediate results
+with complete signatures and proper origin functions. Like intermediate
+results, normal forms may have parameters. More precisely, a normal
+form n is an intermediate result satisfying the following additional con-
+straints:
+The visible signature of n is complete, i.e., all sorts used in function
+definitions in the visible signature are also declared in the visible signa-
+ture.
+The internal signature of n is complete as well, i.e., all sorts used in
+function definitions in the internal signature and all functions used in
+equations are declared in the internal signature.
+All sorts and functions in the internal signature have proper origins. In
+particular, no origin may contain the name of a parameter that has been
+bound during normalization and thus no longer exists. (This simply
+means that all formal names of bound parameters have been eliminated.)
+The domain ASF of ASF specifications consists of all strings derivable
+from the notion <specification> in the ASF grammar in Section 1.2.1.
+The domain RENAMING consists of non-empty lists of (old-
+disambiguated-name, new-name)-pairs:
+RENAMING =
+((SNAME x SNAME) u ((FNAME x FTYPE) x FNAME)) +
+E
+The algebraic specification formalism ASF 25
+1.3.2.2 Auxiliary functions
+We evaluate the elements of a module in the same order in which they
+occur in the text. This strategy is not optimal in the sense that it may lead
+to violations of the origin rule and to other errors in cases in which another
+evaluation order would produce a correct normal form. It has the advan-
+tage of being straightforward, however.
+The normalization function N : MNAME x ASF NF computes the
+normal form of a module with a given name in the context of a given
+specification. To define N we need four auxiliary functions:
+rename_visibles, rename _hiddens, combine, and bind. All these functions
+are partial.
+The types of the functions occurring in the following semi-formal
+description of the normalization procedure are to be understood as dynamic
+constraints. Each function is responsible for checking whether its own
+arguments and results have the proper type. If they do not, normalization
+fails. We have explicitly indicated most (but not necessarily all) other con-
+straints that may cause normalization failures, so the normalization pro-
+cedure can also be viewed as a static consistency checker for ASF
+modules. Freek Wiedijk has implemented such a checker in C and Paul
+Hendriks has written one in Prolog. The latter also compiles ASF
+specifications to Prolog (see Chapters 5 and 9).
+1.3.2.2.1 rename_visibles : IR x RENAMING x ORF IR
+This function renames an intermediate result as indicated in a renamed
+by or bound by clause. The third argument of rename_visibles is the ori-
+gin function of the actual module to be bound. It is undefined for ordinary
+renamings. Given an intermediate result ir = (E,P,F,V,O,E) to be
+renamed, a renaming r, and a (possibly undefined) origin function Oact,
+rename_visibles(ir,r,Oact) first applies a "simultaneous" renaming to the
+visible signature of ir as prescribed by r. E, P and E may be affected by
+renamings of both sorts and functions (resulting in P' and E'), while r
+and V may be affected by the renaming of (visible) sorts only (resulting in
+r and V'). The resulting origin function 0' is determined as follows. Let
+domain(Onew)=0 and0 old= 0. For each (x,y) E r
+1. remove x from domain(Oold);
+2. define Onew(y)=0(x) (ordinary renaming; Oact undefined; y inherits
+the origin of x); or
+2'. define 0,(y) =0 act(y) (parameter binding).
+Now take 0 '=
+- old U One, (this fails if the result 0' is not a function!)
+>
+E',
+>
+26 Algebraic Specification
+and define
+rename visibles (ir,r,Oact) = (s,P', v', E')
+Note that, if a new visible name clashes with an existing hidden name in r,
+the latter is not automatically renamed.
+1 .3 .2 .2 .2 rename hiddens : NF x IR ---> NF
+This renaming does not correspond to an explicit renamed by or bound
+by clause, but is used implicitly by combine (next section). Given a
+normal form n to be renamed and an intermediate result ir,
+rename _hiddens(n,ir) applies a renaming to all hidden sorts and functions
+and all variables of n so that these names can no longer cause clashes when
+ir and n are merged by combine.
+1 .3 .2 .2 .3 combine : IR x NF ----> NF
+This function corresponds to an import clause. For an intermediate result
+ir and a normal form n to be imported in ir, combine is defined as
+combine(ir,n)= ir u rename _hiddens(n,ir)
+where u is componentwise union. As dictated by the origin rule (Section
+1.1.7), hidden names or variables of n that have the same origin as hidden
+names or variables of ir are identified, i.e., they are renamed to the names
+they have in ir. Only the hidden names of n are renamed, so the hidden
+names of ir can still clash with visible names of n (Section 1.5.1.12). This
+will be detected by the origin rule. The sets of parameter names of ir and n
+should be disjoint and the result of combine should be a normal form.
+I .3 .2 .2 .4 bind : NF x PNAME x RENAMING x NF NF
+This function corresponds to a bound by clause. Given a parameterized
+normal form n 1 = (11,P 1,1- ,V 1,0 1,E 1), a parameter name pE P 1, a
+renaming (binding) r, and an actual parameter in normal form
+n 2 = (E2,P2,r2,V2,02,E 2), bind performs the following steps:
+1. add parameter signature Ep of n1 to its export signature Et, delete
+(p,Ep) from P 1, and let the result be ir (this is an intermediate result
+and not a normal form, because some names in ir may still have origins
+containing p, although this parameter does not exist in ir);
+2. let ir' = rename _visibles (ir,r,0 2);
+3. define bind (n 1,p,r,n2) = combine (ir',n 2).
+-->
+The algebraic specification formalism ASF 27
+For bind to succeed, each (x,y)E r should satisfy the following require-
+ments:
+x is a sort name or a (function name, function type)-pair defined in Ep;
+y is a name of a sort or function in the visible signature Z2 u P 2 of n 2;
+each name from El, appears exactly once as old name in r.
+1.3.2.3 The normalization function N : MNAME x ASF -> NF
+Given a module name me MNAME and a specification SE ASF, the normal
+form N(m,S) is computed with the aid of the auxiliary functions of the pre-
+vious section as follows:
+1. Let M be the text of the module in S with name rn (this step may fail if
+there is no such module).
+2. Let / be the intermediate result obtained from M by deleting its
+import s clause (if any) and by adding an origin function 0 (this step
+may fail if /e IR).
+I = (E,P, F, V, 0,E) with
+E an export signature consisting of the sorts and functions declared
+in the export s section of M;
+P a list of pairs (pi,Ei), where pi is the name of the i-th parameter of
+M and Ei is the corresponding parameter section of M;
+r a hidden signature consisting of the hidden sorts and functions
+declared in M;
+V the set of variables declared in M;
+0 the origin function on EP ur u V;
+E the set of equations in M obtained by eliminating all instances of
+f (Section 1.1.4.3).
+3. Let the import s clause of M be
+imports El, . . . , Ek (k 0)
+with module expressions
+Ei = mi Ci,i, . ,Ci, (mie MNAME, 1 ?. 0, I depends on i)
+Ci, j is either a bound by or a renamed by clause (the latter is only
+allowed for j = 1 or j =1 and not both if 2). For i=1, . . . ,k evaluate
+Ei as follows:
+3.1. Let Ni,0 =N(mi,S) be the normal form of mi. To ensure termi-
+nation the declaration of mi must precede that of m in S.
+. .
+1
+28 Algebraic Specification
+3.2. For j=1, . . . , 1 evaluate C,3 as follows:
+3.2.1. If C1,1 is a bound by clause
+Pi,j bound by r, to rni,
+with pi, je PNAME, ri, j a renaming, nit, je MNAME, let
+N 1, j = bind(Ni, j_i,pi, j,Ri, j,S))
+be the normal form after binding pi, j. The renaming Ri,
+is obtained from the list ro of (old-name, new-name)-
+pairs in Ci, by extending function names with their type.
+To ensure termination the declaration of mo must pre-
+cede that of mi in S.
+3.2.2. If Ci, is a renamed by clause
+renamed by ro (ro a renaming)
+let
+N1,1 = rename visibles(N i,j _1,R i, pundefined)
+be the normal form after renaming. As in the bound by
+case, the renaming Ro is obtained from the list I-0 of
+(old-name, new-name)-pairs in C,, j by extending function
+names with their type. If old-name corresponds to an
+overloaded function, one pair is added to R for each
+instance of old-name.
+3.3. Let N1=N1,1 be the normal form of Ei.
+4. The desired normal form is
+N(m,S) = combine(I,combine( combine (N 1,N 2) N k))
+(By combining N 1, , Nk first, we deviate slightly from the textual
+order of evaluation, which would correspond to
+combine( combine(combine(I,N 1),N 2) Nk)
+The latter evaluation order only works if the type of combine is relaxed
+to IR x NF IR.)
+The semantics of module m in the context of specification S is the initial
+algebra (Section 1.3.1) of its normal form N(m,S), provided the latter has
+no void sorts (at least one closed term for each sort) and no unbound
+parameters.
+j, N(mi,
+. . .
+>
+The algebraic specification formalism ASF 29
+1.3.3 An example of normalization
+We show the result of normalizing module Nstrings in the context of the
+example specification given in Section 1.1.2 (to which we will refer as
+spec). Nstrings involves both import and parameter binding.
+Except for the origin information, which we add after each declaration, a
+normal form can be represented as an ordinary ASF module.
+Upon import of Booleans in Naturals, variables x and y of sort BOOL
+are implicitly renamed to x and Y by combine (Section 1.3.2.2.3) to avoid
+overloading with x and y of sort NAT. Function eq is overloaded in the
+normal form of Nstring, but this is allowed (see Sections 1.1.5.2 and
+1.1.5.3). Renaming of hidden function not of module Booleans is not
+necessary in this example.
+Nstrings' = N(Nstrings,Spec) looks as follows:
+module Nstrings'
+begin
+exports
+begin
+sorts
+BOOL [Booleans, export, sort, BOOL]
+NAT [Naturals, export, sort, NAT]
+NSTRING [Sequences, export, sort, SEQ]
+functions
+true : -> BOOL
+[Booleans, export,
+false : -> BOOL
+[Booleans, export,
+and : BOOL # BOOL ->
+[Booleans, export,
+or : BOOL # BOOL ->
+[Booleans, export,
+function,
+function,
+true :
+false :
+->
+->
+BOOL]
+BOOL]
+BOOL
+function,
+and : BOOL # BOOL -> BOOL]
+BOOL
+function,
+or : BOOL # BOOL -> BOOL]
+0 : -> NAT
+[Naturals, export, function, 0 : -> NAT]
+succ : NAT -> NAT
+[Naturals, export, function,
+succ : NAT -> NAT]
+eq : NAT # NAT -> BOOL
+[Naturals, export, function,
+eq : NAT # NAT -> BOOL]
+30 Algebraic Specification
+null-nstring : -> NSTRING
+[Sequences, export, function, null : -> SEQ]
+cons : NAT # NSTRING -> NSTRING
+[Sequences, export, function,
+cons : ITEM # SEQ -> SEQ]
+eq : NSTRING # NSTRING -> BOOL
+[Sequences, export, function,
+eq : SEQ # SEQ -> BOOL]
+end
+functions
+not : BOOL -> BOOL
+[Booleans, hidden, function, not : BOOL -> BOOL]
+variables
+X : -> BOOL
+[Booleans, hidden, variable, x : -> BOOL]
+Y : -> BOOL
+[Booleans, hidden, variable, y : -> BOOL]
+x : -> NAT
+[Naturals, hidden, variable, x : -> NAT]
+y : -> NAT
+[Naturals, hidden, variable, y : -> NAT]
+s : -> NSTRING
+[Sequences, hidden, variable, s : -> SEQ]
+sl : -> NSTRING
+[Sequences, hidden, variable, sl : -> SEQ]
+s2 : -> NSTRING
+[Sequences, hidden, variable, s2 : -> SEQ]
+i -> NAT
+[Sequences, hidden, variable, i : -> ITEM]
+ii : -> NAT
+[Sequences, hidden, variable, il : -> ITEM]
+i2 : -> NAT
+[Sequences, hidden, variable, i2 : -> ITEM]
+equations
+[B1] and(true, X) = X
+[B2] and(false, X) = false
+[B3] not(true) = false
+[34] not(false) = true
+[B5] or(X, Y) = not(and(not(X), not(Y)))
+[N1] eq(0, 0) = true
+:
+The algebraic specification formalism ASF 31
+[N2] eq(x, y) = eq(y, x)
+[N3] eq(succ(x), 0) = false
+[N4] eq(succ(x), succ(y)) = eq(x, y)
+[S1) eq(null-nstring, null-nstring) = true
+[S2] eq(sl, s2) = eq(s2, sl)
+[S3] eq(cons(i, s), null-nstring) = false
+[S4] eq(cons(il, sl), cons(i2, s2))
+= and(eq(il, i2), eq(sl, s2))
+end Nstrings'
+1.4 Discussion
+1.4.1 Known defects and limitations of ASF
+All exported names are inherited by importing modules, i.e., they are
+also exported by the modules that directly or indirectly use the module
+from which the names were originally exported. This simple scheme has
+the undesirable property that the number of exported names never
+decreases and cannot be controlled. A more refined mechanism for hid-
+ing visible names is clearly desirable, but has not been included in ASF.
+It is not possible to rename or bind one of the instances of an overloaded
+function independently of the other instances due to the lack of type
+information in renamings and bindings.
+The inside-out typing scheme is too restrictive in some cases.
+In the text of a module the export signature precedes the import section.
+This has the advantage that the export signature has a fixed and prom-
+inent position in the text, but the disadvantage that the export and param-
+eter signatures may contain sorts from imported modules appearing later
+in the text.
+It would be desirable to have a general facility for defining the syntax of
+operators and functions instead of the very limited possibilities offered
+by ASF. By means of such a facility specifications containing user-
+defined (conventional) notation for integer and string constants, sets,
+lists, etc., could be written. This would also eliminate the need for ad
+hoc conventions such as, for instance, the notation for string constants
+32 Algebraic Specification
+used in Chapter 2. The problem of introducing syntactic freedom in
+specifications is addressed in SDF (Chapter 6).
+Some specifications could probably benefit from a notion of subsorts
+[GJM85, GM85], i.e., an inclusion relationship between two or more
+sorts. This has to be modeled in ASF by explicit injection functions.
+ASF does not provide nested module definitions.
+Parameter binding is restricted to the binding of a formal parameter to a
+single actual module. Interesting possibilities not covered by ASF are:
+(a) binding of a formal parameter to more than one actual module; (b)
+binding of a parameter to the module in which the parameterized module
+is imported.
+Binding a parameter of a parameterized module does not affect the ori-
+gins of names that are not involved in the binding. As a consequence,
+names of different instances of a parameterized module are identified if
+they are equal, but this is clearly undesirable. The current version of the
+origin rule is too weak to handle these cases properly.
+The origin rule does not apply to parameter names (Section 1.5.2.4).
+Parameter names cannot be renamed.
+1.4.2 Some theoretical aspects of ASF
+The prime reason for including hiding is that it is both practically and
+theoretically essential. See [BT82], [BT83] and [BT87] for theoretical
+results on the power of initial algebra specifications with and without hid-
+den sorts and functions. Furthermore, every effective parameterized data
+type has an initial algebra specification with hidden sorts and functions
+[BK83]. Hence, for parameterized data types the features included in ASF
+are also as strong as possible.
+The description of the semantics of specifications by means of a normal-
+ization procedure as given in Section 1.3.2 is mathematically unsatisfac-
+tory. A better approach would be to translate ASF specifications to module
+algebra [BHK86].
+1.4.3 Related work
+Among the applications of ASF not included in this book are a
+specification of process algebra by Sjouke Mauw [Mau87], an environment
+for statistical software by Volken de Jong [Jon88], and the semantics of a
+specification language for numerical packages by Philips Corporate CAD
+Centre in Eindhoven.
+The algebraic specification formalism ASF 33
+ASF is similar to other algebraic specification formalisms like, among
+others, ACT-ONE [EM851, ASL [Wir83], Asspegique [BC85], OBJ2
+[FGJM85], PLUSS [Gau86], and RAP [GH86, Hus87]. It is also similar to
+an algebraic sublanguage of the design language Cold [FJOKRR87].
+The features of ASF for which some claim to novelty can perhaps be
+made are:
+The origin rule, which not only serves as a means to enforce modulariza-
+tion but also avoids numerous occurrences of renamed versions of the
+same hidden sort or function within one module. Nearly all context-
+dependent constraints on ASF specifications can be expressed as viola-
+tions of the origin rule.
+Structure diagrams, which display the structure of imports and parame-
+ters. These are generated automatically from the text of an ASF
+specification.
+The precise description of the semantics of modular specifications by
+means of a syntactic normalization procedure, which replaces more com-
+plex semantical considerations. As was pointed out in the previous sec-
+tion, this "operational" semantics is not satisfactory in the long run due
+to its lack of compositionality.
+Finally, it should be noted that the interaction between imports, exports,
+parameters, parameter binding, hiding, overloading, renaming, and the ori-
+gin rule is so complex that most of the time we spent on the design of ASF
+went into analyzing all problematic combinations of these features. Obvi-
+ously, one would prefer a formalism that does not give rise to such compli-
+cations, but we have not been able to design one that strikes a better bal-
+ance between expressive power and simplicity.
+1.5 Examples of ASF specifications
+In this section we give some examples of correct ("OK") as well as
+incorrect ("KO") ASF specifications. These examples illustrate various
+aspects of the formalism and may be used as (part of) a test set for an ASF
+static consistency checker. Inherited parameters are not yet very satis-
+factorily represented in structure diagrams by repeating the inherited
+parameter as a parameter of the module inheriting it (see example in Sec-
+tion 1.5.2.1, for instance).
+34 Algebraic Specification
+1.5.1 Import, export, and hiding
+1.5.1.1 (OK] Use of exported sorts/functions outside the module in which
+they are declared
+module Ml
+begin
+exports begin sorts A end
+end Ml
+module M2
+begin
+imports Ml
+functions f: A -> A
+end M2
+MI
+MI
+M2
+1.5.1.2 (KO] Use of hidden sorts/functions outside the module in which
+they are declared
+module Ml
+begin
+sorts A
+end Ml
+module M2
+begin
+imports Ml
+functions f: A -> A
+f has improper type, because
+sort A is not available in M2
+end M2
+1.5.1.3 (KO] Export of functions using hidden sorts
+module M
+begin
+exports
+begin functions f: A # A -> A end
+sorts A
+end M
+MI
+MI
+M2
+ts1
+- -
+The algebraic specification formalism ASF 35
+1.5.1.4 [OK] Hidden functions using exported sorts
+module M
+begin
+exports begin sorts A end
+sorts B
+functions f: B # A -> A
+end M
+1.5.1.5 (OK] Inheritance of exported sorts/functions
+module Ml
+begin
+exports begin sorts A end
+end Ml
+module M2
+begin
+imports Ml
+M2 inherits exported sort A
+from Ml
+end M2
+MI
+MI
+M2
+module M3
+begin
+exports
+begin functions
+imports M2
+f: A # A -> A end
+MI
+M2
+M3
+M3 in turn inherits A from M2,
+- - so f is properly defined
+end M3
+-
+ii
+--
+36 Algebraic Specification
+1.5.1.6 (OK) Multiple direct or indirect import of the same module
+module Ml
+begin
+exports
+begin sorts A
+functions f: A -> A
+end
+end Ml
+module M2
+begin
+exports
+begin sorts B
+functions g: B -> A
+end
+imports Ml
+end M2
+module M3
+begin
+exports
+begin sorts C
+functions h: A # A -> C
+end
+imports Ml
+end M3
+module M4
+begin
+imports M2, M3
+Ml is imported twice in M4:
+-- via M2 and via M3; these two
+imports are identified by the
+- - origin rule
+end M4
+MI
+MI
+M2
+MI
+M3
+MI
+M2
+M4
+MI
+M3
+I
+--
+--
+The algebraic specification formalism ASF 37
+1.5.1.7 [KO] Direct or indirect self-import
+module Ml
+begin
+exports
+begin sorts A
+functions f: A -> B
+end
+imports M2
+end Ml
+module M2
+begin
+exports
+begin sorts B
+functions g: B -> A
+end
+imports Ml
+Cycles in the import graph are
+not allowed
+end M2
+M2
+--
+V.A
+38 Algebraic Specification
+1.5.1.8 [K01 Overloading of constant due to import
+module Ml
+begin
+exports
+begin sorts A
+functions a: -> A
+end
+end Ml
+module M2
+begin
+exports
+begin sorts B
+functions a: -> B
+end
+end M2
+module M3
+begin
+imports Ml, M2
+Constant a becomes overloaded
+on import of Ml and M2 in M3
+end M3
+M1
+M2
+M1
+M3
+M2
+--
+The algebraic specification formalism ASF 39
+1.5.1.9 (OK] Overloading of non-constant function due to import
+module Ml
+begin
+exports
+begin sorts A
+functions f: A -> A
+end
+end Ml
+module M2
+begin
+exports
+begin sorts B
+functions f: B -> B
+end
+end M2
+module M3
+begin
+imports Ml, M2
+Overloading of (non-constant)
+functions is allowed
+end M3
+M1
+M2
+M1
+M3
+M2
+-
+40 Algebraic Specification
+1.5.1.10 [KM Clash of exported sorts/functions on import
+module Ml
+begin
+exports
+begin sorts A
+functions f: A -> A
+end
+end Ml
+module M2
+begin
+exports
+begin sorts A
+functions f: A -> A
+end
+end M2
+module M3
+begin
+imports Ml, M2
+-- A and f: A -> A are imported
+both from Ml and M2, but this
+violates the origin rule
+end M3
+MI.
+M2
+M1
+M3
+M2
+-
+The algebraic specification formalism ASF 41
+1.5.1.11 [OK] Hidden names of imported modules never cause name
+clashes
+module Ml
+begin
+exports begin sorts A end
+sorts B
+functions f: A -> A
+g: B -> B
+end Ml
+module M2
+begin
+exports
+begin functions f: A -> A end
+imports Ml
+sorts B
+functions g: B -> B
+B, g and f can be declared in
+-- M2 without causing clashes with
+identical but hidden names of Ml
+end M2
+MI
+MI
+M2
+1.5.1.12 (KO) Exported function clashes with hidden function on import
+module Ml
+begin
+exports
+begin sorts A
+functions f: A -> A
+end
+end Ml
+module M2
+begin
+imports Ml
+functions f: A -> A
+end M2
+MI
+M1
+M2
+- -
+42 Algebraic Specification
+1.5.1.13 (OK] Renaming of exported sorts/functions
+module Ml
+begin
+exports
+begin sorts A, B
+functions f: A -> B
+end
+end Ml
+module M2
+begin
+imports Ml { renamed by [ A -> C,
+B -> D,
+f -> g ] 1
+end M2
+1.5.1.14 10K] Renaming of exported sorts/functions
+module Ml
+begin
+exports
+begin sorts A, B
+functions f: A -> B
+end
+end Ml
+module M2
+begin
+imports Ml
+A, B and f are inherited by M2
+end M2
+module M3
+begin
+imports
+end M3
+MI
+MI
+M2
+MI
+MI
+M2
+M1
+M2
+M2 { renamed by [ A -> C, M3
+B
+f
+->
+->
+D,
+g I }
+1
+--
+The algebraic specification formalism ASF 43
+1.5.1.15 [KM Renaming of hidden sorts/functions
+module Ml
+begin
+exports begin sorts A end
+sorts B
+functions f: A -> B
+end Ml
+module M2
+begin
+imports Ml { renamed by [ B -> C,
+f -> g ] 1
+end M2
+1.5.1.16 [KO] Name clash due to improper renaming
+module Ml
+begin
+exports begin sorts A, B end
+end Ml
+module M2
+begin
+imports
+C is
+MI
+MI
+M2
+MI
+MI
+Ml { renamed by [ A -> C,
+M2
+B -> C ] 1
+imported twice in M2 with
+different origins
+end M2
+--
+--
+44 Algebraic Specification
+1.5.1.17 [OK] Non-injective renaming does not always cause a name clash
+module Ml
+begin
+exports begin sorts A end
+end Ml
+module M2
+begin
+imports
+Ml,
+Ml { renamed by [ A
+end M2
+module M3
+begin
+imports
+M2 { renamed by [ A
+B
+C is imported twice
+but both instances
+M1
+-> B ] }
+-> C,
+-> C ] 1
+in M4,
+have
+MI MI
+M2
+M2
+MI MI
+M3
+the same origin and are
+identified
+end M3
+1.5.1.18 (OK] Permutative renaming
+module Ml
+begin
+exports begin sorts A, B end
+end MI
+module M2
+begin
+imports Ml { renamed by [ A -> B,
+B -> A ] }
+Renamings are applied
+"simultaneously", so the order
+in which they are specified does
+not matter and the set of target
+names need not be disjoint from
+the set of source names
+end M2
+MI
+MI
+M2
+--
+- -
+-
+- -
+- -
+--
+- -
+The algebraic specification formalism ASF 45
+1.5.2 Parameters
+1.5.2.1 10K] Inheritance of unbound parameters
+module Ml
+begin
+exports
+begin sorts A, B
+functions f: A # A -> B
+end
+end Ml
+module M2
+begin
+parameters
+P begin sorts C, D
+functions g: C # C -> D
+end P
+end M2
+module M3
+begin
+imports M2
+M3 inherits parameter P from M2
+end M3
+module M4
+begin
+imports
+M3 { P bound by [ C -> A,
+D -> B,
+g -> f ] to Ml 1
+M4 does not inherit P, because P
+is bound on import of M3 in M4
+end M4
+M1
+M3
+M1
+CP>
+M3
+M4
+--
+--
+--
+46 Algebraic Specification
+1.5.2.2 (OK) Inheritance of unbound parameters
+module Ml
+begin
+exports
+begin sorts A, B
+functions a: -> A
+f: A -> B
+end
+end Ml
+module M2
+begin
+parameters
+P begin sorts C
+functions c: -> C
+end P,
+Q begin sorts D
+functions g: C -> D
+end Q
+end M2
+module M3
+begin
+imports
+M2 { P bound by
+[ C -> A,
+c -> a ] to Ml 1
+M3 inherits parameter Q
+from M2
+end M3
+module M4
+begin
+imports
+M3 { Q bound by
+[ D -> B,
+g -> f ] to Ml 1
+Note that P and Q are both
+bound to Ml; the origin rule
+-- allows this
+end M4
+M1
+',
+-
+--
+- -
+M3
+The algebraic specification formalism ASF 47
+1.5.2.3 (OK) Inheritance of unbound parameters
+module Ml
+begin
+exports begin sorts A, B
+functions f: A -> B
+end
+end Ml
+module M2
+begin
+parameters
+P begin sorts C, D
+functions g: C -> D
+end P
+exports begin sorts E
+functions h: E -> E
+end
+end M2
+module M3
+begin
+parameters
+Q begin sorts F
+functions i: F -> F
+end Q
+end M3
+module M4
+begin
+imports
+M3 { Q bound by [ F -> E,
+i -> h ] to M2 1
+M4 inherits parameter P from M2
+end M4
+M1
+--
+-0-
+48 Algebraic Specification
+module M5
+begin
+imports
+M4 { P bound by [ C -> A,
+D -> B,
+g -> f ] to Ml 1
+end M5
+141
+145
+The algebraic specification formalism ASF 49
+1.5.2.4 (KO) Multiple inheritance of the same parameter
+module Ml
+begin
+parameters P begin sorts A end P
+end MI
+module M2
+begin
+imports MI
+M2 inherits P from Ml
+end M2
+module M3
+begin
+imports Ml
+M3 also inherits P from Ml
+end M3
+module M4
+begin
+imports M2, M3
+-- M4 inherits P both from M2
+and M3; as the origin rule
+does not (yet) apply to
+parameter names, this is a
+-- name clash
+end M4
+<P>
+M2
+--
+-
+- -
+--
+--
+50 Algebraic Specification
+1.5.2.5 (OK) Inheritance of exported sorts/functions
+module M1
+begin
+exports
+begin sorts A, B
+functions f: A -> A
+end
+end M1
+module M2
+begin
+parameters
+P begin sorts C
+functions g: C -> C
+end P
+end M2
+module M3
+begin
+exports
+begin functions h: B -> A end
+imports
+M2 { P bound by [ C -> A,
+g -> f ] to MI 1
+M3 inherits the visible signature
+-- of Ml, so h is correctly defined
+end M3
+MI.
+IN3
+11
+--
+The algebraic specification formalism ASF 51
+1.5.2.6 (OKI Function in parameter uses imported sorts
+module Ml
+begin
+exports begin sorts A end
+end Ml
+module M2
+begin
+parameters
+P begin sorts B
+functions f: A # A -> B
+end P
+imports Ml
+end M2
+1.5.2.7 [KO] Function in parameter uses hidden sorts
+module M
+begin
+parameters
+P begin sorts A
+functions f: A -> B
+end P
+sorts B
+end M
+1.5.2.8 [OK] Overloading within parameter
+module M
+begin
+parameters
+P begin sorts A, B
+functions f: A -> B
+f: A # A -> A
+end P
+end M
+M1
+52 Algebraic Specification
+1.5.2.9 (OK] Parameters containing overloaded functions
+module M
+begin
+parameters
+P begin sorts A
+functions f: A -> B
+end P,
+Q begin sorts B
+functions f: B -> A
+end Q
+end M
+1.5.2.10 [KO) Clash of parameter names on import
+module Ml
+begin
+parameters P begin sorts A end P
+end MI
+module M2
+begin
+parameters P begin sorts B end P
+imports Ml
+M2 inherits parameter P
+from Ml, but already has
+a parameter P itself
+end M2
+P
+MI
+--
+-
+The algebraic specification formalism ASF 53
+1.5.2.11 (KO] Clash of parameter sorts/functions on import
+module MI
+begin
+parameters
+P1 begin sorts A
+functions f: A -> A
+end P1
+end M1
+module M2
+begin
+parameters
+P2 begin sorts A
+functions f: A -> A
+end P2
+imports MI
+end M2
+1.5.2.12 (OK] Renaming of parameter sorts/functions
+module MI
+begin
+parameters
+P begin sorts A, B
+functions f: A -> B
+end P
+end Ml
+module M2
+begin
+imports Ml { renamed by [ A -> C,
+B -> D,
+f -> g ] 1
+end M2
+M2
+54 Algebraic Specification
+1.5.2.13 [KO] Name clash due to improper renaming
+module M1
+begin
+exports begin sorts A end
+end Ml
+module M2
+begin
+parameters P begin sorts B end P
+end M2
+module M3
+begin
+imports
+Ml { renamed by [ A -> C ] },
+M2 { renamed by [ B -> C ] 1
+C is imported twice in M3
+with different origins
+end M3
+M1
+CP D
+M1
+M3
+I
+--
+The algebraic specification formalism ASF 55
+1.5.3 Parameter binding
+1.5.3.1 (OK) Binding of parameters
+module MI
+begin
+exports
+begin sorts A, B, C
+functions f: A
+g: A
+end
+end Ml
+module M2
+begin
+parameters
+P begin sorts D, E
+functions h:
+end P
+end M2
+module M3
+begin
+imports
+M2 { P bound by [ D
+E
+h
+end M3
+# A -> B
+# B -> C
+D # D -> E
+->
+->
+->
+A,
+B,
+f ] to Ml }
+MI.
+56 Algebraic Specification
+1.5.3.2 [OK] Multiple binding to the same module
+module Ml
+begin
+exports
+begin sorts A, B
+functions a: -> A
+f: B -> B
+end
+end Ml
+module M2
+begin
+parameters
+P begin sorts C
+functions c: -> C
+end P,
+Q begin sorts D
+functions g: D -> D
+end Q
+end M2
+module M3
+begin
+imports
+M2 { P bound by
+[ C -> A,
+c -> a ] to Ml
+Q bound by
+[ D -> B,
+g -> f ] to Ml }
+Ml enters M3 via two routes,
+but both instances are identified
+by the origin rule
+end M3
+M1
+The algebraic specification formalism ASF 57
+1.5.3.3 (OK] Binding of functions using imported sorts
+module MI
+begin
+exports begin sorts A end
+end Ml
+module M2
+begin
+exports
+begin sorts B
+functions f: A # A -> B
+end
+imports Ml
+end M2
+module M3
+begin
+parameters
+P begin sorts C
+functions g: A # A -> C
+Sort A is imported
+from Ml and cannot
+be bound
+end P
+imports Ml
+end M3
+module M4
+begin
+imports
+M3 { P bound by [ C -> B,
+g -> f ] to M2 }
+end M4
+MI
+MI
+M2
+M1
+M2
+M1
+M3
+M4
+--
+M3
+P
+--
+--
+58 Algebraic Specification
+1.5.3.4 [KO] Binding to hidden sorts/functions
+module Ml
+begin
+exports begin sorts A, B end
+functions f: A # A -> B
+end Ml
+module M2
+begin
+parameters
+P begin sorts C, D
+functions g: C # C -> D
+end P
+end M2
+module M3
+begin
+imports
+M2 { P bound by [ C -> A,
+D -> B,
+g -> f ] to Ml }
+f is not visible outside Ml and
+cannot be the target of a
+parameter binding
+end M3
+I
+1
+I
+1
+1
+1
+1
+--
+--
+The algebraic specification formalism ASF 59
+1.5.3.5 (OK] Parameter to parameter binding
+module Ml
+begin
+parameters
+P begin sorts A, B
+functions f: A -> A
+g: B # B -> A
+end P
+end Ml
+module M2
+begin
+parameters
+Q begin sorts C
+functions h: C -> C
+end Q
+end M2
+module M3
+begin
+imports
+M2 { Q bound by [ C -> A,
+h -> f ] to Ml 1
+Parameter Q of M2 is bound to
+parameter P of Ml, i.e.,
+effectively becomes part of P;
+P in turn is inherited by M3
+end M3
+module M4
+begin
+exports
+begin sorts D, E
+functions i: D -> D
+j: E # E -> D
+end
+end M4
+A
+4
+1
+1
+M3
+M4
+-CD-
+60 Algebraic Specification
+module M5
+begin
+imports
+M3 { P bound by [ A -> D,
+B -> E,
+f -> i,
+g -> j ] to M4 }
+end M5
+1
+i
+ril
+MS
+The algebraic specification formalism ASF 61
+1.5.3.6 (KO] Incomplete parameter binding
+module Ml
+begin
+exports
+begin sorts A, B
+functions f: A -> B
+end
+end Ml
+module M2
+begin
+parameters
+P begin sorts C, D
+functions g: C -> D
+h: D -> C
+end P
+end M2
+module M3
+begin
+imports
+M2 P bound by [ C -> A,
+D -> B,
+g -> f ] to Ml 1
+h should have been bound too
+end M3
+MI
+{
+62 Algebraic Specification
+1.5.3.7 (KO] Inconsistent parameter binding
+module MI
+begin
+exports
+begin sorts A, B
+functions f: A # A -> B
+end
+end Ml
+module M2
+begin
+parameters
+P begin sorts C, D
+functions g: C -> D
+end P
+end M2
+M3
+M1
+ports
+M2 { P bound by [ C -> A,
+D -> B,
+g -> f ] to MI }
+The types of g and f are
+incompatible
+end M3
+M1
+,
+EP)
+M2
+3
+begin
+-
+module
+The algebraic specification formalism ASF 63
+1.5.3.8 [KO] Inconsistent parameter binding
+module MI
+begin
+exports
+begin sorts A, B
+functions f: A -> B
+end
+end Ml
+module M2
+begin
+parameters
+P begin sorts C, D
+functions g: C -> D
+end P
+end M2
+module M3
+begin
+imports
+M2 (
+g ->
+end M3
+P bound by [ C ->
+D
+g
+->
+->
+f implies C -> A
+B,
+A,
+f ] to Ml )
+and D -> B
+M1
+--
+i,
+M3
+1
+64 Algebraic Specification
+1.5.3.9 (OKI Binding to overloaded function
+module Ml
+begin
+exports
+begin sorts A, B
+functions f: A -> B
+f: B -> B
+end
+end Ml
+module M2
+begin
+parameters
+P begin sorts C, D
+functions g: C -> D
+h: D -> D
+end P
+end M2
+module M3
+begin
+imports
+M2 f P bound by [ C -> A,
+D -> B,
+g -> f,
+h -> f ] to Ml )
+end M3
+I
+I
+M1
+M3
+The algebraic specification formalism ASF 65
+1.5.3.10 (OK] Multiple (i.e., non-injective) binding to same target
+sort/function
+module Ml
+begin
+exports
+begin sorts A, B
+functions f: A -> B
+end
+end Ml
+module M2
+begin
+parameters
+P begin sorts C, D
+functions g: C -> D
+h: C -> D
+end P
+end M2
+module M3
+begin
+imports
+M2 { P bound by [ C -> A,
+D -> B,
+g -> f,
+h -> f ] to Ml }
+g and h are both bound to f
+end M3
+M1
+M3
+66 Algebraic Specification
+1.5.3.11 (KO) Multiple binding of sort/function
+module Ml
+begin
+exports
+begin sorts A, B
+functions f: A -> B
+g: A -> B
+end
+end MI
+module M2
+begin
+parameters
+P begin sorts C, D
+functions h: C -> D
+end P
+end M2
+module M3
+begin
+imports
+M2 { P bound by [ C -> A,
+D -> B,
+h -> f,
+h -> g ] to Ml 1
+h is bound to both f and g
+end M3
+MI.
+M3
+1

@@ -1,0 +1,954 @@
+Deriving Cryptographically Sound Implementations
+Using Composition and Formally Verified Bisimulation
+Michael Backes1, Christian Jacobi2, and Birgit Pfitzmann3
+1 Saarland University, Saarbru¨cken, Germany
+mbackes@cs.uni-sb.de
+2 IBM Deutschland Entwicklung GmbH, Processor Development 2, Bo¨blingen, Germany
+cjacobi@de.ibm.com
+3 IBM Zurich Research Laboratory, Ru¨schlikon, Switzerland
+bpf@zurich.ibm.com
+Abstract. We consider abstract specifications of cryptographic protocols which
+are both suitable for formal verification and maintain a sound cryptographic
+semantics. In this paper, we present the first abstract specification for ordered
+secure message transmission in reactive systems based on the recently published
+model of Pfitzmann and Waidner. We use their composition theorem to derive
+a possible implementation whose correctness additionally involves a classical
+bisimulation, which we formally verify using the theorem prover PVS. The
+example serves as the first important case study which shows that this approach
+is applicable in practice, and it is the first example that combines tool-supported
+formal proof techniques with the rigorous proofs of cryptography.
+Keywords: security, cryptography, formal verification, PVS, simulatability
+1 Introduction
+Nowadays, security proofs are getting more and more attention both in theory and
+practice. Some years ago, this field of research only focused on certain cryptographic
+primitives such as encryption and digital signature schemes. In current research, larger
+systems like secure channels or fair exchange protocols are to be verified. The main
+goal researchers are ultimately aiming at is to verify really large systems like whole
+e-commerce architectures.
+If we turn our attention to what already has been done, we can distinguish between
+two main approaches that unfortunately seem to be rather disjoint. One approach mainly
+considers the cryptographic aspects of protocols aiming at complete and mathematically
+rigorous proofs with respect to cryptographic definitions. The other one involves formal
+methods, so protocols should be verified using formal proof systems or these proofs
+should even be generated automatically by theorem provers. Usually, these proofs are
+much trustworthier than hand-made proofs, especially if we consider large protocols
+using many single steps. The main problem of this approach lies in the necessary ab-
+straction of cryptographic details. This abstraction cannot be completely avoided, since
+formal methods cannot handle probabilistic behaviours so far, so usually perfect cryp-
+tography is assumed (following the approach of Dolev and Yao [4]) in order to make
+L.-H. Eriksson and P. Lindsay (Eds.): FME 2002, LNCS 2391, pp. 310–329, 2002.
+c© Springer-Verlag Berlin Heidelberg 2002
+Deriving Cryptographically Sound Implementations 311
+machine-aided verification possible. However, these abstractions are unfaithful, since
+no secure implementation is known so far.
+Comparing both approaches, we can see that cryptographic proofs are more mean-
+ingful in the sense of security but they also have one main disadvantage: cryptographic
+proofs usually are very long and error-prone even for very small examples like encryp-
+tion schemes, and moreover have to be done be hand so far. Hence, it seems rather
+impossible to verify large systems like whole e-commerce architectures by now.
+Our approach tries to combine the best of both worlds: We aim at proofs that allow
+abstractions and the use of verification tools but nevertheless keep a sound cryptographic
+semantics. For this, we split our system into two layers, the lower one containing crypto-
+graphic systems, the higher one hiding all cryptographic details enabling tool-supported
+proofs. Secure composition with respect to these layers has already been shown by Pfitz-
+mann and Waidner in [16], so if we consider a large system and replace a verified abstract
+subsystem with a cryptographic implementation, we again obtain a secure system if the
+implementation is proven to be at least as secure as its abstract counterpart.
+In this paper we present the first abstract specification for ordered secure message
+transmission, and we derive a possible implementation serving as the first example of a
+concrete and secure system derived using the composition theorem from [16]. Moreover,
+the crucial part of this security proof involves a bisimulation, which we formally verify
+using the theorem prover PVS [13] yielding a trustworthy proof. Our implementation
+is based on the scheme for standard secure message transmission presented in [16], but
+we put a system on top of it to prevent message reordering.
+Outline. We recapitulate the underlying model of reactive systems in asynchronous
+networks in Section 2. Furthermore we briefly review how to express typical trust mod-
+els and what secure composition of systems means. Sections 3, 4 and 5 contain the
+main work. In Section 3 we present an abstract specification for ordered secure message
+transmission, and a possible implementation derived using the composition theorem. In
+Section 4 we accomplish some preparatory work for proving the security of the imple-
+mentation, which is performed in Section 5 using the theorem prover PVS. Section 6
+summarizes and gives an outlook on future work.
+Related Literature. One main goal in the verification of cryptographic protocols is to
+retain a sound cryptographic semantics and nevertheless provide abstract interfaces in
+order to make machine-aided verification possible. This goal is pursued by several re-
+searchers: our specification for ordered secure message transmission is based on a model
+recently introduced by Pfitzmann and Waidner [16], which we believe to be really close
+to this goal. Another possible way to achieve this goal has been presented in [7,8]: actual
+cryptography and security is directly expressed and verified using a formal language (π-
+calculus), but their approach does neither offer any abstractions nor abstract interfaces
+that enable tool support. [11] has quite a similar motivation to our underlying model,
+but it is restricted to the usual equational specifications of cryptographic primitives,
+the Dolev-Yao model [4], and the semantics is not probabilistic. Moreover, [11] only
+considers passive adversaries and a restricted class of users, referred to as “environ-
+ment”. So the abstraction from cryptography is not faithful. This applies also to other
+formal-methods papers about security, e.g., [9,17,1,14,5]: they are based on intuitive but
+312 M. Backes, C. Jacobi, and B. Pfitzmann
+unfaithful abstractions, i.e., no secure cryptographic implementation is known. In [2],
+it is shown that a slight variation of the Dolev-Yao model is cryptographically faithful
+specifically for symmetric encryption, but only under passive attacks.
+As to secure message transmission, several specifications have been proposed, but
+they are either specific for one concrete protocol or lack abstraction [7]. So far, no model
+for ordered secure message transmission has been published. Thus, we present the first
+completely abstract specification and a possible implementation for secure message
+transmission that prevents message reordering. We furthermore showed that the com-
+position theorem of [16] is in fact applicable in practice. Moreover, our proof contains
+machine-aided verification, so this paper is the first one that uses formal verification of
+cryptographic protocols while retaining a sound semantics with respect to the underlying
+cryptographic primitives.
+2 Reactive Systems in Asynchronous Networks
+In this section we briefly recapitulate the model for reactive systems in asynchronous
+networks as introduced in [16]. All details not necessary for understanding are omitted,
+they can be found in [16]. Machines are represented by probabilistic state-transition
+machines, similar to probabilistic I/O automata [10]. For complexity we consider every
+automaton to be implemented as a probabilistic Turing machine; complexity is measured
+in the length of its initial state, i.e., the initial worktape content (often a security parameter
+k in unary representation).
+2.1 General System Model and Simulatability
+Systems are mainly compositions of several machines. Usually we consider real systems
+that are built by a set Mˆ of machines {M1, . . . ,Mn}, and ideal systems built by one
+machine {TH}.
+Communication between different machines is done via ports. Inspired by the CSP
+notation [6], we write output and input ports as p! and p? respectively. The ports of
+a machine M are denoted by ports(M). Connections are defined implicitly by naming
+convention, that is port p! sends messages to p?. To achieve asynchronous timing, a
+message is not directly sent to its recipient, but it is first stored in a special machine p˜
+called a buffer and waits to be scheduled. If a machine wants to schedule the i-th message
+of buffer p˜ (this machine must have the unique clock out-port p!) it simply sends i at
+p!. The i-th message is then scheduled by the buffer and removed from its internal list.
+Usually buffers are scheduled by the adversary, but it is sometimes useful to let other
+machines schedule certain buffers. This is done by the mentioned clock out-port p!.
+A collection C of machines is a finite set of machines with pairwise different machine
+names and disjoint sets of ports. The completion [C] of a collection C is the union of all
+machines of C and the buffers needed for every connection.
+A structure is a pair (Mˆ ,S ), where Mˆ is a collection of machines andS ⊆ free([Mˆ ]),
+the so called specified ports, are a subset of the free1 ports in [Mˆ ]. Roughly, the ports
+1 A port is called free if its corresponding port is not in the collection. These ports will be
+connected to the users and the adversary.
+Deriving Cryptographically Sound Implementations 313
+S guarantee specific services to the honest users. We always describe specified ports
+by their complements S c, i.e., the ports honest users should have. A structure can be
+completed to a configuration by adding machines H and A modeling honest users and
+the adversary. The machine H is restricted to the specified ports S , A connects to the
+remaining free ports of the structure and both machines can interact. If we now consider
+a set of structures, we obtain a system Sys .
+Scheduling of machines is done sequentially, so we have exactly one active machine
+M at any time. If this machine has clock-out ports, it is allowed to select the next message
+to be scheduled as explained above. If that message exists, it is delivered by the buffer
+and the unique receiving machine is the next active machine. If M tries to schedule
+multiple messages, only one is taken, and if it schedules none or the message does not
+exist, a designated master scheduler is scheduled.
+Altogether we obtain a probability space of runs (sometimes called traces or execu-
+tions) of a configuration conf for each security parameter k. If we restrict these runs to
+a set Mˆ of machines, we obtain the view of Mˆ ; this is a random variable denoted by
+viewconf ,k(Mˆ ).
+An important security concept is simulatability. Essentially it means that whatever
+might happen to an honest user H in a real system Sys real can also happen to the
+same honest user in an ideal System Sys id. Formally speaking, for every configuration
+conf 1 of Sys real there is a configuration conf 2 of Sys id yielding indistinguishable views
+for the same H in both systems [18]. We write this Sys real ≥sec Sys id and say that
+Sys real is at least as secure as Sys id; indistinguishability of the views of H is denoted
+by viewconf 1(H) ≈ viewconf 2(H). Usually, only certain “corresponding” structures
+(Mˆ1,S1) ofSys real and (Mˆ2,S2) ofSys id are compared, in particular we requireS1 = S2.
+In general, a mapping f may denote this correspondence and one writes ≥fsec, but if the
+requirement S1 = S2 gives a unique one-to-one correspondence, we call the mapping
+canonical and omit it. This is the case in all our examples.
+An important feature of the system model is transitivity of≥sec, i.e., the preconditions
+Sys1 ≥sec Sys2 and Sys2 ≥sec Sys3 together imply Sys1 ≥sec Sys3 [16].
+2.2 Standard Cryptographic Systems
+We now turn our attention to the specific class of standard cryptographic systems with
+static adversaries. In real life, every user u usually has exactly one machine Mu, which
+is correct if and only if its user is honest. The machine Mu has special ports inu? and
+outu !, which are specified ports of the system and connect to the user u. A standard
+cryptographic system Sys can now be derived by a trust model, which consists of an
+access structure ACC and a channel model χ. ACC is a set of subsets H of {1, . . . , n}
+and denotes the possible sets of correct machines. The channel model classifies every
+connection as secure (private and authentic), authenticated or insecure. In the given
+model these changes can easily be done via port renaming [16]. Thus, for each set H
+and a fixed channel model, we obtain a modified machine Mu,H for every machine Mu
+with u ∈ H. These machines form the structure for the set H; the remaining machines
+are considered part of the adversary.
+314 M. Backes, C. Jacobi, and B. Pfitzmann
+≥
+
+
+
+
+≥
+≥
+≥
+
+
+Fig. 1. Composition of Systems.
+Ideal systems are typically of the form Sys id = {({THH},SH) | H ∈ ACC} with
+the same sets SH as in the corresponding real system Sys real, i.e., each structure consists
+of only one machine that we usually refer to as trusted host THH, or TH for short.
+2.3 Composition
+We conclude this section with a briefly review of what has already been proven about
+composition of reactive systems.Assume that we have already proven that a system Sys0
+is at least as secure as another system Sys ′0. Typically Sys0 is a real system whereas
+Sys ′0 is an ideal specification of the real system. If we now consider larger protocols
+that use Sys ′0 as an ideal primitive we would like to securely replace it with Sys0. In
+practice this means that we replace the specification of a system with its implementation
+yielding a concrete system.
+Usually, replacing means that we have another system Sys1 using Sys ′0; we call
+this composition Sys∗. We now want to replace Sys ′0 with Sys0 inside of Sys∗ which
+gives a composition Sys#. Typically Sys# is a completely real system whereas Sys∗
+is at least partly ideal. This is illustrated in the left and middle part of Figure 1. The
+composition theorem now states that this replacement maintains security, i.e., Sys# is
+at least as secure as Sys∗ (see [16] for details).
+However, typically a specification of the overall system should not prescribe that
+the implementation must have two subsystems; e.g., in specifying a payment system,
+it should be irrelevant whether the implementation uses secure message transmission
+as a subsystem. Hence, the overall specification is typically monolithic, cf. Sysspec in
+Figure 1. Moreover, such specifications are well-suited for formal verification, because
+single machines are usually much easier to validate. Our specification in Section 3 is of
+this kind.
+3 Secure Message Transmission in Correct Order
+In this section an abstract specification for ordered secure message transmission is
+presented, so neither reordering the messages in transit nor replay attacks are possible for
+the adversary. Furthermore, a concrete implementation for this specification is presented
+according to the composition approach from Section 2.3.
+Deriving Cryptographically Sound Implementations 315
+3.1 The Abstract Specification
+Our specification is a typical ideal system Sysspec = {(TH′H,SH)|H ∈ ACC} as
+described in Section 2.2 where any number of participants may be dishonest. We start
+with an intuitive description of how the scheme works.
+The ideal machine TH′H models initialization, sending and receiving of messages.
+A user u can initialize communications with other users by inputting a command of the
+form (snd init) to the port inu? of TH′H. In the real world, initialization corresponds
+to key generation and authenticated key exchange. Sending a message to a user v is
+triggered by a command (send,m, v). If v is honest, the message is stored in an internal
+array deliver specu,v of TH
+′H together with a counter indicating the number of the message.
+After that, the information (send blindly, i, l, v) is output to the adversary, where l and
+i denote the length of the message m and its position in the array, respectively. This
+models that a real-world adversary may see that a message is sent and may even see
+its length. We speak of tolerable imperfections that are explicitly given to the adver-
+sary. Because of the asynchronous timing model, TH′H has to wait for a special term
+(receive blindly, v, i) or (rec init, u) sent by the adversary, signaling that the ith mes-
+sage in deliver specu,v should be delivered to v or that a connection between u and v should
+be established, respectively. In the first case, TH′H reads (m, j) := deliver specu,v [i] and
+checks whether j ≥ msg out specu,v holds for a message counter msg out specu,v . This test
+prevents replay and message reordering. If the test is successful the message is delivered
+and the counter is set to j + 1. Otherwise, TH′H outputs nothing. The user v receives
+inputs (receive, u,m) and (rec init, u), respectively.
+If v is dishonest, TH′H simply outputs (send,m, v) to the adversary. The adversary
+can also send a messagem to a user u by inputting a command (receive, v,m) to the port
+from advu? of TH′H for a corrupted user v. Finally, he can stop the machine of any user
+by sending a command (stop) to TH′H; this corresponds to exceeding the machine’s
+runtime bounds in the real world.
+The length of each message and the number of messages each user may send and
+receive is bounded by L(k), s1(k) and s2(k), respectively, for polynomials L, s1, s2,
+and the security parameter k. We furthermore distinguish the standard ordered system
+and the perfect ordered system. The standard ordered system only prevents message
+reordering, but the adversary can still leave out messages. In the perfect ordered system,
+the adversary can only deliver messages between honest users in exactly the sequence
+they have been sent. We now give the formal specification of the systems.
+Scheme 1 (Specification for Ordered Secure Message Transmission) Let n ∈ N
+and polynomials L, s1, s2 ∈ N[x] be given, and let Σ denote the message alphabet,
+len the length of strings, and ↓ an undefined value. Let M := {1, . . . , n} denote the
+set of possible participants, and let the access structureACC be the powerset ofM. Our
+specification for ordered secure message transmission is a standard ideal system
+Sysmsg ord,specn,L,s1,s2 = {({TH′H},SH) | H ⊆M}
+with S cH := {inu !, outu?, inu! | u ∈ H} and TH′H defined as follows. WhenH is clear
+from the context, let A :=M\H denote the indices of corrupted machines.
+316 M. Backes, C. Jacobi, and B. Pfitzmann
+The ports of the machine TH′H are {inu?, outu !, outu! | u ∈ H} ∪
+{from advu?, to advu !, to advu! | u ∈ H}. Internally, TH′H maintains seven arrays:
+– (init specu,v )u,v∈M over {0, 1} for modeling initialization of users,
+– (sc inspecu,v )u∈H,v∈M over {0, . . . , s1(k)} for counting how often TH′H has been
+switched by user u using messages intended for v,
+– (msg out specu,v )u,v∈H over{0, . . . , s2(k)} for storing the number of the next expected
+message (cf. the description above),
+– (sc out specu,v )u∈M,v∈H over {0, . . . , s2(k)} for counting how often TH′H has been
+switched by the adversary for delivering a message from user u to user v,
+– (msg inspecu,v )u∈H,v∈M over {0, . . . , s1(k)} for counting the incoming messages
+from u intended for v,
+– (stopped specu )u∈H over {0, 1} for storing whether the machine of user u has already
+been stopped, i.e., reached its runtime bounds,
+– (deliver specu,v )u,v∈H of lists for storing the actual messages.
+The first six arrays are initialized with 0 everywhere, except that msg out specu,v is initial-
+ized with 1 everywhere. The last array should be initialized with empty lists everywhere.
+Roughly, the five arrays init specu,v , msg out specu,v , msg inspecu,v , stopped
+spec
+u , and deliver
+spec
+u,v
+ensure functional correctness, whereas the arrays sc inspecu,v and sc out specu,v help to make
+the system polynomial-time: the machine TH′H ignores certain inputs as soon as these
+counters reach the given bounds s1(k) or s2(k), respectively. The state-transition func-
+tion of TH′H is defined by the following rules, written in a pseudo-code language. For
+the sake of readability, we exemplarily annotate the “Send initialization” transition, i.e.,
+the key generation in the real world.
+– Send initialization: Assume that the user u wants to generate its encryption and
+signature keys and distribute the corresponding public keys over authenticated chan-
+nels. He can do so by sending a command (snd init) toTH′H. Now, the system checks
+that the user has not already reached his message bound (which is quite improbable
+in this case unless he tried to send trash all the time), that the machine itself has
+not reached its runtime bound, and that no key generation of this user has already
+occurred in the past. These three checks correspond to sc inspecu,v < s1(k) for all
+v ∈M, stopped specu = 0, and init specu,u = 0, respectively. If at least the check of the
+message bound (i.e., sc inspecu,v < s1(k)) holds, the counter sc inspecu,v is increased. If
+all three checks hold, the keys are distributed over authenticated channels, modeled
+by an output (snd init) to the adversary which either can schedule them immedi-
+ately, later or even leave them on the channels forever. In our pseudo-code language
+this is expressed as follows:
+On input (snd init) at inu?: If sc inspecu,v < s1(k) for all v ∈ M, set sc inspecu,v :=
+sc inspecu,v + 1 for all v ∈ M, otherwise do nothing. If the test holds check
+stopped specu = 0 and init specu,u = 0. In this case set init specu,u := 1 and output (snd init)
+at to advu !, 1 at to advu!.
+The following parts should now be understood similarly:
+Deriving Cryptographically Sound Implementations 317
+– Receive initialization: On input (rec init, u) at from advv? with u ∈ M, v ∈ H:
+If stopped specv = 0, init specu,v = 0, and [u ∈ H ⇒ init specu,u = 1], set init specu,v := 1. If
+sc out specu,v < s2(k) set sc out
+spec
+u,v := sc out
+spec
+u,v + 1, output (rec init, u) at outv !,
+1 at outv !.
+– Send: On input (send,m, v) at inu?: If sc inspecu,v < s1(k) and stopped specu = 0, set
+sc inspecu,v := sc in
+spec
+u,v +1, otherwise do nothing. If m ∈ Σ+, l := len(m) ≤ L(k),
+v ∈M \ {u}, init specu,u = 1 and init specv,u = 1 holds:
+If v ∈ A then { set msg inspecu,v := msg inspecu,v + 1 and output
+(send, (m,msg inspecu,v ), v) at to advu !, 1 at to advu
+! } else {set i :=
+size(deliver specu,v ) + 1, msg in
+spec
+u,v := msg in
+spec
+u,v + 1, deliver
+spec
+u,v [i] :=
+(m,msg inspecu,v ) and output (send blindy, i, l, v) at to advu !, 1 at to advu
+! }.
+– Receive from honest party u: On input (receive blindly, u, i) at from advv? with
+u, v ∈ H: If stopped specv = 0, init specv,v = 1, init specu,v = 1, sc out specu,v < s2(k)
+and (m, j) := deliver specu,v [i] = ↓, check j ≥ msg out specu,v (j = msg out specu,v
+in the perfect ordered system). If this holds set sc out specu,v := sc out specu,v + 1,
+msg out specu,v := j + 1 and output (receive, u,m) at outv !, 1 at outv !.
+– Receive from dishonest party u: On input (receive, u,m) at from advv? with
+u ∈ A,m ∈ Σ+, len(m) ≤ L(k) and v ∈ H: If stopped specv = 0, init specv,v = 1,
+init specu,v = 1 and sc out specu,v < s2(k), set sc out specu,v := sc out specu,v + 1 and output
+(receive, u,m) at outv !, 1 at outv !.
+– Stop: On input (stop) at from advu? with u ∈ H: If stopped specu = 0, set
+stopped specu := 1 and output (stop) at outu !, 1 at outu!.
+Finally, if TH′H receives an input at a port inu? which is not comprised by the above six
+transitions (i.e., the user sends some kind of trash), it increases the counter sc inspecu,v for
+all v ∈ M. Similarly, if TH′H receives such an input at a port from advv? it increases
+every counter sc out specu,v for u ∈M. ✸
+Thus, at least one counter sc inspecu,v or sc out specu,v is increased in each transition ofTH
+′H,
+and each transition can obviously be realized in polynomial-time, so the machine TH′H
+is polynomial-time.
+Sysmsg ord,specn,L,s1,s2 is as abstract as we hoped for. It is deterministic without containing any
+cryptographic objects. Furthermore it is simple, so that its state-transition function can
+easily by expressed in formal languages, e.g., in PVS. In the following we simply write
+Sysmsg ord,spec instead of Sysmsg ord,specn,L,s1,s2 if the parameters n,L, s1, s2 are not necessary
+for understanding.
+3.2 The Split Ideal System
+This section contains the first step for deriving a real system that is as secure as Scheme 1.
+If we take a look at Figure 1, the system Sysmsg ord,spec plays the role of the monolithic
+specification Sysspec. We now “split” our specification into a system Sys∗ such that
+Sys∗ ≥sec Sysspec holds. Sys∗ is the combination of two systems Sys ′0 and Sys1.
+Finally, we replace Sys ′0 with Sys0 using the composition theorem and obtain a real
+system that still fulfills our requirements.
+318 M. Backes, C. Jacobi, and B. Pfitzmann
+The systems Sys ′0 and Sys0 are the ideal and real systems for secure message
+transmission presented in [16]. Sys1 filters messages that are out of order; we define it
+next, see also Figure 2.
+Scheme 2 (Filtering System Sys1) Let n,L, s1, s2,M be given as in Scheme 1. Fur-
+thermore let a polynomialL1 := L+c(k) be given; the value of c(k) is explained below.
+Sys1 is now defined as
+Sys1 = {(Mˆ ′H,SH) | H ⊆M},
+where Mˆ ′H = {M′u | u ∈ H} and ports(M′u) = {inu?, outu !, outu!}
+∪ {in′u !, out′u?, in′u!}. All free ports of [Mˆ ′H] are specified, i.e., SH consists
+of all ports corresponding to ports(Mˆ ′H). Internally, the machine M′u maintains
+two arrays (msg in idu,v)v∈M, (sc in idu,v)v∈M over {0, . . . , s1(k)} and two arrays
+(msg out idv,u)v∈M, (sc out
+id
+v,u)v∈M over {0, . . . , s2(k)}. All four arrays are initial-
+ized with 0 everywhere. Moreover, it contains a flag (stopped idu ) over {0, 1} initialized
+with 0. We assume that encoding of tuples has the following straightforward length prop-
+erty: len((m,num)) = len(m) + c(k) for every num ∈ {0, . . . ,max{s1(k), s2(k)}}
+and an arbitrary function c, i.e., len(num) is constant for each fixed security parameter
+k. This condition can easily be achieved by padding all values num to a fixed size
+≥ len(max{s1(k), s2(k)}). The behaviour of M′u is defined as follows.
+– Send initialization: On input (snd init) at inu?: If sc in idu,v < s1(k) for every
+v ∈ M, set sc in idu,v := sc in idu,v + 1 for every v ∈ M. If stopped idu = 0 then
+output (snd init) at in′u !, 1 at in′u
+!.
+– Receive initialization: On input (rec init, v) at out′u?: If stopped
+id
+u = 0 and
+sc out idv,u < s2(k), set sc out
+id
+v,u := sc out
+id
+v,u + 1 and output (rec init, v) at
+outu !, 1 at outu!.
+– Send: On input (send,m, v) at inu?: If stopped idu = 0 and sc in idu,v < s1(k),
+set sc in idu,v := sc in
+id
+u,v + 1, msg in
+id
+u,v := msg in
+id
+u,v + 1 and output
+(send, (m,msg in idu,v), v) at in
+′
+u !, 1 at in
+′
+u
+!.
+– Receive: On input (receive, v,m′) at out′u?: If stopped
+id
+u = 0 and sc out idv,u <
+s2(k), set sc out idv,u := sc out
+id
+v,u + 1, otherwise do nothing. If the test was true,
+decompose the message m′ into (m,num). If num ≥ msg out idv,u (or num =
+msg out idv,u in the perfect ordered system), msg out idv,u := num + 1 and output
+(receive, v,m) at outu !, 1 at outu!.
+– Stop: On input (stop) at out′u?: If stopped idu = 0, set stopped idu := 1 and output
+(stop) at outu !, 1 at outu!.
+Finally, if M′u receives an input at a port inu? which is not comprised by the above five
+transitions, it increases the counter sc inspecu,v for all v ∈ M. Similarly, if M′u receives
+such an input at port out′u? it increases every counter sc out specv,u for v ∈M. ✸
+Obviously, Sys ′0 is polynomial-time for the same reason as TH
+′H.
+As described above, the system Sys0 is the ideal system for secure message trans-
+mission of [16]. We now describe it in full because we need it for our security proof in
+Sections 4 and 5. We made a few adaptations, which do not invalidate the proof.
+Deriving Cryptographically Sound Implementations 319
+
+	
+
+
+
+
+ 
+
+	
+
+
+
+
+
+	 	
+
+	
+
+ 	
+  	
+
+
+
+Fig. 2. The Split Ideal System.
+Scheme 3 (Ideal System for Unordered Secure Message Transmission) Let
+n,L1,M be given as above. ACC is the powerset of M. Then
+Sys ′0 := {({THH},SH) | H ⊆M}
+with S cH := {in′u !, out′u?, in′u! | u ∈ H} and THH defined as follows. The ports of THH
+are {in′u?, out′u !, out′u!, from adv′u?, to adv′u !, to adv′u! | u ∈ H}. THH maintains
+arrays (init∗u,v)u,v∈M and (stopped
+∗
+u)u∈H over {0, 1}, both initialized with 0 every-
+where, and an array (deliver∗u,v)u,v∈H of lists, all initially empty. The state-transition
+function of THH is defined by the following rules:
+– Send initialization. On input (snd init) at in′u?: If stopped∗u = 0 and init∗u,u = 0,
+set init∗u,u := 1 and output (snd init) at to adv′u !, 1 at to adv′u
+!.
+– Receive initialization. On input (rec init, u) at from adv′v? with u ∈ M, v ∈ H:
+If stopped∗v = 0 and init∗u,v = 0 and [u ∈ H ⇒ init∗u,u = 1], set init∗u,v := 1 and
+output (rec init, u) at out′v !, 1 at out′v
+!.
+– Send. On input (send,m, v) at in′u? with m ∈ Σ+, l := len(m) ≤ L1(k), and
+v ∈ M \ {u}: If stopped∗u = 0, init∗u,u = 1, and init∗v,u = 1: If v ∈ A then {
+output (send,m, v) at to adv′u !, 1 at to adv′u
+! }, else {i := size(deliver∗u,v) + 1;
+deliver∗u,v[i] := m; output (send blindly, i, l, v) at to adv′u !, 1 at to adv′u
+! }.
+– Receive from honest party u. On input (receive blindly, u, i) at from adv′v? with
+u, v ∈ H: If stopped∗v = 0, init∗v,v = 1, init∗u,v = 1, and m := deliver∗u,v[i] = ↓,
+then output (receive, u,m) at out′v !, 1 at out′v
+!.
+– Receive from dishonest party u. On input (receive, u,m) at from adv′v? with
+u ∈ A, m ∈ Σ+, len(m) ≤ L1(k), and v ∈ H: If stopped∗v = 0, init∗v,v = 1 and
+init∗u,v = 1, then output (receive, u,m) at out′v !, 1 at out′v
+!.
+– Stop. On input (stop) at from adv′u? with u ∈ H, set stopped∗u = 1 and output
+(stop) at out′u !, 1 at out
+′
+u
+!.
+✸
+320 M. Backes, C. Jacobi, and B. Pfitzmann
+	
+	
+
+	!
+	
+
+
+
+
+
+
+ 
+
+	 	
+
+
+
+
+"
+Fig. 3. Sketch of the Real System for Ordered Secure Message Transmission.
+If we now combine the two systems Sys ′0 and Sys1 in the “canonical” way, i.e., we
+combine those structures with the same index H, we obtain the system Sys∗, which we
+call split ideal system (Figure 2). Finally, we define all connections {out′u !, out′u?} and
+{in′u !, in′u?} of Sys∗ to be secure, because they correspond to local subroutine calls.
+3.3 The Real System
+Our real system Sys# is derived be replacing Sys ′0 with Sys0. For understanding it is
+sufficient to give a brief review of Sys0 from [16]. It is a standard cryptographic system
+of the form Sys0 = {(MˆH,SH) | H ∈ ACC}, see Figure 3, where MˆH = {Mu | u ∈ H}
+andACC is the powerset ofM, i.e., any subset of participants may be dishonest. It uses
+asymmetric encryption and digital signatures as cryptographic primitives. A user u can
+let his machine create signature and encryption keys that are sent to other users over
+authenticated channels. Messages sent from user u to user v are signed and encrypted by
+Mu and sent toMv over an insecure channel, representing a real network. The adversary
+can schedule the communication between correct machines2 and send arbitrary messages
+m to arbitrary users.
+We now build the combination of Sys1 and Sys0 in the canonical way, which yields
+a new system Sys# that we refer to as real ordered system.
+4 Proving Security of the Real Ordered System
+We now start to prove that the real ordered system is at least as secure as the specification.
+This is captured by the following theorem.
+Theorem 1. (Security of Real Ordered Secure Message Transmission) For all n ∈ N
+and s1, s2, L ∈ N[x], Sys# ≥polysec Sysspec holds (for the canonical mapping), provided
+2 He can therefore replay messages and also change their order. This is prevented in our scheme
+by the additional filtering system Sys1.
+Deriving Cryptographically Sound Implementations 321
+ 
+
+
+
+ 
+
+	
+
+
+
+
+
+	 	
+
+	
+
+ 	
+  	
+
+
+
+	
+
+
+ 
+
+ 
+
+  
+
+
+
+ 
+
+≥
+	
+Fig. 4. Proof Overview of Sys∗ ≥perfsec Sys spec.
+the signature and encryption schemes used are secure. This holds with blackbox simu-
+latability.3 ✷
+Our proof contains the already described four steps, illustrated in Figure 1. First, [16]
+contains the result Sys0 ≥sec Sys ′0. Secondly, the composition theorem (cf. Section 2.3)
+yields the relation Sys# ≥sec Sys∗. The only remaining task is to check that its pre-
+conditions are fulfilled, which is straightforward since we showed that the system Sys1
+is polynomial-time. If we have proven Sys∗ ≥sec Sysspec, then Sys# ≥sec Sysspec
+follows from the transitivity lemma, cf. Section 2.1. Thus, we only have to prove
+Sys∗ ≥polysec Sysspec. We will even prove the perfect case Sys∗ ≥perfsec Sysspec.
+Lemma 1. For all n ∈ N and s1, s2, L ∈ N[x], Sys∗ ≥perfsec Sysspec holds (for the
+canonical mapping), and with blackbox simulatability. ✷
+In order to prove this, we assume a configuration confsi := ({THH} ∪ Mˆ ′u ,SH,H,A)
+of Sys∗ with Mˆ ′u = {M′u | u ∈ H} to be given, which we call split-ideal configuration.
+We then have to show that there exists a configuration confsp := ({TH′H},SH,H,A′)
+of Sysspec, called specification configuration, yielding indistinguishable views for the
+honest user H .
+The adversary A′ consists of two machines: a so-called simulator SimH, which we
+define in the following, and the original adversary A. This is exactly the notion of
+blackbox simulatability. These configurations are shown in Figure 4.
+Definition of the Simulator SimH. The Simulator SimH is placed between the
+trusted host TH′H and the adversary A, see Figure 4. Its ports are given
+by {to advu?, from advu !, from advu! | u ∈ H} ∪ {from adv′u?, to adv′u !,
+to adv′u
+! | u ∈ H}. The first set contains the ports connected to TH′H, the ports of the
+second set are for communication with the adversary. Internally, SimH maintains two
+arrays (init simu,v)u,v∈M, (stopped
+sim
+u )u∈H over {0, 1}, an array (msg out simu,v)u∈A,v∈H
+3 See [16] for further details on valid and canonical mappings and different kinds of simulatability.
+322 M. Backes, C. Jacobi, and B. Pfitzmann
+over {0, . . . , s1(k)}, and an array (sc out simu,v)u∈M,v∈H over {0, . . . , s2(k)}. All four
+arrays are initialized with 0 everywhere. They match the arrays in the ideal system, ex-
+cept that msg out simu,v corresponds to msg out idu,v of M′v for dishonest v only. We now
+define the behaviour of the simulator. In most cases SimH simply forwards inputs to
+their corresponding outputs, modifying some internal values.
+– Send initialization: Upon input (snd init) at to advu?, SimH sets init simu,u := 1 and
+outputs (snd init) at to adv′u !, 1 at to adv′u
+!.
+– Receive initialization: Upon input (rec init, u) at from adv′v?: If stopped
+sim
+u = 0
+and init simu,v = 0 and [u ∈ H =⇒ init simu,u = 1] SimH sets init simu,v := 1. If
+additionally sc out simu,v < s2(k) holds, it sets sc out simu,v := sc out simu,v + 1 and
+outputs (rec init, u) at from advv !, 1 at from advv !.
+– Send: Upon input (send blindy, i, l′, v) at to advu?, SimH determines l := l′+c(k)
+and outputs (send blindy, i, l, v) at to adv′u !, 1 at to adv′u
+!.
+Upon input (send,m, v) at to advu?, SimH simply forwards the input to to adv′u !
+and schedules it.
+– Receive from honest party u: Upon input (receive blindly, u, i) at from adv′v?,
+SimH forwards this input to port from advv ! and schedules it.
+– Receive from dishonest party u: Upon input (receive, u,m′) at from adv′v? with
+u ∈ A, SimH decomposes m′ = (m,num): If stopped simv = 0, init simv,v = 1,
+init simu,v = 1, len(m
+′) ≤ L1(k), num ≥ msg out simu,v (num = msg out simu,v in the
+perfect ordered system) and sc out simu,v < s2(k), set msg out simu,v := num + 1,
+sc out simu,v := sc out
+sim
+u,v + 1 and output (receive, u,m) at from advv !, 1 at
+from advv
+!.
+– Stop: On input (stop) at from adv′u?: If stopped simu = 0, SimH sets stopped simu := 1
+and outputs (stop) at from advu !, 1 at from advu!.
+What the simulator does is recalculating the length of message m into len((m,num)) to
+achieve indistinguishability. Furthermore it decomposes messages sent by the adversary,
+maybe sorting them out, in order to achieve identical outputs in both systems. Now the
+overall adversary A′ is defined by combining A and SimH.
+Now the ultimate goal is to show that the collections Mˆ∗ := {THH} ∪ {Mu | u ∈
+H} and Mˆspec := {TH′H,SimH} have the same input-output behaviour, i.e., if they
+obtain the same inputs they produce the same outputs. We do so by proving a classical
+deterministic bisimulation, i.e., we define a relation φ on the states of the two collections
+and show that φ is maintained in every step of every trace and that the outputs of both
+systems are always equal. This is exactly the procedure we will perform using the theorem
+prover PVS.
+Definition 1. (Deterministic Bisimulation) Let two arbitrary collections Mˆ1 and Mˆ2
+of deterministic machines with identical sets of free ports be given, i.e., free([Mˆ1]) =
+free([Mˆ2]). A deterministic bisimulation between these two collections is a binary rela-
+tion φ on the states of Mˆ1 and Mˆ2 such that the following holds.
+Deriving Cryptographically Sound Implementations 323
+– The initial states of Mˆ1 and Mˆ2 satisfy the relation φ.
+– The transition functions δ1 and δ2 of Mˆ1 and Mˆ2 preserve the relationφ and produce
+identical outputs. I.e., let S1 and S2 be two states of Mˆ1 and Mˆ2, respectively,
+with (S1, S2) ∈ φ, let I be an arbitrary overall input of Mˆ1 and Mˆ2, and let
+(S′1,O1) := δ1(S1, I) and (S′2,O2) := δ2(S2, I). Then we have (S′1, S′2) ∈ φ and
+O1 = O2.
+We call two collections Mˆ1 and Mˆ2 bisimilar if there exists a bisimulation between
+them. ✸
+We will apply this definition to composed transition functions of each of the two col-
+lections Mˆ∗ and Mˆspec, i.e., the overall transition from an external input (from H or A)
+to an external output (to H or A). It is quite easy to see that a deterministic bisimulation
+in this sense implies perfect indistinguishability of the view of H, cf. Figure 4, and even
+of the joint view of H and the original adversary A. Assume for contradiction that these
+views are not identical. Thus, there exists a first time where they can be distinguished.
+This difference has to be produced by the collections. Since we defined this to be the
+first different step, the prior input of both collections is identical. But thus, both collec-
+tions also produce identical outputs because they are bisimilar. This yields the desired
+contradiction.
+The next section describes how the machines are expressed in the formal syntax of
+PVS and partly explains the bisimulation proof.
+It is worth mentioning that we used standard paper-and-pencil proofs before we
+decided to use a formal proof system to validate the desired bisimulation. However,
+these proofs have turned out to be very error-prone since they are straightforward on the
+one hand, but long and tedious on the other, so they are mainly vulnerable to slow-down
+of concentration. During our formal verification, we in fact found several errors in both
+our machines and our proofs, which were quite obvious afterwards, but had not been
+found before. We decided to put the whole paper-and-pencil proof in the web4, so readers
+can make up their own minds.
+5 Formal Verification of the Bisimulation
+5.1 Defining the Machines in PVS
+In this section, we describe how Lemma 1 is formally verified in the theorem proving
+system PVS [13]. As we already showed in the previous section, it is sufficient to prove
+that the two collections Mˆ∗ and Mˆspec are contained in a deterministic bisimulation.
+In order to do so, we first describe how the machines are formalized in PVS. Since
+the formal machine descriptions are too large to be given here completely, we use the
+machine TH′H as an example. The complete machine descriptions and the proof are
+available online4.
+We denote the number of participating machines by N , and for a given subset
+H ∈ ACC, we denote the number of honest users by M := #H. As defined in
+Scheme 1, the machine TH′H has 2M input ports {inu?, from advu? | u ∈ H}. In
+4 http://www-krypt.cs.uni-sb.de/∼mbackes/PVS/FME2002/
+324 M. Backes, C. Jacobi, and B. Pfitzmann
+PVS, we number these input ports 1, . . . , 2M , where we identify 1, . . . ,M with the
+user ports and M + 1, . . . , 2M with the adversary ports. Similarly, TH′H has output
+ports {outu !, to advu ! | u ∈ H}, which also are numbered 1, . . . , 2M . In PVS, we
+define the following types to denote machines, honest users, and ports:
+MACH: TYPE = subrange(1,N) %% machines
+USERS: TYPE = subrange(1,M) %% honest users
+PORTS: TYPE = subrange(1,2*M) %% port numbers
+The subrange(i,j) type is a PVS built-in type denoting the integers i, . . . , j. We
+further define a type STRING to represent messages.
+In Scheme 1, the different possible inputs to machine TH′H are listed, e.g.,
+(snd init), (rec init, u), . . . In PVS, the type of input ports is defined using a PVS ab-
+stract datatype [12]. The prefix m1i in the following stands for “inputs of machine 1”,
+which is TH′H, and is used to distinguish between inputs and outputs of the different
+machines.
+m1_in_port: DATATYPE
+BEGIN
+m1i_snd_init: m1i_snd_init?
+m1i_rec_init(u: MACH): m1i_rec_init?
+m1i_send(m: STRING, v: MACH): m1i_send?
+m1i_receive_blindly(u: USERS, i: posnat): m1i_receive_blindly?
+m1i_receive(u: MACH, m: STRING): m1i_receive?
+m1i_stop: m1i_stop?
+END m1_in_port
+This defines an abstract datatype with constructors m1i snd init, m1i rec init etc.
+For example, for given u, i, m1i receive blindly(u,i) constructs an instance of
+the above datatype, which we identify with (receive blindly, u, i). Given an instance
+p of this datatype, we can use the recognizers on the right side of the definition to
+distinguish between the different forms. For example, m1i receive blindly?(p)
+checks whether the instance p of the m1i in port datatype was constructed from the
+m1i receive blindly constructor. If it was, the components u and i can be restored
+using the accessor functions u(·) and i(·); for example, u(p) returns the u component
+of p. The accessor functions may be overloaded for different constructors (e.g., u is
+overloaded in m1i rec init, m1i receive blindly and m1i receive).
+The machine TH′H performs a step iff exactly one of the input ports is active. In
+this case, we call the input ok, otherwise garbage. Because of our underlying scheduling
+definition, an input with several active input ports cannot occur so garbage naturally
+correspond to an all-empty input. The type of the complete inputs to TH′H comprising
+all 2M input ports is therefore either garbage, or the number u of the active port together
+with the input p on port u. This is formalized in the following PVS datatype:
+M1_INP: DATATYPE
+BEGIN
+m1i_garbage: m1i_garbage?
+m1i_ok(u: PORTS, p: m1_in_port): m1i_ok?
+END M1_INP
+Deriving Cryptographically Sound Implementations 325
+Similar datatypes m1 out port and M1 OUT are defined to denote the type of individual
+outputs, and the type of the complete output of TH′H, respectively.
+Next we define the state type of TH′H. As defined in Scheme 1, this state consists of
+seven one- or two-dimensional arrays. In PVS, arrays are modeled as functions mapping
+the indices to the contents of the array. For example [MACH,USERS -> nat] defines a
+two-dimensional array of natural numbers, where the first index ranges overM, and the
+second ranges overH. The state type ofTH′H is defined as a record of such arrays. There
+is only one small exception: the array deliver specu,v stores lists of tuples (m, i) (e.g., see the
+“Send” transition), where m is a string and i ∈ N. It is convenient in PVS to decompose
+this array of lists of tuples into two arrays of lists, where the first array deliver specu,v stores
+lists of messagesm, and the second array deliv i specu,v stores lists of naturals i. Altogether,
+this yields a state type of eight arrays:
+M1_STATE: TYPE = [# init_spec: [MACH,MACH -> bool],
+sc_in_spec: [USERS,MACH -> nat],
+msg_in_spec: [USERS,MACH -> nat],
+msg_out_spec: [USERS,USERS -> posnat],
+sc_out_spec: [MACH,USERS -> nat],
+deliver_spec: [USERS,USERS -> list[STRING]],
+deliv_i_spec: [USERS,USERS -> list[posnat]],
+stopped_spec: [USERS -> bool] #]
+The initial state m1 init is defined as a constant of type M1 STATE:
+M1_init: M1_STATE = (#
+init_spec := LAMBDA (w1,w2: MACH): FALSE,
+...
+deliv_i_spec := LAMBDA (u1,u2: USERS): null,
+stopped_spec := LAMBDA (u1: USERS): FALSE #)
+The constructornulldenotes the empty list. In the definition of machineTH′H, sc inspecu,v
+is incremented for all machines v during the “Send initialization” part. This is encapsu-
+lated in the following PVS function:
+incr_sc_in_spec(S: M1_STATE, u: USERS): M1_STATE =
+S WITH [ ‘sc_in_spec := LAMBDA (w: USERS, v: MACH):
+IF w=u THEN S‘sc_in_spec(w,v)+1 ELSE
+S‘sc_in_spec(w,v) ENDIF ];
+The WITH construct leaves the record S unchanged except for the sc in spec compo-
+nent, which is replaced by the λ-expression. The machine TH′H is now formalized in
+PVS as a next-state/output function mapping current state and inputs to the next state
+and outputs. We exemplarily give the first few lines of the PVS code:
+M1_ns(S: M1_STATE, I: M1_INP): [# ns: M1_STATE, O: M1_OUT #] =
+IF m1i_garbage?(I) THEN
+(# ns:=S, O:=m1o_garbage #)
+%% do not change the state, output nothing
+ELSE
+LET ua1=ua(I), p=p(I) IN
+%% ua1 is the active port number,
+%% p is the input on this port
+326 M. Backes, C. Jacobi, and B. Pfitzmann
+IF ua1<=M AND m1i_snd_init?(p) THEN
+%% we have a send-init on a user port (<=M);
+IF (FORALL w1: S‘sc_in_spec(ua1,w1)<s1k) THEN
+IF S‘init_spec(ua1,ua1) OR S‘stopped_spec(ua1) THEN
+(# ns:=incr_sc_in_spec(S,ua1),O:=m1o_garbage #)
+%% increment sc_in_spec, but do not send any output
+ELSE
+(# ns:=incr_sc_in_spec(S,ua1)
+WITH [ ‘init_spec(ua1,ua1) := TRUE ],
+O := m1o_ok(M+ua1, m1o_snd_init) #)
+%% increment sc_in_spec, set init_spec(ua1,ua1):=true
+%% send m1o_snd_init to adversary port M+ua1
+ENDIF
+ELSE %% otherwise do nothing
+(# ns:=S, O:=m1o_garbage #)
+ENDIF
+ELSIF ua1>M AND m1i_rec_init?(p) THEN
+...
+In a similar way we have formalized the machines THH, {M′u | u ∈ H}, and SimH. The
+M machines M′u in the left part of Figure 4 have been combined into a single machine in
+PVS; however, this is only syntactic and does not change the semantics. The combination
+of the machinesTHH and {M′u |u ∈ H} respectivelyTH′H and SimH is straightforward
+by composition of the corresponding state transition functions:An input fromH is always
+first handled by a machine M′u and TH
+′H, and then by THH and SimH, respectively, and
+vice versa. This saves us from implementing the full asynchronous scheduling algorithm
+in PVS for this example.
+The only non-trivial choice we have made in the transliteration of the machines to
+PVS is the type of the input- and output-ports. In a previous attempt, we did not use the
+abstract datatype definition of M1 INP, but defined M1 INP as an array of 2M individual
+input ports; in order to model non-active ports, we added an m1i inactive form to the
+input port type m1i in port. An input from M1 INP was defined to be ok iff exactly
+one of the ports is different from m1i inactive. This obviously models the same valid
+inputs as the definition of M1 INP above. The problem with the array definition is that
+extracting the active port number u involves an application of the choice-function ε in
+order to choose the index u of the array for which the port is active. The application of
+the choice-function considerably complicates the proofs in PVS, since the definition of
+ε is not constructive in PVS. In contrast, in the definition using the abstract datatype,
+the active port number u can be constructively extracted from the input by applying the
+accessor function of the abstract datatype. Due to constructiveness, the proofs in PVS
+become much simpler. This problem in the port definition also applies to the output ports
+of the machines.
+The rest of the transliteration of the machine definitions to PVS is straightforward.
+In the following, we revert to standard mathematical notation for the sake of brevity and
+readability. However, it should be noted once more that all the definitions and claims in
+this section have been formalized and verified in PVS.
+Deriving Cryptographically Sound Implementations 327
+5.2 Proving the Bisimulation
+In order to prove Lemma 1, we prove the following predicates to be invariants of the
+collections Mˆ∗ and Mˆspec when they obtain the same inputs.
+– stopped∗ = stopped id = stopped sim = stopped spec.
+Note that we compare whole arrays in this predicate, i.e., we make use of the higher-
+order capabilities of PVS. One could also write ∀u : stopped∗u = stopped idu = . . . ,
+but the equality of the whole arrays is more concise and easier to use in the proofs.
+– sc in id = sc inspec.
+– init∗ = init sim = init spec.
+– msg in id = msg inspec.
+– ∀u, v ∈ H : length(deliver∗u,v ) = length(deliv i∗u,v ).
+length is the PVS function delivering the length of lists. We use the quantified form
+of the invariant here instead of the higher-order form, since otherwise we would
+have to ‘lift’ the length function to arrays of lists.
+– ∀u, v ∈ H : length(deliver specu,v ) = length(deliv i specu,v ).
+– deliver∗ = deliver spec and deliv i∗ = deliv i spec.
+– sc out id = sc out spec.
+– ∀w ∈M, u ∈ H : sc out simw,u ≤ sc out specw,u .
+Again we use the quantified form, since otherwise we had to lift “≤” to arrays.
+– ∀w ∈M, u ∈ H : ((w ∈ H =⇒ msg out idw,u = msg out specw,u) and
+(w ∈ A ∧ sc out idw,u < s2(k) =⇒ msg out idw,u = msg out simw,u)).
+Each of the 10 invariants is formalized as a predicate φi(Ssi, Ssp) on the current states of
+the two collections Mˆ∗ and Mˆspec. The conjunction of all the φi yields the bisimulation
+relationφ. Let δsi and δsp denote the overall transition function of the machine collections
+Mˆ∗ and Mˆspec, respectively. The following theorem asserts that the invariants indeed are
+invariants of these collections:
+Theorem 2. Let Ssi and Ssp be states of the two collections Mˆ∗ and Mˆspec such that all
+invariants φi(Ssi, Ssp), 1 ≤ i ≤ 10 hold. The transition functions δsi, δsp preserve the
+invariants, i.e., for an arbitrary overall input I of Mˆ∗ and Mˆspec we have
+φi(S′si, S
+′
+sp) ∀i, 1 ≤ i ≤ 10
+with (S′si,Osi) := δsi(Ssi, I) and (S′sp,Osp) := δsp(Ssp, I). Furthermore, the initial
+states initialsi and initialsp satisfy all 10 invariants. ✷
+In PVS, this theorem is split into 10 lemmas, one for each invariant. Using the invariants
+φi, we prove the following theorem:
+Theorem 3. Let Ssi and Ssp be states satisfying all invariants φi(Ssi, Ssp), 1 ≤ i ≤ 10,
+and let I be an overall input of the collections Mˆ∗ and Mˆspec. Then both collections
+make the same outputs on all ports to the users and the adversary. ✷
+Together, Theorems 2 and 3 prove that the two systems are bisimilar, which finishes our
+proof of Theorem 1.
+328 M. Backes, C. Jacobi, and B. Pfitzmann
+5.3 Verification Effort
+The manual proof effort in PVS is rather small. The proofs make heavy use of the built-in
+PVS strategy(grind), which expands definitions and performs automatic case-splitting.
+The main effort was to figure out the correct parameters for the (grind) command. The
+proof goals not resolved by(grind)were proved with little manual assistance. However,
+looking for errors and thinking about the necessary modifications of the machines was
+a time-consuming task. During our proof attempts, we simultaneously debugged the
+machines until we finally found the correct specifications of all machines. After that, the
+proof itself turned out to be quite easy. Altogether, the formalization of the machines in
+PVS took 2 weeks, and the development of the proofs took another week (given prior
+familiarity with PVS). A complete checking of the proof takes about one hour on a 600
+MHz Athlon processor.
+6 Summary and Future Work
+We have presented the first abstract specification for secure message transmission pre-
+venting message reordering, together with a secure implementation. Its proof of security
+involved a recently proven composition theorem [16] and a bisimulation which we
+formally verified using the theorem prover PVS. Our approach furthermore presents
+a general strategy how to derive real implementations by splitting specifications into
+smaller systems that can then be refined stepwise using the composition theorem and
+formal proof systems.
+One next step is to verify the claimed integrity property of the systems, i.e., a formula
+that messages are output in correct order. This requires more theoretical work, e.g., we
+have to show that integrity properties are in fact preserved under simulatability also in
+the asynchronous case (this is not trivial even though the synchronous case was already
+shown in [15]). Also the PVS proof becomes more complicated than the one presented
+here. A preliminary version of that work can already be seen in [3]. Putting our current
+paper and those results together, we are confident that our underlying model is well suited
+for future analysis of larger protocols including real cryptographic primitives, since it
+supports commonly accepted machine-aided proofs (like the one of [14]) without losing
+its sound cryptographic semantics.
+Concerning further future work, there are innumerous things to do. Obviously, the
+security of the system presented in this paper is still based on paper-and-pencil proofs
+such as the composition theorem, the transitivity lemma or the security proof in [16].
+Hence, one future step could be the verification of those theorems using formal proof
+systems. However, we are aware of the difficulty of this task, mostly because of the
+occurrence of probabilism. In the shorter term, we are turning our attention to a library
+which should provide sound abstractions of a set of common cryptographic primitives.
+The library may naturally serve as a construction kit for designing large protocols whose
+security properties can then easily be validated again by formal proof systems.
+Deriving Cryptographically Sound Implementations 329
+References
+1. M. Abadi and A. D. Gordon. A calculus for cryptographic protocols: The spi calculus.
+Information and Computation 148/1 (1999) 1-70.
+2. M. Abadi and P. Rogaway. Reconciling two views of cryptography (the computational sound-
+ness of formal encryption). IFIP Intern. Conf. on Theoretical Computer Science (TCS 2000),
+LNCS 1872, Springer-Verlag, 2000, 3–22.
+3. M. Backes. Cryptographically sound analysis of security protocols. Ph.D thesis, Computer
+Science Department, Saarland University, 2002.
+4. D. Dolev and A. C. Yao. On the security of public key protocols. IEEE Transactions on
+Information Theory 29/2 (1983) 198-208.
+5. F. J. T. Fabrega, J. C. Herzog, and J. D. Guttman. Strand spaces: Why is a security protocol
+correct? 1998 IEEE Symposium on Security and Privacy, IEEE Computer Society Press, Los
+Alamitos 1998, 160-171.
+6. C. A. R. Hoare. Communicating sequential processes. International Series in Computer
+Science, Prentice Hall, Hemel Hempstead 1985.
+7. P. Lincoln, J. Mitchell, M. Mitchell, and A. Scedrov. A probabilistic poly-time framework
+for protocol analysis. 5th ACM Conference on Computer and Communications Security, San
+Francisco, November 1998, 112–121.
+8. P. Lincoln, J. Mitchell, M. Mitchell, and A. Scedrov. Probabilistic polynomial-time equiv-
+alence and security analysis. Formal Methods ’99, LNCS 1708, Springer-Verlag, 1999,
+776–793.
+9. G. Lowe. Breaking and fixing the needham-schroeder public-key protocol using FDR.
+Tools and Algorithms for the Construction and Analysis of Systems (TACAS), LNCS 1055,
+Springer-Verlag, Berlin 1996, 147-166.
+10. N. Lynch. Distributed algorithms. Morgan Kaufmann Publishers, San Francisco 1996.
+11. N. Lynch. I/O automaton models and proofs for shared-key communication systems. 12th
+Computer Security Foundations Workshop (CSFW), IEEE, 1999, 14–29.
+12. S. Owre and N. Shankar. Abstract datatypes in PVS. Technical report, Computer Science
+Laboratory, SRI International, 1993.
+13. S. Owre, N. Shankar, and J. M. Rushby. PVS: A prototype verification system. In CADE 11,
+volume 607 of LNAI, pages 748–752. Springer, 1992.
+14. L. Paulson. The inductive approach to verifying cryptographic protocols. Journal of Computer
+Security, 6(1):85-128, 1998.
+15. B. Pfitzmann and M. Waidner. Composition and integrity preservation of secure reactive sys-
+tems. 7th ACM Conference on Computer and Communications Security, Athens, November
+2000, 245-254.
+16. B. Pfitzmann and M. Waidner. A model for asynchronous reactive systems and its application
+to secure message transmission. IEEE Symposium on Security and Privacy, Oakland, May
+2001, 184-202.
+17. S. Schneider. Security properties and CSP. 1996 IEEE Symposium on Security and Privacy,
+IEEE Computer Society Press, Washington 1996, 174-187.
+18. A. C.Yao. Protocols for secure computations. 23rd Symposium on Foundations of Computer
+Science (FOCS) 1982, IEEE Computer Society, 1982, 160-164.
